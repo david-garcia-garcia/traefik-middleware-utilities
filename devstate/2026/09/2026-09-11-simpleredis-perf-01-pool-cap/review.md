@@ -16,3 +16,14 @@ skipped: none
 assumed: poolSize 8, poolTimeout 1s, redis:unreachable, const-only Init, Pester hold+CLIENT LIST both engines, CI live env
 head: d67be5fc43a0afc8c91340b2e0f750c536c4152d
 ci: success run 34649105900 (measured on 74124f0)
+
+## propose (2026-09-11T21:29:36Z)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: simpleredis-live-pool-cap
+fold: std_go_simpleredis_tcp-session
+head: 5d4bf4769490bc78fd45fe80a67dcec7ee18f82e
+ci: in progress run 34649646781
+
