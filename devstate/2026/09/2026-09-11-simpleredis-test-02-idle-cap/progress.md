@@ -5,7 +5,7 @@ JobName: 2026-09-11-simpleredis-test-02-idle-cap
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T21:22:30Z |
-| explore | [ ] | [ ] | |
+| explore | [x] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
