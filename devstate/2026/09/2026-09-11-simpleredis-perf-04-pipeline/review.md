@@ -15,3 +15,9 @@ phase: propose
 findings: OpenSpec change simpleredis-exec-pipeline; modified std_go_simpleredis_resp-commands and std_go_simpleredis_tcp-session; usage packet names ExecPipeline; 6 assumed; apply not started; CI run 34651223489 succeeded
 fixed: n/a
 skipped: n/a
+
+## implement (2026-09-11)
+phase: implement
+findings: ExecPipeline + e2e + Pester landed vs origin/master; CI run 34652182373 succeeded (Lint, Test, Integration Tests); 6 assumed; axis review None; verdict in progress (codereview not done)
+fixed: n/a
+skipped: n/a
