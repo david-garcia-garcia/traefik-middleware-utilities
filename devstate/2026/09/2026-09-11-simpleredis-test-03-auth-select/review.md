@@ -33,3 +33,10 @@ findings: none
 fixed: none
 skipped: none
 
+## devdocsimpact (2026-09-11)
+
+phase: devdocsimpact
+findings: stale-usage SimpleRedis produced; Handshake Language skipped
+fixed: std_go_simpleredis AUTH-before-SELECT, empty-field skip, live_test.go, e2e PathPrefix
+skipped: Handshake Language term (explore nickname; product owner is dial)
+
