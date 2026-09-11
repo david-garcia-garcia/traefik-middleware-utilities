@@ -27,3 +27,12 @@ fold: std_go_simpleredis_tcp-session
 head: 5d4bf4769490bc78fd45fe80a67dcec7ee18f82e
 ci: in progress run 34649646781
 
+## implement (2026-09-11T21:58:29Z)
+phase: implement
+findings: none
+fixed: none
+skipped: none
+localTests: passed
+head: 4e4b3ac6f3b50de499fa4c1a30592402e49b5e06
+ci: in progress run 34651875079
+

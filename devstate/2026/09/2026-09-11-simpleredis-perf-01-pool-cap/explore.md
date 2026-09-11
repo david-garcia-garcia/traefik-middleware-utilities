@@ -41,9 +41,9 @@ Units:
 
 - Keep `Init` as three strings. Production callers are one probe plus libraries that take an already-Inited client. A public pool knob would be a new operator surface this ticket did not ask for.
 - Default `poolSize` is **8**, same as the idle cap and the live spec’s “at most eight”. Finding allowed 8–16; 16 would widen the spec without a deploy key.
-- Default `poolTimeout` is **1s**, same as `ioTimeout`, so a waiter does not sit longer than a command I/O. Fail fast locally.
+- Default `poolTimeout` is **200ms**, shorter than `ioTimeout` (1s), so a live command can occupy a slot longer than the wait. That is what lets Redis/Dragonfly prove a waiter error without Init knobs. Fail fast locally.
 - Timeout Error() text is **`redis:unreachable`**. Finding allowed a new `redis:pool-timeout`; dest callers already match `redis:unreachable`. Distinct string would be a new public token for the same fail-closed outcome.
-- Live sockets (idle + checked-out) are the semaphore, not checked-out alone. Yaegi-safe: buffered `chan struct{}` plus `select` on a timer.
+- In-use turns are the semaphore (go-redis shape): acquire a slot before pop-idle or dial; idle does not hold a turn. Yaegi-safe: buffered `chan struct{}` plus `select` on a timer. Live sockets still cannot exceed `poolSize` because dial only happens while holding a turn.
 - `release` still trims idle to eight, but does not close a reusable socket only because idle is full while live is under `poolSize` (the case tests hit when they set `poolSize` above eight).
 - Fake-server tests stay (burst dials, live ≤ poolSize, timeout). They are not the required proof.
 - Required proof: dest compose + Pester on `/redis` and `/dragonfly`, plus compiled live tests on both engines (same CI `test` service pattern as windowcounter/tokenbucket). Probe grows a hold query that EVALs a TIME wait with **zero keys**, Lua 5.1-safe, no `table.maxn`. Pester fires concurrent holds, asserts `CLIENT LIST` from that backend stays at most eight, and that a waiter past `poolTimeout` returns `redis:unreachable` (HTTP 502).
@@ -58,8 +58,8 @@ Units:
 
 - Q: What is the default `poolTimeout`?
   Rank: additive asked — Desired names a wait bound so the queue is not unbounded
-  Decision: assumed — 1s, matching `ioTimeout`.
-  By: explore
+  Decision: resolved — 200ms, shorter than `ioTimeout` (1s), so a hold on Redis/Dragonfly can outlast the wait and Pester can observe `redis:unreachable` without Init knobs.
+  By: implement
 
 - Q: Which Error() text does a pool timeout return?
   Rank: additive asked — Desired allows `redis:unreachable` or a new `redis:pool-timeout`
@@ -73,8 +73,8 @@ Units:
 
 - Q: How does Pester observe live sockets and pool-timeout on `/redis` and `/dragonfly`?
   Rank: additive asked — Desired e2e addendum requires both engines via dest compose + Pester
-  Decision: assumed — probe `?hold=` EVAL TIME-wait (0 KEYS, Lua 5.1-safe); Pester concurrent requests; `redis-cli CLIENT LIST` (Redis and Dragonfly compose services) ≤ 8; extra waiter → 502 `redis:unreachable`. Keep `/a` `/b` reclaim routes.
-  By: explore
+  Decision: resolved — probe `?hold=` EVAL TIME-wait (0 KEYS, Lua 5.1-safe). Redis CLIENT LIST is blocked while a script runs, so Pester counts ESTABLISHED sockets on `/proc/net/tcp` port 6379 (`:18EB`) in the engine netns (Redis `cat`; Dragonfly distroless uses a `redis:7-alpine` sidecar). Extra waiter → 502 `redis:unreachable` when eight are held. Keep `/a` `/b` reclaim routes.
+  By: implement
 
 - Q: Should CI `test` also run compiled pool tests against live Redis and Dragonfly?
   Rank: additive asked — Desired says CI must exercise both backends; dest `test` job already has both engines for sibling packages
