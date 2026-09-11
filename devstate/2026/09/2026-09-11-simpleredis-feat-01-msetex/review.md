@@ -38,3 +38,12 @@ skipped: none
 change: simpleredis-msetex
 specs: modified std_go_simpleredis_resp-commands
 ci: 34654134540 success
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: stale-usage taken on std_go_simpleredis
+fixed: How-to/Gotchas integer-0 redis:issue?, pass-through TTL, native→Lua recache, past-EXAT Get miss
+skipped: none
+change: simpleredis-msetex
+specs: modified std_go_simpleredis_resp-commands
+ci: 34654939236 success
