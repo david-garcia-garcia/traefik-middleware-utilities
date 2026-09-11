@@ -16,3 +16,11 @@ skipped: none
 open-questions: 10 ranked; 8 assumed copied to card; none blocked
 issues: note large rename-reclaim-e2e-compose; note large choose-product-license
 deviations: taken simpleredis/ instead of redis/
+
+## propose (2026-09-11)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: add-simpleredis
+specs: added std_go_simpleredis_tcp-session, std_go_simpleredis_resp-commands
