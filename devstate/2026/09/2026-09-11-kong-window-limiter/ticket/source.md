@@ -17,7 +17,7 @@ Not Traefik's token bucket. Not a leaky bucket. Not an in-memory limiter product
 - **Redis errors:** return `redis:unreachable` / timeout. No fail-open/fail-close inside the library. No health-gate.
 - **Client:** `simpleredis` only (`Eval`, `Incr`/`IncrBy`, `Expire`/`ExpireAt`). No `go-redis`. If those methods are missing, this change is blocked — do not GET/SET-race a counter.
 - **Timer:** reclaim `Sleep`/`Wake`/`Close` so the flush goroutine dies on Traefik reload. No leaked tickers.
-- **Package:** `ratelimit/` (not `bucket/`). README row becomes this primitive.
+- **Package:** `windowcounter/` (not `bucket/`, not `ratelimit/`). README row becomes this primitive.
 - **EVALSHA:** later. `Eval` is enough.
 
 ## Tests (required)

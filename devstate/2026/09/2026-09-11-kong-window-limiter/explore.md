@@ -10,7 +10,7 @@ IssueKey: 2026-09-11-kong-window-limiter
 - **Exact vs buffered** — `sync_rate=0`: `Incr` every `Take`, `Expire` when the result is 1. `sync_rate>0`: admit from `redis_known + local_delta`; timer `Eval` of the Kong INCRBY + EXPIREAT-if-new script (`KEYS` declared; no `table.maxn`). Floor 20 ms ([Kong Advanced schema](https://developer.konghq.com/plugins/rate-limiting-advanced)). After flush, `redis_known` becomes the EVAL return (global count) and `local_delta` clears — that is how two clients share a limit without last-write-wins.
 - **Reclaim hooks** — `reclaim.Hooks` is Sleep/Wake/Close on a stored value (`reclaim/table.go`, `knowledge/devdocs/std_go_reclaim.md`). The limiter is a value a middleware `Open`s; it does not import `reclaim.Table`.
 - **Identity** — opaque key only. This library does not read HTTP, client address, user, tenant, or Host. The middleware that calls `Take` already owns that fact.
-- **Tests** — unit: in-package fake TCP (SimpleRedis `startFakeRedis` style; that helper is unexported in `simpleredis_test.go`, so ratelimit tests own a copy). Live: `Init` + `Take` on real Redis and Dragonfly. Yaegi: compiled test owns start/skip; interpreted probe calls `Take`; GOPATH copy of non-test sources; stdlib only, `useunsafe` false. Pester/Traefik plugin is optional extra, not the behaviour suite.
+- **Tests** — unit: in-package fake TCP (SimpleRedis `startFakeRedis` style; that helper is unexported in `simpleredis_test.go`, so windowcounter tests own a copy). Live: `Init` + `Take` on real Redis and Dragonfly. Yaegi: compiled test owns start/skip; interpreted probe calls `Take`; GOPATH copy of non-test sources; stdlib only, `useunsafe` false. Pester/Traefik plugin is optional extra, not the behaviour suite.
 - **CI gap** — `.github/workflows/ci.yml` `test` job is `go test -v ./...` with no Redis/Dragonfly. Compose `redis`/`dragonfly` have no host ports (`docker-compose.yml`). Live tests must not depend on the Traefik Pester stack.
 
 ```
@@ -26,7 +26,7 @@ Take(key, limit, window)
                               └─ timer Eval INCRBY + EXPIREAT-if-new
 ```
 
-Gap measured: no `ratelimit/` tree on this worktree; README library row is still leaky bucket.
+Gap measured: no `windowcounter/` tree on this worktree; README library row is still leaky bucket.
 
 ## Decisions
 
@@ -37,8 +37,8 @@ Gap measured: no `ratelimit/` tree on this worktree; README library row is still
 - Limiter methods `Sleep` / `Wake` / `Close` for `reclaim.Hooks`. Sleep: flush pending deltas then stop the ticker. Wake: start the ticker. Close: after Sleep (reclaim always Sleeps first); do not `Close` the injected SimpleRedis (shared client). `sync_rate=0`: hooks are no-ops besides stopping any leftover work. Use `time.NewTicker` + stop channel, not `time.Tick`.
 - Redis errors propagate. No fail-open, fail-close, or health gate.
 - README library row and layout become `windowcounter/` (this primitive). Do not add `bucket/`.
-- Live tests: env `RATELIMIT_LIVE_REDIS` and `RATELIMIT_LIVE_DRAGONFLY` (`host:port`). `testing.Short` or missing addrs → skip. CI `test` job starts both engines (GitHub Actions service containers; Dragonfly image already pinned in compose: `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2`) and sets those env vars so the suite does **not** skip. Table-driven backend addr. When env is unset and not `-short`, compiled `TestMain` may `docker run` and skip if Docker is absent. Do not publish compose ports or reuse the Traefik integration job as the limiter suite.
-- Yaegi live: same scenarios; compiled test starts/skips engines; probe in GOPATH calls `Take`. Copy `ratelimit` and `simpleredis` non-test sources.
+- Live tests: env `WINDOWCOUNTER_LIVE_REDIS` and `WINDOWCOUNTER_LIVE_DRAGONFLY` (`host:port`). `testing.Short` or missing addrs → skip. CI `test` job starts both engines (GitHub Actions service containers; Dragonfly image already pinned in compose: `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2`) and sets those env vars so the suite does **not** skip. Table-driven backend addr. When env is unset and not `-short`, compiled `TestMain` may `docker run` and skip if Docker is absent. Do not publish compose ports or reuse the Traefik integration job as the limiter suite.
+- Yaegi live: same scenarios; compiled test starts/skips engines; probe in GOPATH calls `Take`. Copy `windowcounter` and `simpleredis` non-test sources.
 - No Pester/Traefik plugin in this change (optional extra; bound the ask).
 - EVALSHA later. No `go-redis`. Usage packet `knowledge/devdocs/std_go_windowcounter.md` in propose/implement (no API on dest to document yet). Spec host: new `std_go_windowcounter_*` leaves under `std` / `go` (`openspec/specs/map.md`).
 
@@ -61,7 +61,7 @@ Gap measured: no `ratelimit/` tree on this worktree; README library row is still
 
 - Q: How do live tests discover Redis/Dragonfly addrs in CI while keeping `-short` skip locally?
   Rank: additive asked — Desired live suite + CI must not skip
-  Decision: assumed — `RATELIMIT_LIVE_REDIS` / `RATELIMIT_LIVE_DRAGONFLY`; skip on `testing.Short` or empty; CI `test` job service containers set both. Optional `TestMain` `docker run` when env empty and not short.
+  Decision: assumed — `WINDOWCOUNTER_LIVE_REDIS` / `WINDOWCOUNTER_LIVE_DRAGONFLY`; skip on `testing.Short` or empty; CI `test` job service containers set both. Optional `TestMain` `docker run` when env empty and not short.
   By: explore
 
 - Q: Does one limiter instance own a SimpleRedis client, or do callers inject shared clients?

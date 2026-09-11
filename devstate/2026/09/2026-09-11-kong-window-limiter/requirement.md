@@ -52,5 +52,5 @@ IssueKey: 2026-09-11-kong-window-limiter
 - Whether one limiter instance owns one `SimpleRedis` client or callers inject shared clients for multi-instance `sync_rate>0` tests.
 
 ## Tensions
-- README and layout still name `bucket/` leaky bucket as planned; ticket locks `ratelimit/` and forbids leaky/token buckets — README row must change to this primitive.
+- README and layout still name `bucket/` leaky bucket as planned; ticket locks `windowcounter/` and forbids leaky/token buckets — README row must change to this primitive.
 - Prior tickets extended Pester for SimpleRedis; this ticket makes Pester optional and requires direct `go test` live suite as the behaviour proof — CI shape differs from existing integration job.
