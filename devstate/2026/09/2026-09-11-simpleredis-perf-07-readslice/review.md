@@ -39,3 +39,9 @@ phase: archive
 findings: new std_go_simpleredis_resp-decode; fold std_go_simpleredis_resp-commands; validate_spec_map and validate_artifact_names OK
 fixed: catalog synced; change moved to archive/2026-09-11-simpleredis-readslice-decode
 skipped: none
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: none
+fixed: reused PR 20; dropped WIP; gitmoji perf title; CI Lint/Test/Integration Tests success on 8e15852 (build 34652978083)
+skipped: none

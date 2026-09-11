@@ -11,4 +11,4 @@ JobName: 2026-09-11-simpleredis-perf-07-readslice
 | codereview | [x] | [x] | 2026-09-11T21:58:48Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:05:25Z |
 | archive | [x] | [x] | 2026-09-11T22:11:29Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T22:18:54Z |
