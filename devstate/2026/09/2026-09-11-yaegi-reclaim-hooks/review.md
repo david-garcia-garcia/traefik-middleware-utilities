@@ -29,3 +29,9 @@ phase: codereview
 findings: 1 Standards hard + 6 Nitpicks hard, all Status: done; Spec/Security/Performance/Dead/Coverage none
 fixed: live Purpose reverted; runSleep/runWake/runClose; probe capture created; yaegi locals interpreter/evaluated/hookCount
 skipped: none
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: 2 units, 2 produced [x] (Close Language + Close usage on std_go_reclaim); remaining [ ] 0
+fixed: usage packet Close term and Close-hook usage/gotcha
+skipped: none
