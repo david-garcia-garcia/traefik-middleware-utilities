@@ -1,7 +1,7 @@
 ## 1. Sweep-on-release
 
-- [ ] 1.1 In `release`, on every reusable path, peel `idle[0]` while older than `idleTimeout` (stop at the first still-valid head); collect peeled conns under the lock; `close()` after unlock; peel before the append-or-close decision including `closed` and `len(idle) >= maxIdleConns`
-- [ ] 1.2 Leave `borrow` LIFO `break` and `Close` drain unchanged; no ticker, no `container/list`; keep `idleTimeout` 30s and `maxIdleConns` 8
+- [x] 1.1 In `release`, on every reusable path, peel `idle[0]` while older than `idleTimeout` (stop at the first still-valid head); collect peeled conns under the lock; `close()` after unlock; peel before the append-or-close decision including `closed` and `len(idle) >= maxIdleConns`
+- [x] 1.2 Leave `borrow` LIFO `break` and `Close` drain unchanged; no ticker, no `container/list`; keep `idleTimeout` 30s and `maxIdleConns` 8
 
 ## 2. Fake-server unit
 

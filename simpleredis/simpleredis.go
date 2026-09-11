@@ -241,22 +241,39 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 	return conn, false, err
 }
 
-// release returns a clean conn to the idle list, or closes it when dirty, closed, or the idle cap is full.
+// release peels idle-head sockets older than idleTimeout, then returns a clean conn to the idle list, or closes it when dirty, closed, or the idle cap is full.
 func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 	if !reusable {
 		conn.close()
 		return
 	}
 	conn.lastUsed = time.Now()
+	now := conn.lastUsed
 
 	sr.mu.Lock()
-	if sr.closed || len(sr.idle) >= maxIdleConns {
-		sr.mu.Unlock()
-		conn.close()
-		return
+	// Close idle-head sockets older than idleTimeout; stop at the first still-valid head.
+	var peeled []*pooledConn
+	for len(sr.idle) > 0 {
+		head := sr.idle[0]
+		if now.Sub(head.lastUsed) < idleTimeout {
+			break
+		}
+		peeled = append(peeled, head)
+		sr.idle = sr.idle[1:]
 	}
-	sr.idle = append(sr.idle, conn)
+	poolClosed := sr.closed
+	idleFull := len(sr.idle) >= maxIdleConns
+	if !poolClosed && !idleFull {
+		sr.idle = append(sr.idle, conn)
+	}
 	sr.mu.Unlock()
+
+	for _, peeledConn := range peeled {
+		peeledConn.close()
+	}
+	if poolClosed || idleFull {
+		conn.close()
+	}
 }
 
 // dial opens TCP to host, then AUTH and SELECT when those Init fields are set.
