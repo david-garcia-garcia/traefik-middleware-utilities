@@ -1,0 +1,15 @@
+issueKey: 2026-09-11-yaegi-reclaim-hooks
+jobName: 2026-09-11-yaegi-reclaim-hooks
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: pending
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
