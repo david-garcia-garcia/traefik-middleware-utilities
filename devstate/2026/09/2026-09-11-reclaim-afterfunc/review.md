@@ -11,3 +11,9 @@ phase: explore
 findings: Yaegi AfterFunc interp passed; ship Done()!=nil branch; keep nil-Done poll; 3 assumed rows
 fixed: explore.md, research interp probe extract, PR #6 explore card
 skipped: stop-func storage; spec mechanism SHALL; new Pester case
+
+## propose (2026-09-11)
+phase: propose
+findings: fold std_go_reclaim_context-lease; change reclaim-afterfunc-wait apply-ready
+fixed: OpenSpec artifacts, specs.md, PR #6 propose card
+skipped: AfterFunc SHALL; value-lifecycle rewrite
