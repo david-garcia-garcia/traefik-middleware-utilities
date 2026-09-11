@@ -1,6 +1,4 @@
-// Package simpleredis implements utility routines for interacting.
-// It supports currently the following operations: GET, MGET, SET, DELETE,
-// and support timetoleave for keys.
+// Package simpleredis is a stdlib pooled TCP RESP client (GET, MGET, SET with EX, DEL).
 package simpleredis
 
 import (
@@ -39,6 +37,7 @@ var (
 	errIssue       = errors.New(RedisIssue)
 )
 
+// pooledConn is one TCP socket plus RESP reader/writer kept in the idle list.
 type pooledConn struct {
 	netConn  net.Conn
 	reader   *bufio.Reader
@@ -46,11 +45,12 @@ type pooledConn struct {
 	lastUsed time.Time
 }
 
+// close closes the TCP socket. Safe to call after a failed command.
 func (c *pooledConn) close() {
 	_ = c.netConn.Close()
 }
 
-// A SimpleRedis is used to communicate with redis.
+// SimpleRedis is a pooled TCP RESP client. Init stores dial settings; Get/MGet/Set/Del dial on first use.
 type SimpleRedis struct {
 	host     string
 	pass     string
@@ -128,6 +128,7 @@ func (sr *SimpleRedis) Del(name string) error {
 	return err
 }
 
+// exec borrows a connection, runs one RESP command, and retries once when a reused idle socket is dead.
 func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
 	conn, reused, err := sr.borrow()
 	if err != nil {
@@ -149,6 +150,7 @@ func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
 	return values, err
 }
 
+// borrow takes an idle socket younger than idleTimeout, or dials a new one.
 func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 	var reused *pooledConn
 	var stale []*pooledConn
@@ -159,6 +161,7 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 		sr.mu.Unlock()
 		return nil, false, errUnreachable
 	}
+	// Idle sockets still inside idleTimeout are reused; older ones are closed after unlock.
 	for len(sr.idle) > 0 {
 		conn := sr.idle[len(sr.idle)-1]
 		sr.idle = sr.idle[:len(sr.idle)-1]
@@ -183,10 +186,12 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 	if closed {
 		return nil, false, errUnreachable
 	}
+	// Empty idle list: open a new TCP session (AUTH/SELECT in dial).
 	conn, err := sr.dial()
 	return conn, false, err
 }
 
+// release returns a clean conn to the idle list, or closes it when dirty, closed, or the idle cap is full.
 func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 	if !reusable {
 		conn.close()
@@ -204,6 +209,7 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 	sr.mu.Unlock()
 }
 
+// dial opens TCP to host, then AUTH and SELECT when those Init fields are set.
 func (sr *SimpleRedis) dial() (*pooledConn, error) {
 	dialer := net.Dialer{Timeout: dialTimeout}
 	netConn, err := dialer.Dial("tcp", sr.host)
@@ -216,6 +222,7 @@ func (sr *SimpleRedis) dial() (*pooledConn, error) {
 		writer:  bufio.NewWriter(netConn),
 	}
 
+	// AUTH before SELECT so a passworded server accepts the session.
 	if sr.pass != "" {
 		if _, _, err = sr.do(conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
 			conn.close()
@@ -231,6 +238,7 @@ func (sr *SimpleRedis) dial() (*pooledConn, error) {
 	return conn, nil
 }
 
+// do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty.
 func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
 	if err := conn.netConn.SetDeadline(time.Now().Add(ioTimeout)); err != nil {
 		return nil, false, errUnreachable
@@ -245,6 +253,7 @@ func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, erro
 	return values, true, err
 }
 
+// writeCommand writes one RESP array of bulk strings and flushes.
 func writeCommand(writer *bufio.Writer, args [][]byte) error {
 	if _, err := writer.WriteString("*" + strconv.Itoa(len(args)) + "\r\n"); err != nil {
 		return err
@@ -263,6 +272,7 @@ func writeCommand(writer *bufio.Writer, args [][]byte) error {
 	return writer.Flush()
 }
 
+// readReply parses one RESP value. clean is false when the stream is no longer usable.
 func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 	line, err := readLine(reader)
 	if err != nil {
@@ -312,6 +322,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 	}
 }
 
+// readBulk reads a $ payload (or a miss when length is negative).
 func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if len(head) == 0 || head[0] != '$' {
 		return nil, errIssue
@@ -330,6 +341,7 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	return data[:length], nil
 }
 
+// readLine reads one CRLF-terminated RESP line without the CRLF.
 func readLine(reader *bufio.Reader) ([]byte, error) {
 	line, err := reader.ReadBytes('\n')
 	if err != nil {
@@ -341,6 +353,7 @@ func readLine(reader *bufio.Reader) ([]byte, error) {
 	return line[:len(line)-2], nil
 }
 
+// replyError maps AUTH-class Redis errors to redis:noauth and otherwise returns the payload text.
 func replyError(message []byte) error {
 	text := string(message)
 	for _, prefix := range []string{"NOAUTH", "WRONGPASS", "NOPERM", "ERR Client sent AUTH"} {
@@ -351,6 +364,7 @@ func replyError(message []byte) error {
 	return errors.New(text)
 }
 
+// ioError maps deadline exceeded to redis:timeout and other IO failures to redis:unreachable.
 func ioError(err error) error {
 	// errors.Is, not a net.Error assert: Yaegi has panicked on that interface across the interpreter boundary.
 	if errors.Is(err, os.ErrDeadlineExceeded) {

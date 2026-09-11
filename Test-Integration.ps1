@@ -26,12 +26,12 @@ function Test-RedisHealth {
         [int]$RetryIntervalSeconds = 2
     )
 
-    Write-Step "Waiting for Redis..."
+    Write-Step "Waiting for $ServiceName..."
     $elapsed = 0
     do {
         $pong = docker compose exec -T redis redis-cli ping 2>$null
         if ($LASTEXITCODE -eq 0 -and "$pong".Trim() -eq "PONG") {
-            Write-Step "Redis is ready"
+            Write-Step "$ServiceName is ready"
             return $true
         }
         Start-Sleep $RetryIntervalSeconds

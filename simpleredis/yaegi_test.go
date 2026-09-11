@@ -97,7 +97,7 @@ import (
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
-// RoundTrip Inits a client, Sets a key, Gets it, Dels it, then Gets a miss.
+// RoundTrip Inits a client, Sets a key, Gets it, and Dels it.
 func RoundTrip(host string) string {
 	client := &simpleredis.SimpleRedis{}
 	client.Init(host, "", "")

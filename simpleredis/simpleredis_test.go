@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// fakeRedis is an in-process RESP server backed by a string map.
 type fakeRedis struct {
 	mu      sync.Mutex
 	store   map[string]string
@@ -18,8 +19,10 @@ type fakeRedis struct {
 	auths   int
 	selects int
 	gets    int
+	lastSet []string
 }
 
+// startFakeRedis listens on a local TCP port and serves an in-process RESP map.
 func startFakeRedis(t *testing.T, store map[string]string) (*fakeRedis, string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -44,6 +47,7 @@ func startFakeRedis(t *testing.T, store map[string]string) (*fakeRedis, string) 
 	return fake, listener.Addr().String()
 }
 
+// serve answers AUTH/SELECT/GET/MGET/SET on one accepted socket.
 func (f *fakeRedis) serve(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
@@ -70,6 +74,7 @@ func (f *fakeRedis) serve(conn net.Conn) {
 			}
 		case "SET":
 			f.store[args[1]] = args[2]
+			f.lastSet = append([]string(nil), args...)
 			_, _ = io.WriteString(conn, "+OK\r\n")
 		default:
 			_, _ = io.WriteString(conn, "+OK\r\n")
@@ -78,10 +83,18 @@ func (f *fakeRedis) serve(conn net.Conn) {
 	}
 }
 
+// connections is how many TCP accepts the fake has seen.
 func (f *fakeRedis) connections() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.conns
+}
+
+// lastSetCommand returns the last SET argv (including EX and duration).
+func (f *fakeRedis) lastSetCommand() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.lastSet...)
 }
 
 // handshakeCounts returns AUTH, SELECT, and GET commands seen on this fake.
@@ -90,6 +103,8 @@ func (f *fakeRedis) handshakeCounts() (auths, selects, gets int) {
 	defer f.mu.Unlock()
 	return f.auths, f.selects, f.gets
 }
+
+// bulk formats a GET/MGET bulk string or a miss.
 func bulk(store map[string]string, name string) string {
 	value, found := store[name]
 	if !found {
@@ -98,6 +113,7 @@ func bulk(store map[string]string, name string) string {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
 }
 
+// readCommand parses one RESP array of bulk strings from the fake client.
 func readCommand(reader *bufio.Reader) ([]string, error) {
 	header, err := reader.ReadString('\n')
 	if err != nil {
@@ -126,6 +142,7 @@ func readCommand(reader *bufio.Reader) ([]string, error) {
 	return args, nil
 }
 
+// startStaticRedis replies with the same canned RESP on every command.
 func startStaticRedis(t *testing.T, reply string) string {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -177,6 +194,9 @@ func TestConnectionIsReused(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
 	redis.Init(addr, "", "")
+	if fake.connections() != 0 {
+		t.Fatalf("Init opened %d connections, want 0", fake.connections())
+	}
 
 	for i := 0; i < 25; i++ {
 		if _, err := redis.Get("hit"); err != nil {
@@ -185,6 +205,25 @@ func TestConnectionIsReused(t *testing.T) {
 	}
 	if fake.connections() != 1 {
 		t.Fatalf("25 sequential Get opened %d connections, want 1", fake.connections())
+	}
+}
+
+func TestSetSendsExpire(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	if err := redis.Set("k", []byte("v"), 60); err != nil {
+		t.Fatalf("Set: %v", err)
+	}
+	got := fake.lastSetCommand()
+	want := []string{"SET", "k", "v", "EX", "60"}
+	if len(got) != len(want) {
+		t.Fatalf("SET argv %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("SET argv %q, want %q", got, want)
+		}
 	}
 }
 
@@ -282,12 +321,19 @@ func TestMGetRejectsShortReply(t *testing.T) {
 }
 
 func TestRejectedAuthIsReturned(t *testing.T) {
-	addr := startStaticRedis(t, "-NOAUTH Authentication required.\r\n")
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
-
-	if _, err := redis.Get("a"); err == nil || err.Error() != RedisNoAuth {
-		t.Fatalf("Get against -NOAUTH = %v, want %s", err, RedisNoAuth)
+	replies := []string{
+		"-NOAUTH Authentication required.\r\n",
+		"-WRONGPASS invalid password\r\n",
+		"-NOPERM this user has no permissions\r\n",
+		"-ERR Client sent AUTH, but no password is set\r\n",
+	}
+	for _, reply := range replies {
+		addr := startStaticRedis(t, reply)
+		var redis SimpleRedis
+		redis.Init(addr, "", "")
+		if _, err := redis.Get("a"); err == nil || err.Error() != RedisNoAuth {
+			t.Fatalf("Get against %q = %v, want %s", reply, err, RedisNoAuth)
+		}
 	}
 }
 
@@ -312,6 +358,15 @@ func TestDelSucceeds(t *testing.T) {
 
 	if err := redis.Del("k"); err != nil {
 		t.Fatalf("Del = %v", err)
+	}
+}
+
+func TestDelIntegerReplySucceeds(t *testing.T) {
+	addr := startStaticRedis(t, ":1\r\n")
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	if err := redis.Del("k"); err != nil {
+		t.Fatalf("Del against :1 = %v", err)
 	}
 }
 
