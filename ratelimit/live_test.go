@@ -35,6 +35,7 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 	}
 }
 
+// runLiveBackend runs exact N-then-deny, buffered two-client share, and sliding-at-boundary against one engine.
 func runLiveBackend(t *testing.T, addr string) {
 	t.Helper()
 	client := waitLiveClient(t, addr)
@@ -137,6 +138,7 @@ func runLiveBackend(t *testing.T, addr string) {
 	})
 }
 
+// waitLiveClient retries Incr until the engine accepts connections or the wait expires.
 func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 	t.Helper()
 	client := &simpleredis.SimpleRedis{}

@@ -19,33 +19,61 @@ func TestYaegi_TakeUntilDeny(t *testing.T) {
 	writeGopathLimiter(t, goPath)
 	writeGopathFile(t, goPath, "takeprobe", "roundtrip.go", takeprobeSrc)
 
-	got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.UntilDeny(%q, 3)`, addr))
+	got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.UntilDeny(%q, %q, 3)`, addr, "yaegi-k"))
 	if got != "ok" {
 		t.Fatalf("yaegi take: %q, want ok", got)
 	}
 }
 
-// TestYaegiLive_TakeUntilDeny runs the same UntilDeny against a live engine when addrs are set.
-func TestYaegiLive_TakeUntilDeny(t *testing.T) {
+// TestYaegiLive_RedisAndDragonfly runs the same live Take scenarios interpreted against each engine.
+func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("live engines skipped under -short")
 	}
-	addr := os.Getenv("RATELIMIT_LIVE_REDIS")
-	if addr == "" {
-		addr = os.Getenv("RATELIMIT_LIVE_DRAGONFLY")
+	backends := []struct {
+		name string
+		addr string
+	}{
+		{"redis", os.Getenv("RATELIMIT_LIVE_REDIS")},
+		{"dragonfly", os.Getenv("RATELIMIT_LIVE_DRAGONFLY")},
 	}
-	if addr == "" {
+	anyAddr := false
+	for _, backend := range backends {
+		if backend.addr == "" {
+			continue
+		}
+		anyAddr = true
+		backend := backend
+		t.Run(backend.name, func(t *testing.T) {
+			goPath := t.TempDir()
+			writeGopathLimiter(t, goPath)
+			writeGopathFile(t, goPath, "takeprobe", "roundtrip.go", takeprobeSrc)
+			t.Run("exactNThenDeny", func(t *testing.T) {
+				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.UntilDeny(%q, %q, 3)`, backend.addr, t.Name()))
+				if got != "ok" {
+					t.Fatalf("yaegi live take: %q, want ok", got)
+				}
+			})
+			t.Run("bufferedTwoClients", func(t *testing.T) {
+				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.BufferedShare(%q, %q)`, backend.addr, t.Name()))
+				if got != "ok" {
+					t.Fatalf("yaegi live buffered: %q, want ok", got)
+				}
+			})
+			t.Run("slidingBoundary", func(t *testing.T) {
+				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.SlidingBoundary(%q, %q)`, backend.addr, t.Name()))
+				if got != "ok" {
+					t.Fatalf("yaegi live sliding: %q, want ok", got)
+				}
+			})
+		})
+	}
+	if !anyAddr {
 		t.Skip("live addrs unset")
-	}
-	goPath := t.TempDir()
-	writeGopathLimiter(t, goPath)
-	writeGopathFile(t, goPath, "takeprobe", "roundtrip.go", takeprobeSrc)
-	got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.UntilDeny(%q, 3)`, addr))
-	if got != "ok" {
-		t.Fatalf("yaegi live take: %q, want ok", got)
 	}
 }
 
+// evalTakeprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalTakeprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
 	interpreter := interp.New(interp.Options{GoPath: goPath})
@@ -62,6 +90,7 @@ func evalTakeprobe(t *testing.T, goPath, expr string) string {
 	return evaluated.Interface().(string)
 }
 
+// writeGopathLimiter copies non-test ratelimit and simpleredis sources into a GOPATH module tree.
 func writeGopathLimiter(t *testing.T, goPath string) {
 	t.Helper()
 	src := callerDir(t)
@@ -69,6 +98,7 @@ func writeGopathLimiter(t *testing.T, goPath string) {
 	copyNonTestGo(t, filepath.Join(filepath.Dir(src), "simpleredis"), goPath, "simpleredis")
 }
 
+// copyNonTestGo copies non-test .go files from srcDir into GOPATH/src/.../<pkg>.
 func copyNonTestGo(t *testing.T, srcDir, goPath, pkg string) {
 	t.Helper()
 	destDir := filepath.Join(goPath, "src", "github.com", "david-garcia-garcia", "traefik-middleware-utilities", pkg)
@@ -99,6 +129,7 @@ func copyNonTestGo(t *testing.T, srcDir, goPath, pkg string) {
 	}
 }
 
+// callerDir is the directory of the test file that called writeGopathLimiter.
 func callerDir(t *testing.T) string {
 	t.Helper()
 	_, thisFile, _, ok := runtime.Caller(1)
@@ -108,6 +139,7 @@ func callerDir(t *testing.T) string {
 	return filepath.Dir(thisFile)
 }
 
+// writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
 func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
 	t.Helper()
 	dir := filepath.Join(goPath, "src", pkg)
@@ -129,7 +161,7 @@ import (
 )
 
 // UntilDeny Takes until the limit then expects a deny.
-func UntilDeny(host string, limit int) string {
+func UntilDeny(host, key string, limit int) string {
 	client := &simpleredis.SimpleRedis{}
 	client.Init(host, "", "")
 	limiter, err := ratelimit.New(client, 0)
@@ -138,7 +170,7 @@ func UntilDeny(host string, limit int) string {
 	}
 	n := int64(limit)
 	for i := int64(0); i < n; i++ {
-		allowed, _, takeErr := limiter.Take("yaegi-k", n, time.Minute)
+		allowed, _, takeErr := limiter.Take(key, n, time.Minute)
 		if takeErr != nil {
 			return "take:" + takeErr.Error()
 		}
@@ -146,12 +178,92 @@ func UntilDeny(host string, limit int) string {
 			return "early"
 		}
 	}
-	allowed, _, err := limiter.Take("yaegi-k", n, time.Minute)
+	allowed, _, err := limiter.Take(key, n, time.Minute)
 	if err != nil {
 		return "deny:" + err.Error()
 	}
 	if allowed {
 		return "not-denied"
+	}
+	return "ok"
+}
+
+// BufferedShare flushes two clients then expects the shared count to deny the next Take.
+func BufferedShare(host, key string) string {
+	aClient := &simpleredis.SimpleRedis{}
+	aClient.Init(host, "", "")
+	bClient := &simpleredis.SimpleRedis{}
+	bClient.Init(host, "", "")
+	a, err := ratelimit.New(aClient, time.Hour)
+	if err != nil {
+		return "new-a:" + err.Error()
+	}
+	b, err := ratelimit.New(bClient, time.Hour)
+	if err != nil {
+		return "new-b:" + err.Error()
+	}
+	const limit int64 = 3
+	window := time.Minute
+	for i := 0; i < 2; i++ {
+		allowed, _, takeErr := a.Take(key, limit, window)
+		if takeErr != nil {
+			return "a:" + takeErr.Error()
+		}
+		if !allowed {
+			return "a-early"
+		}
+		allowed, _, takeErr = b.Take(key, limit, window)
+		if takeErr != nil {
+			return "b:" + takeErr.Error()
+		}
+		if !allowed {
+			return "b-early"
+		}
+	}
+	a.Sleep()
+	b.Sleep()
+	allowed, _, err := a.Take(key, limit, window)
+	if err != nil {
+		return "share:" + err.Error()
+	}
+	if allowed {
+		return "last-write-wins"
+	}
+	a.Close()
+	b.Close()
+	return "ok"
+}
+
+// SlidingBoundary fills a window then Takes at the next start and expects the previous hits to still count.
+func SlidingBoundary(host, key string) string {
+	client := &simpleredis.SimpleRedis{}
+	client.Init(host, "", "")
+	limiter, err := ratelimit.New(client, 0)
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	window := 10 * time.Second
+	const limit int64 = 2
+	start := time.Now().Unix() / 10 * 10
+	now := time.Unix(start, 0).Add(9 * time.Second)
+	limiter.SetNowForTest(func() time.Time { return now })
+	for i := int64(0); i < limit; i++ {
+		allowed, _, takeErr := limiter.Take(key, limit, window)
+		if takeErr != nil {
+			return "fill:" + takeErr.Error()
+		}
+		if !allowed {
+			return "fill-early"
+		}
+	}
+	now = time.Unix(start, 0).Add(window)
+	limiter.SetNowForTest(func() time.Time { return now })
+	allowed, _, err := limiter.Take(key, limit, window)
+	if err != nil {
+		return "boundary:" + err.Error()
+	}
+	if allowed {
+		return "doubled"
 	}
 	return "ok"
 }

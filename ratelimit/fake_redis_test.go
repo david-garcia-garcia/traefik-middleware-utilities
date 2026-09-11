@@ -98,6 +98,7 @@ func (f *testFakeRedis) lastExpireCommand() []string {
 	return append([]string(nil), f.lastExpire...)
 }
 
+// testBulk formats a GET/MGET bulk string or a miss.
 func testBulk(store map[string]string, name string) string {
 	value, found := store[name]
 	if !found {
@@ -106,6 +107,7 @@ func testBulk(store map[string]string, name string) string {
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
 }
 
+// incrementTestStore adds delta to a decimal string slot, treating a missing key as 0.
 func incrementTestStore(store map[string]string, name string, delta int64) (int64, error) {
 	current := int64(0)
 	if raw, found := store[name]; found {
@@ -120,6 +122,7 @@ func incrementTestStore(store map[string]string, name string, delta int64) (int6
 	return next, nil
 }
 
+// readTestCommand parses one RESP array of bulk strings from the fake client.
 func readTestCommand(reader *bufio.Reader) ([]string, error) {
 	header, err := reader.ReadString('\n')
 	if err != nil {

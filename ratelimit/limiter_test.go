@@ -111,6 +111,66 @@ func TestNew_NegativeSyncRate(t *testing.T) {
 	}
 }
 
+func TestNew_FloorsSyncRateBelow20ms(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := New(client, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	if limiter.syncRate != minSyncRate {
+		t.Fatalf("syncRate %v want %v", limiter.syncRate, minSyncRate)
+	}
+}
+
+func TestTake_SubSecondWindow(t *testing.T) {
+	client := &simpleredis.SimpleRedis{}
+	client.Init("127.0.0.1:1", "", "")
+	limiter, err := New(client, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = limiter.Take("k", 1, 500*time.Millisecond)
+	if err == nil {
+		t.Fatal("want window error")
+	}
+}
+
+func TestBuffered_TickerFlushesWithoutSleep(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := New(client, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	allowed, _, err := limiter.Take("tick-k", 10, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !allowed {
+		t.Fatal("first take denied")
+	}
+	windowStart := now.Unix() / 60 * 60
+	redisKey := redisWindowKey("tick-k", windowStart)
+	deadline := time.Now().Add(time.Second)
+	for {
+		raw, getErr := client.Get(redisKey)
+		if getErr == nil && string(raw) == "1" {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("ticker did not flush; get err %v value %q", getErr, raw)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func TestBuffered_TwoClientsShareWithoutLastWriteWins(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
 	aClient := &simpleredis.SimpleRedis{}

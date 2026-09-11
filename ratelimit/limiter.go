@@ -99,7 +99,7 @@ func (l *Limiter) Take(key string, limit int64, window time.Duration) (bool, flo
 	return l.takeBuffered(currentKey, previousKey, expireAt, weight, limit)
 }
 
-// Allow is Take.
+// Allow is an alias for Take for callers who prefer Allow.
 func (l *Limiter) Allow(key string, limit int64, window time.Duration) (bool, float64, error) {
 	return l.Take(key, limit, window)
 }
@@ -199,10 +199,8 @@ func (l *Limiter) getCount(redisKey string) (int64, error) {
 
 // Sleep flushes pending deltas then stops the flush ticker. Exact mode is a no-op besides stopping leftover work.
 func (l *Limiter) Sleep() {
-	l.mu.Lock()
-	l.stopFlushLocked()
-	l.mu.Unlock()
 	_ = l.flushPending()
+	l.stopFlushAndWait()
 }
 
 // Wake starts the flush ticker when sync_rate is positive and the limiter is not closed.
@@ -223,9 +221,9 @@ func (l *Limiter) Close() {
 		return
 	}
 	l.closed = true
-	l.stopFlushLocked()
 	l.mu.Unlock()
 	_ = l.flushPending()
+	l.stopFlushAndWait()
 }
 
 // startFlushLocked starts the ticker goroutine. Caller holds l.mu. NewTicker is not time.Tick.
@@ -236,21 +234,28 @@ func (l *Limiter) startFlushLocked() {
 	go l.flushLoop(l.ticker, l.stop)
 }
 
-// stopFlushLocked stops the ticker and waits for the goroutine. Caller holds l.mu until Stop, then waits outside? Wait on wg while holding mu deadlocks the loop if it needs mu. Unlock first.
-func (l *Limiter) stopFlushLocked() {
+// takeFlushTickerLocked closes the stop channel and detaches the ticker. Caller holds l.mu. Does not wait.
+func (l *Limiter) takeFlushTickerLocked() *time.Ticker {
 	if l.stop == nil {
-		return
+		return nil
 	}
 	close(l.stop)
 	l.stop = nil
 	ticker := l.ticker
 	l.ticker = nil
-	l.mu.Unlock()
-	l.wg.Wait()
-	if ticker != nil {
-		ticker.Stop()
-	}
+	return ticker
+}
+
+// stopFlushAndWait stops the ticker then waits for flushLoop. Caller must not hold l.mu.
+func (l *Limiter) stopFlushAndWait() {
 	l.mu.Lock()
+	ticker := l.takeFlushTickerLocked()
+	l.mu.Unlock()
+	if ticker == nil {
+		return
+	}
+	l.wg.Wait()
+	ticker.Stop()
 }
 
 // flushLoop EVAL-flushes on each tick until stop.
@@ -271,31 +276,34 @@ func (l *Limiter) flushPending() error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	var firstErr error
+	nowUnix := l.now().Unix()
 	for redisKey, state := range l.windows {
-		if state.localDelta == 0 {
-			continue
-		}
-		delta := state.localDelta
-		expireAt := state.expireAt
-		values, err := l.redis.Eval(flushScript, []string{redisKey}, []string{
-			strconv.FormatInt(delta, 10),
-			strconv.FormatInt(expireAt, 10),
-		})
-		if err != nil {
-			if firstErr == nil {
-				firstErr = err
+		if state.localDelta > 0 {
+			delta := state.localDelta
+			expireAt := state.expireAt
+			values, err := l.redis.Eval(flushScript, []string{redisKey}, []string{
+				strconv.FormatInt(delta, 10),
+				strconv.FormatInt(expireAt, 10),
+			})
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+			} else {
+				n, convErr := parseEvalInt(values)
+				if convErr != nil {
+					if firstErr == nil {
+						firstErr = convErr
+					}
+				} else {
+					state.redisKnown = n
+					state.localDelta = 0
+				}
 			}
-			continue
 		}
-		n, convErr := parseEvalInt(values)
-		if convErr != nil {
-			if firstErr == nil {
-				firstErr = convErr
-			}
-			continue
+		if state.localDelta == 0 && (state.expireAt == 0 || nowUnix >= state.expireAt) {
+			delete(l.windows, redisKey)
 		}
-		state.redisKnown = n
-		state.localDelta = 0
 	}
 	return firstErr
 }
