@@ -98,13 +98,13 @@ Do not add Yaegi or a second test file for this. Do not cover array-element shor
 
 - Q: Do dest `readBulk` / `do` / `release` need a production change?
   Rank: additive asked — Out of scope: no production change when dest already returns `clean == false` on short read; Affected allows `simpleredis.go` only if tests prove it wrong
-  Decision: assumed — no. Throwaway truncated Get on dest: `redis:unreachable`, idle 0, second Get `hello`. Implement lands tests; edit production only if those tests fail.
-  By: explore
+  Decision: resolved — no. Committed truncated Get: `redis:unreachable`, idle 0, second Get `hello`. `simpleredis.go` not edited.
+  By: implement
 
 - Q: Coverage block ids `401.52,403.3` will move if `readBulk` is edited — what is the proof?
   Rank: additive asked — Unknowns name the dest-line ids; Desired: that block becomes non-zero and the invariant fails if `clean==true` or `release` pools `reusable==false`
-  Decision: assumed — invariant tests are the proof. After implement, measure that `401.52,403.3` (or the new id of the `ReadFull` fail block) is non-zero. Do not treat a hardcoded dest id as the only assertion.
-  By: explore
+  Decision: resolved — invariant tests landed; `go test ./simpleredis -covermode=set` shows `401.52,403.3` count 1 (was 0). Production not edited so the dest id still matches.
+  By: implement
 
 - Q: How is `readBulk`’s non-`$` head (`390-392`) covered when `readReply` only calls it for `$`?
   Rank: additive asked — Desired malformed bulk header plus finding `:390-392`; public Get cannot reach that branch

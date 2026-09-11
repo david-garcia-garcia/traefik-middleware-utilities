@@ -7,7 +7,7 @@ JobName: 2026-09-11-simpleredis-test-04-truncated-bulk
 | prepare | [x] | [x] | 2026-09-11T21:21:31Z |
 | explore | [x] | [x] | 2026-09-11T21:30:51Z |
 | propose | [x] | [x] | 2026-09-11T21:39:41Z |
-| implement | [ ] | [ ] | |
+| implement | [x] | [x] | 2026-09-11T22:01:00Z |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |

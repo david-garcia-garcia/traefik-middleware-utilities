@@ -16,3 +16,9 @@ findings: none
 fixed: none
 skipped: implement not started; truncated-payload unit tests and live unique-value Pester remain
 
+## implement (2026-09-11T21:59:13Z)
+phase: implement
+findings: none
+fixed: truncated-bulk unit tests and live Get/MGet own-value on Redis and Dragonfly
+skipped: production simpleredis.go (dest already clean==false); no new spec folder
+
