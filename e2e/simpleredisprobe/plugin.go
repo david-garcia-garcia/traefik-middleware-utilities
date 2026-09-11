@@ -58,8 +58,13 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return &middleware{next: next, client: client}, nil
 }
 
-// ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval, then copies results into headers.
+// ServeHTTP runs every client verb, or Set+Get only when recover=1, then copies results into headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	if req.URL.Query().Get("recover") == "1" {
+		m.serveRecover(rw, req)
+		return
+	}
+
 	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
 	setKey := prefix + ":set"
 	incrKey := prefix + ":incr"
@@ -146,5 +151,21 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("X-SimpleRedis-Eval", string(evalValues[0]))
 
+	m.next.ServeHTTP(rw, req)
+}
+
+// serveRecover runs Set+Get only and sets X-SimpleRedis-Recover when those succeed. It does not Eval.
+func (m *middleware) serveRecover(rw http.ResponseWriter, req *http.Request) {
+	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
+	setKey := prefix + ":set"
+	if err := m.client.Set(setKey, []byte("ok"), 60); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if _, err := m.client.Get(setKey); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-Recover", "ok")
 	m.next.ServeHTTP(rw, req)
 }

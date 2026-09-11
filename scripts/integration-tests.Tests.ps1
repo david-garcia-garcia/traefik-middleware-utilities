@@ -19,6 +19,40 @@ BeforeAll {
 
     $script:BaseUrl = "http://localhost:8000"
     $script:TraefikApiUrl = "http://localhost:8080"
+
+    function Stop-TraefikEngineClientForTest {
+        param(
+            [Parameter(Mandatory)]
+            [ValidateSet("redis", "dragonfly")]
+            [string]$Engine
+        )
+        $traefikIp = (docker inspect -f "{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}" reclaim-e2e-traefik).Trim()
+        if (-not $traefikIp) {
+            throw "traefik container IP is empty"
+        }
+        $cli = @("compose", "exec", "-T", "redis", "redis-cli")
+        if ($Engine -eq "dragonfly") {
+            $cli += @("-h", "dragonfly")
+        }
+        $list = docker @cli CLIENT LIST
+        if ($LASTEXITCODE -ne 0) {
+            throw "CLIENT LIST on $Engine failed"
+        }
+        $killed = 0
+        foreach ($line in ($list -split "`r?`n")) {
+            if ($line -match "addr=$([regex]::Escape($traefikIp)):\d+") {
+                $addr = $Matches[0].Substring("addr=".Length)
+                docker @cli CLIENT KILL ADDR $addr | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    throw "CLIENT KILL ADDR $addr on $Engine failed"
+                }
+                $killed++
+            }
+        }
+        if ($killed -eq 0) {
+            throw "CLIENT KILL killed 0 Traefik clients on $Engine (ip $traefikIp). CLIENT LIST: $list"
+        }
+    }
 }
 
 Describe "reclaim Yaegi e2e" {
@@ -111,5 +145,23 @@ Describe "simpleredis Yaegi e2e" {
         $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+    }
+
+    It "GET /redis recovers after CLIENT KILL of the Traefik client" {
+        $warmup = Invoke-WebRequest -Uri "$script:BaseUrl/redis" -UseBasicParsing -TimeoutSec 10
+        $warmup.StatusCode | Should -Be 200
+        Stop-TraefikEngineClientForTest -Engine redis
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis?recover=1" -UseBasicParsing -TimeoutSec 10
+        $response.StatusCode | Should -Be 200
+        $response.Headers["X-SimpleRedis-Recover"] | Should -Be "ok"
+    }
+
+    It "GET /dragonfly recovers after CLIENT KILL of the Traefik client" {
+        $warmup = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly" -UseBasicParsing -TimeoutSec 10
+        $warmup.StatusCode | Should -Be 200
+        Stop-TraefikEngineClientForTest -Engine dragonfly
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly?recover=1" -UseBasicParsing -TimeoutSec 10
+        $response.StatusCode | Should -Be 200
+        $response.Headers["X-SimpleRedis-Recover"] | Should -Be "ok"
     }
 }
