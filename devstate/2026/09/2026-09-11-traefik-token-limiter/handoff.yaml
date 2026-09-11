@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-traefik-token-limiter
+jobName: 2026-09-11-traefik-token-limiter
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: ef51ff92dd55261ca3d01f846a076b502f3c0bcbe59ec0f9e451f50e868a2649
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 8
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8
