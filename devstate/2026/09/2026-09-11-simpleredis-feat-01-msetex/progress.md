@@ -6,7 +6,7 @@ JobName: 2026-09-11-simpleredis-feat-01-msetex
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T21:26:58Z |
 | explore | [x] | [x] | 2026-09-11T21:41:02Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |

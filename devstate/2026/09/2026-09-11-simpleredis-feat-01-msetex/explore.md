@@ -43,12 +43,12 @@ IssueKey: 2026-09-11-simpleredis-feat-01-msetex
 - Q: What pair-count cap rejects an unbounded frame before I/O?
   Rank: additive asked — Desired names a cap so one call cannot build an unbounded frame; the number is not on requirement.md
   Decision: assumed — 1024 pairs. Above the ticket’s 200-key flush example; small enough for the 1s `ioTimeout`. Constant next to `maxIdleConns`. Over cap → `redis:issue?`, no dial.
-  By: explore
+  By: propose
 
 - Q: How is integer `0` spelled as a Go error?
   Rank: additive asked — Desired: integer 1 success; integer 0 must be returned to the caller (not swallowed)
   Decision: assumed — `redis:issue?`. `0` without NX/XX is an unexpected integer for this API. Do not add a sixth exported string. Do not use `errors.New("0")` (not in the stable set; Expire treats `:0` as success).
-  By: explore
+  By: propose
 
 - Q: Do empty or nil slices error, or match dest `MGet` (`nil, nil`)?
   Rank: additive asked — Desired: reject empty input; Out of scope: changing `MGet` empty-input; Tensions say do not change `MGet`
@@ -68,7 +68,7 @@ IssueKey: 2026-09-11-simpleredis-feat-01-msetex
 - Q: Re-detect native support after reconnect?
   Rank: additive asked — Desired: detect once per client, cache under existing mutex, cached miss goes straight to EVAL; Unknowns: re-detect after reconnect only if cheap
   Decision: assumed — once per `SimpleRedis` value. Cached miss stays miss for the client lifetime (Lua works on Valkey too). Cached native that later gets `ERR unknown command` recaches miss and `EVAL`s that call. Do not reset the flag on `dial`. A new `Init`/value is a new cache.
-  By: explore
+  By: propose
 
 - Q: Where are native argv tests run?
   Rank: additive asked — Desired fake-server native argv; human: native argv tests stay on the fake
@@ -103,22 +103,22 @@ IssueKey: 2026-09-11-simpleredis-feat-01-msetex
 - Q: How is `ERR unknown command` matched?
   Rank: additive asked — Desired: treat ERR unknown command as not supported
   Decision: assumed — `strings.HasPrefix(err.Error(), "ERR unknown command")`. Covers Redis 7 quote styles (`ext_redis_msetex`). Do not match Lua `Error running script`. AUTH-class stays `redis:noauth` before this check.
-  By: explore
+  By: propose
 
 - Q: One Lua script or two (EX vs EXAT)?
   Rank: additive asked — Desired: one EVAL script, EX vs EXAT variants
   Decision: assumed — one script. Last two ARGV are the token (`EX` or `EXAT`) and the decimal TTL. One body to special-case in the fake. Two Go wrappers share it.
-  By: explore
+  By: propose
 
 - Q: How does the fake distinguish native MSETEX from unknown-command fallback?
   Rank: additive asked — Desired fake native argv and fake unknown-command then cached EVAL; dest fake replies +OK for unknown including MSETEX
   Decision: assumed — add `case "MSETEX"` that stores pairs, records argv, replies `:1` (and deletes on past EXAT when tests need it). A test-only `rejectMSetEX` (or equivalent) replies `-ERR unknown command 'MSETEX'`. Do not change the default `+OK` for other unknown verbs. Fake EVAL special-cases the fallback script string and applies SET+store (or tests use `startStaticRedis` `:1` plus argv assert via a recording fake).
-  By: explore
+  By: propose
 
 - Q: What error do mismatched lengths and over-cap use?
   Rank: additive asked — Desired: validate len(names)==len(values), reject empty, cap pair count, all before I/O
   Decision: assumed — `redis:issue?` for empty, length mismatch, and over-cap. Same matchable string as other unexpected-call/reply cases. No dial.
-  By: explore
+  By: propose
 
 - Q: Cluster hash-slot constraint?
   Rank: additive asked — Desired: document clustered engines need all keys in one hash slot (hash tags)
@@ -128,7 +128,7 @@ IssueKey: 2026-09-11-simpleredis-feat-01-msetex
 - Q: What does the Traefik probe and Pester assert for the new verb?
   Rank: additive asked — Affected `e2e/simpleredisprobe` and `scripts/integration-tests.Tests.ps1`; human: extend compose + Pester `/redis` `/dragonfly` and the probe with the new verb
   Decision: assumed — `ServeHTTP` calls `MSetEX` and `MSetEXAt` on per-request keys, then `Eval` `return redis.call('TTL', KEYS[1])` with that key in KEYS. Headers `X-SimpleRedis-MSetEX` (value ok) and `X-SimpleRedis-MSetEX-TTL` (positive decimal). Same on `/redis` and `/dragonfly`. Do not stop whoami-a/b. Compose services unchanged.
-  By: explore
+  By: propose
 
 - Q: How is Yaegi coverage provided for both paths?
   Rank: additive asked — Desired: Yaegi coverage for both paths; human same
@@ -138,9 +138,9 @@ IssueKey: 2026-09-11-simpleredis-feat-01-msetex
 - Q: Are zero or negative TTL values rejected in Go?
   Rank: additive asked — Desired: require the TTL argument (do not omit; do not default KEEPTTL); dest `Set` already passes duration -1 through to the server
   Decision: assumed — pass the integer through, same as `Set`/`Expire`. Do not clamp. Do not omit the option. Server error text (or delete-on-past for EXAT) is the engine’s.
-  By: explore
+  By: propose
 
 - Q: Where does the native-support flag live?
   Rank: additive asked — Desired: cache under the existing mutex; Current: mu guards pool/closed only
   Decision: assumed — one field on `SimpleRedis` (tri-state unknown / native / lua), read and written only while holding `mu`. Do not put it on `pooledConn`. Existing borrow/release stay as they are.
-  By: explore
+  By: propose
