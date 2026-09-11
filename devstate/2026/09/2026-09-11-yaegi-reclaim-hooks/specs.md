@@ -15,3 +15,7 @@ verdicts:
 
 - fold std_go_reclaim_value-lifecycle (high; small adjustment: replace optional interfaces on the value with optional Hooks funcs; owner already names value-lifecycle)
 - fold std_go_reclaim_context-lease (high; small adjustment: Open signature grows hooks; Close hook replaces Close() on the value; Yaegi load no longer MAY stay inert)
+
+## archive (2026-09-11)
+
+FindSpecHost re-ran Search + Verdict. Same fold/high owners as propose. Live catalog folded; type-switch requirement removed from `std_go_reclaim_value-lifecycle`.

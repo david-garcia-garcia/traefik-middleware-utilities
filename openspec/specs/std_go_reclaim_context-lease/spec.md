@@ -20,19 +20,19 @@ The `Table` source file SHALL import only Go standard-library packages. It MUST 
 - **AND** `create` runs once
 
 ### Requirement: Open creates once and binds a context
-`Open(ctx, key, logger, create)` SHALL create the value on the first call for a key, store it,
-and bind `ctx` as a holder. `Open` SHALL panic if `ctx` is nil. `Open` SHALL return an error if
-`logger` is nil. The table MUST NOT keep a logger of its own; `logger` is the only logger for
-that Open. A holder whose `Done` is nil (`context.Background`) SHALL be treated as live until
-`ctx.Err()` is set. `create` SHALL take no arguments (Yaegi cannot call
-`func(context.Context) (any, error)`). The table SHALL register the key before it runs `create`,
-so concurrent first `Open` calls for one key run `create` exactly once and every caller receives
-that one value; no `Open` SHALL create a value that is then discarded. If `create` returns an
-error the key SHALL NOT be stored, every caller waiting on that create SHALL receive that error,
-and a later `Open` SHALL be free to try again. A later `Open` for the same key (live or sleeping)
-SHALL return the stored value, bind the new context, and MUST NOT run `create`. Two live contexts
-on one key SHALL keep the value until both are Done. A stale holder drop from a previous
-incarnation or from `Reset` MUST NOT change a later incarnation of the same key.
+`Open(ctx, key, logger, create, hooks)` SHALL create the value on the first call for a key, store
+it, store `hooks` on that incarnation, and bind `ctx` as a holder. `Open` SHALL panic if `ctx` is
+nil. `Open` SHALL return an error if `logger` is nil. The table MUST NOT keep a logger of its own;
+`logger` is the only logger for that Open. A holder whose `Done` is nil (`context.Background`)
+SHALL be treated as live until `ctx.Err()` is set. `create` SHALL take no arguments (Yaegi cannot
+call `func(context.Context) (any, error)`). The table SHALL register the key before it runs
+`create`, so concurrent first `Open` calls for one key run `create` exactly once and every caller
+receives that one value; no `Open` SHALL create a value that is then discarded. If `create`
+returns an error the key SHALL NOT be stored, every caller waiting on that create SHALL receive
+that error, and a later `Open` SHALL be free to try again. A later `Open` for the same key (live
+or sleeping) SHALL return the stored value, bind the new context, and MUST NOT run `create`. Two
+live contexts on one key SHALL keep the value until both are Done. A stale holder drop from a
+previous incarnation or from `Reset` MUST NOT change a later incarnation of the same key.
 
 #### Scenario: Two holders one dispose
 - **WHEN** `Open` creates a value for a key
@@ -124,9 +124,9 @@ incarnation was still awake. Log lines MUST NOT be emitted while the table mutex
 
 Every line SHALL mean the work it names has already happened: `reclaim_orphan` is emitted after
 `sleep` has returned, `reclaim_reclaim` after `wake` has returned, and `reclaim_dispose` after
-`Close()` has returned. For one incarnation `reclaim_orphan` SHALL always precede the
-`reclaim_dispose` that ends it, at every grace duration including zero, with no exception for
-`Reset`.
+the Close hook has returned (or immediately when that func is nil). For one incarnation
+`reclaim_orphan` SHALL always precede the `reclaim_dispose` that ends it, at every grace duration
+including zero, with no exception for `Reset`.
 
 At zero grace the table keeps no sleeping value, so an `Open` that races the last holder going
 away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), not as
@@ -166,31 +166,32 @@ away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), n
 
 ### Requirement: Incarnation end closes the stored value before it reports the end
 When an incarnation ends (grace elapsed while sleeping, `Reset`, or a zero-grace drop), the table
-SHALL call `Close()` on the stored value and SHALL wait until it has returned before it emits
-`reclaim_dispose`. `Close()` SHALL be called at most once per incarnation. Because the table
-waits, a value whose `Close()` blocks blocks whoever ended the incarnation; values stored on this
-table SHALL NOT block in `Close()`. Every goroutine the table starts for a key SHALL exit once
-that key's holder contexts are Done and its incarnation has ended.
+SHALL call the Close hook when that func is non-nil and SHALL wait until it has returned before
+it emits `reclaim_dispose`. The Close hook SHALL be called at most once per incarnation. Because
+the table waits, a Close hook that blocks blocks whoever ended the incarnation; Close hooks
+SHALL NOT block. Every goroutine the table starts for a key SHALL exit once that key's holder
+contexts are Done and its incarnation has ended.
 
 #### Scenario: Dispose log implies Close has returned
 - **WHEN** a key is orphaned and grace elapses
-- **AND** the stored value has a `Close()` method
-- **THEN** `Close()` has returned before `reclaim_dispose` is emitted for that key
-- **AND** `Close()` did not observe a dispose line already written for that key
+- **AND** the Close hook is set
+- **THEN** that func has returned before `reclaim_dispose` is emitted for that key
+- **AND** that func did not observe a dispose line already written for that key
 
 #### Scenario: Reset closes the value before it reports dispose
 - **WHEN** `Reset` is called on a table that still has an incarnation
-- **THEN** that value's `Close()` has returned before `reclaim_dispose` is emitted for that key
+- **AND** the Close hook is set
+- **THEN** that func has returned before `reclaim_dispose` is emitted for that key
 
 #### Scenario: Goroutines do not outlive the incarnation
 - **WHEN** many keys are opened, then every holder context is Done and every incarnation has ended
 - **THEN** the table owns no more goroutines than it did before those `Open` calls
 
 ### Requirement: Library Open loads under Traefik Yaegi
-A Traefik local plugin SHALL import this module's `reclaim` package and call `Open` from `New`.
-Traefik SHALL start. A request through that plugin SHALL succeed. Two plugin instances that Open
-the same key SHALL receive the same stored value. Optional `Sleep`/`Wake`/`Close` MAY remain
-inert under Yaegi; that MUST NOT fail the load or the request.
+A Traefik local plugin SHALL import this module's `reclaim` package and call `Open` from `New`
+with `Hooks` that log sleep, wake, and close. Traefik SHALL start. A request through that plugin
+SHALL succeed. Two plugin instances that Open the same key SHALL receive the same stored value.
+Those hooks SHALL run under Yaegi. Inert hooks MUST NOT be accepted as success for this load.
 
 #### Scenario: Fake plugin starts and shares one incarnation
 - **WHEN** Traefik v3.7.11 loads a local plugin whose `New` calls `reclaim.Open` for a shared key
@@ -199,3 +200,13 @@ inert under Yaegi; that MUST NOT fail the load or the request.
 - **AND** a request through each route succeeds
 - **AND** both instances observe the same stored value identity
 - **AND** Traefik logs include `reclaim_put` and `reclaim_bind`
+
+#### Scenario: Reload runs sleep then wake hooks
+- **WHEN** both plugin instances for that shared key are torn down and constructed again within grace
+- **THEN** Traefik logs include `reclaim_orphan` and `reclaim_reclaim`
+- **AND** Traefik logs include the plugin's sleep hook line and wake hook line
+
+#### Scenario: Teardown runs the close hook
+- **WHEN** every plugin instance for that shared key is torn down and grace elapses
+- **THEN** Traefik logs include `reclaim_dispose`
+- **AND** Traefik logs include the plugin's close hook line
