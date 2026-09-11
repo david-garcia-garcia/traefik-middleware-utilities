@@ -21,3 +21,9 @@ phase: implement
 findings: none
 fixed: n/a
 skipped: Open signature change; in-process Yaegi interp probe
+
+## codereview (2026-09-11)
+phase: codereview
+findings: P3 Reset naming (skipped), spec archive missing (skipped), useunsafe flag (fixed)
+fixed: compose useunsafe=false
+skipped: Reset rename; main-catalog specs until archive

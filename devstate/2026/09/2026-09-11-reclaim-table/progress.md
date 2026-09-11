@@ -8,7 +8,7 @@ JobName: 2026-09-11-reclaim-table
 | explore | [x] | [x] | 2026-09-11T04:53:40Z |
 | propose | [x] | [x] | 2026-09-11T05:01:27Z |
 | implement | [x] | [x] | 2026-09-11T05:09:22Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-11T05:18:40Z |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
