@@ -23,3 +23,9 @@ phase: implement
 findings: None.
 fixed: peel stale idle heads in release; fake two-entry unit; live Redis+Dragonfly live_test.go; CI SIMPLEREDIS_LIVE_*; usage gotcha
 skipped: none
+
+## codereview (2026-09-11)
+phase: codereview
+findings: Test coverage 1 hard (done); other axes none
+fixed: TestStaleIdleHeadPeelStopsAtStillValidHead (73efe0b)
+skipped: none
