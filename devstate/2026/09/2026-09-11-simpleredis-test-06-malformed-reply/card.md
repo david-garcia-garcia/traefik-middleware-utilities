@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-11T22:11:33Z
+Developer review: in progress — 2026-09-11T22:18:49Z
 
 ## What this changes
 **Operators.** None.
@@ -33,10 +33,10 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Code review found no hard, missing, or wrong findings. CI on this head is still running. 1 item remains.
+Usage-doc impact is none (`std_go_simpleredis` already distinguishes `*-1` from `$-1`). CI on this head is still running. 1 item remains.
 
 Priority: P3 — tests and decoder proof, no current operator or user harm
-Reviewed head: dd2230c
+Reviewed head: 99a8289
 Owner decision: None.
 
 ## Review scores
@@ -53,7 +53,7 @@ Owner decision: None.
 | Branch | 2026-09-11-simpleredis-test-06-malformed-reply pushed | `git` / origin |
 | OpenSpec | simpleredis-malformed-reply | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/24 | pr-host List/Create |
-| CI | build 34652868995 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652868995 | pr-host CI |
+| CI | build 34653358963 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653358963 | pr-host CI |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -67,13 +67,13 @@ Owner decision: None.
 None.
 
 ## How this fits together
-Local test-06 finding → implement `simpleredis-malformed-reply` on `2026-09-11-simpleredis-test-06-malformed-reply` → PR 24 → CI run 34652868995 in progress.
+Local test-06 finding → implement `simpleredis-malformed-reply` on `2026-09-11-simpleredis-test-06-malformed-reply` → PR 24 → CI run 34653358963 in progress.
 
 ## Explore Decisions
 None.
 
 ## Before merge
-- [ ] CI run 34652868995 (Lint, Test, Integration Tests in progress)
+- [ ] CI run 34653358963 (Lint, Test, Integration Tests in progress)
 
 ## Findings
 None.
@@ -94,7 +94,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | dd2230c7c9014dc5942425e56eb5d495e803a383 | Card must match the branch you measured |
+| Reviewed head | 99a8289448aead5a1bac1fd769aaa6d6ef90de99 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -109,9 +109,10 @@ Is this the best way to solve the issue? Yes versus `master`: keep dest `count <
 ### Evidence
 What I checked:
 - Pin `origin/master` `7dc4b051888d857869b4beb53cdd9579f930d3c1`; three-dot product diff excluding `devstate/` and `.cursor/`
-- Seven-axis review of that diff: all axes `none.` (SHA dd2230c)
+- Usage packet `knowledge/devdocs/std_go_simpleredis.md` already has the `*-1` vs `$-1` Gotcha; Language has SimpleRedis; findings none
+- Seven-axis review: all axes `none.`
 - PR 24 comments: none
-- CI run 34652868995 in progress (Lint, Test, Integration Tests)
+- CI run 34653358963 in progress on 99a8289 (Lint, Test, Integration Tests); prior head fcdc1c1 Test failed (run 34653054907)
 
 ### Rank-up moves
 None.

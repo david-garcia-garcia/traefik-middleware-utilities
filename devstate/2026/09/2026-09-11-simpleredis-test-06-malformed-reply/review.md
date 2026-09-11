@@ -23,3 +23,9 @@ phase: codereview
 findings: all seven axes none
 fixed: n/a
 skipped: n/a
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: none; SimpleRedis packet already has the `*-1` Gotcha
+fixed: n/a
+skipped: n/a
