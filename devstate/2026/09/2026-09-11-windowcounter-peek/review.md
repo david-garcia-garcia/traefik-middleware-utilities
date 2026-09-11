@@ -18,3 +18,9 @@ findings: fold std_go_windowcounter_sliding-take and std_go_windowcounter_sync-f
 fixed: proposal, design, tasks, deltas, specs.md
 skipped: none
 
+## implement (2026-09-11)
+phase: implement
+findings: Peek on Limiter; skip-storm memory path; exact two GET; unit/live/Yaegi; CI 34637353984 succeeded
+fixed: limiter.go Peek, tests, std_go_windowcounter.md
+skipped: none
+
