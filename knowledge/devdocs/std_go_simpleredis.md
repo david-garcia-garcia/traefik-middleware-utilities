@@ -41,6 +41,8 @@ if err != nil {
 - `simpleredis/yaegi_test.go` — interpreter Init/Get/Set/Del/Incr/Eval
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`
+- `knowledge/devdocs/std_go_simpleredis_resp-decode.md` — ReadSlice decode, escaping `+`/`:` copies, `parseLen`
+- `openspec/specs/std_go_simpleredis_resp-decode/spec.md`
 
 ## Gotchas
 
