@@ -28,3 +28,9 @@ phase: codereview
 findings: Standards 3 (1 done, 2 skipped), Nitpicks 4 done, other axes none
 fixed: 27d70e5
 skipped: duplicated Kong script; duplicated Pester headers
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: stale-usage on std_go_simpleredis
+fixed: usage How-to, snippet, Gotchas
+skipped: n/a
