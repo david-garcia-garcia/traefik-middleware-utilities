@@ -11,4 +11,4 @@ JobName: 2026-09-11-leaky-bucket
 | codereview | [x] | [x] | 2026-09-11T21:39:27.049Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T21:41:39.941Z |
 | archive | [x] | [x] | 2026-09-11T21:44:22.664Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T21:48:17.415Z |

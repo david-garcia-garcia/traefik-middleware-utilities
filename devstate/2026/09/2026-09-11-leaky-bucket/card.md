@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-11T21:44:22.664Z
+Developer review: ready for review — 2026-09-11T21:48:17.415Z
 
 ## What this changes
 **Operators.** CI `test` job now sets `LEAKYBUCKET_LIVE_REDIS` / `LEAKYBUCKET_LIVE_DRAGONFLY` on the existing Redis `:6379` and Dragonfly `:6380` services, and `go test` timeout is 5m.
@@ -23,18 +23,18 @@ flowchart LR
 ```
 
 ## Merge readiness
-Specs archived into the live catalog; CI on this head is still running; PR title is still WIP. 1 item remains.
+Specs archived; PR title is ready; CI succeeded. 0 items remain.
 
 Priority: P3 — new library; no current operator or end-user harm
 
-Reviewed head: 103433a
+Reviewed head: 422b2d2
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3 | CI on this head is still in progress |
-| CI proof | 3 | Lint, Test, Integration in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650802136 |
+| Overall readiness | 6 | CI succeeded; one OPEN PR; no open comments |
+| CI proof | 6 | Lint, Test, Integration succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650869973 |
 | Local tests proof | N/A | Remote PR; CI covers it |
 | Review resolution | 6 | No open PR comments |
 
@@ -44,7 +44,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-11-leaky-bucket pushed | git / origin |
 | OpenSpec | add-leakybucket archived | openspec/changes/archive/2026-09-11-add-leakybucket/ |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9 | pr-host |
-| CI | build 34650802136 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650802136 | GitHub MCP get_check_runs |
+| CI | build 34650869973 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650869973 | GitHub MCP get_check_runs |
 | Local tests | passed | handoff.yaml localTests; `go test -short ./leakybucket/` after review fixes |
 | PR comments | no comments | comments: none |
 
@@ -59,7 +59,7 @@ None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → specs archived; drop WIP next.
+Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → CI green.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -73,14 +73,7 @@ Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → specs archived; dr
 | Where does Redis EXPIRE ttl come from? | additive asked | assumed — constructor `ttl` on both stores, min 1s; script EXPIRE that many seconds; missing hash is empty water. | explore |
 
 ## Before merge
-- [x] Stub PR #9 open
-- [x] Explore recorded
-- [x] OpenSpec `add-leakybucket` proposed
-- [x] Land `leakybucket/` with unit, live Redis/Dragonfly, and Yaegi proof
-- [x] Apply seven-axis hard findings
-- [x] Usage packet Key files and memory-cap Gotcha
-- [x] Archive `add-leakybucket` into live specs
-- [ ] Drop WIP from the PR title and wait for CI
+None.
 
 ## Findings
 None.
@@ -101,7 +94,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 2 added / 0 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 103433a9f99c4bac13b15f9044fd5dbe4225d112 | Card must match the branch you measured |
+| Reviewed head | 422b2d25e6bd5d57a93978d46d1b01f5022b6498 | Card must match the branch you measured |
 
 ### Stored data model
 - New: Redis HASH key (caller-prefixed opaque key) with fields `water` and `last`.
@@ -116,8 +109,8 @@ Is this the best way to solve the issue? Yes — I.371 meter + Kong delta timer,
 ### Evidence
 What I checked:
 - `go test -short ./leakybucket/` passed after review fixes
-- GitHub MCP get_check_runs: build 34650802136 Lint/Test/Integration in_progress
-- `validate_spec_map` write then verify OK; `validate_artifact_names` OK; change moved to `openspec/changes/archive/2026-09-11-add-leakybucket/`
+- GitHub MCP get_check_runs: build 34650869973 Lint/Test/Integration success
+- PR title `✨ feat(leakybucket): add I.371 water-meter limiter`
 
 ### Rank-up moves
 - Extract shared EVAL ARGV helper (Standards judgement skip)
