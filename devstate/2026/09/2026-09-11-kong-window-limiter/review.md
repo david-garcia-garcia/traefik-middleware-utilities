@@ -27,3 +27,15 @@ phase: codereview
 findings: Sleep stop-before-flush; ticker path untested; unbounded windows map
 fixed: flush then stop; prune stale windows; Locked helper split; Yaegi live table-drive; ticker/window/floor tests
 skipped: parallel RESP fake (unexported simpleredis helper); shared Lua const; Eval pipeline (no SimpleRedis pipeline); Allow deny alias test
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: stale-usage on std_go_ratelimit Key files and Sleep flush order
+fixed: Sleep flush-then-stop Gotcha; Key files now name main specs after archive
+skipped: n/a
+
+## archive (2026-09-11)
+phase: archive
+findings: none
+fixed: synced std_go_ratelimit_sliding-take and std_go_ratelimit_sync-flush into main specs
+skipped: n/a
