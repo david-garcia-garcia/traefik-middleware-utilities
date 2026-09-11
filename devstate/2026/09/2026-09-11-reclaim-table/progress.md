@@ -9,6 +9,6 @@ JobName: 2026-09-11-reclaim-table
 | propose | [x] | [x] | 2026-09-11T05:01:27Z |
 | implement | [x] | [x] | 2026-09-11T05:09:22Z |
 | codereview | [x] | [x] | 2026-09-11T05:18:40Z |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
-| pullrequest | [ ] | [ ] | |
+| devdocsimpact | [x] | [x] | 2026-09-11T05:25:30Z |
+| archive | [x] | [x] | 2026-09-11T05:25:30Z |
+| pullrequest | [x] | [x] | 2026-09-11T05:25:30Z |
