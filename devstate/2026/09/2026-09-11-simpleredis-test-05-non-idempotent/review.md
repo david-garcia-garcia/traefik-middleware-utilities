@@ -6,3 +6,9 @@ phase: prepare
 findings: none
 fixed: none
 skipped: product apply not started; CI queued on PR 21; live lost-reply injection still unknown
+
+## explore (2026-09-11)
+phase: explore
+findings: none
+fixed: none
+skipped: product apply not started; four assumed open questions copied to the card; two resolved rows omitted
