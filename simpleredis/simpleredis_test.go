@@ -255,6 +255,103 @@ func startStaticRedis(t *testing.T, reply string) string {
 	return listener.Addr().String()
 }
 
+// holdFakeRedis accepts TCP then holds each reply until the test releases the gate.
+type holdFakeRedis struct {
+	addr        string
+	mu          sync.Mutex
+	accepted    int
+	open        int
+	commands    int
+	releaseCh   chan struct{}
+	releaseOnce sync.Once
+}
+
+// startHoldFakeRedis listens on a local TCP port and holds GET replies until releaseHeldReplies.
+func startHoldFakeRedis(t *testing.T) *holdFakeRedis {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	fake := &holdFakeRedis{releaseCh: make(chan struct{}), addr: listener.Addr().String()}
+	t.Cleanup(func() { fake.releaseHeldReplies() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			fake.mu.Lock()
+			fake.accepted++
+			fake.open++
+			fake.mu.Unlock()
+			go fake.serve(conn)
+		}
+	}()
+	return fake
+}
+
+// serve reads one RESP command then waits for the hold before writing a GET hit.
+func (f *holdFakeRedis) serve(conn net.Conn) {
+	defer func() {
+		_ = conn.Close()
+		f.mu.Lock()
+		f.open--
+		f.mu.Unlock()
+	}()
+	reader := bufio.NewReader(conn)
+	for {
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		f.mu.Lock()
+		f.commands++
+		f.mu.Unlock()
+		<-f.releaseCh
+		_, _ = io.WriteString(conn, "$1\r\nt\r\n")
+	}
+}
+
+// waitHeldCommands waits until at least want commands are blocked on the hold.
+func (f *holdFakeRedis) waitHeldCommands(t *testing.T, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		f.mu.Lock()
+		got := f.commands
+		f.mu.Unlock()
+		if got >= want {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	f.mu.Lock()
+	got := f.commands
+	f.mu.Unlock()
+	t.Fatalf("held commands = %d, want >= %d", got, want)
+}
+
+// releaseHeldReplies lets every held command write its reply. Safe to call more than once.
+func (f *holdFakeRedis) releaseHeldReplies() {
+	f.releaseOnce.Do(func() { close(f.releaseCh) })
+}
+
+// acceptedSockets is how many TCP accepts this fake has seen.
+func (f *holdFakeRedis) acceptedSockets() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.accepted
+}
+
+// openSockets is how many accepted sockets are still open.
+func (f *holdFakeRedis) openSockets() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.open
+}
+
 func TestGetHitAndMiss(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
@@ -311,12 +408,13 @@ func TestSetSendsExpire(t *testing.T) {
 }
 
 func TestConcurrentCommandsStayWithinPool(t *testing.T) {
-	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake := startHoldFakeRedis(t)
 	var redis SimpleRedis
-	redis.Init(addr, "", "")
+	redis.Init(fake.addr, "", "")
 
+	const overlap = 16
 	var wg sync.WaitGroup
-	for i := 0; i < 8; i++ {
+	for i := 0; i < overlap; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -328,10 +426,63 @@ func TestConcurrentCommandsStayWithinPool(t *testing.T) {
 			}
 		}()
 	}
+	fake.waitHeldCommands(t, overlap)
+	fake.releaseHeldReplies()
 	wg.Wait()
 
-	if got := fake.connections(); got > 8 {
-		t.Fatalf("8 goroutines opened %d connections, want at most 8", got)
+	if got := idleLen(&redis); got > maxIdleConns {
+		t.Fatalf("16 goroutines left idle = %d, want at most %d", got, maxIdleConns)
+	}
+}
+
+// TestIdleCapAfterOverlapClosesExcess starts 16 overlapping Gets and asserts idle <= 8 with no leaked sockets.
+func TestIdleCapAfterOverlapClosesExcess(t *testing.T) {
+	fake := startHoldFakeRedis(t)
+	var redis SimpleRedis
+	redis.Init(fake.addr, "", "")
+
+	const overlap = 16
+	var wg sync.WaitGroup
+	for i := 0; i < overlap; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := redis.Get("hit"); err != nil {
+				t.Errorf("Get: %v", err)
+			}
+		}()
+	}
+	fake.waitHeldCommands(t, overlap)
+	fake.releaseHeldReplies()
+	wg.Wait()
+
+	idle := idleLen(&redis)
+	if idle > maxIdleConns {
+		t.Fatalf("idle = %d, want at most %d", idle, maxIdleConns)
+	}
+	waitOpenSocketsMatchIdle(t, fake, idle)
+}
+
+// idleLen is the current idle pool length.
+func idleLen(redis *SimpleRedis) int {
+	redis.mu.Lock()
+	defer redis.mu.Unlock()
+	return len(redis.idle)
+}
+
+// waitOpenSocketsMatchIdle waits until the fake's still-open sockets equal idle (excess closed, not leaked).
+func waitOpenSocketsMatchIdle(t *testing.T, fake *holdFakeRedis, idle int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		open := fake.openSockets()
+		if open == idle {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("open sockets = %d, idle = %d (excess leaked)", open, idle)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 
@@ -516,8 +667,52 @@ func TestCloseDrainsIdleAndDoesNotRepool(t *testing.T) {
 	if fake.connections() != 1 {
 		t.Fatalf("Get after Close opened %d connections, want 1", fake.connections())
 	}
-	if len(redis.idle) != 0 {
-		t.Fatalf("release after Close idle = %d, want 0", len(redis.idle))
+}
+
+// TestBorrowSecondClosedCheckDoesNotDial closes the client after the idle scan so borrow returns unreachable without dialing.
+func TestBorrowSecondClosedCheckDoesNotDial(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	afterIdleScanForTest = func(client *SimpleRedis) {
+		client.Close()
+	}
+	t.Cleanup(func() { afterIdleScanForTest = nil })
+
+	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
+	}
+	if fake.connections() != 0 {
+		t.Fatalf("second closed check dialed %d sockets, want 0", fake.connections())
+	}
+}
+
+// TestCloseDuringInFlightCommandClosesSocketOnRelease closes while a Get is held, then asserts idle empty and no redial.
+func TestCloseDuringInFlightCommandClosesSocketOnRelease(t *testing.T) {
+	fake := startHoldFakeRedis(t)
+	var redis SimpleRedis
+	redis.Init(fake.addr, "", "")
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := redis.Get("hit")
+		errCh <- err
+	}()
+	fake.waitHeldCommands(t, 1)
+	redis.Close()
+	fake.releaseHeldReplies()
+	if err := <-errCh; err != nil {
+		t.Fatalf("in-flight Get: %v", err)
+	}
+	if idleLen(&redis) != 0 {
+		t.Fatalf("idle after in-flight Close = %d, want 0", idleLen(&redis))
+	}
+	waitOpenSocketsMatchIdle(t, fake, 0)
+	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("Get after Close = %v, want %s", err, RedisUnreachable)
+	}
+	if fake.acceptedSockets() != 1 {
+		t.Fatalf("Get after Close accepted %d, want 1", fake.acceptedSockets())
 	}
 }
 
