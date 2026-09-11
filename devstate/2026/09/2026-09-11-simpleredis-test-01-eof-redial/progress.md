@@ -11,4 +11,4 @@ JobName: 2026-09-11-simpleredis-test-01-eof-redial
 | codereview | [x] | [x] | 2026-09-11T22:13:40.664Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:20:50.791Z |
 | archive | [x] | [x] | 2026-09-11T22:27:18.829Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T22:33:37.032Z |
