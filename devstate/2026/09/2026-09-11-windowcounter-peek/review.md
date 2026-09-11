@@ -30,3 +30,9 @@ findings: coverage 2 hard (buffered Peek no-increment; Takes then Peek deny); ot
 fixed: TestPeek_BufferedDoesNotIncrement, TestPeek_BufferedTakeThenPeekDenies (`74bbc68`)
 skipped: none
 
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: none — Peek Language and How-to already on std_go_windowcounter.md
+fixed: none
+skipped: none
+
