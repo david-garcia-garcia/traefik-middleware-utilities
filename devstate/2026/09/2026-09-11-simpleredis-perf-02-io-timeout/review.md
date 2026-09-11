@@ -22,3 +22,9 @@ findings: InitWithOptions + live BLPOP on Redis and Dragonfly; CI green
 fixed: timeouts configurable; localTests passed
 skipped: n/a
 
+## codereview (2026-09-11)
+phase: codereview
+findings: 6 axes clean; 1 hard coverage done (Init/negative Options defaults)
+fixed: TestInitStoresDefaultTimeouts
+skipped: n/a
+

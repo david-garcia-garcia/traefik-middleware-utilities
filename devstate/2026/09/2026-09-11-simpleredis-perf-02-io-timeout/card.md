@@ -1,4 +1,4 @@
-Developer review: ready for review — 2026-09-11T21:54:40Z
+Developer review: ready for review — 2026-09-11T22:02:08Z
 
 ## What this changes
 **Operators.** None.
@@ -27,10 +27,10 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Configurable timeouts and live Redis/Dragonfly proof are on the branch. CI succeeded. 0 items remain.
+Seven-axis review is clean; one hard coverage item is done. CI succeeded. 0 items remain.
 
 Priority: P2 — Redis slowness holds Traefik workers for a full second and fans out dials, with no caller-set shorter deadline
-Reviewed head: 3891c2c
+Reviewed head: 7006b50
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -47,7 +47,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-11-simpleredis-perf-02-io-timeout pushed | `git` origin/2026-09-11-simpleredis-perf-02-io-timeout |
 | OpenSpec | simpleredis-configurable-timeouts | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/16 | pr-host List/Create |
-| CI | build 34651448864 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34651448864 | pr-host CI |
+| CI | build 34652000905 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652000905 | pr-host CI |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -61,7 +61,7 @@ Owner decision: Required. See Explore Decisions.
 None.
 
 ## How this fits together
-Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. Stub PR 16 hosts the card. Apply is on HEAD `3891c2c`; next is seven-axis review then archive.
+Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. Stub PR 16 hosts the card. Seven-axis review of HEAD `7006b50` is recorded; next is usage-doc impact then archive.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -83,7 +83,13 @@ Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` f
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-02-io-timeout/devstate/2026/09/2026-09-11-simpleredis-perf-02-io-timeout/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-02-io-timeout/devstate/2026/09/2026-09-11-simpleredis-perf-02-io-timeout/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-02-io-timeout/devstate/2026/09/2026-09-11-simpleredis-perf-02-io-timeout/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-02-io-timeout/devstate/2026/09/2026-09-11-simpleredis-perf-02-io-timeout/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-02-io-timeout/devstate/2026/09/2026-09-11-simpleredis-perf-02-io-timeout/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-02-io-timeout/devstate/2026/09/2026-09-11-simpleredis-perf-02-io-timeout/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-02-io-timeout/devstate/2026/09/2026-09-11-simpleredis-perf-02-io-timeout/codereview_coverage.md) — 1 total, 0 pending, 1 completed
 
 ## Agent review details
 
@@ -92,7 +98,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 3891c2c559b1dc8d4f6bb50099c175321587d7f2 | Card must match the branch you measured |
+| Reviewed head | 7006b5089c79f87a83c57603c22141a50c564eaf | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -100,16 +106,15 @@ None.
 ### Technical review
 Best possible solution: Keep Init(host, pass, database) and today's defaults; add InitWithOptions with a plain Options struct; prove I/O timeout with BLPOP on both engines; leave the wait-queue to perf-01.
 
-Do we have a high-confidence way to reproduce? Yes — TestIoTimeout on defaults; configured IoTimeout fake never-reply; live BLPOP on Redis and Dragonfly; hanging-SYN for DialTimeout.
+Do we have a high-confidence way to reproduce? Yes — TestIoTimeout on defaults; configured IoTimeout fake never-reply; live BLPOP on Redis and Dragonfly; hanging-SYN for DialTimeout; TestInitStoresDefaultTimeouts for zero/negative defaults.
 
 Is this the best way to solve the issue? Yes versus master: expose the existing constants as caller-set deadlines without rewriting the pool.
 
 ### Evidence
 What I checked:
-- simpleredis/simpleredis.go Options and InitWithOptions on HEAD 3891c2c
-- simpleredis/live_test.go; CI test env SIMPLEREDIS_LIVE_REDIS and SIMPLEREDIS_LIVE_DRAGONFLY
+- seven axis files under the run root; coverage item Status done
 - OPEN PR 16, zero comments
-- CI run 34651448864: Lint success, Test success, Integration Tests success
+- CI run 34652000905: Lint success, Test success, Integration Tests success
 
 ### Rank-up moves
 None.
