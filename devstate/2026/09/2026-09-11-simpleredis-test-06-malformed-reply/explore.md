@@ -67,18 +67,18 @@ Usage packet `knowledge/devdocs/std_go_simpleredis.md` is enough to call the cli
 
 - Q: How to exercise `exec` borrow-failure on the retry attempt (`:195`) with a canned reply?
   Rank: additive asked — new test helper this change creates; Problem, Current `:195-197`, and Unknowns name the branch
-  Decision: assumed — dedicated one-accept helper (good first reply, then malformed on the reused socket, listener closed before retry dial). Expect `redis:unreachable` and `idle==0`. Not a `startStaticRedis` table row.
-  By: propose
+  Decision: resolved — dedicated one-accept helper (good first reply, then malformed on the reused socket, listener closed before retry dial). Expect `redis:unreachable` and `idle==0`. Not a `startStaticRedis` table row.
+  By: implement
 
 - Q: Do `Get` / `parseIntegerReply` count-mismatch rows assert `len(idle)==0` the same as decoder poison?
   Rank: additive asked — Desired names covering those branches via canned replies; Current cites `:93-95` and `:171-173`
-  Decision: assumed — cover with canned `*0` / `*2`; assert `redis:issue?`; do **not** assert `idle==0` (conn is clean). Do not change `Get` / `release` to destroy on arity mismatch. Deviation recorded.
-  By: propose
+  Decision: resolved — cover with canned `*0` / `*2`; assert `redis:issue?`; do **not** assert `idle==0` (conn is clean). Do not change `Get` / `release` to destroy on arity mismatch. Deviation recorded.
+  By: implement
 
 - Q: How do live Redis and Dragonfly stay in the proof if malformed cases are fake-server only?
   Rank: additive asked — Desired and conductor HARD REQUIREMENT: both engines; extend compose + Pester `/redis` `/dragonfly`; do not replace live happy-path
-  Decision: assumed — keep compose `redis:7-alpine` and `dragonfly:v1.40.2` and both whoami routes. Extend probe + Pester with Get-miss on `/redis` and `/dragonfly`. Table-driven malformed stays in-process. A decoder change still has to pass both live Its.
-  By: propose
+  Decision: resolved — keep compose `redis:7-alpine` and `dragonfly:v1.40.2` and both whoami routes. Extend probe + Pester with Get-miss on `/redis` and `/dragonfly`. Table-driven malformed stays in-process. A decoder change still has to pass both live Its.
+  By: implement
 
 - Q: Which Eval script may live tests send?
   Rank: additive asked — Desired: Lua 5.1-safe and KEYS listed (Dragonfly)
