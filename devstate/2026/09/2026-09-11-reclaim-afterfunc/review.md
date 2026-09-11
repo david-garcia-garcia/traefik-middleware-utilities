@@ -23,3 +23,9 @@ phase: implement
 findings: AfterFunc for Done()!=nil; poll for nil Done; localTests passed; CI succeeded
 fixed: dropWhenDone in reclaim/table.go, hold-time test, tasks.md
 skipped: none of the apply tasks
+
+## codereview (2026-09-11)
+phase: codereview
+findings: all seven axes none
+fixed: axis files on bus
+skipped: no hard items to apply
