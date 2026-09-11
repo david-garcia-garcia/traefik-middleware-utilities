@@ -27,3 +27,9 @@ phase: codereview
 findings: Standards 1 hard done, Standards 2 judgement skipped; Nitpicks 1-2 hard done; Spec/Security/Performance/Dead/Coverage none
 fixed: Leave a trail comments on `Stop-TraefikEngineClientForTest`; `killPooledIdleAddrOrIDForTest`; `peerCloseFake.connections` (`60346e9`)
 skipped: extract overlapping Redis/Dragonfly Pester Its (judgement; engines stay visible as dest backends)
+
+## devdocsimpact (2026-09-11T22:20:50.791Z)
+phase: devdocsimpact
+findings: 0
+fixed: none (usage already enough)
+skipped: none
