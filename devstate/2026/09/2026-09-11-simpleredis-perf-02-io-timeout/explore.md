@@ -77,8 +77,8 @@ Usage packet Language is still true. How to use / Pattern snippet will need `Ini
 
 - Q: Can MaxIdleConns 0 mean "keep no idle sockets", or is 0 the default eight?
   Rank: additive asked — Desired names zero-value defaults so Init is unchanged
-  Decision: assumed — `MaxIdleConns == 0` means eight. Callers cannot express "idle cap zero" on this Options type. Idle cap of zero is not in the ask.
-  By: explore
+  Decision: assumed — `MaxIdleConns <= 0` means eight. Callers cannot express "idle cap zero" on this Options type. Idle cap of zero is not in the ask. Negative is treated as zero so a literal cap of -1 cannot close every idle socket.
+  By: propose
 
 - Q: Rewrite the spec's "concurrent commands SHALL not open more than eight connections" now that MaxIdleConns is configurable?
   Rank: bounded incidental — existing tcp-session requirement; 1 spec leaf `openspec/specs/std_go_simpleredis_tcp-session/spec.md` plus the 8-concurrent fake test in `simpleredis/simpleredis_test.go`; perf-01 is Out of scope
