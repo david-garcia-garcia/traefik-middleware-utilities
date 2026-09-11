@@ -1,0 +1,41 @@
+name: reclaim-e2e
+
+services:
+  traefik:
+    image: traefik:v3.7.11
+    container_name: reclaim-e2e-traefik
+    command:
+      - "--log.level=DEBUG"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`com.docker.compose.project`,`reclaim-e2e`)"
+      - "--entrypoints.web.address=:80"
+      - "--experimental.localplugins.reclaimprobe.modulename=github.com/david-garcia-garcia/reclaimprobe"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./e2e/reclaimprobe:/plugins-local/src/github.com/david-garcia-garcia/reclaimprobe
+      - ./:/plugins-local/src/github.com/david-garcia-garcia/traefik-middleware-utilities
+    ports:
+      - "8000:80"
+      - "8080:8080"
+
+  whoami-a:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.reclaim-a.rule=PathPrefix(`/a`)"
+      - "traefik.http.routers.reclaim-a.entrypoints=web"
+      - "traefik.http.routers.reclaim-a.middlewares=reclaim-a@docker"
+      - "traefik.http.services.reclaim-a.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.reclaim-a.plugin.reclaimprobe.key=shared"
+
+  whoami-b:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.reclaim-b.rule=PathPrefix(`/b`)"
+      - "traefik.http.routers.reclaim-b.entrypoints=web"
+      - "traefik.http.routers.reclaim-b.middlewares=reclaim-b@docker"
+      - "traefik.http.services.reclaim-b.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.reclaim-b.plugin.reclaimprobe.key=shared"
