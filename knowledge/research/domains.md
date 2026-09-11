@@ -6,4 +6,5 @@
 - crowdsec
 - redis
 - dragonfly
+- valkey
 - kong

@@ -14,3 +14,8 @@ description: Redis EXPIRE/EXPIREAT integer :0/:1 replies, missing keys, and dele
 priority: normal
 local: ext_redis_eval/
 description: Redis EVAL argument shape, zero keys, Lua-to-RESP reply mapping, and script error format.
+
+## MSETEX
+priority: normal
+local: ext_redis_msetex/
+description: Redis 8.4 MSETEX argv/reply and Redis 7 unknown-command detection for engines that lack it.

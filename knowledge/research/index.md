@@ -18,12 +18,17 @@ description: Facts about crowdsec-bouncer-traefik-plugin packages this product m
 ## redis
 priority: normal
 local: index_ext_redis.md
-description: Official Redis command wire behavior for INCR, EXPIRE, and EVAL used by rate-limit scripts.
+description: Official Redis command wire behavior for INCR, EXPIRE, EVAL, and MSETEX used by rate-limit scripts.
 
 ## dragonfly
 priority: normal
 local: index_ext_dragonfly.md
-description: Dragonfly Redis-compat scripting and official container image for CI e2e beside Redis.
+description: Dragonfly Redis-compat scripting, missing MSETEX, and official container image for CI e2e beside Redis.
+
+## valkey
+priority: normal
+local: index_ext_valkey.md
+description: Official Valkey command wire behavior for MSETEX (native group write with TTL).
 
 ## kong
 priority: normal
