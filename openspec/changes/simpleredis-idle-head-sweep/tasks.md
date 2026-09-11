@@ -17,4 +17,4 @@
 ## 4. Usage packet and validate
 
 - [x] 4.1 After the peel lands, add a usage gotcha on `knowledge/devdocs/std_go_simpleredis.md` that `release` peels stale heads
-- [ ] 4.2 Run `openspec validate --change simpleredis-idle-head-sweep --strict`
+- [x] 4.2 Run `openspec validate --change simpleredis-idle-head-sweep --strict`
