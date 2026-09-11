@@ -7,7 +7,7 @@ JobName: 2026-09-11-simpleredis
 | prepare | [x] | [x] | 2026-09-11T08:13:01Z |
 | explore | [x] | [x] | 2026-09-11T08:23:04Z |
 | propose | [x] | [x] | 2026-09-11T08:36:49Z |
-| implement | [ ] | [ ] | |
+| implement | [x] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
