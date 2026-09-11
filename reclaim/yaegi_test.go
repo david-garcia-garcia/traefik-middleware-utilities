@@ -44,18 +44,18 @@ func TestYaegi_OpenHooksRunSleepWakeClose(t *testing.T) {
 // evalHookprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalHookprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
-	i := interp.New(interp.Options{GoPath: goPath})
-	if err := i.Use(stdlib.Symbols); err != nil {
+	interpreter := interp.New(interp.Options{GoPath: goPath})
+	if err := interpreter.Use(stdlib.Symbols); err != nil {
 		t.Fatalf("use stdlib: %v", err)
 	}
-	if _, err := i.Eval(`import "hookprobe"`); err != nil {
+	if _, err := interpreter.Eval(`import "hookprobe"`); err != nil {
 		t.Fatalf("import hookprobe: %v", err)
 	}
-	v, err := i.Eval(expr)
+	evaluated, err := interpreter.Eval(expr)
 	if err != nil {
 		t.Fatalf("eval %s: %v", expr, err)
 	}
-	return v.Interface().(string)
+	return evaluated.Interface().(string)
 }
 
 // writeGopathReclaim copies non-test reclaim sources into a GOPATH module tree.
@@ -176,9 +176,9 @@ func RunHooks() string {
 	return fmt.Sprintf("%d %d %d", sleeps.Load(), wakes.Load(), closes.Load())
 }
 
-func waitCount(n *atomic.Int32) {
+func waitCount(hookCount *atomic.Int32) {
 	deadline := time.Now().Add(2 * time.Second)
-	for n.Load() == 0 && time.Now().Before(deadline) {
+	for hookCount.Load() == 0 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
 }

@@ -122,22 +122,22 @@ func waitCtx(ctx context.Context) {
 	}
 }
 
-// sleepValue runs the stored Sleep hook when it is set. Runs outside t.mu.
-func sleepValue(hooks Hooks) {
+// runSleep runs the stored Sleep hook when it is set. Runs outside t.mu.
+func runSleep(hooks Hooks) {
 	if hooks.Sleep != nil {
 		hooks.Sleep()
 	}
 }
 
-// wakeValue runs the stored Wake hook when it is set. Runs outside t.mu, before Open returns.
-func wakeValue(hooks Hooks) {
+// runWake runs the stored Wake hook when it is set. Runs outside t.mu, before Open returns.
+func runWake(hooks Hooks) {
 	if hooks.Wake != nil {
 		hooks.Wake()
 	}
 }
 
-// closeValue runs the stored Close hook when it is set. Runs outside t.mu, always after sleepValue.
-func closeValue(hooks Hooks) {
+// runClose runs the stored Close hook when it is set. Runs outside t.mu, always after runSleep.
+func runClose(hooks Hooks) {
 	if hooks.Close != nil {
 		hooks.Close()
 	}
@@ -145,7 +145,7 @@ func closeValue(hooks Hooks) {
 
 // dispose runs the Close hook and then reports the end, so reclaim_dispose means Close has returned.
 func dispose(key string, hooks Hooks, logger *slog.Logger) {
-	closeValue(hooks)
+	runClose(hooks)
 	logger.Debug(MsgDispose, "key", key)
 }
 
@@ -257,7 +257,7 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 	storedHooks := incarnation.hooks
 	t.mu.Unlock()
 
-	wakeValue(storedHooks)
+	runWake(storedHooks)
 
 	t.mu.Lock()
 	incarnation.state = slotAwake
@@ -303,7 +303,7 @@ func (t *Table) drop(key string, incarnation *slot) {
 	grace := t.grace
 	t.mu.Unlock()
 
-	sleepValue(storedHooks)
+	runSleep(storedHooks)
 	// Orphan is written while the slot is still busy. Reset leaves a busy slot to the goroutine
 	// that owns the transition, so nothing else can write this incarnation's dispose line first.
 	logger.Debug(MsgOrphan, "key", key)
@@ -380,7 +380,7 @@ func (t *Table) Reset() {
 
 		switch state {
 		case slotAwake:
-			sleepValue(storedHooks)
+			runSleep(storedHooks)
 			logger.Debug(MsgOrphan, "key", key)
 			dispose(key, storedHooks, logger)
 		case slotAsleep:

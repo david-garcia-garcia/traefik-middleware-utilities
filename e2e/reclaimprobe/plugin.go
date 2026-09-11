@@ -51,10 +51,10 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	var storedValue *probeValue
+	var created *probeValue
 	stored, err := reclaim.Open(ctx, key, logger, func() (any, error) {
-		storedValue = &probeValue{id: nextID.Add(1)}
-		return storedValue, nil
+		created = &probeValue{id: nextID.Add(1)}
+		return created, nil
 	}, reclaim.Hooks{
 		Sleep: func() { logger.Debug("reclaimprobe_sleep") },
 		Wake:  func() { logger.Debug("reclaimprobe_wake") },
@@ -65,8 +65,8 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	}
 
 	id := fmt.Sprintf("%T", stored)
-	if storedValue != nil {
-		id = fmt.Sprintf("%d", storedValue.id)
+	if created != nil {
+		id = fmt.Sprintf("%d", created.id)
 	} else if typed, ok := stored.(*probeValue); ok {
 		id = fmt.Sprintf("%d", typed.id)
 	}
