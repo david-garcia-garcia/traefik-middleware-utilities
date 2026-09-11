@@ -14,3 +14,8 @@ description: Redis EXPIRE/EXPIREAT integer :0/:1 replies, missing keys, and dele
 priority: normal
 local: ext_redis_eval/
 description: Redis EVAL argument shape, zero keys, Lua-to-RESP reply mapping, and script error format.
+
+## RESP2 null array
+priority: normal
+local: ext_redis_resp_null-array/
+description: Official RESP2 encoding of a null array (*-1) versus null bulk and empty array.
