@@ -1581,6 +1581,32 @@ func TestTable_ResetRacingOpenClosesEveryValue(t *testing.T) {
 	}
 }
 
+// TestTable_CancellableHoldersDoNotParkWaiters proves live WithCancel holders do not park a
+// waiter for the hold. Same slack as TestTable_GoroutinesReturnToBaseline.
+func TestTable_CancellableHoldersDoNotParkWaiters(t *testing.T) {
+	const keys = 50
+	const slack = 2
+	base := settledGoroutines()
+
+	tab := NewTable(2 * time.Millisecond)
+	h := &recHandler{}
+	cancels := make([]context.CancelFunc, keys)
+	for i := 0; i < keys; i++ {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancels[i] = cancel
+		if _, err := tab.Open(ctx, "k"+strconv.Itoa(i), recLogger(h), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
+			t.Fatalf("open %d: %v", i, err)
+		}
+	}
+	if got := settledGoroutines(); got > base+slack {
+		t.Fatalf("hold goroutines %d, baseline %d, slack %d", got, base, slack)
+	}
+	for _, cancel := range cancels {
+		cancel()
+	}
+	waitUntil(t, func() bool { return countMsg(h.events(), MsgDispose) == keys })
+}
+
 func TestTable_GoroutinesReturnToBaseline(t *testing.T) {
 	const keys = 50
 	const slack = 2
