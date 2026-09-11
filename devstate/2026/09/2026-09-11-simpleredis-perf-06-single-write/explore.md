@@ -52,8 +52,8 @@ intended encode
 
 - Q: Does any spec leaf need an encode-path requirement, or are tests+e2e enough?
   Rank: additive incidental — Unknowns name the choice; no criterion requires a spec sentence about call count; Desired 3 is wire-identical behavior already specified as command shapes + dual-engine e2e
-  Decision: assumed — tests + dual-engine e2e + the four benches are enough. Do not add an encode-call-count or `bufio.Writer` requirement to `std_go_simpleredis_resp-commands` or `std_go_simpleredis_tcp-session`. tcp-session stdlib-only / no `go-redis` stays as-is
-  By: explore
+  Decision: resolved — fold wire-identical golden, dual-engine live proof (compose + Pester `/redis` `/dragonfly`, `e2e/simpleredisprobe`), and encode benches into `std_go_simpleredis_resp-commands`; fold idle encode-scratch trim into `std_go_simpleredis_tcp-session`. Do not add an encode-call-count or `bufio.Writer` SHALL. tcp-session stdlib-only / no `go-redis` stays as-is
+  By: propose
 
 - Q: What is `writeCommand`’s signature after `bufio.Writer` is gone?
   Rank: bounded asked — Desired 1 names scratch + one `netConn.Write` and dropping `bufio.Writer`; 1 product caller of `writeCommand` (`do` at `simpleredis.go:296`); 3 `pooledConn.writer` sites in `simpleredis.go` (`:44`, `:272`, `:296`); 0 dest test callers; neighbors use exported verbs only (searched `simpleredis/`, `tokenbucket/`, `windowcounter/`, `e2e/simpleredisprobe/` for `writeCommand` and `conn.writer`)
