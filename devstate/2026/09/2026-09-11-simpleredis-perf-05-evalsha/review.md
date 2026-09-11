@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: 1 unit SimpleRedis; 0 findings
 fixed: n/a (none to produce)
 skipped: n/a
+
+## archive (2026-09-11)
+phase: archive
+findings: fold std_go_simpleredis_resp-commands high; validate clean; CI in progress on 962c586
+fixed: delta synced; change moved to archive/2026-09-11-simpleredis-evalsha
+skipped: n/a
