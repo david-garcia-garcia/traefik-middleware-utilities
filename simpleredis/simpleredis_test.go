@@ -644,6 +644,22 @@ func TestInitWithOptionsDoesNotDial(t *testing.T) {
 	}
 }
 
+// TestInitStoresDefaultTimeouts proves zero and negative Options knobs store the package constants.
+func TestInitStoresDefaultTimeouts(t *testing.T) {
+	assertDefaults := func(t *testing.T, redis *SimpleRedis) {
+		t.Helper()
+		if redis.dialTimeout != dialTimeout || redis.ioTimeout != ioTimeout || redis.idleTimeout != idleTimeout || redis.maxIdleConns != maxIdleConns {
+			t.Fatalf("stored defaults dial=%v io=%v idle=%v maxIdle=%d, want %v %v %v %d", redis.dialTimeout, redis.ioTimeout, redis.idleTimeout, redis.maxIdleConns, dialTimeout, ioTimeout, idleTimeout, maxIdleConns)
+		}
+	}
+	var viaInit SimpleRedis
+	viaInit.Init("127.0.0.1:1", "", "")
+	assertDefaults(t, &viaInit)
+	var viaNegative SimpleRedis
+	viaNegative.InitWithOptions("127.0.0.1:1", "", "", Options{DialTimeout: -1, IoTimeout: -1, IdleTimeout: -time.Second, MaxIdleConns: -1})
+	assertDefaults(t, &viaNegative)
+}
+
 func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
