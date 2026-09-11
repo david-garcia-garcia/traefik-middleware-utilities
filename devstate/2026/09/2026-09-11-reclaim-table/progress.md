@@ -6,7 +6,7 @@ JobName: 2026-09-11-reclaim-table
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T04:46:00Z |
 | explore | [x] | [x] | 2026-09-11T04:53:40Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [x] | 2026-09-11T05:01:27Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
