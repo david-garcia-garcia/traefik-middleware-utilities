@@ -41,3 +41,9 @@ phase: archive
 findings: none (pullrequest remains)
 fixed: live specs folded (std_go_reclaim_value-lifecycle, std_go_reclaim_context-lease); Purpose aligned with Hooks (e8bbfa7)
 skipped: none
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: none (ready for review)
+fixed: PR #2 summary final card @ 8a33154; CI Lint/Test/Integration success run 34575995195
+skipped: none
