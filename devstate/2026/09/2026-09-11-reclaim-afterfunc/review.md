@@ -35,3 +35,9 @@ phase: devdocsimpact
 findings: Reclaim table unit; findings none
 fixed: devdocs-impact.md
 skipped: no produce (usage already enough)
+
+## archive (2026-09-11)
+phase: archive
+findings: folded std_go_reclaim_context-lease; moved change to archive/2026-09-11-reclaim-afterfunc-wait
+fixed: live spec scenarios, folder move, validate-spec-map OK, validate-artifact-names OK
+skipped: map.md CRLF-only rewrite
