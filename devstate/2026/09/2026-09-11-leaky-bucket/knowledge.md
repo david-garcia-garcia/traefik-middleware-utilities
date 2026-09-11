@@ -5,3 +5,4 @@
 - updated knowledge/research/domains.md
 - created knowledge/devdocs/std_go_leakybucket.md
 - updated knowledge/devdocs/index_std_go.md
+- updated knowledge/devdocs/std_go_leakybucket.md

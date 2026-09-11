@@ -57,7 +57,7 @@ _ = untilNotFull
 ## Key files
 
 - `leakybucket/` — I.371 water meter
-- `openspec/changes/add-leakybucket/specs/std_go_leakybucket_pour/spec.md`, `openspec/changes/add-leakybucket/specs/std_go_leakybucket_sync-flush/spec.md`
+- `openspec/specs/std_go_leakybucket_pour/spec.md`, `openspec/specs/std_go_leakybucket_sync-flush/spec.md`
 
 ## Gotchas
 
@@ -65,4 +65,5 @@ _ = untilNotFull
 - Overflow denies and does not pour. Empty water is 0 (room up to `capacity`).
 - EVAL scripts must list keys in `KEYS` (Dragonfly). Do not use `table.maxn`. Go must not `SET`/`HSET` the hash.
 - Two limiter instances on one Redis key share water. Buffered mode may over-allow by at most one sync interval of replica pours.
+- In-memory unique keys are capped at 65536 (same as `tokenbucket`); a new identity may drop an existing slot.
 - `Sleep` flushes pending pours then stops the ticker. After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's. Memory has no reclaim hooks.
