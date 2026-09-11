@@ -30,3 +30,9 @@ phase: codereview
 findings: Standards 2 (both done); other axes 0
 fixed: duplicate Specs tasks block; ServeHTTP drop-relay header comment
 skipped: none; Explore Decisions still None (all six Q resolved)
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: stale-usage SimpleRedis std_go_simpleredis already matching
+fixed: none
+skipped: none; Explore Decisions still None (all six Q resolved)
