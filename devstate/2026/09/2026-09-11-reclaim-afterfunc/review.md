@@ -41,3 +41,9 @@ phase: archive
 findings: folded std_go_reclaim_context-lease; moved change to archive/2026-09-11-reclaim-afterfunc-wait
 fixed: live spec scenarios, folder move, validate-spec-map OK, validate-artifact-names OK
 skipped: map.md CRLF-only rewrite
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: reused PR #6; comments none; Test had failed on 0cb8a1f (~10m); local live suite passed; CI 34635768330 succeeded after engine healthcheck and 2m timeout
+fixed: PR title already ready; PR summary delivery card; progress Work+Card
+skipped: dest windowcounter key isolation; GitHub job logs (MCP has no log tool)

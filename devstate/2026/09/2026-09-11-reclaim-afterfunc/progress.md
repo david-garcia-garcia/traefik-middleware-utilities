@@ -11,4 +11,4 @@ JobName: 2026-09-11-reclaim-afterfunc
 | codereview | [x] | [x] | 2026-09-11T17:59:24Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T18:03:47Z |
 | archive | [x] | [x] | 2026-09-11T18:11:56Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T18:55:57Z |
