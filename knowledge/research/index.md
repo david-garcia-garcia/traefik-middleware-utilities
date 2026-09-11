@@ -14,3 +14,13 @@ description: Source package and test harness this product ports from traefik-geo
 priority: normal
 local: index_ext_crowdsec.md
 description: Facts about crowdsec-bouncer-traefik-plugin packages this product may copy.
+
+## redis
+priority: normal
+local: index_ext_redis.md
+description: Official Redis command wire behavior for INCR, EXPIRE, and EVAL used by rate-limit scripts.
+
+## dragonfly
+priority: normal
+local: index_ext_dragonfly.md
+description: Dragonfly Redis-compat scripting and official container image for CI e2e beside Redis.

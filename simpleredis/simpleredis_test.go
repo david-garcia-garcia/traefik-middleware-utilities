@@ -13,13 +13,15 @@ import (
 
 // fakeRedis is an in-process RESP server backed by a string map.
 type fakeRedis struct {
-	mu      sync.Mutex
-	store   map[string]string
-	conns   int
-	auths   int
-	selects int
-	gets    int
-	lastSet []string
+	mu         sync.Mutex
+	store      map[string]string
+	conns      int
+	auths      int
+	selects    int
+	gets       int
+	lastSet    []string
+	lastExpire []string
+	lastEval   []string
 }
 
 // startFakeRedis listens on a local TCP port and serves an in-process RESP map.
@@ -76,6 +78,50 @@ func (f *fakeRedis) serve(conn net.Conn) {
 			f.store[args[1]] = args[2]
 			f.lastSet = append([]string(nil), args...)
 			_, _ = io.WriteString(conn, "+OK\r\n")
+		case "INCR":
+			afterIncr, incrErr := incrementStored(f.store, args[1], 1)
+			if incrErr != nil {
+				_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
+				break
+			}
+			_, _ = fmt.Fprintf(conn, ":%d\r\n", afterIncr)
+		case "INCRBY":
+			delta, convErr := strconv.ParseInt(args[2], 10, 64)
+			if convErr != nil {
+				_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
+				break
+			}
+			afterIncr, incrErr := incrementStored(f.store, args[1], delta)
+			if incrErr != nil {
+				_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
+				break
+			}
+			_, _ = fmt.Fprintf(conn, ":%d\r\n", afterIncr)
+		case "EXPIRE", "EXPIREAT":
+			f.lastExpire = append([]string(nil), args...)
+			_, _ = io.WriteString(conn, ":1\r\n")
+		case "EVAL":
+			f.lastEval = append([]string(nil), args...)
+			if args[1] == kongIncrbyExpireatScript && len(args) >= 6 {
+				key := args[3]
+				delta, convErr := strconv.ParseInt(args[4], 10, 64)
+				if convErr != nil {
+					_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
+					break
+				}
+				_, existed := f.store[key]
+				n, incrErr := incrementStored(f.store, key, delta)
+				if incrErr != nil {
+					_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
+					break
+				}
+				if !existed {
+					f.lastExpire = []string{"EXPIREAT", key, args[5]}
+				}
+				_, _ = fmt.Fprintf(conn, ":%d\r\n", n)
+			} else {
+				_, _ = io.WriteString(conn, ":0\r\n")
+			}
 		default:
 			_, _ = io.WriteString(conn, "+OK\r\n")
 		}
@@ -97,6 +143,20 @@ func (f *fakeRedis) lastSetCommand() []string {
 	return append([]string(nil), f.lastSet...)
 }
 
+// lastExpireCommand returns the last EXPIRE or EXPIREAT argv.
+func (f *fakeRedis) lastExpireCommand() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.lastExpire...)
+}
+
+// lastEvalCommand returns the last EVAL argv.
+func (f *fakeRedis) lastEvalCommand() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.lastEval...)
+}
+
 // handshakeCounts returns AUTH, SELECT, and GET commands seen on this fake.
 func (f *fakeRedis) handshakeCounts() (auths, selects, gets int) {
 	f.mu.Lock()
@@ -112,6 +172,29 @@ func bulk(store map[string]string, name string) string {
 	}
 	return fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
 }
+
+// incrementStored adds delta to a decimal string slot, treating a missing key as 0.
+func incrementStored(store map[string]string, name string, delta int64) (int64, error) {
+	current := int64(0)
+	if raw, found := store[name]; found {
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return 0, err
+		}
+		current = n
+	}
+	next := current + delta
+	store[name] = strconv.FormatInt(next, 10)
+	return next, nil
+}
+
+// kongIncrbyExpireatScript is the Kong flush snippet (KEYS declared, Lua 5.1-safe).
+const kongIncrbyExpireatScript = `local exists = redis.call("exists", KEYS[1])
+local value = redis.call("incrby", KEYS[1], ARGV[1])
+if exists == 0 then
+  redis.call("expireat", KEYS[1], ARGV[2])
+end
+return value`
 
 // readCommand parses one RESP array of bulk strings from the fake client.
 func readCommand(reader *bufio.Reader) ([]string, error) {
@@ -545,5 +628,149 @@ func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	}
 	if fake.connections() != 2 {
 		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+}
+
+func TestIncrMissingThenPresent(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	first, err := redis.Incr("counter")
+	if err != nil {
+		t.Fatalf("first Incr: %v", err)
+	}
+	if first != 1 {
+		t.Fatalf("first Incr = %d, want 1", first)
+	}
+	second, err := redis.Incr("counter")
+	if err != nil {
+		t.Fatalf("second Incr: %v", err)
+	}
+	if second != 2 {
+		t.Fatalf("second Incr = %d, want 2", second)
+	}
+}
+
+func TestIncrByMissing(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	got, err := redis.IncrBy("counter", 5)
+	if err != nil {
+		t.Fatalf("IncrBy: %v", err)
+	}
+	if got != 5 {
+		t.Fatalf("IncrBy = %d, want 5", got)
+	}
+}
+
+func TestIncrNonIntegerValue(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{"k": "abc"})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	_, err := redis.Incr("k")
+	if err == nil {
+		t.Fatal("Incr non-integer: want error")
+	}
+	if err.Error() == RedisIssue {
+		t.Fatalf("Incr non-integer = %v, want Redis error text", err)
+	}
+}
+
+func TestExpireAndExpireAtArgv(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"k": "1"})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	if err := redis.Expire("k", 60); err != nil {
+		t.Fatalf("Expire: %v", err)
+	}
+	got := fake.lastExpireCommand()
+	if len(got) != 3 || got[0] != "EXPIRE" || got[1] != "k" || got[2] != "60" {
+		t.Fatalf("Expire argv = %v, want EXPIRE k 60", got)
+	}
+
+	if err := redis.ExpireAt("k", 1700000000); err != nil {
+		t.Fatalf("ExpireAt: %v", err)
+	}
+	got = fake.lastExpireCommand()
+	if len(got) != 3 || got[0] != "EXPIREAT" || got[1] != "k" || got[2] != "1700000000" {
+		t.Fatalf("ExpireAt argv = %v, want EXPIREAT k 1700000000", got)
+	}
+}
+
+func TestExpireZeroReplyIsSuccess(t *testing.T) {
+	addr := startStaticRedis(t, ":0\r\n")
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	if err := redis.Expire("missing", 30); err != nil {
+		t.Fatalf("Expire :0: %v", err)
+	}
+}
+
+func TestEvalArgvAndIntegerReply(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	values, err := redis.Eval(kongIncrbyExpireatScript, []string{"win"}, []string{"7", "1700000000"})
+	if err != nil {
+		t.Fatalf("Eval: %v", err)
+	}
+	if len(values) != 1 || string(values[0]) != "7" {
+		t.Fatalf("Eval = %q, want [7]", values)
+	}
+	got := fake.lastEvalCommand()
+	if len(got) != 6 || got[0] != "EVAL" || got[1] != kongIncrbyExpireatScript || got[2] != "1" || got[3] != "win" || got[4] != "7" || got[5] != "1700000000" {
+		t.Fatalf("Eval argv = %v", got)
+	}
+}
+
+func TestEvalEmptyKeys(t *testing.T) {
+	addr := startStaticRedis(t, ":1\r\n")
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	values, err := redis.Eval("return 1", nil, nil)
+	if err != nil {
+		t.Fatalf("Eval empty: %v", err)
+	}
+	if len(values) != 1 || string(values[0]) != "1" {
+		t.Fatalf("Eval empty = %q, want [1]", values)
+	}
+}
+
+func TestEvalMixedArrayReply(t *testing.T) {
+	addr := startStaticRedis(t, "*3\r\n$3\r\nfoo\r\n:7\r\n+OK\r\n")
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	values, err := redis.Eval("return {1}", nil, nil)
+	if err != nil {
+		t.Fatalf("Eval mixed: %v", err)
+	}
+	if len(values) != 3 || string(values[0]) != "foo" || string(values[1]) != "7" || string(values[2]) != "OK" {
+		t.Fatalf("Eval mixed = %q", values)
+	}
+}
+
+func TestEvalNestedArrayIsIssue(t *testing.T) {
+	addr := startStaticRedis(t, "*1\r\n*0\r\n")
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	_, err := redis.Eval("return {{}}", nil, nil)
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("Eval nested = %v, want %s", err, RedisIssue)
+	}
+}
+
+func TestIncrGarbageIntegerPayload(t *testing.T) {
+	addr := startStaticRedis(t, ":not-an-int\r\n")
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	_, err := redis.Incr("k")
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("Incr garbage = %v, want %s", err, RedisIssue)
 	}
 }

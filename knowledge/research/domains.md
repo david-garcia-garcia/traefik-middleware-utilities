@@ -4,3 +4,5 @@
 - traefik
 - geoblock
 - crowdsec
+- redis
+- dragonfly
