@@ -12,7 +12,7 @@ _Avoid_: one `NewTable` per caller when they should share; unprefixed keys that 
 
 **Incarnation**:
 One value from `create` to `close`, together with the holders bound to it. A key has at most one at a time. Sleeping and waking do not end an incarnation: a woken value is the same pointer the earlier holder had.
-_Avoid_: calling a new value after a reclaim "the same incarnation"; it is not, and its `Close` runs separately
+_Avoid_: calling a new value after a reclaim "the same incarnation"; it is not, and its Close hook runs separately
 
 **Open**:
 Create-once for a key (`create` takes no args — Yaegi cannot call `func(context.Context) (any, error)`). The caller passes a `*slog.Logger` (required; no table logger and no fallback) and a `Hooks` value stored on the incarnation at put. A later `Open` does not run create, does not replace hooks, and wakes the value first if it was asleep. `ctx` must not be nil. Traefik's `New` ctx is `WithCancel`; the next dynamic config cancels it before the next `New`.
@@ -34,6 +34,10 @@ _Avoid_: releasing something in `Sleep` that `Wake` cannot get back
 Optional `Hooks.Wake`, called when an `Open` finds a stored, sleeping value. `Open` does not return until `Wake` has returned, so a caller never receives a sleeping value. `Wake` cannot fail: a value that cannot guarantee resume simply does not pass Sleep and Wake hooks.
 _Avoid_: an error return or a create-fallback on wake; work in `Wake` slow enough to stall a Traefik reload
 
+**Close**:
+Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table waits until it has returned before `reclaim_dispose`.
+_Avoid_: cleanup in Close that Sleep already did; a Close hook that blocks; Traefik plugin `Close`
+
 **Grace**:
 How long a **sleeping** value is kept before it is closed and its key dropped. An `Open` inside that window is a reclaim: it wakes the stored value instead of creating one. Zero grace keeps nothing — `sleep` and `close` run back to back and there is no window to be woken in. Negative grace is `DefaultGrace` (10s).
 _Avoid_: passing `0` when you meant the product default; reading grace as "how long the value stays live" — it is asleep for all of it
@@ -50,7 +54,7 @@ Because grace costs a sleeping value rather than a live one, a long grace is che
 - Watch stable `msg` + `key`. All five (`reclaim_put`, `reclaim_bind`, `reclaim_orphan`, `reclaim_reclaim`, `reclaim_dispose`) are debug. Put/bind/reclaim use that `Open`'s logger; orphan/dispose use the last `Open` on the key.
 - `ctx` is the host teardown context (Traefik `New` ctx), not `req.Context()`, not `context.Background()`.
 - Pass `Hooks` that close over a pointer assigned inside `create`. Do not type-switch the stored `any` for Sleep, Wake, or Close.
-- Write `Close` assuming `Sleep` already ran.
+- Write the Close hook assuming Sleep already ran. Do not block in Close.
 - Prefix keys when more than one type shares Default.
 
 ## Pattern snippet
@@ -82,5 +86,6 @@ w := stored.(*BIN)
 - A second `Open` while the incarnation is live or in grace returns the same value.
 - Tests assert the `msg` constants. A test that cancels a holder and immediately calls `Open` is usually not testing the wake branch — wait for `reclaim_orphan` first.
 - `Open` blocks for as long as `Wake` takes. Keep `Wake` cheap.
+- A Close hook that blocks blocks the drop or `Reset` goroutine. Keep Close cheap.
 - At zero grace an `Open` that races the orphan log is a plain bind, not a reclaim.
 - `Reset` is tests only. It must not race an `Open` on the same key.
