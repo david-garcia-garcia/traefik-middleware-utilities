@@ -13,10 +13,10 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 ## How to use
 
 - Allocate `&simpleredis.SimpleRedis{}` and `Init(host, pass, database)` once before concurrent use. `Init` is unchanged.
-- Call `InitWithOptions(host, pass, database, Options)` when dial, I/O, idle age, or idle-list cap must differ from the defaults. Zero or negative duration, and `MaxIdleConns` of 0 or less, mean today's constants (2s / 1s / 30s / 8).
+- Call `InitWithOptions(host, pass, database, Options)` when `DialTimeout`, `IoTimeout`, `IdleTimeout`, or `MaxIdleConns` must differ from the defaults. Zero or negative duration, and `MaxIdleConns` of 0 or less, mean the session defaults (2s / 1s / 30s / 8).
 - Do not dial in Traefik `New`. Call `Init` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, or `Eval`).
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
-- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly). Live I/O-timeout proof skips unless `SIMPLEREDIS_LIVE_REDIS` and/or `SIMPLEREDIS_LIVE_DRAGONFLY` are set (or under `-short`).
+- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly). Live I/O-timeout proof skips without `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY` or under `-short`. CI must set both.
 
 ## Pattern snippet
 
@@ -48,7 +48,7 @@ short.InitWithOptions("redis:6379", "", "", simpleredis.Options{IoTimeout: 50 * 
 
 ## Gotchas
 
-- `Init` does not dial. A refusing host is fine until the first command.
+- `Init` and `InitWithOptions` do not dial. A refusing host is fine until the first command.
 - After `Close`, commands return `redis:unreachable` and do not redial.
 - Idle pool cap is `MaxIdleConns` (default eight) after release. It is the idle list, not a live-socket wait queue. Concurrent in-flight dials are not capped on this type.
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
