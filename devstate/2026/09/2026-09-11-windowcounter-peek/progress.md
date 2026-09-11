@@ -6,7 +6,7 @@ JobName: 2026-09-11-windowcounter-peek
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T18:58:25Z |
 | explore | [x] | [x] | 2026-09-11T19:02:33Z |
-| propose | [x] | [ ] | |
+| propose | [x] | [x] | 2026-09-11T19:05:56Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |

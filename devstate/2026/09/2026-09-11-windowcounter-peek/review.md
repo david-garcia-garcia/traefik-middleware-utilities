@@ -12,3 +12,9 @@ findings: Peek is Take without increment; skip-storm must not use windowLocked; 
 fixed: explore.md, deviations.md, PR #7 card
 skipped: none
 
+## propose (2026-09-11)
+phase: propose
+findings: fold std_go_windowcounter_sliding-take and std_go_windowcounter_sync-flush; change windowcounter-peek
+fixed: proposal, design, tasks, deltas, specs.md
+skipped: none
+
