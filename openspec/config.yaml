@@ -1,0 +1,7 @@
+schema: spec-driven
+
+context: |
+  Shared Go libraries for Traefik middlewares, interpreted by Yaegi.
+  Module: github.com/david-garcia-garcia/traefik-middleware-utilities
+  First library: reclaim/ (non-generic table of any).
+  Yaegi-first: stdlib only in library packages; prove with go test then Traefik local-plugin Pester e2e.

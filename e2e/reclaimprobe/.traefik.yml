@@ -1,0 +1,6 @@
+displayName: reclaimprobe
+type: middleware
+import: github.com/david-garcia-garcia/reclaimprobe
+summary: Fake Traefik middleware that opens a reclaim table key for Yaegi e2e.
+testData:
+  key: shared
