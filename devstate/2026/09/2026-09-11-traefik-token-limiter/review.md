@@ -15,3 +15,19 @@ fixed: n/a
 skipped: n/a
 deviations: README add token-bucket row beside windowcounter
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8
+
+## propose (2026-09-11)
+phase: propose
+findings: new specs std_go_tokenbucket_allow and std_go_tokenbucket_lua-eval
+fixed: n/a
+skipped: n/a
+change: add-tokenbucket
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8
+
+## implement (2026-09-11)
+phase: implement
+findings: tokenbucket/ landed; local tests passed; live skipped without engines
+fixed: n/a
+skipped: n/a
+localTests: passed
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8

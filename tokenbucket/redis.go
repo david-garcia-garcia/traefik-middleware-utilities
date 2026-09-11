@@ -63,7 +63,7 @@ func (r *Redis) Allow(key string) (bool, time.Duration, error) {
 	}
 	waitMicro, convErr := strconv.ParseFloat(string(values[1]), 64)
 	if convErr != nil {
-		return false, 0, errEvalLen
+		return false, 0, errEvalWait
 	}
 	wait := waitDuration(waitMicro)
 	return allowedFromWait(wait, r.clock.maxDelay), wait, nil

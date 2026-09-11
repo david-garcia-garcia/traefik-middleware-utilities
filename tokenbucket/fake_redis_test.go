@@ -19,9 +19,10 @@ type testHash struct {
 
 // testFakeRedis is an in-process RESP server for limiter unit tests.
 type testFakeRedis struct {
-	mu      sync.Mutex
-	hashes  map[string]*testHash
-	lastEval []string
+	mu        sync.Mutex
+	hashes    map[string]*testHash
+	lastEval  []string
+	evalReply string
 }
 
 // startTestFakeRedis listens on a local TCP port and serves an in-process RESP map.
@@ -60,6 +61,10 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 			_, _ = io.WriteString(conn, "+OK\r\n")
 		case "EVAL":
 			f.lastEval = append([]string(nil), args...)
+			if f.evalReply != "" {
+				_, _ = io.WriteString(conn, f.evalReply)
+				break
+			}
 			if len(args) < 9 || strings.TrimSpace(args[1]) != strings.TrimSpace(allowTokenBucketScript) {
 				_, _ = io.WriteString(conn, "-ERR unknown script\r\n")
 				break
@@ -95,6 +100,12 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 	}
 }
 
+// setEvalReply overrides the EVAL RESP body (empty restores the script).
+func (f *testFakeRedis) setEvalReply(reply string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.evalReply = reply
+}
 // lastEvalCommand returns the last EVAL argv.
 func (f *testFakeRedis) lastEvalCommand() []string {
 	f.mu.Lock()

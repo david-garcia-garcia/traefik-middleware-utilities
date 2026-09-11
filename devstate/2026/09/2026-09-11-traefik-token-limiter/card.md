@@ -1,16 +1,16 @@
-Developer review: in progress — 2026-09-11T19:10:19.055Z
+Developer review: in progress — 2026-09-11T19:21:44.694Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** `knowledge/research/ext_traefik_ratelimiter_token-bucket/` records Traefik RateLimit token-bucket math. Explore locked `tokenbucket/` Allow mapping, Lua clock units, and `TOKENBUCKET_LIVE_*` env names. The package is not on dest yet.
+**Developers.** Package `tokenbucket/` adds `NewMemory` / `NewRedis` and `Allow(key)` (Traefik Lua math, copied script with `#rl_source == 4`). Live env `TOKENBUCKET_LIVE_REDIS` / `TOKENBUCKET_LIVE_DRAGONFLY`. Specs `std_go_tokenbucket_allow` and `std_go_tokenbucket_lua-eval`. Usage packet `knowledge/devdocs/std_go_tokenbucket.md`.
 
 **End users.** None.
 
 ## Motivation
-Middleware authors who need Traefik RateLimit behaviour (refill `rate`, cap `burst`, wait, refund when wait exceeds maxDelay) have no package on `master`. Dest already ships `windowcounter/` for Kong sliding windows and says a token bucket would be a separate package.
+Middleware authors who need Traefik RateLimit behaviour (refill `rate`, cap `burst`, wait, refund when wait exceeds maxDelay) had no package on `master`. Dest already ships `windowcounter/` for Kong sliding windows and says a token bucket would be a separate package.
 
 If we do not add that package, a plugin either imports the window counter (wrong clock) or copies Traefik’s Lua with `table.maxn` and `go-redis`, which Yaegi and Dragonfly will not run.
 
@@ -23,33 +23,34 @@ flowchart LR
 ```
 
 ## Merge readiness
-Explore recorded; propose has not run. 3 items remain.
+Library landed locally; CI on this HEAD is still running. 1 item remains.
 
-Priority: P3 — missing library and spec; no current operator or end-user harm
+Priority: P3 — new library; no current operator or end-user harm
 
-Reviewed head: 0a301de
+Reviewed head: 8adbab2
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1 | HEAD after explore is not measured by CI yet |
-| CI proof | 1 | pushed; check runs not seen on 0a301de |
-| Local tests proof | N/A | Before implement |
+| Overall readiness | 3 | CI in progress; local tests passed |
+| CI proof | 3 | Lint, Test, Integration in progress |
+| Local tests proof | 6 | go test ./tokenbucket/... passed (live skipped without engines) |
 | Review resolution | 6 | No open PR comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-11-traefik-token-limiter pushed | git / origin |
-| OpenSpec | none | handoff.yaml |
+| OpenSpec | add-tokenbucket | openspec/changes/add-tokenbucket |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8 | pr-host |
-| CI | not seen | GitHub MCP get_check_runs total_count 0 |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 34638405714 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34638405714 | GitHub MCP get_check_runs |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | comments: none |
 
 ## Specs
-None.
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-traefik-token-limiter/openspec/changes/add-tokenbucket/proposal.md) — added
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-traefik-token-limiter/openspec/changes/add-tokenbucket/proposal.md) — added
 
 ## Deviations from the ask
 - taken: README leaky-bucket row replacement → add a Token bucket row beside Window counter — `README.md` — dest already replaced leaky-`bucket/` with `windowcounter/`. Requester: not asked.
@@ -58,7 +59,7 @@ None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-11-traefik-token-limiter` → stub PR #8 → explore locked Allow/clock/live-env. Propose is next.
+Local spec → branch `2026-09-11-traefik-token-limiter` → PR #8 → implement `tokenbucket/`. Code review is next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -73,8 +74,9 @@ Local spec → branch `2026-09-11-traefik-token-limiter` → stub PR #8 → expl
 ## Before merge
 - [x] Stub PR #8 open
 - [x] Explore Allow mapping, clock units, live env
-- [ ] Propose OpenSpec change
-- [ ] Implement `tokenbucket/` + live Redis/Dragonfly + Yaegi tests
+- [x] Propose OpenSpec change
+- [x] Implement `tokenbucket/` + unit/Yaegi tests
+- [ ] CI Test job green on both live engines
 
 ## Findings
 None.
@@ -87,26 +89,26 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | No spec.md in dest...HEAD |
+| Specs in this PR | 2 added / 0 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 0a301deeffd31f178c2ac8114c1570b6102c478e | Card must match the branch you measured |
+| Reviewed head | 8adbab213f08c31e4a5f09131d384205def68257 | Card must match the branch you measured |
 
 ### Stored data model
-None.
+- New: Redis hash (caller-prefixed key) with fields `last` and `tokens`.
 
 ### Technical review
-Best possible solution: not implemented; dest still has no token-bucket package. Explore chose Lua-formula memory plus `simpleredis.Eval` so both stores share one meaning.
+Best possible solution: Lua-formula memory plus `simpleredis.Eval` so both stores share one meaning; EVALSHA and x/time/rate stay out.
 
-Do we have a high-confidence way to reproduce? Yes — dest tree has `windowcounter/` and no `tokenbucket/`; Traefik Lua still uses `table.maxn`.
+Do we have a high-confidence way to reproduce? Yes — `go test ./tokenbucket/...` burst, refund, two-instance share, memory/Redis agreement, Yaegi on fake TCP.
 
-Is this the best way to solve the issue? Yes — separate package as dest README already reserved; do not fold into `windowcounter/`.
+Is this the best way to solve the issue? Yes — separate package as dest README reserved.
 
 ### Evidence
 What I checked:
-- dest `tokenbucket/` not found; README line 25 reserves a separate package
-- `simpleredis.Eval` present (`simpleredis.go:154`)
-- Traefik research pin 903e8a9 (Lua always-true, Inf 429, EVALSHA)
-- GitHub MCP PR #8 comments empty; check_runs total_count 0 on HEAD 0a301de
+- `go test ./tokenbucket/...` passed (live skipped; env unset)
+- `go test ./reclaim/... ./simpleredis/... ./windowcounter/...` passed
+- `openspec validate add-tokenbucket --type change --strict` valid
+- GitHub MCP PR #8 run 34638405714 in progress
 
 ### Rank-up moves
 None.

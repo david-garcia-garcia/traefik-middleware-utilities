@@ -21,6 +21,9 @@ type Memory struct {
 	buckets map[string]*memEntry
 }
 
+// maxMemorySources is Traefik's in-memory source cap (ttlmap maxSources).
+const maxMemorySources = 65536
+
 // NewMemory builds an in-process limiter. rate is requests per second.
 func NewMemory(rate float64, burst int64, maxDelay, ttl time.Duration) (*Memory, error) {
 	if err := validateClock(rate, burst, maxDelay, ttl); err != nil {
@@ -53,9 +56,17 @@ func (m *Memory) Allow(key string) (bool, time.Duration, error) {
 	nowMicro := now.UnixMicro()
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// Idle longer than ttl is a new bucket (Traefik TTL map).
+	// Idle longer than ttl is a new bucket (Traefik TTL map). Drop expired keys so the map cannot grow without bound.
 	entry := m.buckets[key]
-	if entry == nil || !now.Before(entry.expireAt) {
+	if entry != nil && !now.Before(entry.expireAt) {
+		delete(m.buckets, key)
+		entry = nil
+	}
+	if entry == nil {
+		m.dropExpired(now)
+		if len(m.buckets) >= maxMemorySources {
+			m.dropOne(now)
+		}
 		entry = &memEntry{}
 		m.buckets[key] = entry
 	}
@@ -65,4 +76,25 @@ func (m *Memory) Allow(key string) (bool, time.Duration, error) {
 	entry.expireAt = now.Add(m.clock.ttl)
 	wait := waitDuration(waitMicro)
 	return allowedFromWait(wait, m.clock.maxDelay), wait, nil
+}
+
+// dropExpired removes buckets whose ttl has elapsed.
+func (m *Memory) dropExpired(now time.Time) {
+	for source, entry := range m.buckets {
+		if !now.Before(entry.expireAt) {
+			delete(m.buckets, source)
+		}
+	}
+}
+
+// dropOne removes one map slot when at cap so a new source can be stored.
+func (m *Memory) dropOne(now time.Time) {
+	m.dropExpired(now)
+	if len(m.buckets) < maxMemorySources {
+		return
+	}
+	for source := range m.buckets {
+		delete(m.buckets, source)
+		return
+	}
 }

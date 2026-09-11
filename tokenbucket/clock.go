@@ -12,7 +12,8 @@ var (
 	errDelay   = errors.New("tokenbucket: maxDelay must not be negative")
 	errTTL     = errors.New("tokenbucket: ttl must be at least 1s")
 	errRedis   = errors.New("tokenbucket: redis is required")
-	errEvalLen = errors.New("tokenbucket: eval reply must have 3 fields")
+	errEvalLen  = errors.New("tokenbucket: eval reply must have 3 fields")
+	errEvalWait = errors.New("tokenbucket: eval wait is not a number")
 )
 
 // clockConfig is rate, burst, maxDelay, and ttl shared by both stores.

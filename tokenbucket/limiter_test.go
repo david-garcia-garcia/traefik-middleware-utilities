@@ -10,6 +10,56 @@ import (
 
 const testTTL = 2 * time.Second
 
+func TestNewRedis_RejectsNil(t *testing.T) {
+	limiter, err := NewRedis(nil, 1, 1, time.Second, testTTL)
+	if limiter != nil || !errors.Is(err, errRedis) {
+		t.Fatalf("nil redis: limiter %v err %v", limiter, err)
+	}
+}
+
+func TestMemory_IdlePastTTLStartsFull(t *testing.T) {
+	limiter, err := NewMemory(1, 2, time.Hour, testTTL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	if _, _, err := limiter.Allow("k"); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(testTTL)
+	limiter.SetNowForTest(func() time.Time { return now })
+	for i := 0; i < 2; i++ {
+		allowed, wait, allowErr := limiter.Allow("k")
+		if allowErr != nil {
+			t.Fatal(allowErr)
+		}
+		if !allowed || wait != 0 {
+			t.Fatalf("fresh burst %d: allowed %v wait %v", i+1, allowed, wait)
+		}
+	}
+}
+
+func TestRedis_EvalBadReply(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	fake.setEvalReply("*1\r\n$4\r\ntrue\r\n")
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := NewRedis(client, 1, 1, time.Second, testTTL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = limiter.Allow("k")
+	if !errors.Is(err, errEvalLen) {
+		t.Fatalf("want errEvalLen, got %v", err)
+	}
+	fake.setEvalReply("*3\r\n$4\r\ntrue\r\n$3\r\nxyz\r\n$1\r\n0\r\n")
+	_, _, err = limiter.Allow("k")
+	if !errors.Is(err, errEvalWait) {
+		t.Fatalf("want errEvalWait, got %v", err)
+	}
+}
+
 func TestNewMemory_RejectsInvalidClock(t *testing.T) {
 	if _, err := NewMemory(0, 1, 0, testTTL); !errors.Is(err, errRate) {
 		t.Fatalf("rate 0: %v", err)
@@ -76,15 +126,15 @@ func TestMemory_RefundWhenWaitExceedsMaxDelay(t *testing.T) {
 	if allowed || wait <= time.Microsecond {
 		t.Fatalf("want deny wait>maxDelay, got allowed %v wait %v", allowed, wait)
 	}
-	again, wait2, err := limiter.Allow("k")
+	allowedAfterRefund, waitAfterRefund, err := limiter.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if again {
+	if allowedAfterRefund {
 		t.Fatal("refund must not admit a stacked consume")
 	}
-	if wait2 != wait {
-		t.Fatalf("wait after refund %v want %v (not stacked)", wait2, wait)
+	if waitAfterRefund != wait {
+		t.Fatalf("wait after refund %v want %v (not stacked)", waitAfterRefund, wait)
 	}
 }
 

@@ -24,6 +24,18 @@ func TestYaegi_AllowBurst(t *testing.T) {
 	}
 }
 
+func TestYaegi_AllowRefund(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	goPath := t.TempDir()
+	writeGopathTokenbucket(t, goPath)
+	writeGopathFile(t, goPath, "allowprobe", "roundtrip.go", allowprobeSrc)
+
+	got := evalAllowprobe(t, goPath, fmt.Sprintf(`allowprobe.RefundAfterBurst(%q, %q)`, addr, "yaegi-refund"))
+	if got != "ok" {
+		t.Fatalf("yaegi refund: %q, want ok", got)
+	}
+}
+
 func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("live engines skipped under -short")
@@ -253,6 +265,41 @@ func MemoryAgrees(host, key string) string {
 		if (mWait > time.Millisecond) != (rWait > time.Millisecond) {
 			return "class-mismatch"
 		}
+	}
+	return "ok"
+}
+
+func RefundAfterBurst(host, key string) string {
+	client := &simpleredis.SimpleRedis{}
+	client.Init(host, "", "")
+	limiter, err := tokenbucket.NewRedis(client, 1, 3, time.Microsecond, 2*time.Second)
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	now := time.Unix(1700000000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	for i := 0; i < 3; i++ {
+		allowed, _, allowErr := limiter.Allow(key)
+		if allowErr != nil {
+			return "allow:" + allowErr.Error()
+		}
+		if !allowed {
+			return "early"
+		}
+	}
+	allowed, wait, err := limiter.Allow(key)
+	if err != nil {
+		return "deny:" + err.Error()
+	}
+	if allowed || wait <= time.Microsecond {
+		return "not-denied"
+	}
+	allowedAfterRefund, waitAfterRefund, err := limiter.Allow(key)
+	if err != nil {
+		return "refund:" + err.Error()
+	}
+	if allowedAfterRefund || waitAfterRefund != wait {
+		return "stacked"
 	}
 	return "ok"
 }
