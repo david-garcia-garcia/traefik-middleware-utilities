@@ -24,3 +24,9 @@ findings: Peek on Limiter; skip-storm memory path; exact two GET; unit/live/Yaeg
 fixed: limiter.go Peek, tests, std_go_windowcounter.md
 skipped: none
 
+## codereview (2026-09-11)
+phase: codereview
+findings: coverage 2 hard (buffered Peek no-increment; Takes then Peek deny); other axes none
+fixed: TestPeek_BufferedDoesNotIncrement, TestPeek_BufferedTakeThenPeekDenies (`74bbc68`)
+skipped: none
+
