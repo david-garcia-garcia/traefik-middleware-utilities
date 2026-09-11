@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-11T20:54:23.857Z
+Developer review: in progress — 2026-09-11T20:59:10.691Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** Research notes for the classic leaky-bucket meter; no `leakybucket/` package on the branch yet.
+**Developers.** OpenSpec change `add-leakybucket` (pour clock + Redis sync-flush). No `leakybucket/` package on the branch yet.
 
 **End users.** None.
 
@@ -23,18 +23,18 @@ flowchart LR
 ```
 
 ## Merge readiness
-Explore recorded; product library is not on the branch yet. 1 item remains.
+Proposal is on the branch; product library is not. 1 item remains.
 
 Priority: P3 — new library; no current operator or end-user harm
 
-Reviewed head: 55f3a7d
+Reviewed head: 9f743b3
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 3 | CI in progress; no library yet |
-| CI proof | 3 | Lint succeeded; Test and Integration in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34646571103 |
+| CI proof | 3 | Lint succeeded; Test and Integration in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34646986686 |
 | Local tests proof | N/A | Before implement |
 | Review resolution | 6 | No open PR comments |
 
@@ -42,14 +42,15 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-11-leaky-bucket pushed | git / origin |
-| OpenSpec | none | openspec/ |
+| OpenSpec | add-leakybucket | openspec/changes/add-leakybucket/ |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9 | pr-host |
-| CI | build 34646571103 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34646571103 | GitHub MCP get_check_runs |
+| CI | build 34646986686 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34646986686 | GitHub MCP get_check_runs |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | comments: none |
 
 ## Specs
-None.
+- [std_go_leakybucket_pour](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-leaky-bucket/openspec/changes/add-leakybucket/proposal.md) — added
+- [std_go_leakybucket_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-leaky-bucket/openspec/changes/add-leakybucket/proposal.md) — added
 
 ## Deviations from the ask
 None.
@@ -58,7 +59,7 @@ None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → propose next.
+Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → implement next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -74,6 +75,7 @@ Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → propose next.
 ## Before merge
 - [x] Stub PR #9 open
 - [x] Explore recorded
+- [x] OpenSpec `add-leakybucket` proposed
 - [ ] Land `leakybucket/` with unit, live Redis/Dragonfly, and Yaegi proof
 
 ## Findings
@@ -87,9 +89,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
+| Specs in this PR | 2 added / 0 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 55f3a7d4db10e48dc27c4b88700d67b719e640e4 | Card must match the branch you measured |
+| Reviewed head | 9f743b357902987f4dab4feeb28be3841399eae2 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -97,16 +99,16 @@ None.
 ### Technical review
 Best possible solution: Dest already owns token-bucket refill and Kong window+flush as separate packages; a third package for the water clock matches that split.
 
-Do we have a high-confidence way to reproduce? Yes, `leakybucket/` is absent and `go list ./leakybucket` fails.
+Do we have a high-confidence way to reproduce? Yes, `leakybucket/` is still absent on DestBranch.
 
-Is this the best way to solve the issue? Yes — a new package beside the two clocks, Kong delta+timer for flush, I.371 meter for the clock, not an invert of `tokenbucket/` Lua.
+Is this the best way to solve the issue? Yes — new specs `std_go_leakybucket_pour` and `std_go_leakybucket_sync-flush`, not a fold into Traefik or Kong leaves.
 
 ### Evidence
 What I checked:
-- `leakybucket/` not found; `go list ./leakybucket` fails
-- `knowledge/research/ext_leaky-bucket_meter/notes.md` (I.371 meter, refuse overflow)
-- One OPEN PR #9, no comments (GitHub MCP)
-- CI run 34646571103 Lint success, Test/Integration in progress (head 55f3a7d)
+- `openspec validate add-leakybucket --type change --strict` valid
+- `validate_artifact_names` OK
+- One OPEN PR #9, no comments
+- CI run 34646986686 Lint success, Test/Integration in progress (head 9f743b3)
 
 ### Rank-up moves
 None.
