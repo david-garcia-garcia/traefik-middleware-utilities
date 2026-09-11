@@ -34,4 +34,10 @@ findings: 1 stale-usage produced, 0 skipped
 fixed: Close-on-release gotcha on knowledge/devdocs/std_go_simpleredis.md
 skipped: none
 
+## archive (2026-09-11)
+phase: archive
+findings: fold std_go_simpleredis_tcp-session; validate_spec_map write/verify and validate_artifact_names clean; archived to 2026-09-11-test-idle-cap-and-release-after-close
+fixed: live catalog idle-cap and in-flight-Close requirements
+skipped: none
+
 
