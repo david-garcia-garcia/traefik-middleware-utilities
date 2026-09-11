@@ -1,61 +1,65 @@
-Developer review: in progress — 2026-09-11T09:04:43Z
+Developer review: ready for review — 2026-09-11T09:09:28Z
 
 ## What this changes
-**Operators.** E2e compose runs `redis:7-alpine` at `redis:6379` plus `whoami-redis` on `/redis` on `reclaim-e2e` (ports 8000/8080 unchanged).
+**Operators.** E2e compose runs `redis:7-alpine` at `redis:6379` (no password) plus `whoami-redis` on `/redis` on the existing `reclaim-e2e` stack (ports 8000/8080 unchanged).
 
 **Admin users.** None.
 
-**Developers.** Package `simpleredis/` is a copied stdlib RESP client with Yaegi tests, `e2e/simpleredisprobe`, and OpenSpec `add-simpleredis`. Code review applied comment/test hards; skipped renaming copied `do`, rewriting retry, and capping in-flight dials.
+**Developers.** Package `simpleredis/` is a copied stdlib RESP client (`Init`/`Get`/`MGet`/`Set`/`Del`/`Close`) with copied fake-TCP tests, `simpleredis/yaegi_test.go`, nested plugin `e2e/simpleredisprobe`, usage packet `std_go_simpleredis`, and catalog specs `std_go_simpleredis_tcp-session` and `std_go_simpleredis_resp-commands`. Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`.
 
 **End users.** None.
 
 ## Motivation
-DestBranch had no Redis client. Without this PR each middleware keeps a private RESP dialer and there is no Yaegi/Traefik proof for SimpleRedis.
+DestBranch listed Redis as Planned and had no client. Middleware authors could not import SimpleRedis from this module.
+
+If this PR does not land, each plugin keeps inventing a RESP dialer, and there is no Yaegi or Traefik e2e seam for that client.
 
 ```mermaid
 flowchart LR
-  dest["DestBranch: Redis Planned"] --> copy["simpleredis/ + Yaegi + Pester"]
+  dest["DestBranch: Redis Planned, no tree"] --> copy["simpleredis/ copy"]
+  copy --> yaegi["yaegi_test.go"]
+  copy --> probe["e2e/simpleredisprobe + compose redis"]
   dest --> miss["Without merge: each plugin keeps its own dialer"]
 ```
 
 ## Merge readiness
-Seven-axis review is recorded. Archive and ready PR title remain. 1 item remains.
+OpenSpec archived, CI green, no open review comments. 0 items remain.
 
 Priority: P3 — missing planned library; no production harm today
-Reviewed head: 73cdb00
+Reviewed head: 5572ad8
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI on the review-fix push still in progress |
-| CI proof | 3/6 | Lint, Test, Integration Tests in progress — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34582322122 |
+| Overall readiness | 6/6 | Lint, Test, and Integration Tests succeeded |
+| CI proof | 6/6 | Lint, Test, Integration Tests success — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34582611526 |
 | Local tests proof | N/A | `localTests: passed`; remote CI is the proof axis |
 | Review resolution | 6/6 | OPEN PR #3, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-11-simpleredis pushed | `git` @ 73cdb00 |
-| OpenSpec | add-simpleredis | `openspec/changes/add-simpleredis/` |
+| Branch | 2026-09-11-simpleredis pushed | `git` / origin/2026-09-11-simpleredis @ 5572ad8 |
+| OpenSpec | add-simpleredis archived | `openspec/changes/archive/2026-09-11-add-simpleredis/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/3 | GitHub MCP |
-| CI | build 34582322122 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34582322122 | GitHub check runs |
-| Local tests | passed | handoff.yaml |
+| CI | build 34582611526 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34582611526 | GitHub check runs |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | comments: none |
 
 ## Specs
-- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis/openspec/changes/add-simpleredis/proposal.md) — added
-- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis/openspec/changes/add-simpleredis/proposal.md) — added
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis/openspec/changes/archive/2026-09-11-add-simpleredis/proposal.md) — added
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis/openspec/changes/archive/2026-09-11-add-simpleredis/proposal.md) — added
 
 ## Deviations from the ask
-- taken: README Planned Redis connection under `redis/` → folder and import `simpleredis/` — `README.md` — dest sibling `reclaim/` kept folder=package. Requester: not asked.
+- taken: README Planned Redis connection under `redis/` → folder and import `simpleredis/`, Libraries title SimpleRedis — `README.md` — dest sibling `reclaim/` kept folder=package. Requester: not asked.
 
 ## Follow-up issues
 - [ ] [Rename compose project `reclaim-e2e` to a harness name](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis/knowledge/debt/2026-09-11-rename-reclaim-e2e-compose.md) — compose project `reclaim-e2e` will also host the Redis probe after this change.
 - [ ] [Choose a product LICENSE for dest](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis/knowledge/debt/2026-09-11-choose-product-license.md) — dest has no root LICENSE while this change adds Apache-2.0 files under `simpleredis/`.
 
 ## How this fits together
-Local ticket 2026-09-11-simpleredis is the branch and stub PR into master. Code review closed hard findings that did not reshape the copied client; archive is next.
+Local ticket 2026-09-11-simpleredis is the branch and PR #3 into master. SimpleRedis is copied, proved under Yaegi and Traefik Pester, usage-documented, and archived.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -70,10 +74,7 @@ Local ticket 2026-09-11-simpleredis is the branch and stub PR into master. Code 
 | Where do Yaegi interpreter tests live? | additive asked | assumed — `simpleredis/yaegi_test.go`. | explore |
 
 ## Before merge
-- [ ] Archive `add-simpleredis` and drop WIP from PR #3 [P3]
-- [x] Seven-axis review (hard comments/tests applied; copied-client hards skipped)
-- [x] Land SimpleRedis, Yaegi tests, Redis host plugin, Pester e2e
-- [x] Stub PR #3 opened into master
+None.
 
 ## Findings
 None.
@@ -94,23 +95,24 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 2 added / 0 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 73cdb005e098f82340473bc50918aec47e20ff3f | Card must match the branch you measured |
+| Reviewed head | 5572ad899863170473381430a561fb781bab3073 | Card must match the branch you measured |
 
 ### Stored data model
 - New: Redis keys written by `e2e/simpleredisprobe` (probe SET/GET `simpleredisprobe`).
 
 ### Technical review
-Best possible solution: Keep the copied SimpleRedis contract; prove it under Yaegi and Traefik; do not add a max-open the source never had.
+Best possible solution: Copy the named stdlib client as `simpleredis/` and prove it with dest’s Yaegi + shared-compose Pester pattern.
 
-Do we have a high-confidence way to reproduce? Yes — `go test ./simpleredis/...` and prior Integration success on 34581091629.
+Do we have a high-confidence way to reproduce? Yes — `go test ./simpleredis/...` and CI Integration Tests on 34582611526.
 
 Is this the best way to solve the issue? Yes versus DestBranch.
 
 ### Evidence
 What I checked:
-- Seven axis files under the run root (HEAD 73cdb00)
-- `go test ./simpleredis/...` passed after review-fix 0d90461
-- GitHub check runs 34582322122 in progress
+- `openspec/changes/archive/2026-09-11-add-simpleredis/`
+- `knowledge/devdocs/std_go_simpleredis.md`
+- GitHub check runs 34582611526: Lint/Test/Integration success
+- comments: none
 
 ### Rank-up moves
 None.
