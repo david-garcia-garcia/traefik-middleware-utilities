@@ -44,8 +44,8 @@ No active OpenSpec change (`openspec list --json` empty). Fold the peer-close sc
 
 - Q: Are CI Go live tests, compose+Pester, or both required so Dragonfly is not skipped?
   Rank: additive asked — new `live_test.go` and Pester Its; Desired compose recovery plus Affected `.github/workflows/ci.yml and/or a simpleredis live test`
-  Decision: assumed — both. Go live tests on dest `:6379`/`:6380` (env `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY`, skip if unset or `-short`, same shape as `windowcounter/live_test.go`). Pester recovery Its against compose `/redis` and `/dragonfly`. Fake TCP stays the unit path that does not need engines.
-  By: explore
+  Decision: resolved — both. Go live tests on dest `:6379`/`:6380` (env `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY`, skip if unset or `-short`, same shape as `windowcounter/live_test.go`). Pester recovery Its against compose `/redis` and `/dragonfly`. Fake TCP stays the unit path that does not need engines.
+  By: implement
 
 - Q: How long to wait after server close versus client `idleTimeout` (30s)?
   Rank: additive asked — constraint on the live tests this change adds; Unknowns wait vs `idleTimeout`
@@ -54,15 +54,15 @@ No active OpenSpec change (`openspec list --json` empty). Fold the peer-close sc
 
 - Q: Must the probe expose reuse/redial in headers, or can Pester infer recovery from a second 200 after a kill?
   Rank: additive asked — new query/header on `e2e/simpleredisprobe` this change creates; Desired extend Pester and probe
-  Decision: assumed — Pester: warmup GET, kill the probe connection by `ID`/`ADDR` (not `TYPE`/`SKIPME`), second GET 200 with verb or recover headers. Probe: `recover=1` runs Set+Get only and sets `X-SimpleRedis-Recover: ok`. Do not add production pool metrics on `SimpleRedis`.
-  By: explore
+  Decision: resolved — Pester: warmup GET, kill the probe connection by `ID`/`ADDR` (not `TYPE`/`SKIPME`), second GET 200 with `X-SimpleRedis-Recover: ok`. Probe: `recover=1` runs Set+Get only and sets that header. Do not add production pool metrics on `SimpleRedis`.
+  By: implement
 
 - Q: How do Go live tests send `CLIENT KILL` without a public SimpleRedis API?
   Rank: additive incidental — new test-only helper this change creates; means to the live-recovery criterion (no criterion names a public `ClientKill`)
-  Decision: assumed — same-package sidecar (second `SimpleRedis` or raw dial) named with `test` in the identifier. Kill `ADDR` of `sr.idle[0].netConn.LocalAddr()` so parallel windowcounter/tokenbucket clients on the same CI Redis survive. Do not ship a production `ClientKill`.
-  By: explore
+  Decision: resolved — same-package sidecar sends `CLIENT KILL ADDR` of `sr.idle[0].netConn.LocalAddr()`. If the engine reports 0 (Docker/GHA port-publish NAT), send `CLIENT ID` on that pooled socket then `CLIENT KILL ID`. Fail if still 0. Do not ship a production `ClientKill`.
+  By: implement
 
 - Q: Does dest `exec` retry policy need to change for peer `io.EOF`?
   Rank: additive asked — Desired "Do not change the retry policy unless a new test proves dest is wrong"
-  Decision: assumed — keep one retry of a dead pooled conn unless peer-close tests fail on dest `exec`. Spec adds a scenario only.
-  By: explore
+  Decision: resolved — dest `exec` already retries a dead pooled conn once; peer-close fake and live tests passed without changing it. Spec adds a scenario only.
+  By: implement
