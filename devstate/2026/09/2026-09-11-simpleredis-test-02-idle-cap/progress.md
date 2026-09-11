@@ -8,7 +8,7 @@ JobName: 2026-09-11-simpleredis-test-02-idle-cap
 | explore | [x] | [x] | 2026-09-11T21:31:09Z |
 | propose | [x] | [x] | 2026-09-11T21:38:31Z |
 | implement | [x] | [x] | 2026-09-11T22:01:20Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
