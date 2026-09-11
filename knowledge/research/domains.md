@@ -3,3 +3,4 @@
 ## ext
 - traefik
 - geoblock
+- crowdsec
