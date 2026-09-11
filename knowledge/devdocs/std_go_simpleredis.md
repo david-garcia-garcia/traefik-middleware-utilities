@@ -46,7 +46,7 @@ if err != nil {
 
 - `Init` does not dial. A refusing host is fine until the first command.
 - After `Close`, commands return `redis:unreachable` and do not redial.
-- Idle pool cap is eight after release; concurrent in-flight dials are not capped (copied client).
+- Live pool cap is eight (idle plus in-flight). Callers above the cap wait 200ms, then `redis:unreachable`. Idle trim stays eight.
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).

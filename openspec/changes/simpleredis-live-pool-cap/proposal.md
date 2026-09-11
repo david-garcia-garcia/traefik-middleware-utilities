@@ -5,7 +5,7 @@ On DestBranch, SimpleRedis caps only the idle list at eight. Concurrent callers 
 ## What Changes
 
 - Cap **live** sockets (`poolSize` default 8) separately from the idle list. Callers above the cap wait on a buffered `chan struct{}` instead of dialing.
-- Bound that wait with `poolTimeout` default 1s. Elapse returns `redis:unreachable`. Do not queue forever.
+- Bound that wait with `poolTimeout` default 200ms (shorter than the 1s I/O deadline). Elapse returns `redis:unreachable`. Do not queue forever.
 - Keep idle trimming at eight, but do not close a reusable socket only because idle is full while live sockets are under `poolSize`.
 - `Init(host, pass, database)` stays three arguments. No public pool knobs. No `go-redis` import.
 - Prove the cap and timeout on a fake server **and** on live Redis and Dragonfly (compiled tests plus dest compose + Pester). Fake-server tests are not a substitute.

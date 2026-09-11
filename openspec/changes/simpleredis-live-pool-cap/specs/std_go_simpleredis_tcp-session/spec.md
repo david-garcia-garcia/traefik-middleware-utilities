@@ -1,12 +1,12 @@
 ## ADDED Requirements
 
 ### Requirement: Full pool wait returns redis:unreachable
-When every live socket is checked out, a further command SHALL wait for a slot. If no slot frees before the pool wait (one second) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a slot arrives).
+When every live socket is checked out, a further command SHALL wait for a slot. If no slot frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a slot arrives).
 
 #### Scenario: Pool wait times out
 - **WHEN** all eight live sockets are busy
 - **AND** another command is issued
-- **AND** no socket becomes free within one second
+- **AND** no socket becomes free within 200 milliseconds
 - **THEN** that command returns `redis:unreachable`
 - **AND** the fake or server observes no additional TCP connection for that command
 
@@ -15,12 +15,12 @@ The session SHALL keep at most eight live TCP connections (idle plus in use) aga
 
 #### Scenario: Concurrent holds stay within eight on Redis
 - **WHEN** overlapping requests through the Traefik plugin hold sockets against compose Redis
-- **THEN** Redis `CLIENT LIST` from that plugin stays at most eight
+- **THEN** Redis has at most eight established TCP clients from that plugin
 - **AND** reclaim routes `/a` and `/b` still succeed
 
 #### Scenario: Concurrent holds stay within eight on Dragonfly
 - **WHEN** overlapping requests through the Traefik plugin hold sockets against compose Dragonfly
-- **THEN** Dragonfly `CLIENT LIST` from that plugin stays at most eight
+- **THEN** Dragonfly has at most eight established TCP clients from that plugin
 
 #### Scenario: Extra waiter is redis:unreachable on both engines
 - **WHEN** eight sockets are held against Redis
