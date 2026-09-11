@@ -9,3 +9,4 @@ Allowlist of root + domain: `openspec/specs/domains.md`.
 
 - reclaim
 - simpleredis
+- windowcounter

@@ -27,6 +27,19 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+        - 6379:6379
+      dragonfly:
+        image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2
+        ports:
+        - 6380:6379
+        options: --ulimit memlock=-1
+    env:
+      WINDOWCOUNTER_LIVE_REDIS: 127.0.0.1:6379
+      WINDOWCOUNTER_LIVE_DRAGONFLY: 127.0.0.1:6380
     steps:
     - name: Checkout Repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
