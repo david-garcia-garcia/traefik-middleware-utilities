@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-11T21:41:39.941Z
+Developer review: in progress — 2026-09-11T21:44:22.664Z
 
 ## What this changes
 **Operators.** CI `test` job now sets `LEAKYBUCKET_LIVE_REDIS` / `LEAKYBUCKET_LIVE_DRAGONFLY` on the existing Redis `:6379` and Dragonfly `:6380` services, and `go test` timeout is 5m.
@@ -23,18 +23,18 @@ flowchart LR
 ```
 
 ## Merge readiness
-Seven-axis review applied; usage packet Key files and memory-cap Gotcha caught up; CI on this head is still running; OpenSpec change is not archived yet. 1 item remains.
+Specs archived into the live catalog; CI on this head is still running; PR title is still WIP. 1 item remains.
 
 Priority: P3 — new library; no current operator or end-user harm
 
-Reviewed head: f8e92b4
+Reviewed head: 103433a
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 3 | CI on this head is still in progress |
-| CI proof | 3 | Lint, Test, Integration in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650569484 |
+| CI proof | 3 | Lint, Test, Integration in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650802136 |
 | Local tests proof | N/A | Remote PR; CI covers it |
 | Review resolution | 6 | No open PR comments |
 
@@ -42,15 +42,15 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-11-leaky-bucket pushed | git / origin |
-| OpenSpec | add-leakybucket | openspec/changes/add-leakybucket/ |
+| OpenSpec | add-leakybucket archived | openspec/changes/archive/2026-09-11-add-leakybucket/ |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9 | pr-host |
-| CI | build 34650569484 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650569484 | GitHub MCP get_check_runs |
+| CI | build 34650802136 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650802136 | GitHub MCP get_check_runs |
 | Local tests | passed | handoff.yaml localTests; `go test -short ./leakybucket/` after review fixes |
 | PR comments | no comments | comments: none |
 
 ## Specs
-- [std_go_leakybucket_pour](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-leaky-bucket/openspec/changes/add-leakybucket/proposal.md) — added
-- [std_go_leakybucket_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-leaky-bucket/openspec/changes/add-leakybucket/proposal.md) — added
+- [std_go_leakybucket_pour](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-leaky-bucket/openspec/changes/archive/2026-09-11-add-leakybucket/proposal.md) — added
+- [std_go_leakybucket_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-leaky-bucket/openspec/changes/archive/2026-09-11-add-leakybucket/proposal.md) — added
 
 ## Deviations from the ask
 None.
@@ -59,7 +59,7 @@ None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → usage packet caught up; archive next.
+Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → specs archived; drop WIP next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -79,7 +79,8 @@ Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → usage packet caugh
 - [x] Land `leakybucket/` with unit, live Redis/Dragonfly, and Yaegi proof
 - [x] Apply seven-axis hard findings
 - [x] Usage packet Key files and memory-cap Gotcha
-- [ ] Archive specs and drop WIP from the PR title
+- [x] Archive `add-leakybucket` into live specs
+- [ ] Drop WIP from the PR title and wait for CI
 
 ## Findings
 None.
@@ -100,7 +101,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 2 added / 0 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | f8e92b420e7fdc66e75f8cadafeb1cfd1548c1dd | Card must match the branch you measured |
+| Reviewed head | 103433a9f99c4bac13b15f9044fd5dbe4225d112 | Card must match the branch you measured |
 
 ### Stored data model
 - New: Redis HASH key (caller-prefixed opaque key) with fields `water` and `last`.
@@ -115,8 +116,8 @@ Is this the best way to solve the issue? Yes — I.371 meter + Kong delta timer,
 ### Evidence
 What I checked:
 - `go test -short ./leakybucket/` passed after review fixes
-- GitHub MCP get_check_runs: build 34650569484 Lint/Test/Integration in_progress
-- `devdocs-impact.md`: stale-usage Key files + Gotcha produced in `f8e92b4`
+- GitHub MCP get_check_runs: build 34650802136 Lint/Test/Integration in_progress
+- `validate_spec_map` write then verify OK; `validate_artifact_names` OK; change moved to `openspec/changes/archive/2026-09-11-add-leakybucket/`
 
 ### Rank-up moves
 - Extract shared EVAL ARGV helper (Standards judgement skip)
