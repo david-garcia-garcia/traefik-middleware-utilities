@@ -695,6 +695,58 @@ func proveIdleHeadSweep(t *testing.T, client *SimpleRedis, key string) {
 	}
 }
 
+func TestStaleIdleHeadPeelStopsAtStillValidHead(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := redis.Get("hit"); err != nil {
+				t.Errorf("concurrent Get: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	waitIdleLen(t, &redis, 3)
+
+	redis.mu.Lock()
+	head := redis.idle[0]
+	middle := redis.idle[1]
+	head.lastUsed = time.Now().Add(-idleTimeout - time.Second)
+	redis.mu.Unlock()
+
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("Get after stale head: %v", err)
+	}
+
+	redis.mu.Lock()
+	headStillIdle := false
+	middleStillIdle := false
+	for _, idleConn := range redis.idle {
+		if idleConn == head {
+			headStillIdle = true
+		}
+		if idleConn == middle {
+			middleStillIdle = true
+		}
+	}
+	redis.mu.Unlock()
+
+	if headStillIdle {
+		t.Fatal("stale head still in idle")
+	}
+	if !middleStillIdle {
+		t.Fatal("still-valid head was peeled")
+	}
+	if err := head.netConn.SetDeadline(time.Now()); err == nil {
+		t.Fatal("stale head socket still open")
+	}
+}
+
 func TestIncrMissingThenPresent(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	var redis SimpleRedis
