@@ -1,0 +1,7 @@
+host: local
+ref: none
+title: perf-02 — Fixed 1 s I/O timeout plus no pool cap fans out under Redis slowness
+url: none
+number: none
+source: simpleredisfixes/perf-02-io-timeout-fan-out.md
+index: simpleredisfixes/README.md
