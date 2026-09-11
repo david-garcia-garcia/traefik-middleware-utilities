@@ -27,3 +27,9 @@ phase: codereview
 findings: none
 fixed: none
 skipped: none; CI in progress on HEAD 28d779f
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: none
+fixed: none
+skipped: none; usage already recorded no-adopt and CI guards
