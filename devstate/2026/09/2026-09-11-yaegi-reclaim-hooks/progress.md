@@ -9,6 +9,6 @@ JobName: 2026-09-11-yaegi-reclaim-hooks
 | propose | [x] | [x] | 2026-09-11T06:43:06Z |
 | implement | [x] | [x] | 2026-09-11T07:06:40Z |
 | codereview | [x] | [x] | 2026-09-11T07:20:42Z |
-| devdocsimpact | [ ] | [ ] | |
+| devdocsimpact | [x] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
