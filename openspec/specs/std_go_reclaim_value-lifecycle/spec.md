@@ -1,8 +1,8 @@
 ## Purpose
 
 Defines the four events a value stored on the reclaim table receives — create, sleep, wake, close
-— their order, the optional interfaces that carry them, and the guarantee that close is always
-preceded by sleep so cleanup is never written twice.
+— their order, the optional Hooks funcs that carry sleep, wake, and close, and the guarantee that
+close is always preceded by sleep so cleanup is never written twice.
 
 ## Requirements
 
