@@ -29,6 +29,7 @@ return tostring(tokens)`
 
 const largeBulkBytes = 100 * 1024
 
+// BenchmarkGet measures end-to-end Get against the in-process fake server.
 func BenchmarkGet(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{"hit": "some-cached-value"})
 	var redis SimpleRedis
@@ -46,6 +47,7 @@ func BenchmarkGet(b *testing.B) {
 	}
 }
 
+// BenchmarkMGet10 measures end-to-end MGet of ten keys against the fake server.
 func BenchmarkMGet10(b *testing.B) {
 	store := map[string]string{}
 	names := make([]string, 10)
@@ -66,6 +68,7 @@ func BenchmarkMGet10(b *testing.B) {
 	}
 }
 
+// BenchmarkIncr measures end-to-end Incr against the fake server.
 func BenchmarkIncr(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{})
 	var redis SimpleRedis
@@ -80,6 +83,7 @@ func BenchmarkIncr(b *testing.B) {
 	}
 }
 
+// BenchmarkEval measures end-to-end Eval of tokenBucketScript against the fake server.
 func BenchmarkEval(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{})
 	var redis SimpleRedis
@@ -102,6 +106,7 @@ type repeatReader struct {
 	pos     int
 }
 
+// Read copies the canned RESP payload into p, wrapping at the end so decode can loop.
 func (r *repeatReader) Read(p []byte) (int, error) {
 	written := 0
 	for written < len(p) {
@@ -115,6 +120,7 @@ func (r *repeatReader) Read(p []byte) (int, error) {
 	return written, nil
 }
 
+// encodeGet encodes a GET argv to Discard so CI can gate encode allocs/op and B/op.
 func encodeGet(b *testing.B) {
 	writer := bufio.NewWriter(io.Discard)
 	const name = "session:9f2c1ab4-user-token"
@@ -128,6 +134,7 @@ func encodeGet(b *testing.B) {
 	}
 }
 
+// encodeEval rebuilds and encodes an EVAL argv each op (KEYS declared, script copied).
 func encodeEval(b *testing.B) {
 	writer := bufio.NewWriter(io.Discard)
 	keys := []string{"bucket:1.2.3.4"}
@@ -150,6 +157,7 @@ func encodeEval(b *testing.B) {
 	}
 }
 
+// decodeBulk decodes one canned bulk GET reply through readReply.
 func decodeBulk(b *testing.B) {
 	reader := bufio.NewReader(&repeatReader{payload: []byte("$17\r\nsome-cached-value\r\n")})
 
@@ -162,6 +170,7 @@ func decodeBulk(b *testing.B) {
 	}
 }
 
+// decodeArray10 decodes one canned 10-bulk array reply through readReply.
 func decodeArray10(b *testing.B) {
 	payload := []byte("*10\r\n")
 	for i := 0; i < 10; i++ {
@@ -178,6 +187,7 @@ func decodeArray10(b *testing.B) {
 	}
 }
 
+// decodeInteger decodes one canned integer reply through readReply and parseIntegerReply.
 func decodeInteger(b *testing.B) {
 	reader := bufio.NewReader(&repeatReader{payload: []byte(":1234567\r\n")})
 
@@ -191,6 +201,7 @@ func decodeInteger(b *testing.B) {
 	}
 }
 
+// cannedBulkGET builds a `$<n>` bulk payload of length bytes plus the trailing CRLF.
 func cannedBulkGET(length int) []byte {
 	payload := make([]byte, 0, 16+length+2)
 	payload = append(payload, '$')
@@ -201,6 +212,7 @@ func cannedBulkGET(length int) []byte {
 	return payload
 }
 
+// decodeBulk100KB decodes a canned 100 KiB bulk GET (`$102400`) through readReply.
 func decodeBulk100KB(b *testing.B) {
 	reader := bufio.NewReader(&repeatReader{payload: cannedBulkGET(largeBulkBytes)})
 
@@ -213,6 +225,7 @@ func decodeBulk100KB(b *testing.B) {
 	}
 }
 
+// encodeSet100KB encodes a 100 KiB SET argv to Discard so buffer growth is gated.
 func encodeSet100KB(b *testing.B) {
 	writer := bufio.NewWriter(io.Discard)
 	value := make([]byte, largeBulkBytes)
@@ -374,10 +387,12 @@ const (
 	encodeSet100KBBytes  int64 = 96     // measured 32 + 64
 )
 
+// allocExceedsCeiling reports whether allocs/op or B/op exceeded the recorded ceilings.
 func allocExceedsCeiling(result testing.BenchmarkResult, maxAllocs, maxBytes int64) (allocsOver, bytesOver bool) {
 	return result.AllocsPerOp() > maxAllocs, result.AllocedBytesPerOp() > maxBytes
 }
 
+// assertAllocCeiling fails the Test when the bench result is over the Go 1.21 allocs/op or B/op ceiling.
 func assertAllocCeiling(t *testing.T, name string, result testing.BenchmarkResult, maxAllocs, maxBytes int64) {
 	t.Helper()
 	allocs := result.AllocsPerOp()

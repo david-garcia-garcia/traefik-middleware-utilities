@@ -185,7 +185,7 @@ func BenchmarkCompiledParseIntUnsafe(b *testing.B) {
 }
 
 // benchmarkYaegiConvert runs one interpreted conversion loop from convertprobe.
-func benchmarkYaegiConvert(b *testing.B, fn string) {
+func benchmarkYaegiConvert(b *testing.B, loopName string) {
 	goPath := b.TempDir()
 	writeGopathFile(b, goPath, "convertprobe", "convert.go", convertprobeSrc)
 
@@ -199,12 +199,12 @@ func benchmarkYaegiConvert(b *testing.B, fn string) {
 	if _, err := interpreter.Eval(`import "convertprobe"`); err != nil {
 		b.Fatalf("import convertprobe: %v", err)
 	}
-	if _, err := interpreter.Eval(fmt.Sprintf(`convertprobe.%s(1)`, fn)); err != nil {
+	if _, err := interpreter.Eval(fmt.Sprintf(`convertprobe.%s(1)`, loopName)); err != nil {
 		b.Fatalf("warmup: %v", err)
 	}
 
 	b.ResetTimer()
-	if _, err := interpreter.Eval(fmt.Sprintf(`convertprobe.%s(%d)`, fn, b.N)); err != nil {
+	if _, err := interpreter.Eval(fmt.Sprintf(`convertprobe.%s(%d)`, loopName, b.N)); err != nil {
 		b.Fatalf("eval loop: %v", err)
 	}
 }
@@ -268,7 +268,7 @@ func UnsafeLoop(count int) int {
 `
 
 // benchmarkYaegiEncode runs one interpreted encode loop from encodeprobe.
-func benchmarkYaegiEncode(b *testing.B, fn string) {
+func benchmarkYaegiEncode(b *testing.B, loopName string) {
 	goPath := b.TempDir()
 	writeGopathFile(b, goPath, "encodeprobe", "encode.go", encodeprobeSrc)
 
@@ -279,18 +279,18 @@ func benchmarkYaegiEncode(b *testing.B, fn string) {
 	if _, err := interpreter.Eval(`import "encodeprobe"`); err != nil {
 		b.Fatalf("import encodeprobe: %v", err)
 	}
-	if _, err := interpreter.Eval(fmt.Sprintf(`encodeprobe.%s(1)`, fn)); err != nil {
+	if _, err := interpreter.Eval(fmt.Sprintf(`encodeprobe.%s(1)`, loopName)); err != nil {
 		b.Fatalf("warmup: %v", err)
 	}
 
 	b.ResetTimer()
-	evaluated, err := interpreter.Eval(fmt.Sprintf(`encodeprobe.%s(%d)`, fn, b.N))
+	evaluated, err := interpreter.Eval(fmt.Sprintf(`encodeprobe.%s(%d)`, loopName, b.N))
 	if err != nil {
 		b.Fatalf("eval loop: %v", err)
 	}
 	b.StopTimer()
 	if got := evaluated.Interface().(string); got != "ok" {
-		b.Fatalf("%s = %q, want ok", fn, got)
+		b.Fatalf("%s = %q, want ok", loopName, got)
 	}
 }
 
