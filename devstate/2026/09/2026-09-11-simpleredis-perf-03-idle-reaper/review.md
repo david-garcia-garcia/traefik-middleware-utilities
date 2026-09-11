@@ -41,3 +41,9 @@ phase: archive
 findings: None.
 fixed: fold std_go_simpleredis_tcp-session into live catalog; archived to 2026-09-12-simpleredis-idle-head-sweep
 skipped: none
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: CI Test failed (Run Tests exit code 1)
+fixed: none (PR 12 reused; dropped WIP; ready title set)
+skipped: none
