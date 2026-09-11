@@ -93,14 +93,14 @@ func writeGopathSimpleredis(t *testing.T, goPath string) {
 }
 
 // writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
-func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
-	t.Helper()
+func writeGopathFile(tb testing.TB, goPath, pkg, name, src string) {
+	tb.Helper()
 	dir := filepath.Join(goPath, "src", pkg)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 }
 
