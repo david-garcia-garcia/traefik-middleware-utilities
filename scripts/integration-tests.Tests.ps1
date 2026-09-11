@@ -98,6 +98,7 @@ Describe "simpleredis Yaegi e2e" {
         $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        $response.Headers["X-SimpleRedis-Pipeline"] | Should -Be "1:ok:1:3"
     }
 
     It "GET /dragonfly succeeds and echoes every SimpleRedis verb" {
@@ -111,5 +112,6 @@ Describe "simpleredis Yaegi e2e" {
         $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        $response.Headers["X-SimpleRedis-Pipeline"] | Should -Be "1:ok:1:3"
     }
 }

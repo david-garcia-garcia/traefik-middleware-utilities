@@ -58,7 +58,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return &middleware{next: next, client: client}, nil
 }
 
-// ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval, then copies results into headers.
+// ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, and one mixed ExecPipeline, then copies results into headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
 	setKey := prefix + ":set"
@@ -68,6 +68,8 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	expireAtKey := prefix + ":expireat"
 	evalKey := prefix + ":eval"
 	delKey := prefix + ":del"
+	pipeIncrKey := prefix + ":pipeincr"
+	pipeEvalKey := prefix + ":pipeeval"
 
 	if err := m.client.Set(setKey, []byte("ok"), 60); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
@@ -145,6 +147,40 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-Eval", string(evalValues[0]))
+
+	// Mixed INCR+EXPIRE+GET+EVAL on unique keys; EVAL lists KEYS[1] (Lua 5.1-safe).
+	unixExpiry := strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)
+	pipeSlots, err := m.client.ExecPipeline([][][]byte{
+		{[]byte("INCR"), []byte(pipeIncrKey)},
+		{[]byte("EXPIRE"), []byte(pipeIncrKey), []byte("60")},
+		{[]byte("GET"), []byte(pipeIncrKey)},
+		{[]byte("EVAL"), []byte(kongIncrbyExpireatScript), []byte("1"), []byte(pipeEvalKey), []byte("3"), []byte(unixExpiry)},
+	})
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if len(pipeSlots) != 4 {
+		http.Error(rw, "pipeline slots", http.StatusBadGateway)
+		return
+	}
+	if pipeSlots[0].Err != nil || len(pipeSlots[0].Values) != 1 {
+		http.Error(rw, "pipeline incr", http.StatusBadGateway)
+		return
+	}
+	if pipeSlots[1].Err != nil {
+		http.Error(rw, "pipeline expire", http.StatusBadGateway)
+		return
+	}
+	if pipeSlots[2].Err != nil || len(pipeSlots[2].Values) != 1 {
+		http.Error(rw, "pipeline get", http.StatusBadGateway)
+		return
+	}
+	if pipeSlots[3].Err != nil || len(pipeSlots[3].Values) != 1 {
+		http.Error(rw, "pipeline eval", http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-Pipeline", string(pipeSlots[0].Values[0])+":ok:"+string(pipeSlots[2].Values[0])+":"+string(pipeSlots[3].Values[0]))
 
 	m.next.ServeHTTP(rw, req)
 }
