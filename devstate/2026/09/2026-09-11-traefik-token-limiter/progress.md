@@ -10,5 +10,5 @@ JobName: 2026-09-11-traefik-token-limiter
 | implement | [x] | [x] | 2026-09-11T19:21:44.694Z |
 | codereview | [x] | [x] | 2026-09-11T19:30:56.742Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T19:30:56.742Z |
-| archive | [x] | [ ] | |
-| pullrequest | [ ] | [ ] | |
+| archive | [x] | [x] | 2026-09-11T19:35:54.903Z |
+| pullrequest | [x] | [x] | 2026-09-11T19:38:31.035Z |

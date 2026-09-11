@@ -52,3 +52,11 @@ findings: synced std_go_tokenbucket_allow and std_go_tokenbucket_lua-eval; moved
 fixed: n/a
 skipped: n/a
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: CI 34639703129 Lint/Test/Integration succeeded on c88eed8
+fixed: gofmt, waitClass unparam, allowScript rename (gosec)
+skipped: n/a
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8
+
