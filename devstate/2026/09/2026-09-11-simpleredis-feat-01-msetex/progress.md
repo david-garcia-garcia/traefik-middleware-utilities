@@ -4,7 +4,7 @@ JobName: 2026-09-11-simpleredis-feat-01-msetex
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [ ] | [ ] | |
+| prepare | [x] | [ ] | 2026-09-11T21:21:48Z |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
