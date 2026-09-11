@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis-test-03-auth-select
+jobName: 2026-09-11-simpleredis-test-03-auth-select
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 3d5f3c8f27b881901b2f19e9fc8b8c1a2fd99cd69c8872b7ee09eb7c3b5bf8ce
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 11
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/11
