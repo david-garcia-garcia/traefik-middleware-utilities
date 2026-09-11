@@ -19,6 +19,42 @@ BeforeAll {
 
     $script:BaseUrl = "http://localhost:8000"
     $script:TraefikApiUrl = "http://localhost:8080"
+
+    function Get-SimpleRedisHeader {
+        param(
+            $Response,
+            [string]$Name
+        )
+        return [string]@($Response.Headers[$Name])[0]
+    }
+
+    function Assert-SimpleRedisVerbs {
+        param($Response)
+        $Response.StatusCode | Should -Be 200
+        $value = Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Value"
+        $value | Should -Match '^srp:\d+$'
+        (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-MGet") | Should -Be $value
+        (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Del") | Should -Be "ok"
+        (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Incr") | Should -Be "1"
+        (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-IncrBy") | Should -Be "5"
+        (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Expire") | Should -Be "ok"
+        (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-ExpireAt") | Should -Be "ok"
+        (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Eval") | Should -Be "3"
+    }
+
+    function Invoke-TwoOverlappingGets {
+        param([string]$Url)
+        $fetch = {
+            param($Uri)
+            Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 10
+        }
+        $jobA = Start-Job -ScriptBlock $fetch -ArgumentList $Url
+        $jobB = Start-Job -ScriptBlock $fetch -ArgumentList $Url
+        $a = Receive-Job $jobA -Wait
+        $b = Receive-Job $jobB -Wait
+        Remove-Job $jobA, $jobB -Force
+        return @($a, $b)
+    }
 }
 
 Describe "reclaim Yaegi e2e" {
@@ -79,35 +115,6 @@ Describe "reclaim Yaegi e2e" {
         Wait-TraefikPluginLog -Pattern "reclaim_dispose" -TimeoutSeconds 30 | Should -BeTrue
         Wait-TraefikPluginLog -Pattern "reclaimprobe_close" -TimeoutSeconds 30 | Should -BeTrue
     }
-}
-
-function Get-SimpleRedisHeader {
-    param(
-        $Response,
-        [string]$Name
-    )
-    return [string]@($Response.Headers[$Name])[0]
-}
-
-function Assert-SimpleRedisVerbs {
-    param($Response)
-    $Response.StatusCode | Should -Be 200
-    $value = Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Value"
-    $value | Should -Match '^srp:\d+$'
-    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-MGet") | Should -Be $value
-    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Del") | Should -Be "ok"
-    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Incr") | Should -Be "1"
-    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-IncrBy") | Should -Be "5"
-    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Expire") | Should -Be "ok"
-    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-ExpireAt") | Should -Be "ok"
-    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Eval") | Should -Be "3"
-}
-
-function Invoke-TwoOverlappingGets {
-    param([string]$Url)
-    return @(1, 2) | ForEach-Object -Parallel {
-        Invoke-WebRequest -Uri $using:Url -UseBasicParsing -TimeoutSec 10
-    } -ThrottleLimit 2
 }
 
 Describe "simpleredis Yaegi e2e" {
