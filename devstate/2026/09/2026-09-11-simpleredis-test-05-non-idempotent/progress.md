@@ -11,4 +11,4 @@ JobName: 2026-09-11-simpleredis-test-05-non-idempotent
 | codereview | [x] | [x] | 2026-09-11T22:24:05Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:30:36Z |
 | archive | [x] | [x] | 2026-09-11T22:36:29Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [ ] | |
