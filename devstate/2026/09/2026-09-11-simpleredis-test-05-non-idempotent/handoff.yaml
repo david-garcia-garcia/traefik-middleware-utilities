@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis-test-05-non-idempotent
+jobName: 2026-09-11-simpleredis-test-05-non-idempotent
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: d886c039fe33e1029ed6ddf2f826c7bad6a8e71606ad151bc28684cabb76aa7e
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 21
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/21
