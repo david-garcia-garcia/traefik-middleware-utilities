@@ -37,6 +37,9 @@ var (
 	errIssue       = errors.New(RedisIssue)
 )
 
+// afterIdleScanForTest runs after borrow unlocks the idle scan and before the second closed check. Tests set it to Close so that race is deterministic; production leaves it nil.
+var afterIdleScanForTest func(*SimpleRedis)
+
 // pooledConn is one TCP socket plus RESP reader/writer kept in the idle list.
 type pooledConn struct {
 	netConn  net.Conn
@@ -228,6 +231,10 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 	}
 	if reused != nil {
 		return reused, true, nil
+	}
+
+	if afterIdleScanForTest != nil {
+		afterIdleScanForTest(sr)
 	}
 
 	sr.mu.Lock()
