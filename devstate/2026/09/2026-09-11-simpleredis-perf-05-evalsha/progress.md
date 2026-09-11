@@ -8,7 +8,7 @@ JobName: 2026-09-11-simpleredis-perf-05-evalsha
 | explore | [x] | [x] | 2026-09-11T21:30:35Z |
 | propose | [x] | [x] | 2026-09-11T21:39:11Z |
 | implement | [x] | [x] | 2026-09-11T22:05:55Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-11T22:12:14Z |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |

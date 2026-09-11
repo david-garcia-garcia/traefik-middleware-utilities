@@ -1,4 +1,4 @@
-Developer review: ready for review — 2026-09-11T22:04:51Z
+Developer review: ready for review — 2026-09-11T22:12:14Z
 
 ## What this changes
 **Operators.** None.
@@ -24,27 +24,27 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-EVALSHA-inside-Eval is on the branch; Lint, Test, and Integration Tests succeeded. 0 items remain.
+Seven-axis review of `origin/master...HEAD` found no hard, missing, or wrong items. 0 items remain.
 
 Priority: P3 — extra EVAL bytes on DestBranch; no wrong answers or outages
-Reviewed head: 0d7aa06
+Reviewed head: 89c5d22
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | CI succeeded; no open PR comments |
-| CI proof | 6/6 | Lint, Test, and Integration Tests succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34651975884 |
+| Overall readiness | 6/6 | CI succeeded; no open PR comments; no open hard findings |
+| CI proof | 6/6 | Lint, Test, and Integration Tests succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652485555 |
 | Local tests proof | N/A | Remote CI is the proof axis |
 | Review resolution | 6/6 | No OPEN PR comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin 0d7aa06 |
+| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin 89c5d22 |
 | OpenSpec | simpleredis-evalsha | `openspec/changes/simpleredis-evalsha/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/13 | GitHub PR 13 |
-| CI | build 34651975884 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34651975884 | GitHub check runs |
+| CI | build 34652485555 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652485555 | GitHub check runs |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -58,7 +58,7 @@ None.
 None.
 
 ## How this fits together
-Implement landed on `2026-09-11-simpleredis-perf-05-evalsha` and stub PR 13. Code review of the apply diff is next.
+Code review of `origin/master...HEAD` on `2026-09-11-simpleredis-perf-05-evalsha` and stub PR 13. No hard, missing, or wrong findings remain. Devdocs impact is next.
 
 ## Explore Decisions
 None.
@@ -67,12 +67,19 @@ None.
 - [x] Land EVALSHA inside `Eval` with NOSCRIPT fallback, Yaegi interp, and live Redis plus Dragonfly proof [P3]
 - [x] OpenSpec change `simpleredis-evalsha` ready
 - [x] Stub review PR opened
+- [x] Seven-axis code review of the apply diff
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_standards.md) — 1 total, 0 pending, 0 completed, 1 skipped
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_performance.md) — 1 total, 0 pending, 0 completed, 1 skipped
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -81,7 +88,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 0d7aa063bd54b50c5ecfcb3e837d0b1f58204896 | Card must match the branch you measured |
+| Reviewed head | 89c5d2275fb20e0ee3657921011145e86233237d | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -95,11 +102,11 @@ Is this the best way to solve the issue? Yes — digest plus fallback beats ship
 
 ### Evidence
 What I checked:
-- `origin/master...HEAD` at 0d7aa06 (`Eval` EVALSHA + NOSCRIPT fallback; probe digest/EvalAgain; Pester miss-then-hit)
-- `go test -count=1 ./...` passed; `./Test-Integration.ps1` 8/8 (Redis and Dragonfly Describes, reclaim green)
-- `openspec validate simpleredis-evalsha --strict` valid
-- PR 13 OPEN; Lint / Test / Integration Tests succeeded (run 34651975884)
+- `origin/master...HEAD` at 89c5d22 (`Eval` EVALSHA + NOSCRIPT fallback; probe digest/EvalAgain; Pester miss-then-hit)
+- Seven-axis files under `devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/`; 0 hard/missing/wrong remaining
+- PR 13 OPEN; Lint / Test / Integration Tests succeeded (run 34652485555)
 - qualify: qualified-with-gaps; localTests: passed; change: simpleredis-evalsha (`handoff.yaml`)
 
 ### Rank-up moves
-None.
+- Probe SHA-1 copy vs `scriptSHA1Hex` (Standards judgement, skipped)
+- Digest map has no cap (Performance judgement, skipped; callers pass consts)

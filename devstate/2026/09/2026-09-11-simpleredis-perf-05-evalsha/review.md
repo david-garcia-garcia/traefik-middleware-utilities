@@ -21,3 +21,9 @@ phase: implement
 findings: EVALSHA-inside-Eval landed; localTests passed; CI Lint/Test/Integration succeeded
 fixed: n/a
 skipped: n/a
+
+## codereview (2026-09-11)
+phase: codereview
+findings: Standards 1 judgement, Performance 1 judgement; Nitpicks/Spec/Security/Dead/Test coverage none; 0 hard/missing/wrong
+fixed: none (no hard/missing/wrong)
+skipped: Standards 1 Duplicated Code (probe sha1hex); Performance 1 unbounded digests map (callers pass consts)
