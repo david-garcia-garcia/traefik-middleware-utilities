@@ -15,7 +15,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 - Allocate `&simpleredis.SimpleRedis{}` and `Init(host, pass, database)` once before concurrent use.
 - Do not dial in Traefik `New`. Call `Init` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, or `Eval`).
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
-- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
+- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Handshake AUTH/SELECT failure is the in-process fake plus skip-if-unset live engines: `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY` (SELECT 99) and `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (WRONGPASS). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
 
 ## Pattern snippet
 
@@ -39,7 +39,7 @@ if err != nil {
 
 - `simpleredis/simpleredis.go` — session, pool, RESP
 - `simpleredis/yaegi_test.go` — interpreter Init/Get/Set/Del/Incr/Eval
-- `e2e/simpleredisprobe/plugin.go` — Traefik local plugin
+- `e2e/simpleredisprobe/plugin.go` — Traefik local plugin (`Host`, optional `Password` and `Database`)
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`
 
 ## Gotchas
@@ -51,3 +51,5 @@ if err != nil {
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
 - Match AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) as `redis:noauth`. Redis 7.4 `AUTH` against a nopass default user returns `ERR AUTH <password> called without any password configured…`, which is **not** that prefix — it is a plain error. Dragonfly without `--requirepass` accepts any `AUTH` password (`OK`). Wrong-password live proof needs `requirepass` on both engines.
+- `SELECT` out of range is `ERR DB index is out of range`, not `redis:noauth`. A handshake AUTH or SELECT error closes the socket, is not pooled, and is not retried.
+- Probe success labels on `/redis` and `/dragonfly` stay host-only (empty password and database). Wrong-password and database-99 routes set `Password` / `Database`.
