@@ -65,7 +65,7 @@ go test ./tokenbucket/...
 
 `Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. The copied SimpleRedis client is Apache-2.0 (`simpleredis/LICENSE`).
 
-Window-counter live tests skip unless `WINDOWCOUNTER_LIVE_REDIS` and/or `WINDOWCOUNTER_LIVE_DRAGONFLY` are set (or under `-short`). Token-bucket live tests skip unless `TOKENBUCKET_LIVE_REDIS` and/or `TOKENBUCKET_LIVE_DRAGONFLY` are set (or under `-short`). CI starts both engines and sets those variables so the suite does not skip.
+Window-counter live tests skip unless `WINDOWCOUNTER_LIVE_REDIS` and/or `WINDOWCOUNTER_LIVE_DRAGONFLY` are set (or under `-short`). Token-bucket live tests skip unless `TOKENBUCKET_LIVE_REDIS` and/or `TOKENBUCKET_LIVE_DRAGONFLY` are set (or under `-short`). SimpleRedis live handshake tests skip unless `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY` (SELECT 99) and/or `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (WRONGPASS) are set (or under `-short`). CI starts both engines, plus passworded siblings, and sets those variables so the suite does not skip.
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, `go test -v ./...`, and that same Pester harness on every pull request and on pushes to `master`.
 

@@ -112,4 +112,28 @@ Describe "simpleredis Yaegi e2e" {
         $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
     }
+
+    It "GET /redis-wrong-password returns 502 redis:noauth" {
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis-wrong-password" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
+        $response.StatusCode | Should -Be 502
+        $response.Content.Trim() | Should -Be "redis:noauth"
+    }
+
+    It "GET /dragonfly-wrong-password returns 502 redis:noauth" {
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly-wrong-password" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
+        $response.StatusCode | Should -Be 502
+        $response.Content.Trim() | Should -Be "redis:noauth"
+    }
+
+    It "GET /redis-database-99 returns 502 ERR DB index is out of range" {
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis-database-99" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
+        $response.StatusCode | Should -Be 502
+        $response.Content | Should -Match "ERR DB index is out of range"
+    }
+
+    It "GET /dragonfly-database-99 returns 502 ERR DB index is out of range" {
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly-database-99" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
+        $response.StatusCode | Should -Be 502
+        $response.Content | Should -Match "ERR DB index is out of range"
+    }
 }

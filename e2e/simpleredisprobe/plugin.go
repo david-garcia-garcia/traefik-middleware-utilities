@@ -24,10 +24,12 @@ return value`
 
 // Config is the dynamic plugin settings Traefik decodes.
 type Config struct {
-	Host string `json:"host,omitempty" yaml:"host,omitempty"`
+	Host     string `json:"host,omitempty" yaml:"host,omitempty"`
+	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+	Database string `json:"database,omitempty" yaml:"database,omitempty"`
 }
 
-// CreateConfig returns default plugin settings (compose Redis, no password).
+// CreateConfig returns default plugin settings (compose Redis, no password, empty database).
 func CreateConfig() *Config {
 	return &Config{Host: defaultHost}
 }
@@ -54,7 +56,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	}
 
 	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client.Init(host, cfg.Password, cfg.Database)
 	return &middleware{next: next, client: client}, nil
 }
 
