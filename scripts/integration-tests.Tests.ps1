@@ -80,3 +80,16 @@ Describe "reclaim Yaegi e2e" {
         Wait-TraefikPluginLog -Pattern "reclaimprobe_close" -TimeoutSeconds 30 | Should -BeTrue
     }
 }
+
+Describe "simpleredis Yaegi e2e" {
+    It "Traefik API is reachable" {
+        $response = Invoke-WebRequest -Uri "$script:TraefikApiUrl/api/rawdata" -UseBasicParsing -TimeoutSec 10
+        $response.StatusCode | Should -Be 200
+    }
+
+    It "GET /redis succeeds and echoes the SET value" {
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis" -UseBasicParsing -TimeoutSec 10
+        $response.StatusCode | Should -Be 200
+        $response.Headers["X-SimpleRedis-Value"] | Should -Be "ok"
+    }
+}

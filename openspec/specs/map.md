@@ -8,3 +8,4 @@ Allowlist of root + domain: `openspec/specs/domains.md`.
 ### go
 
 - reclaim
+- simpleredis

@@ -6,12 +6,12 @@ Traefik loads local and catalog plugins through [Yaegi](https://github.com/traef
 
 ## Libraries
 
-Introduced one at a time. Only the reclaim table is in scope right now.
+Introduced one at a time.
 
 | Library | Status | Role |
 | --- | --- | --- |
 | Reclaim table | Current | In-process table that tracks entries and reclaims them when they expire or are released. |
-| Redis connection | Planned | Shared Redis client setup that middlewares can reuse without each plugin inventing its own. |
+| SimpleRedis | Current | Shared stdlib RESP client (GET/MGET/SET/DEL) middlewares import instead of inventing one. Apache-2.0 (copied from crowdsec-bouncer). |
 | Leaky bucket | Planned | Rate-limit primitive used by middlewares that need a classic leaky-bucket clock. |
 
 ## Yaegi
@@ -31,10 +31,10 @@ If a change would be fine in compiled Go but fails under Yaegi, the Yaegi failur
 ## Layout
 
 ```text
-reclaim/    reclaim table
-e2e/        fake Traefik plugin + Pester harness (Yaegi)
-redis/      Redis connection (later)
-bucket/     leaky bucket (later)
+reclaim/      reclaim table
+simpleredis/  stdlib RESP client (Apache-2.0)
+e2e/          fake Traefik plugins + Pester harness (Yaegi)
+bucket/       leaky bucket (later)
 ```
 
 Module path: `github.com/david-garcia-garcia/traefik-middleware-utilities`.
@@ -43,10 +43,11 @@ Module path: `github.com/david-garcia-garcia/traefik-middleware-utilities`.
 
 ```text
 go test ./reclaim/...
+go test ./simpleredis/...
 ./Test-Integration.ps1
 ```
 
-`Test-Integration.ps1` starts Traefik v3.7.11 with a fake local plugin (`e2e/reclaimprobe`) so reclaim runs under Yaegi. Docker is required.
+`Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. The copied SimpleRedis client is Apache-2.0 (`simpleredis/LICENSE`).
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, `go test -v ./...`, and that same Pester harness on every pull request and on pushes to `master`.
 

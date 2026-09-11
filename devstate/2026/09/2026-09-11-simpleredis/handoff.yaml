@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis
+jobName: 2026-09-11-simpleredis
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 926481495fadd3b1f5ac40311463a1940ce8aafe61515e7bc34d6ca078b7c365
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: add-simpleredis
+pr:
+  id: "3"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/3
