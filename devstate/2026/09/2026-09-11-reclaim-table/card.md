@@ -34,7 +34,7 @@ Remote PR open. Lint, Test, and Integration succeeded. 1 follow-up remains.
 
 Priority: P3 — spec, docs, tests, and internal library extraction.
 Reviewed head: 1554325
-Owner decision: Required. See Decision needed.
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -67,7 +67,7 @@ None.
 ## How this fits together
 Local ticket `devstate/2026/09/2026-09-11-reclaim-table/` on branch `2026-09-11-reclaim-table`; durable card is PR #1 summary; CI run 34566784096 succeeded.
 
-## Decision needed
+## Explore Decisions
 | Question | Rank | Decision | By |
 | --- | --- | --- | --- |
 | Fake middleware shape? | unranked — row incomplete | assumed — nested `e2e/reclaimprobe` | explore |
