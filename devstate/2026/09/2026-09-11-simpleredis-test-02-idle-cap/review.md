@@ -15,3 +15,10 @@ phase: propose
 findings: fold std_go_simpleredis_tcp-session; 4 assumed questions taken as-is; comments none
 fixed: n/a
 skipped: n/a
+
+## implement (2026-09-11)
+phase: implement
+findings: idle-cap and Close-on-release tests landed; live overlap on Redis and Dragonfly; CI 34651786131 succeeded
+fixed: hold fake + idle ≤ 8; in-flight Close; afterIdleScanForTest; Pester CLIENT LIST remaining ≤ 8
+skipped: none
+
