@@ -45,7 +45,7 @@ if err != nil {
 ## Gotchas
 
 - `Init` does not dial. A refusing host is fine until the first command.
-- After `Close`, commands return `redis:unreachable` and do not redial.
+- After `Close`, later commands return `redis:unreachable` and do not redial. Call `Close` while a command is in flight: that command may finish; its socket is closed on release, not returned to idle.
 - Idle pool cap is eight after release; concurrent in-flight dials are not capped (copied client).
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
