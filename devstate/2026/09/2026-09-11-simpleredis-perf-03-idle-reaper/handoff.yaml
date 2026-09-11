@@ -1,0 +1,15 @@
+issueKey: 2026-09-11-simpleredis-perf-03-idle-reaper
+jobName: 2026-09-11-simpleredis-perf-03-idle-reaper
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify:
+src:
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none

@@ -1,0 +1,8 @@
+host: local
+ref: none
+title: perf-03 — Idle reaper only ever inspects the newest connection
+url: none
+number: none
+sources:
+  - simpleredisfixes/perf-03-idle-reaper-tail-only.md
+  - simpleredisfixes/README.md
