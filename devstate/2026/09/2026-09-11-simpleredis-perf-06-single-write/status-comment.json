@@ -1,5 +1,5 @@
 {
-  "commentId": "none",
+  "commentId": "pr-body",
   "issueKey": "2026-09-11-simpleredis-perf-06-single-write",
   "markerValue": "2026-09-11-simpleredis-perf-06-single-write",
   "issueHost": "local"
