@@ -20,12 +20,14 @@ BeforeAll {
     $script:BaseUrl = "http://localhost:8000"
     $script:TraefikApiUrl = "http://localhost:8080"
 
+    # Stop-TraefikEngineClientForTest CLIENT KILLs Traefik ADDR on Redis or Dragonfly (not TYPE/SKIPME).
     function Stop-TraefikEngineClientForTest {
         param(
             [Parameter(Mandatory)]
             [ValidateSet("redis", "dragonfly")]
             [string]$Engine
         )
+        # Traefik compose IP so CLIENT LIST can match addr=<ip>:<port>.
         $traefikIp = (docker inspect -f "{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}" reclaim-e2e-traefik).Trim()
         if (-not $traefikIp) {
             throw "traefik container IP is empty"
@@ -34,10 +36,12 @@ BeforeAll {
         if ($Engine -eq "dragonfly") {
             $cli += @("-h", "dragonfly")
         }
+        # CLIENT LIST on the engine (Dragonfly via redis-cli -h dragonfly).
         $list = docker @cli CLIENT LIST
         if ($LASTEXITCODE -ne 0) {
             throw "CLIENT LIST on $Engine failed"
         }
+        # CLIENT KILL ADDR for each Traefik client; Dragonfly has no TYPE/SKIPME.
         $killed = 0
         foreach ($line in ($list -split "`r?`n")) {
             if ($line -match "addr=$([regex]::Escape($traefikIp)):\d+") {

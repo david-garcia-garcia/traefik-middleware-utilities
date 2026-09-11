@@ -304,8 +304,8 @@ func startPeerCloseFake(t *testing.T, store map[string]string, acceptRetry bool)
 	return fake, listener.Addr().String()
 }
 
-// acceptsCount is how many TCP accepts the peer-close fake has seen.
-func (f *peerCloseFake) acceptsCount() int {
+// connections is how many TCP accepts the peer-close fake has seen.
+func (f *peerCloseFake) connections() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.accepts
@@ -627,8 +627,8 @@ func TestPeerClosedIdleConnEOFIsRetried(t *testing.T) {
 	if string(got) != "t" {
 		t.Fatalf("second Get = %q, want t", got)
 	}
-	if fake.acceptsCount() != 2 {
-		t.Fatalf("opened %d connections, want 2", fake.acceptsCount())
+	if fake.connections() != 2 {
+		t.Fatalf("opened %d connections, want 2", fake.connections())
 	}
 	redis.mu.Lock()
 	for _, conn := range redis.idle {

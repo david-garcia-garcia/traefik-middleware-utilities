@@ -63,7 +63,7 @@ func runLivePeerCloseRecovery(t *testing.T, addr string) {
 	killed := client.idle[0]
 	client.mu.Unlock()
 
-	killPooledIdleAddrForTest(t, client)
+	killPooledIdleAddrOrIDForTest(t, client)
 
 	got, err = client.Get(key)
 	if err != nil {
@@ -100,9 +100,9 @@ func waitLiveSimpleRedisForTest(t *testing.T, addr string) *SimpleRedis {
 	}
 }
 
-// killPooledIdleAddrForTest sends CLIENT KILL ADDR of the idle pooled socket from a sidecar.
+// killPooledIdleAddrOrIDForTest sends CLIENT KILL ADDR of the idle pooled socket from a sidecar.
 // If the engine reports 0 (Docker port-publish NAT), it KILLs by that socket's CLIENT ID instead.
-func killPooledIdleAddrForTest(t *testing.T, sr *SimpleRedis) {
+func killPooledIdleAddrOrIDForTest(t *testing.T, sr *SimpleRedis) {
 	t.Helper()
 	sr.mu.Lock()
 	if len(sr.idle) == 0 {
