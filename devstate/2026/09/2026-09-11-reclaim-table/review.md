@@ -15,3 +15,9 @@ phase: propose
 findings: none
 fixed: n/a
 skipped: n/a
+
+## implement (2026-09-11)
+phase: implement
+findings: none
+fixed: n/a
+skipped: Open signature change; in-process Yaegi interp probe
