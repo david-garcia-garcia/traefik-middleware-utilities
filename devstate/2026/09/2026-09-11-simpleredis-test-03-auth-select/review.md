@@ -40,3 +40,9 @@ findings: stale-usage SimpleRedis produced; Handshake Language skipped
 fixed: std_go_simpleredis AUTH-before-SELECT, empty-field skip, live_test.go, e2e PathPrefix
 skipped: Handshake Language term (explore nickname; product owner is dial)
 
+## archive (2026-09-11)
+phase: archive
+findings: FindSpecHost fold tcp-session and resp-commands (high); Task tool unavailable so Search ran on the archive worker; catalog checkers OK
+fixed: live specs gained handshake-failure requirements; change moved to archive/2026-09-11-simpleredis-test-03-auth-select
+skipped: none
+
