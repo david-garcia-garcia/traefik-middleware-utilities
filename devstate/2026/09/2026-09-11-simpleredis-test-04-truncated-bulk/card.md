@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-11T21:29:42Z
+Developer review: in progress — 2026-09-11T21:38:30Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** Research packet `ext_redis_resp_bulk-string` records RESP2 bulk `$<n>\r\n` plus CRLF and that a truncated payload is a transport fake, not a Redis command. Product tests for `clean == false` are not on the branch yet.
+**Developers.** OpenSpec change `simpleredis-truncated-bulk` folds dirty-conn pool discard into `std_go_simpleredis_tcp-session` and unique live Get/MGet into `std_go_simpleredis_resp-commands`. Research packet `ext_redis_resp_bulk-string` records that a truncated bulk is a transport fake. Product tests are not applied yet.
 
 **End users.** None.
 
@@ -36,17 +36,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore is written; product tests are not on the branch yet. 4 items remain.
+Propose is written; product tests are not applied. 4 items remain.
 
 Priority: P3 — spec, docs, tests, or internal clarity — no current user or operator harm
-Reviewed head: fad9775
+Reviewed head: 8e8ed31
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Explore done; CI in progress; no product apply yet |
-| CI proof | 3/6 | in progress — [run 34649600837](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34649600837) |
+| Overall readiness | 3/6 | Propose done; CI in progress; no product apply yet |
+| CI proof | 3/6 | in progress — [run 34650279616](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650279616) |
 | Local tests proof | N/A | `localTests: none`; remote PR uses CI |
 | Review resolution | 6/6 | OPEN PR, no reviewer comments |
 
@@ -54,23 +54,24 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-11-simpleredis-test-04-truncated-bulk pushed | `git` / origin |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | simpleredis-truncated-bulk | `openspec/changes/simpleredis-truncated-bulk/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/19 | pr-host List |
-| CI | build 34649600837 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34649600837 | GitHub check runs Test, Lint, Integration Tests |
+| CI | build 34650279616 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650279616 | GitHub check runs Test, Lint, Integration Tests |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-None.
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-04-truncated-bulk/openspec/changes/simpleredis-truncated-bulk/proposal.md) — modified
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-04-truncated-bulk/openspec/changes/simpleredis-truncated-bulk/proposal.md) — modified
 
 ## Deviations from the ask
-None.
+- taken: extend compose plus Pester `/redis` `/dragonfly` → keep dest `whoami-redis` / `whoami-dragonfly` and image pins; extend probe payload and Pester assertions only — `docker-compose.yml` — dest already wires both engines on those routes. Requester: not asked.
 
 ## Follow-up issues
 None.
 
 ## How this fits together
-Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk` → stub PR 19 → explore recorded; CI in progress on research plus bus commits.
+Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk` → stub PR 19 → OpenSpec `simpleredis-truncated-bulk` proposed; CI in progress.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -92,6 +93,7 @@ Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk`
 - [ ] [P3] Any Lua in this change stays 5.1-safe with declared KEYS (Dragonfly)
 - [x] Stub PR 19 opened from `origin/master`
 - [x] Explore recorded (`devstate/.../explore.md`)
+- [x] OpenSpec `simpleredis-truncated-bulk` proposed (tcp-session + resp-commands)
 
 ## Findings
 None.
@@ -104,9 +106,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | fad9775229a43afd418c1b74dfce8bd01ba683b6 | Card must match the branch you measured |
+| Reviewed head | 8e8ed31407b5f8dcf319bbab8c21f0a70ca83596 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -120,14 +122,10 @@ Is this the best way to solve the issue? Yes versus dest: the finding is a missi
 
 ### Evidence
 What I checked:
-- `readBulk` / `do` / `release` / `exec` retry (`simpleredis/simpleredis.go`, dest `7dc4b05`)
-- Coverprofile `go test ./simpleredis -covermode=set`: `401.52,403.3` count 0; `390-392` and `394-396` count 0; array-element default `378.12` count 1
-- Throwaway truncated Get (deleted): `redis:unreachable`, idle 0, second Get `hello`
-- `startStaticRedis` always writes a full canned reply (`simpleredis/simpleredis_test.go:228-256`)
-- Probe Set `"ok"`; Pester two Its (`e2e/simpleredisprobe/plugin.go`, `scripts/integration-tests.Tests.ps1:90-114`)
-- Research: `knowledge/research/ext_redis_resp_bulk-string/notes.md`, `ext_redis_eval`, `ext_dragonfly_eval`
-- Usage consume: `knowledge/devdocs/std_go_simpleredis.md`
-- GitHub whoami `david-garcia-garcia` / David; PR 19 OPEN; checks in progress on SHA `fad9775`
+- OpenSpec change `simpleredis-truncated-bulk` (proposal, two folded deltas, design, tasks) at HEAD `8e8ed31`
+- FindSpecHost fold `std_go_simpleredis_tcp-session` and `std_go_simpleredis_resp-commands`; `openspec validate` strict OK; MCP `validate_artifact_names` / `validate_spec_map` OK
+- `handoff.yaml` `change: simpleredis-truncated-bulk`; `devstate/.../specs.md` written
+- GitHub whoami `david-garcia-garcia` / David; PR 19 OPEN; checks in progress on SHA `8e8ed31` run 34650279616
 
 ### Rank-up moves
 None.
