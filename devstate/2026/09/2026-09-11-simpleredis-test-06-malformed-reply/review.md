@@ -35,3 +35,10 @@ phase: archive
 findings: fold std_go_simpleredis_resp-commands; live spec synced; change moved
 fixed: n/a
 skipped: n/a
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: reused PR 24; dropped WIP title; CI Lint/Test/Integration Tests succeeded
+fixed: n/a
+skipped: comments.md absent
+
