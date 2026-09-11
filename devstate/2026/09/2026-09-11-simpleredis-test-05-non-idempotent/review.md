@@ -42,3 +42,9 @@ phase: archive
 findings: none
 fixed: change archived to openspec/changes/archive/2026-09-11-retry-only-idempotent-commands/
 skipped: none; Explore Decisions still None (all six Q resolved)
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none; Explore Decisions still None (all six Q resolved); PR 21 summary set; CI Lint/Test/Integration Tests success on run 34655026399
