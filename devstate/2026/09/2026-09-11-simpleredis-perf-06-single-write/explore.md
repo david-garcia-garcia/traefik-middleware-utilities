@@ -37,18 +37,18 @@ intended encode
 
 - Q: After the encoder change, how do we prove every existing verb still works live on both Redis and Dragonfly with identical wire bytes?
   Rank: additive asked — Desired 3 names identical wire bytes and live Redis and Dragonfly; conductor hard-requirement names compose + Pester `/redis` `/dragonfly`, `e2e/simpleredisprobe`, compiled and Yaegi encode benches, Lua 5.1-safe, Dragonfly KEYS
-  Decision: assumed — run compose + Pester `/redis` and `/dragonfly` plus `e2e/simpleredisprobe` after the switch; do not rewrite the probe Eval script (`kongIncrbyExpireatScript` already lists `KEYS[1]`, no `table.maxn`) or the Dragonfly compose pin; keep `BenchmarkEncodeGet` / `BenchmarkEncodeEval` / `BenchmarkYaegiEncodeBufio` / `BenchmarkYaegiEncodeSingleWrite`; production encode matches the single-write strategy; existing protocol tests stay green
-  By: explore
+  Decision: resolved — ran compose + Pester `/redis` and `/dragonfly` plus `e2e/simpleredisprobe` after the switch; did not rewrite the probe Eval script (`kongIncrbyExpireatScript` already lists `KEYS[1]`, no `table.maxn`) or the Dragonfly compose pin; kept `BenchmarkEncodeGet` / `BenchmarkEncodeEval` / `BenchmarkYaegiEncodeBufio` / `BenchmarkYaegiEncodeSingleWrite`; production encode matches the single-write strategy; existing protocol tests stay green
+  By: implement
 
 - Q: Exact retained-buffer cap on `release`?
   Rank: additive asked — Desired 2 names the trim; finding example is 64 KB
-  Decision: assumed — named const `maxIdleEncodeBuf = 64 * 1024`; on `release` of a reusable conn, if `cap(conn.buf) > maxIdleEncodeBuf` set `conn.buf = nil`; next command reallocates. Same package test: large SET then idle reuse leaves cap ≤ 64 KiB
-  By: explore
+  Decision: resolved — named const `maxIdleEncodeBuf = 64 * 1024`; on `release` of a reusable conn, if `cap(conn.buf) > maxIdleEncodeBuf` set `conn.buf = nil`; next command reallocates. Same package test: large SET then idle reuse leaves cap ≤ 64 KiB
+  By: implement
 
 - Q: Copy the untracked review `bench_test.go` / `interpretedcost_test.go` as-is, or rewrite them against the new `writeCommand`?
   Rank: additive asked — Desired 4 names the four encode benches and says dest must land them; Unknowns name copy-vs-rewrite; Affected names `yaegi_test.go` `testing.TB` widening
-  Decision: assumed — rewrite, do not copy as-is. Land `BenchmarkEncodeGet` and `BenchmarkEncodeEval` on the production encoder (scratch + one Write to `io.Discard`). Land `BenchmarkYaegiEncodeBufio` and `BenchmarkYaegiEncodeSingleWrite` as strategy probes (encodeprobe stays a standalone interpreted package). Widen `writeGopathFile` to `testing.TB`. Do not land decode, unsafe, pool-churn, or `BenchmarkYaegiGet` from those files (perf-07 / perf-08 / perf-01)
-  By: explore
+  Decision: resolved — rewrite, do not copy as-is. Landed `BenchmarkEncodeGet` and `BenchmarkEncodeEval` on the production encoder (scratch + one Write to `io.Discard`). Landed `BenchmarkYaegiEncodeBufio` and `BenchmarkYaegiEncodeSingleWrite` as strategy probes (encodeprobe stays a standalone interpreted package). Widened `writeGopathFile` to `testing.TB`. Did not land decode, unsafe, pool-churn, or `BenchmarkYaegiGet` from those files (perf-07 / perf-08 / perf-01)
+  By: implement
 
 - Q: Does any spec leaf need an encode-path requirement, or are tests+e2e enough?
   Rank: additive incidental — Unknowns name the choice; no criterion requires a spec sentence about call count; Desired 3 is wire-identical behavior already specified as command shapes + dual-engine e2e
@@ -57,15 +57,15 @@ intended encode
 
 - Q: What is `writeCommand`’s signature after `bufio.Writer` is gone?
   Rank: bounded asked — Desired 1 names scratch + one `netConn.Write` and dropping `bufio.Writer`; 1 product caller of `writeCommand` (`do` at `simpleredis.go:296`); 3 `pooledConn.writer` sites in `simpleredis.go` (`:44`, `:272`, `:296`); 0 dest test callers; neighbors use exported verbs only (searched `simpleredis/`, `tokenbucket/`, `windowcounter/`, `e2e/simpleredisprobe/` for `writeCommand` and `conn.writer`)
-  Decision: assumed — unexported `writeCommand` takes `conn *pooledConn` and `args [][]byte`, appends into `conn.buf`, one `conn.netConn.Write`, stores the grown slice back. Compiled encode benches share the append loop via an unexported `appendRESP(buf []byte, args [][]byte) []byte` so they measure production framing without a live socket. Yaegi encodeprobe keeps its own copies of both strategies
-  By: explore
+  Decision: resolved — unexported `writeCommand` takes `conn *pooledConn` and `args [][]byte`, appends into `conn.buf`, one `conn.netConn.Write`, stores the grown slice back. Compiled encode benches share the append loop via an unexported `appendRESP(buf []byte, args [][]byte) []byte` so they measure production framing without a live socket. Yaegi encodeprobe keeps its own copies of both strategies
+  By: implement
 
 - Q: How should a short `Write` be handled once `bufio.Writer.Flush` is gone?
   Rank: additive incidental — no criterion names write-all vs one Write; it is a means to Desired 1
-  Decision: assumed — one `Write`; `n != len(buf)` or non-nil err → return that error (`do` already marks the socket dirty). Do not loop to write the remainder (half-sent RESP + deadline retry would desync; extra interpreted calls)
-  By: explore
+  Decision: resolved — one `Write`; `n != len(buf)` or non-nil err → return that error (`io.ErrShortWrite` when `n` is short and err is nil; `do` already marks the socket dirty). Do not loop to write the remainder (half-sent RESP + deadline retry would desync; extra interpreted calls)
+  By: implement
 
 - Q: How do we prove wire bytes are identical, not only parsed argv?
   Rank: additive asked — Desired 3 names identical wire bytes; current argv helpers parse RESP (`readCommand`) and would miss extra framing if the parser stayed aligned
-  Decision: assumed — add a compiled test that `appendRESP` of GET `session:9f2c1ab4-user-token` equals the dest framing `*2\r\n$3\r\nGET\r\n$28\r\n…\r\n`; keep `TestValueWithNewlinesSurvives` and argv assertions
-  By: explore
+  Decision: resolved — add a compiled test that `appendRESP` of GET `session:9f2c1ab4-user-token` equals dest framing `*2\r\n$3\r\nGET\r\n$27\r\n…\r\n` (key is 27 bytes; the $28 in the finding was a count error); keep `TestValueWithNewlinesSurvives` and argv assertions
+  By: implement

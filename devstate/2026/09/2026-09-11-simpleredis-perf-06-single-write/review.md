@@ -15,3 +15,9 @@ phase: propose
 findings: change simpleredis-single-write-encode; modified std_go_simpleredis_resp-commands and std_go_simpleredis_tcp-session; Q4 resolved fold; 6 assumed remain; dual Redis and Dragonfly e2e required in spec
 fixed: n/a
 skipped: n/a
+
+## implement (2026-09-11)
+phase: implement
+findings: encoder + idle trim + four encode benches; GET golden uses dest `$27` (ask example `$28`); dual-engine Pester verbs passed; CI Lint/Test/Integration success
+fixed: single-write `appendRESP`; `maxIdleEncodeBuf`; rewritten encode benches; spec bulk-length `$27`
+skipped: reclaim dispose flake on one local full Pester run (unrelated; `/a` `/b` and SimpleRedis verbs passed; CI Integration succeeded)
