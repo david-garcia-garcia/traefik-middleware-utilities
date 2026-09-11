@@ -34,3 +34,9 @@ findings: 1 unit SimpleRedis; stale-usage produced
 fixed: named timeout knobs and live-skip in std_go_simpleredis
 skipped: n/a
 
+## archive (2026-09-11)
+phase: archive
+findings: fold std_go_simpleredis_tcp-session; moved to archive/2026-09-11-simpleredis-configurable-timeouts
+fixed: live catalog sync
+skipped: n/a
+
