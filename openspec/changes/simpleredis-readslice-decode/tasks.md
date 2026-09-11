@@ -14,7 +14,7 @@
 ## 3. Live Redis and Dragonfly
 
 - [x] 3.1 Do not edit `e2e/simpleredisprobe`, tokenbucket, or windowcounter Lua; scripts stay Lua 5.1-safe with keys in KEYS; do not add compose services
-- [ ] 3.2 Run `./Test-Integration.ps1` until Pester `/redis` and `/dragonfly` assert Get, MGet, Incr, and Eval headers (`e2e/simpleredisprobe`) on both Redis and Dragonfly
+- [x] 3.2 Run `./Test-Integration.ps1` until Pester `/redis` and `/dragonfly` assert Get, MGet, Incr, and Eval headers (`e2e/simpleredisprobe`) on both Redis and Dragonfly
 
 ## 4. Specs
 
