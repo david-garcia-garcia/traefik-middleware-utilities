@@ -4,7 +4,7 @@ JobName: 2026-09-11-simpleredis-perf-01-pool-cap
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [ ] | [ ] | |
+| prepare | [x] | [ ] | |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
