@@ -6,7 +6,7 @@ JobName: 2026-09-11-kong-window-limiter
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T10:26:09Z |
 | explore | [x] | [x] | 2026-09-11T10:34:22Z |
-| propose | [x] | [ ] | |
+| propose | [x] | [x] | 2026-09-11T16:52:14Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
