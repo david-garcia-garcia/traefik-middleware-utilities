@@ -11,4 +11,4 @@ JobName: 2026-09-11-simpleredis-test-07-benchmarks
 | codereview | [x] | [x] | 2026-09-11T22:04:05Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:12:43Z |
 | archive | [x] | [x] | 2026-09-11T22:19:42Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T22:24:17Z |
