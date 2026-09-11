@@ -24,3 +24,11 @@ fixed: none
 skipped: none
 change: add-simpleredis
 specs: added std_go_simpleredis_tcp-session, std_go_simpleredis_resp-commands
+
+## implement (2026-09-11)
+phase: implement
+findings: lint errcheck on fake Redis writes, fixed 9acc41b
+fixed: simpleredis_test.go WriteString/Fprintf errcheck
+skipped: none
+localTests: passed
+ci: 34581091629 success
