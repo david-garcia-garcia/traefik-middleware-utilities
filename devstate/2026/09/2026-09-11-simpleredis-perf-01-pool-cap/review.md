@@ -44,3 +44,14 @@ skipped: coverage judgement Close-during-borrow
 head: 0187664cdfc3543bd2d7885bdcae229579d1a7bb
 ci: in progress run 34652862680
 
+## devdocsimpact (2026-09-11T22:13:00Z)
+phase: devdocsimpact
+findings: none
+packet: std_go_simpleredis
+head: 6d82b34
+
+## archive (2026-09-11T22:14:00Z)
+phase: archive
+fold: std_go_simpleredis_tcp-session
+archive: openspec/changes/archive/2026-09-11-simpleredis-live-pool-cap
+
