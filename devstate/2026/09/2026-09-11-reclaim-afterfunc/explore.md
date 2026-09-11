@@ -92,8 +92,8 @@ Same compiled probe, `nilDoneCtx` matching `reclaim/table_test.go:294-317` (`Don
 
 - Q: Is AfterFunc's stop func required on `Reset` / stale-incarnation drop, or is registering `drop` enough?
   Rank: additive incidental — optional per-holder stop storage this change could add; listed under Unknowns, not an In-scope or acceptance line; Out of scope does not name stop
-  Decision: assumed — do not store stop. Register `drop`. `drop` no-ops when `incarnation.state != slotAwake` (`table.go:292-294`); Reset marks gone (`:377`); stale-holder test (`table_test.go:1256-1260`) already requires that late fire does not touch the next incarnation.
-  By: explore
+  Decision: assumed — do not store stop. Register `drop`. `drop` no-ops when `incarnation.state != slotAwake`; Reset marks gone; stale-holder test already requires that late fire does not touch the next incarnation. Apply called AfterFunc and discarded the stop func.
+  By: implement
 
 - Q: Which Go build tag Traefik v3.7.11's Yaegi uses (`go1.21` vs `go1.22` extracts)?
   Rank: additive asked — Unknowns: "Which Go build tag Traefik v3.7.11's Yaegi uses"; Out of scope: "Upgrading Traefik or the Yaegi pin"
@@ -112,5 +112,5 @@ Same compiled probe, `nilDoneCtx` matching `reclaim/table_test.go:294-317` (`Don
 
 - Q: Where is the product proof that interpreted `reclaim` loads AfterFunc (in-process Yaegi vs Pester)?
   Rank: additive asked — Affected: "Yaegi interp / Pester e2e if the spike says the interpreted package must load AfterFunc"
-  Decision: assumed — `reclaim/yaegi_test.go` GOPATH + `stdlib.Symbols` (existing harness). Compiled coverage for the AfterFunc hold. No new Pester AfterFunc case; Traefik e2e already loads this package.
-  By: explore
+  Decision: resolved — `reclaim/yaegi_test.go` GOPATH + `stdlib.Symbols` (`useunsafe` false) loaded `table.go` after AfterFunc landed. `go test ./reclaim/...` passed. No new Pester AfterFunc case. Pin stays v0.16.1.
+  By: implement
