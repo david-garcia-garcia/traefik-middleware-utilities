@@ -39,6 +39,7 @@ if err != nil {
 
 - `simpleredis/simpleredis.go` — session, pool, RESP
 - `simpleredis/yaegi_test.go` — interpreter Init/Get/Set/Del/Incr/Eval
+- `simpleredis/interpretedcost_test.go` — asserting Yaegi conversion matrix and copy-vs-unsafe benches
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`
 
@@ -50,6 +51,7 @@ if err != nil {
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
 - Do not adopt `unsafe` zero-copy between `string` and `[]byte`. Compiled it saves a little on Eval encode; under Yaegi (the Traefik plugin path) the legacy struct-header trick is a net loss versus inline `[]byte(s)`. Keep `[]byte(...)` / `string(...)` in session source.
 - Do not import `unsafe` in session source. Do not set `useUnsafe` on the plugin manifest or compose `settings.useunsafe`. Traefik registers unsafe symbols only when **both** the manifest and operator settings are true; manifest true and settings false refuses to load the plugin (`knowledge/research/ext_traefik_plugins_useunsafe/`).
+- CI fails if the Yaegi conversion matrix cells change, if a non-test session file imports `unsafe` or `"C"`, or if probe/compose `useUnsafe` becomes true. Named copy-vs-unsafe benches reproduce ns/op (`go test -run XXX -bench`); they do not fail `go test` without `-bench`.
 - Yaegi v0.16.1 does not export `unsafe.Slice` / `unsafe.String` / `StringData` / `SliceData` even when unsafe symbols are registered (`knowledge/research/ext_traefik_plugins_yaegi-unsafe/`).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
