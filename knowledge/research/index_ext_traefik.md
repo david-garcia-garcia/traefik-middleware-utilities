@@ -13,4 +13,4 @@ description: Which generic and cross-package type shapes load under Traefik's Ya
 ## RateLimit token bucket
 priority: normal
 local: ext_traefik_ratelimiter_token-bucket/
-description: Traefik RateLimit token-bucket math, in-memory vs Redis Lua, and why GCRA was rejected.
+description: Traefik RateLimit token-bucket math, in-memory vs Redis Lua, and GCRA-not-in-tree vs PR 10211.

@@ -9,4 +9,4 @@ ref: traefik/traefik@903e8a965795db5e750004ff74932983e269b85f:pkg/middlewares/ra
 redisPrefix = "rate:". go-redis UniversalClient. script.Run (EVALSHA/EVAL).
 ARGV: rate/1e6, burst, ttl, UnixMicro, maxDelay.Microseconds().
 Allow: script error returned; ok false → nil delay; else &microDelay.
-rate.Inf short-circuits allow with no Redis call. No denyOnError in this file.
+rate.Inf short-circuits without EVAL to (true, nil delay); Allow then returns (nil, nil) → HTTP 429. No denyOnError in this file.
