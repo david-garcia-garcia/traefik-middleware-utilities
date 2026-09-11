@@ -21,3 +21,9 @@ phase: implement
 findings: ExecPipeline + e2e + Pester landed vs origin/master; CI run 34652182373 succeeded (Lint, Test, Integration Tests); 6 assumed; axis review None; verdict in progress (codereview not done)
 fixed: n/a
 skipped: n/a
+
+## codereview (2026-09-11)
+phase: codereview
+findings: Standards 1 done; Coverage 2 done; Nitpicks/Spec/Security/Performance/Dead 0; no open hard; CI run 34653533110 succeeded (Lint, Test, Integration Tests); verdict ready for review
+fixed: retry-borrow intro; TestPipelineTimeoutOnReusedConnIsNotRetried; TestPipelineTruncationIsNotRetried idle empty
+skipped: n/a
