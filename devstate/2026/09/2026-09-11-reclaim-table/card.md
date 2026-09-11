@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-11T04:46:00Z
+Developer review: in progress — 2026-09-11T04:53:40Z
 
 ## What this changes
 
@@ -6,42 +6,44 @@ Developer review: in progress — 2026-09-11T04:46:00Z
 
 **Admin users.** None.
 
-**Developers.** None yet — `origin/initial` at `ef7be38` is an empty tree; prepare grounded the reclaim spin-off from geoblock PR #83 and wrote research, no product code.
+**Developers.** DestBranch still has no `reclaim/` package. This branch adds Traefik/Yaegi research, a `std_go_reclaim` usage packet, and a debt note that optional lifecycle hooks are inert under Yaegi.
 
 **End users.** None.
 
 ## Motivation
 
-Traefik middlewares share a reclaim table that keeps one value per key alive while holders exist and through a grace window after the last holder drops. That logic currently lives only inside `traefik-geoblock` (`pkg/reclaim` on PR #83), so other middleware repos cannot reuse it without copying.
+Traefik middlewares need one shared value per key while any plugin instance holds it, and a cheap sleep window after the last holder drops so a reload does not recreate the value. That table lives only in `traefik-geoblock` PR #83 (`pkg/reclaim`).
 
-On `origin/initial` this repo has no Go module, no `reclaim/` package, no OpenSpec reclaim specs, and no Yaegi e2e harness. The caller's untracked README states the intent (shared libraries, Yaegi-first), but that file is not on the branch baseline yet.
+On `origin/initial` this repo is an empty tree: no module, no `reclaim/`, no OpenSpec reclaim specs, no Yaegi e2e. Compiled `go test` cannot see interpreter-only failures (generics panic, method-set drop, multi-assignment nil).
 
-If we do not spin the package out with tests that run under Yaegi, each middleware keeps reimplementing or forking reclaim logic, and interpreted-only failures stay invisible to compiled unit tests.
+If we do not spin the package out with a fake middleware loaded through Traefik's Yaegi GOPATH, other middleware repos keep copying the table, and DestBranch stays a library repo with nothing to import.
 
 ```mermaid
 sequenceDiagram
-  participant M as Middleware repo
+  participant T as Traefik New
+  participant P as fake plugin
   participant R as reclaim table
-  participant Y as Yaefik/Yaegi
-  M->>R: needs shared lifecycle table
-  Note over R: only in geoblock PR #83 today
-  M->>Y: go test passes
-  Y-->>M: optional hooks may still be inert interpreted
-  Note over M: no library e2e yet in dest repo
+  T->>P: New(ctx)
+  P->>R: Open(ctx, key, logger, create)
+  Note over R: missing on origin/initial
+  T->>T: reload cancels ctx
+  T->>P: New(ctx2)
+  P->>R: Open again same key
+  Note over R: should wake, not create
 ```
 
 ## Merge readiness
 
-Prepare complete; explore is next. Qualify: qualified-with-gaps. 3 items remain.
+Explore recorded proceed policies; propose is next. Qualify: qualified-with-gaps. 2 items remain.
 
-Priority: P3 — spec, docs, tests, and internal library extraction; no current production harm on an empty repo.
-Reviewed head: ef7be38
-Owner decision: None.
+Priority: P3 — spec, docs, tests, and internal library extraction; no current production harm on an empty dest.
+Reviewed head: f37d445
+Owner decision: Required. See Decision needed.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | N/A | No product delta vs DestBranch yet |
+| Overall readiness | N/A | No reclaim package vs DestBranch yet |
 | CI proof | N/A | prHost local; no remote CI |
 | Local tests proof | N/A | Before implement (`localTests: none`) |
 | Review resolution | N/A | No OPEN PR |
@@ -49,8 +51,8 @@ Owner decision: None.
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-11-reclaim-table not pushed | dedicated worktree from `origin/initial` |
-| OpenSpec | none | not found on DestBranch |
+| Branch | 2026-09-11-reclaim-table not pushed | dedicated worktree; human forbids push |
+| OpenSpec | none | no change folder yet |
 | Pull request | none | prHost local |
 | CI | N/A | prHost local |
 | Local tests | none | handoff.yaml |
@@ -63,18 +65,25 @@ None.
 None.
 
 ## Follow-up issues
-None.
+- [ ] [Yaegi drops the method set of a value returned as `any`](knowledge/debt/2026-09-11-yaegi-drops-methods-on-any.md) — Yaegi strips methods on an `any` return, so optional reclaim lifecycle hooks never run interpreted.
 
 ## How this fits together
-Local ticket at `devstate/2026/09/2026-09-11-reclaim-table/ticket/source.md`; branch `2026-09-11-reclaim-table` in worktree `d:\repositories\wt-modsec-2026-09-11-reclaim-table`; durable card is `devstate/card.md` (`commentId: local`); caller checkout stays on `initial`.
+Local ticket at `devstate/2026/09/2026-09-11-reclaim-table/`; branch `2026-09-11-reclaim-table` in worktree `d:\repositories\wt-modsec-2026-09-11-reclaim-table`; durable card is `devstate/card.md` (`commentId: local`).
 
 ## Decision needed
-None.
+| Question | Decision | By |
+| --- | --- | --- |
+| What is the fake middleware shape for Yaegi e2e? | assumed — nested module `e2e/reclaimprobe`; GOPATH mounts plugin + this repo; no root `plugin.go` | explore |
+| How much of geoblock's Pester/docker harness do we reuse? | assumed — pattern only (`traefik:v3.7.11`, whoami, Pester, `reclaim_*` log helpers); not geoblock routes | explore |
+| Do e2e tests run only on this host via Docker, or also CI? | assumed — run on this host; ship the same runner for later CI; this ticket does not push | explore |
+| Under Yaegi, optional hooks are inert. Change `Open`? | assumed — no; port geoblock API; inert hooks are expected in e2e | explore |
+| Traefik image and `useunsafe`? | assumed — `traefik:v3.7.11`; `useunsafe: false` | explore |
+| Go module version? | assumed — `go 1.21` | explore |
+| Rename test-only `Reset` to `ResetForTest`? | assumed — keep `Reset` to match imported specs | explore |
 
 ## Before merge
-- [ ] Explore open questions (fake middleware shape, Yaegi hook strategy, harness reuse)
-- [ ] Propose OpenSpec change for reclaim port + e2e
-- [ ] Implement `reclaim/`, specs, and Pester Yaegi e2e
+- [ ] Propose OpenSpec change for reclaim port + fake-plugin Pester e2e
+- [ ] Implement `reclaim/`, adapted specs, and Yaegi e2e on this host
 
 ## Findings
 None.
@@ -87,25 +96,26 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | No product diff yet |
+| Specs in this PR | none | Specs land in propose/implement |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | No PR host |
-| Reviewed head | ef7be387c9067c523219bb7dbe7055b4e2c17190 | Empty DestBranch baseline |
+| Reviewed head | f37d445e4bcadee73f51ac50cd90d9b80cd190cc | Research HEAD before explore bus commit |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: Port stdlib-only reclaim from geoblock PR #83 into `reclaim/`, adapt specs to `std_go_reclaim_*`, add Pester+Yaegi e2e with a minimal fake middleware — not yet started.
+Best possible solution: Port stdlib-only `reclaim` from geoblock PR #83, keep non-generic `Open`, prove Yaegi via a nested fake plugin under `plugins-local` rather than turning this library module into a plugin.
 
-Do we have a high-confidence way to reproduce? No — no harness or package in dest tree yet.
+Do we have a high-confidence way to reproduce? Yes for the dest gap (`git ls-tree origin/initial` empty). Yaegi e2e is not built yet.
 
-Is this the best way to solve the issue? Yes — dedicated shared repo matches stated README intent and geoblock prior art.
+Is this the best way to solve the issue? Yes — library module + nested probe matches Traefik GOPATH loading and keeps `reclaim/` importable without Traefik symbols on the module root.
 
 ### Evidence
 What I checked:
-- `origin/initial` tree empty at `ef7be38` (git ls-tree)
-- Geoblock PR #83 temp clone @ `22f09a0`: `pkg/reclaim/*`, reclaim specs, Yaegi research
-- Caller checkout README untracked; not on worktree HEAD
+- `origin/initial` empty at `ef7be38` (`git ls-tree`)
+- Geoblock PR #83 @ `22f09a0` reclaim API, specs, `traefik:v3.7.11` compose
+- Traefik local loader: GOPATH `./plugins-local/`, Yaegi does not fetch modules (`knowledge/research/ext_traefik_plugins_local-loader/`)
+- Geoblock Pester flow and reclaim log helpers (`knowledge/research/ext_geoblock_pester-integration/`)
 
 ### Rank-up moves
-None.
+- A throwaway Yaegi interp module outside this `go.mod` (geoblock used one) as a faster guard than Docker — not in this ticket.
