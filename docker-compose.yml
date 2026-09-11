@@ -12,6 +12,7 @@ services:
       - "--providers.docker.constraints=Label(`com.docker.compose.project`,`reclaim-e2e`)"
       - "--entrypoints.web.address=:80"
       - "--experimental.localplugins.reclaimprobe.modulename=github.com/david-garcia-garcia/reclaimprobe"
+      - "--experimental.localplugins.reclaimprobe.settings.useunsafe=false"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./e2e/reclaimprobe:/plugins-local/src/github.com/david-garcia-garcia/reclaimprobe
