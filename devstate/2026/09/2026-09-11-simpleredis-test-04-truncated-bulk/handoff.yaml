@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis-test-04-truncated-bulk
+jobName: 2026-09-11-simpleredis-test-04-truncated-bulk
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: cac58729ad30d2a44dde7d6f4e909933dd704caf1e3afc596fbe481f7e6eb230
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: "19"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/19
