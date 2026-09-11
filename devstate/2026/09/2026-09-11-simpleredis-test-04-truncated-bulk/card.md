@@ -1,4 +1,4 @@
-Developer review: ready for review — 2026-09-11T21:59:13Z
+Developer review: ready for review — 2026-09-11T22:09:09Z
 
 ## What this changes
 **Operators.** None.
@@ -36,17 +36,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Implement applied; Lint, Test, and Integration Tests succeeded. 0 items remain.
+Code review applied; Lint, Test, and Integration Tests succeeded. 0 items remain.
 
 Priority: P3 — spec, docs, tests, or internal clarity — no current user or operator harm
-Reviewed head: 3ee4169
+Reviewed head: 134d585
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded — [run 34651721384](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34651721384) |
+| CI proof | 6/6 | succeeded — [run 34652488701](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652488701) |
 | Local tests proof | N/A | `localTests: passed`; remote PR uses CI |
 | Review resolution | 6/6 | OPEN PR, no reviewer comments |
 
@@ -56,7 +56,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-11-simpleredis-test-04-truncated-bulk pushed | `git` / origin |
 | OpenSpec | simpleredis-truncated-bulk | `openspec/changes/simpleredis-truncated-bulk/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/19 | pr-host List |
-| CI | build 34651721384 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34651721384 | Lint success, Test success, Integration Tests success |
+| CI | build 34652488701 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652488701 | Lint success, Test success, Integration Tests success |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -71,7 +71,7 @@ Owner decision: Required. See Explore Decisions.
 None.
 
 ## How this fits together
-Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk` → PR 19 → OpenSpec `simpleredis-truncated-bulk` applied; CI run 34651721384 succeeded.
+Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk` → PR 19 → OpenSpec `simpleredis-truncated-bulk` applied; CI run 34652488701 succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -88,10 +88,16 @@ Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk`
 None.
 
 ## Findings
-None.
+- [P3] Name for the scope in `pooledIdle` — FIX — renamed placeholder `n` to `idleCount` (`f36aed0`). Path: `simpleredis/simpleredis_test.go:313`. Reply none.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-04-truncated-bulk/devstate/2026/09/2026-09-11-simpleredis-test-04-truncated-bulk/codereview_standards.md) — 1 total, 0 pending, 0 completed, 1 skipped
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-04-truncated-bulk/devstate/2026/09/2026-09-11-simpleredis-test-04-truncated-bulk/codereview_nitpicks.md) — 1 total, 0 pending, 1 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-04-truncated-bulk/devstate/2026/09/2026-09-11-simpleredis-test-04-truncated-bulk/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-04-truncated-bulk/devstate/2026/09/2026-09-11-simpleredis-test-04-truncated-bulk/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-04-truncated-bulk/devstate/2026/09/2026-09-11-simpleredis-test-04-truncated-bulk/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-04-truncated-bulk/devstate/2026/09/2026-09-11-simpleredis-test-04-truncated-bulk/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-04-truncated-bulk/devstate/2026/09/2026-09-11-simpleredis-test-04-truncated-bulk/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -100,25 +106,24 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 3ee4169e21d48f88639eaecce3d1163346796342 | Card must match the branch you measured |
+| Reviewed head | 134d585ff7988b2d3e7c84355e5e3000a8fefbe9 | Card must match the branch you measured |
 
 ### Stored data model
-None.
+- Changed: Redis/Dragonfly key `{prefix}:set` / value — bytes — sample `ok` → `srp:<unixnano>`. Upgrade: rewritten on next probe request.
 
 ### Technical review
 Best possible solution: keep dest `clean == false` on short read and prove it with `startRawReplyRedis` plus `len(idle)==0`; live Get/MGet own-value uses a unique payload on existing `/redis` and `/dragonfly`.
 
-Do we have a high-confidence way to reproduce? Yes — `go test ./simpleredis/...` truncated Get returns `redis:unreachable`, idle 0, second Get `hello`; `Test-Integration.ps1` 10/10 including overlapping `/redis` and `/dragonfly`.
+Do we have a high-confidence way to reproduce? Yes — `go test ./simpleredis/...` truncated Get returns `redis:unreachable`, idle 0, second Get `hello`; CI Integration Tests succeeded on `/redis` and `/dragonfly`.
 
 Is this the best way to solve the issue? Yes versus dest: the finding is a missing test, dest already has the pool-destroy path, and `exec` retry means idle==0 is the load-bearing assert.
 
 ### Evidence
 What I checked:
-- `go test -timeout 2m -count=1 ./...` passed (HEAD after unit tests; reclaim/simpleredis/tokenbucket/windowcounter)
-- `go test ./simpleredis -covermode=set`: `401.52,403.3` count 1 (was 0); `390.38,392.3` and `394.16,396.3` count 1
-- `./Test-Integration.ps1` 10 passed / 0 failed (reclaim green; `/redis` and `/dragonfly` own-value)
-- `openspec validate simpleredis-truncated-bulk --type change --strict` OK
-- GitHub check runs on SHA `3ee4169`: Lint success, Test success, Integration Tests success, run 34651721384
+- Pin `origin/master` `7dc4b051` three-dot diff excluding `devstate/` and `.cursor/`
+- `go test ./simpleredis/...` passed after `pooledIdle` rename (`f36aed0`)
+- GitHub check runs on SHA `134d585`: Lint success, Test success, Integration Tests success, run 34652488701
+- Axis files: 1 judgement skipped, 1 hard renamed `n` → `idleCount`; no hard/missing/wrong left open
 
 ### Rank-up moves
 None.

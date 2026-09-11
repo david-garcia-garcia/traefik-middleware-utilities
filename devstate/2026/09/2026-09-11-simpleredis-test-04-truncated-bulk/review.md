@@ -22,3 +22,9 @@ findings: none
 fixed: truncated-bulk unit tests and live Get/MGet own-value on Redis and Dragonfly
 skipped: production simpleredis.go (dest already clean==false); no new spec folder
 
+## codereview (2026-09-11T22:09:09Z)
+phase: codereview
+findings: Standards 1 judgement skipped; Nitpicks 1 hard fixed; Spec/Security/Performance/Dead/Coverage none
+fixed: `pooledIdle` `n` → `idleCount` (f36aed0)
+skipped: extract overlapping Pester assertion helper (judgement; Redis and Dragonfly Its stay separate)
+
