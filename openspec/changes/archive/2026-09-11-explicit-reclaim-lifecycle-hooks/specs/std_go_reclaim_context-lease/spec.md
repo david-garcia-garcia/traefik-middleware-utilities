@@ -1,23 +1,4 @@
-## Purpose
-
-Defines a keyed reclaim table that stores one value per key as `any`, survives context cancel when the same key is opened again within grace, and cancels the incarnation lifetime when it is not. The table lives in `reclaim` and is reusable across packages. Callers type-assert. Yaegi cannot instantiate `Table[T]` from another package; this table is not generic.
-
-## Requirements
-
-### Requirement: Table file depends only on the Go standard library
-The `Table` source file SHALL import only Go standard-library packages. It MUST NOT import this module’s plugin, e2e, or vendor packages. It MUST store `any`. It MUST NOT be a generic `Table[T]` instantiated as `otherpkg.Table[*T]` (Yaegi panics or fails import).
-
-#### Scenario: Stdlib-only imports
-- **WHEN** `table.go` is listed for imports
-- **THEN** every import path is a Go standard-library package
-
-### Requirement: Process table is a singleton
-`reclaim` SHALL expose one process-wide table (`Default` / package `Open`). Independent keys on that table MUST NOT share an incarnation. Callers in other packages SHALL type-assert the value `Open` returns.
-
-#### Scenario: Default Open shares one incarnation
-- **WHEN** `Open` and `Default().Open` are called for the same key
-- **THEN** both return the same stored value
-- **AND** `create` runs once
+## MODIFIED Requirements
 
 ### Requirement: Open creates once and binds a context
 `Open(ctx, key, logger, create, hooks)` SHALL create the value on the first call for a key, store
@@ -65,51 +46,6 @@ previous incarnation or from `Reset` MUST NOT change a later incarnation of the 
 - **WHEN** `Open` is called with a nil logger
 - **THEN** `Open` returns an error
 - **AND** no incarnation is stored
-
-### Requirement: Cancel then open within grace does not dispose
-When every bound context for a key is Done, the table SHALL put the stored value to sleep and
-keep it for a grace period before it disposes of it. If the same key is opened again with a live
-context before grace ends, the table SHALL wake that value and MUST NOT dispose of it. That
-reclaim MUST NOT run `create` again.
-
-#### Scenario: Reclaim before grace
-- **WHEN** all contexts for a key are Done
-- **AND** a new `Open` for that key occurs before grace ends
-- **THEN** the incarnation is not disposed
-- **AND** the new context is tracked
-- **AND** the stored value is returned awake
-
-#### Scenario: Grace elapses without rebind
-- **WHEN** all contexts for a key are Done
-- **AND** no `Open` for that key occurs during grace
-- **THEN** the incarnation is disposed once
-
-### Requirement: Keys are independent
-Canceling the lifetime of one key MUST NOT cancel the lifetime of another key.
-
-#### Scenario: One key times out
-- **WHEN** key A’s contexts are all Done and grace elapses
-- **AND** key B still has a live context
-- **THEN** only key A’s lifetime is canceled
-
-### Requirement: Grace is configurable
-Grace SHALL be how long a **sleeping** value is kept before it is disposed. Because a sleeping
-value has released what is expensive to hold idle, a long grace is cheap: the reason to keep it
-long is that a sleeping value costs little, not that reloads are fast. The table SHALL use a
-caller-supplied grace duration. A zero grace SHALL dispose of the value as soon as the last
-holder is gone, with no sleeping window at all. A negative grace SHALL become the product default
-of 10 seconds. Default grace in this product SHALL be 10 seconds (`DefaultGrace`) when the
-process table is constructed.
-
-#### Scenario: Default grace
-- **WHEN** a table is created with a negative grace
-- **THEN** grace is 10 seconds
-
-#### Scenario: Zero grace
-- **WHEN** a table is created with a zero grace
-- **AND** the last holder context is Done
-- **THEN** the value is slept and disposed without waiting
-- **AND** the key is not left stored
 
 ### Requirement: Lifecycle events are logged
 The table SHALL emit a structured log line for each of: incarnation created (`Open` create),

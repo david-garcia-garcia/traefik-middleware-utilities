@@ -42,4 +42,41 @@ Describe "reclaim Yaegi e2e" {
         Wait-TraefikPluginLog -Pattern "reclaim_put" | Should -BeTrue
         Wait-TraefikPluginLog -Pattern "reclaim_bind" | Should -BeTrue
     }
+
+    It "reload sleeps then wakes the shared incarnation" {
+        docker compose stop whoami-a whoami-b
+        $LASTEXITCODE | Should -Be 0
+        Wait-TraefikPluginLog -Pattern "reclaim_orphan" | Should -BeTrue
+        Wait-TraefikPluginLog -Pattern "reclaimprobe_sleep" | Should -BeTrue
+        docker compose start whoami-a whoami-b
+        $LASTEXITCODE | Should -Be 0
+        Wait-TraefikPluginLog -Pattern "reclaim_reclaim" | Should -BeTrue
+        Wait-TraefikPluginLog -Pattern "reclaimprobe_wake" | Should -BeTrue
+        $ready = $false
+        $elapsed = 0
+        do {
+            try {
+                $a = Invoke-WebRequest -Uri "$script:BaseUrl/a" -UseBasicParsing -TimeoutSec 10
+                $b = Invoke-WebRequest -Uri "$script:BaseUrl/b" -UseBasicParsing -TimeoutSec 10
+                if ($a.StatusCode -eq 200 -and $b.StatusCode -eq 200) {
+                    $ready = $true
+                    break
+                }
+            }
+            catch {
+                # whoami not ready yet
+            }
+            Start-Sleep 2
+            $elapsed += 2
+        } while ($elapsed -lt 60)
+        $ready | Should -BeTrue
+    }
+
+    It "teardown disposes after grace and runs the close hook" {
+        docker compose stop whoami-a whoami-b
+        $LASTEXITCODE | Should -Be 0
+        Start-Sleep 12
+        Wait-TraefikPluginLog -Pattern "reclaim_dispose" -TimeoutSeconds 30 | Should -BeTrue
+        Wait-TraefikPluginLog -Pattern "reclaimprobe_close" -TimeoutSeconds 30 | Should -BeTrue
+    }
 }

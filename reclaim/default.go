@@ -23,10 +23,9 @@ func Default() *Table {
 }
 
 // Open is Default().Open: create-once for key on the process table and bind ctx.
-// logger is required. A stored value that has Sleep(), Wake(), or Close() is driven through
-// create, sleep, wake, and close by the table; Close() runs only after Sleep() has.
-func Open(ctx context.Context, key string, logger *slog.Logger, create func() (any, error)) (any, error) {
-	return Default().Open(ctx, key, logger, create)
+// logger is required. hooks are stored at put; a later Open ignores them. Nil hook funcs skip.
+func Open(ctx context.Context, key string, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
+	return Default().Open(ctx, key, logger, create, hooks)
 }
 
 // Reset tears down the process table (sleeps then closes every incarnation) and installs a fresh
