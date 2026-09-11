@@ -81,6 +81,35 @@ Describe "reclaim Yaegi e2e" {
     }
 }
 
+function Get-SimpleRedisHeader {
+    param(
+        $Response,
+        [string]$Name
+    )
+    return [string]@($Response.Headers[$Name])[0]
+}
+
+function Assert-SimpleRedisVerbs {
+    param($Response)
+    $Response.StatusCode | Should -Be 200
+    $value = Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Value"
+    $value | Should -Match '^srp:\d+$'
+    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-MGet") | Should -Be $value
+    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Del") | Should -Be "ok"
+    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Incr") | Should -Be "1"
+    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-IncrBy") | Should -Be "5"
+    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Expire") | Should -Be "ok"
+    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-ExpireAt") | Should -Be "ok"
+    (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Eval") | Should -Be "3"
+}
+
+function Invoke-TwoOverlappingGets {
+    param([string]$Url)
+    return @(1, 2) | ForEach-Object -Parallel {
+        Invoke-WebRequest -Uri $using:Url -UseBasicParsing -TimeoutSec 10
+    } -ThrottleLimit 2
+}
+
 Describe "simpleredis Yaegi e2e" {
     It "Traefik API is reachable" {
         $response = Invoke-WebRequest -Uri "$script:TraefikApiUrl/api/rawdata" -UseBasicParsing -TimeoutSec 10
@@ -89,27 +118,35 @@ Describe "simpleredis Yaegi e2e" {
 
     It "GET /redis succeeds and echoes every SimpleRedis verb" {
         $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis" -UseBasicParsing -TimeoutSec 10
-        $response.StatusCode | Should -Be 200
-        $response.Headers["X-SimpleRedis-Value"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-MGet"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Del"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Incr"] | Should -Be "1"
-        $response.Headers["X-SimpleRedis-IncrBy"] | Should -Be "5"
-        $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        Assert-SimpleRedisVerbs $response
     }
 
     It "GET /dragonfly succeeds and echoes every SimpleRedis verb" {
         $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly" -UseBasicParsing -TimeoutSec 10
-        $response.StatusCode | Should -Be 200
-        $response.Headers["X-SimpleRedis-Value"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-MGet"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Del"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Incr"] | Should -Be "1"
-        $response.Headers["X-SimpleRedis-IncrBy"] | Should -Be "5"
-        $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        Assert-SimpleRedisVerbs $response
+    }
+
+    It "two overlapping GET /redis return distinct own-values" {
+        $responses = Invoke-TwoOverlappingGets -Url "$script:BaseUrl/redis"
+        $responses.Count | Should -Be 2
+        $a = Get-SimpleRedisHeader -Response $responses[0] -Name "X-SimpleRedis-Value"
+        $b = Get-SimpleRedisHeader -Response $responses[1] -Name "X-SimpleRedis-Value"
+        $a | Should -Match '^srp:\d+$'
+        $b | Should -Match '^srp:\d+$'
+        $a | Should -Not -Be $b
+        (Get-SimpleRedisHeader -Response $responses[0] -Name "X-SimpleRedis-MGet") | Should -Be $a
+        (Get-SimpleRedisHeader -Response $responses[1] -Name "X-SimpleRedis-MGet") | Should -Be $b
+    }
+
+    It "two overlapping GET /dragonfly return distinct own-values" {
+        $responses = Invoke-TwoOverlappingGets -Url "$script:BaseUrl/dragonfly"
+        $responses.Count | Should -Be 2
+        $a = Get-SimpleRedisHeader -Response $responses[0] -Name "X-SimpleRedis-Value"
+        $b = Get-SimpleRedisHeader -Response $responses[1] -Name "X-SimpleRedis-Value"
+        $a | Should -Match '^srp:\d+$'
+        $b | Should -Match '^srp:\d+$'
+        $a | Should -Not -Be $b
+        (Get-SimpleRedisHeader -Response $responses[0] -Name "X-SimpleRedis-MGet") | Should -Be $a
+        (Get-SimpleRedisHeader -Response $responses[1] -Name "X-SimpleRedis-MGet") | Should -Be $b
     }
 }
