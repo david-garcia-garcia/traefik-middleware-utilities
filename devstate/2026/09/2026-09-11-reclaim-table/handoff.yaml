@@ -1,0 +1,15 @@
+issueKey: 2026-09-11-reclaim-table
+jobName: 2026-09-11-reclaim-table
+issueHost: local
+issueRef: none
+prHost: local
+repoSlug: traefik-middleware-utilities
+destBranch: initial
+qualify: qualified-with-gaps
+src: 7b22b63df6d2e5aeaafe77685a3d8e5bfe472a1fe87488779699b90dcd13a65f
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
