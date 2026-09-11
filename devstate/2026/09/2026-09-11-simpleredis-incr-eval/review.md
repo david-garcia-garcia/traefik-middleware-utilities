@@ -16,3 +16,9 @@ phase: propose
 findings: fold std_go_simpleredis_resp-commands; Dragonfly pin v1.40.2
 fixed: n/a
 skipped: n/a
+
+## implement (2026-09-11)
+phase: implement
+findings: Incr/Expire/Eval landed; e2e Redis+Dragonfly passed locally
+fixed: n/a
+skipped: n/a
