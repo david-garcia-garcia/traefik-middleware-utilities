@@ -54,7 +54,7 @@ func (r *Redis) Allow(key string) (bool, time.Duration, error) {
 		strconv.FormatInt(r.clock.maxDelay.Microseconds(), 10),
 	}
 	// Script owns HGETALL/HSET/EXPIRE. Go only maps wait to allowed.
-	values, err := r.redis.Eval(allowTokenBucketScript, []string{key}, args)
+	values, err := r.redis.Eval(allowScript, []string{key}, args)
 	if err != nil {
 		return false, 0, err
 	}

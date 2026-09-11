@@ -9,6 +9,7 @@ import (
 )
 
 const testTTL = 2 * time.Second
+const agreeMaxDelay = time.Millisecond
 
 func TestNewRedis_RejectsNil(t *testing.T) {
 	limiter, err := NewRedis(nil, 1, 1, time.Second, testTTL)
@@ -196,11 +197,11 @@ func TestMemoryAndRedis_Agree(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
 	client := &simpleredis.SimpleRedis{}
 	client.Init(addr, "", "")
-	mem, err := NewMemory(2, 2, time.Millisecond, testTTL)
+	mem, err := NewMemory(2, 2, agreeMaxDelay, testTTL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	red, err := NewRedis(client, 2, 2, time.Millisecond, testTTL)
+	red, err := NewRedis(client, 2, 2, agreeMaxDelay, testTTL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +220,7 @@ func TestMemoryAndRedis_Agree(t *testing.T) {
 		if mAllowed != rAllowed {
 			t.Fatalf("step %d allowed mem %v redis %v", i, mAllowed, rAllowed)
 		}
-		if waitClass(mWait, time.Millisecond) != waitClass(rWait, time.Millisecond) {
+		if waitClass(mWait) != waitClass(rWait) {
 			t.Fatalf("step %d wait mem %v redis %v", i, mWait, rWait)
 		}
 	}
@@ -238,12 +239,12 @@ func TestRedis_Unreachable(t *testing.T) {
 	}
 }
 
-// waitClass is zero, positive-at-most-maxDelay, or greater-than-maxDelay.
-func waitClass(wait, maxDelay time.Duration) int {
+// waitClass is zero, positive-at-most-agreeMaxDelay, or greater-than-agreeMaxDelay.
+func waitClass(wait time.Duration) int {
 	if wait == 0 {
 		return 0
 	}
-	if wait <= maxDelay {
+	if wait <= agreeMaxDelay {
 		return 1
 	}
 	return 2

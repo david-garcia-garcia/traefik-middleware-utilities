@@ -4,8 +4,8 @@ package tokenbucket
 // Copied from traefik/traefik pkg/middlewares/ratelimiter/lua.go @903e8a9.
 // table.maxn replaced with #rl_source == 4 (Dragonfly Lua 5.4).
 
-// allowTokenBucketScript is Traefik AllowTokenBucketRaw. KEYS[1] is the hash.
-const allowTokenBucketScript = `
+// allowScript is Traefik AllowTokenBucketRaw. KEYS[1] is the hash.
+const allowScript = `
 local key = KEYS[1]
 local limit, burst, ttl, t, max_delay = tonumber(ARGV[1]), tonumber(ARGV[2]), tonumber(ARGV[3]), tonumber(ARGV[4]),
 	tonumber(ARGV[5])

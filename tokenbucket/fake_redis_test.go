@@ -65,7 +65,7 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				_, _ = io.WriteString(conn, f.evalReply)
 				break
 			}
-			if len(args) < 9 || strings.TrimSpace(args[1]) != strings.TrimSpace(allowTokenBucketScript) {
+			if len(args) < 9 || strings.TrimSpace(args[1]) != strings.TrimSpace(allowScript) {
 				_, _ = io.WriteString(conn, "-ERR unknown script\r\n")
 				break
 			}
@@ -106,6 +106,7 @@ func (f *testFakeRedis) setEvalReply(reply string) {
 	defer f.mu.Unlock()
 	f.evalReply = reply
 }
+
 // lastEvalCommand returns the last EVAL argv.
 func (f *testFakeRedis) lastEvalCommand() []string {
 	f.mu.Lock()
