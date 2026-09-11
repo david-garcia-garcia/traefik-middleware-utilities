@@ -2,6 +2,4 @@
 
 ## ext
 - traefik
-
-## std
-- go
+- geoblock

@@ -1,4 +1,4 @@
-# ext / go
+# ext / geoblock
 
 ## Geoblock reclaim source (PR 83)
 priority: normal

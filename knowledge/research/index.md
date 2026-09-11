@@ -5,7 +5,7 @@ priority: normal
 local: index_ext_traefik.md
 description: Traefik plugin loading, Yaegi interpreter constraints for middleware authors.
 
-## go
+## geoblock
 priority: normal
-local: index_ext_go.md
-description: External Go packages and source repos this product ports from.
+local: index_ext_geoblock.md
+description: Source package and test harness this product ports from traefik-geoblock.
