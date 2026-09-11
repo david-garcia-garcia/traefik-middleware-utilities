@@ -39,3 +39,9 @@ phase: archive
 findings: none
 fixed: folded ADDED requirements into live tcp-session and resp-commands; archived change to 2026-09-11-simpleredis-no-unsafe-zero-copy
 skipped: FindSpecHost Task tool missing — ran inline; fold targets unchanged; CI in progress on 0573621
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: none
+fixed: reused PR 22; title `✅ test(simpleredis): guard no-adopt unsafe zero-copy`; Test, Lint, Integration Tests success on 9e2a75a
+skipped: none

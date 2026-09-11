@@ -11,4 +11,4 @@ JobName: 2026-09-11-simpleredis-perf-08-unsafe
 | codereview | [x] | [x] | 2026-09-11T22:02:20Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:09:45Z |
 | archive | [x] | [x] | 2026-09-11T22:15:13Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T22:21:50Z |
