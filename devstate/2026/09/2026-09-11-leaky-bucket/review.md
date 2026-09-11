@@ -23,3 +23,12 @@ fixed: n/a
 skipped: n/a
 qualify: qualified-with-gaps
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9
+
+## implement (2026-09-11)
+phase: implement
+findings: leakybucket/ landed; CI Test failed on shared Redis keys then 2m timeout; prefixed live keys and raised timeout; CI 34649263030 green
+fixed: liveKey prefix; go test timeout 5m
+skipped: n/a
+qualify: qualified-with-gaps
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9
+localTests: passed

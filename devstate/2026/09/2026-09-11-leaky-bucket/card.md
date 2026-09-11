@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-11T20:59:10.691Z
+Developer review: in progress — 2026-09-11T21:26:38.595Z
 
 ## What this changes
-**Operators.** None.
+**Operators.** CI `test` job now sets `LEAKYBUCKET_LIVE_REDIS` / `LEAKYBUCKET_LIVE_DRAGONFLY` on the existing Redis `:6379` and Dragonfly `:6380` services, and `go test` timeout is 5m.
 
 **Admin users.** None.
 
-**Developers.** OpenSpec change `add-leakybucket` (pour clock + Redis sync-flush). No `leakybucket/` package on the branch yet.
+**Developers.** New `leakybucket/` package: `NewMemory` / `NewRedis`, `Add`/`Take`/`Level`, Redis EVAL leak-then-add HASH `{water,last}`, Kong-style `sync_rate` flush, reclaim hooks on Redis only.
 
 **End users.** None.
 
@@ -23,19 +23,19 @@ flowchart LR
 ```
 
 ## Merge readiness
-Proposal is on the branch; product library is not. 1 item remains.
+Library is on the branch; CI succeeded; OpenSpec change is not archived yet. 1 item remains.
 
 Priority: P3 — new library; no current operator or end-user harm
 
-Reviewed head: 9f743b3
+Reviewed head: 6ba0b36
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3 | CI in progress; no library yet |
-| CI proof | 3 | Lint succeeded; Test and Integration in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34646986686 |
-| Local tests proof | N/A | Before implement |
+| Overall readiness | 6 | CI succeeded; checklist still has archive/PR |
+| CI proof | 6 | Lint, Test, Integration succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34649263030 |
+| Local tests proof | N/A | Remote PR; CI covers it |
 | Review resolution | 6 | No open PR comments |
 
 ## Verification
@@ -44,8 +44,8 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-11-leaky-bucket pushed | git / origin |
 | OpenSpec | add-leakybucket | openspec/changes/add-leakybucket/ |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9 | pr-host |
-| CI | build 34646986686 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34646986686 | GitHub MCP get_check_runs |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 34649263030 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34649263030 | GitHub MCP get_check_runs |
+| Local tests | passed | handoff.yaml localTests; `go test ./leakybucket/...` and Go 1.21 docker `./...` with live engines |
 | PR comments | no comments | comments: none |
 
 ## Specs
@@ -59,7 +59,7 @@ None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → implement next.
+Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → code review next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -76,7 +76,8 @@ Local spec → branch `2026-09-11-leaky-bucket` → PR #9 → implement next.
 - [x] Stub PR #9 open
 - [x] Explore recorded
 - [x] OpenSpec `add-leakybucket` proposed
-- [ ] Land `leakybucket/` with unit, live Redis/Dragonfly, and Yaegi proof
+- [x] Land `leakybucket/` with unit, live Redis/Dragonfly, and Yaegi proof
+- [ ] Archive specs and drop WIP from the PR title
 
 ## Findings
 None.
@@ -91,24 +92,23 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 2 added / 0 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 9f743b357902987f4dab4feeb28be3841399eae2 | Card must match the branch you measured |
+| Reviewed head | 6ba0b36acd3cf73216e809ba3f60d6ff6c5eaac9 | Card must match the branch you measured |
 
 ### Stored data model
-None.
+- New: Redis HASH key (caller-prefixed opaque key) with fields `water` and `last`.
 
 ### Technical review
 Best possible solution: Dest already owns token-bucket refill and Kong window+flush as separate packages; a third package for the water clock matches that split.
 
-Do we have a high-confidence way to reproduce? Yes, `leakybucket/` is still absent on DestBranch.
+Do we have a high-confidence way to reproduce? Yes — dest had no `leakybucket/`; CI Test on this head succeeded after prefixing live keys and raising the suite timeout.
 
-Is this the best way to solve the issue? Yes — new specs `std_go_leakybucket_pour` and `std_go_leakybucket_sync-flush`, not a fold into Traefik or Kong leaves.
+Is this the best way to solve the issue? Yes — I.371 meter + Kong delta timer, not inverted Traefik Lua.
 
 ### Evidence
 What I checked:
-- `openspec validate add-leakybucket --type change --strict` valid
-- `validate_artifact_names` OK
-- One OPEN PR #9, no comments
-- CI run 34646986686 Lint success, Test/Integration in progress (head 9f743b3)
+- `go test ./leakybucket/...` passed locally (live Redis/Dragonfly + Yaegi)
+- Go 1.21 docker `go test ./...` with all live env vars passed after `leakybucket:` key prefix
+- CI run 34649263030 Lint/Test/Integration success
 
 ### Rank-up moves
 None.
