@@ -9,3 +9,9 @@ phase: explore
 findings: none
 fixed: none (no decode apply)
 skipped: none
+
+## propose (2026-09-11)
+phase: propose
+findings: none
+fixed: none (no decode apply)
+skipped: none
