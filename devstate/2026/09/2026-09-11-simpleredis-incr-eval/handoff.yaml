@@ -1,0 +1,15 @@
+issueKey: 2026-09-11-simpleredis-incr-eval
+jobName: 2026-09-11-simpleredis-incr-eval
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 292ba6348ea4d6c8068cc05db3dc1775eb5ea6d9068b1a38669fc1b791708130
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
