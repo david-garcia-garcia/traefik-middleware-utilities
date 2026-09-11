@@ -61,7 +61,7 @@ dial → bufio.NewReader (4096) → writeCommand → readReply
 - Q: Will `simpleredis/bench_test.go` exist before this change, or should this change add `BenchmarkDecode*`?
   Rank: additive incidental — new bench file this change would create; no Desired/HARD-REQUIREMENT line names the benches (they name copy-on-escape, ErrBufferFull unit tests, and live Get/MGet/Incr/Eval on both engines)
   Decision: assumed — dest has no `bench_test.go` (glob `**/bench_test.go` in this worktree: not found). Add `BenchmarkDecodeBulk`, `BenchmarkDecodeArray10`, and `BenchmarkDecodeInteger` here. Do not wait on test-07. Do not import go-redis.
-  By: explore
+  By: propose
 
 - Q: Do `-` error payloads that escape via `replyError` → `string(message)` also need an explicit copy before the next read?
   Rank: bounded incidental — 1 existing `replyError(` call site in `simpleredis/simpleredis.go` (`readReply` `case '-'`); searched `simpleredis/` for `replyError`; Desired copy line names `+` / `:`, not `-`
