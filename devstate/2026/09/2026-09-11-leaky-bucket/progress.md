@@ -8,7 +8,7 @@ JobName: 2026-09-11-leaky-bucket
 | explore | [x] | [x] | 2026-09-11T20:54:23.857Z |
 | propose | [x] | [x] | 2026-09-11T20:59:10.691Z |
 | implement | [x] | [x] | 2026-09-11T21:26:38.595Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
