@@ -6,7 +6,7 @@ JobName: 2026-09-11-simpleredis-test-07-benchmarks
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T21:21:44Z |
 | explore | [x] | [x] | 2026-09-11T21:30:02Z |
-| propose | [x] | [ ] | |
+| propose | [x] | [x] | 2026-09-11T21:37:08Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
