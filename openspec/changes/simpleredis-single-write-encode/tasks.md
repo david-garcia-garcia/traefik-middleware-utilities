@@ -1,6 +1,6 @@
 ## 1. Encoder
 
-- [ ] 1.1 Add unexported `appendRESP` that builds dest framing (`*` count, per-arg `$` length, payload, CRLF) with `append` + `strconv.AppendInt`; add compiled golden that GET `session:9f2c1ab4-user-token` equals `*2\r\n$3\r\nGET\r\n$28\r\nsession:9f2c1ab4-user-token\r\n`
+- [ ] 1.1 Add unexported `appendRESP` that builds dest framing (`*` count, per-arg `$` length, payload, CRLF) with `append` + `strconv.AppendInt`; add compiled golden that GET `session:9f2c1ab4-user-token` equals `*2\r\n$3\r\nGET\r\n$27\r\nsession:9f2c1ab4-user-token\r\n`
 - [ ] 1.2 Replace `pooledConn.writer` with `buf []byte`; drop `bufio.NewWriter` from `dial`; keep `bufio.Reader`; `writeCommand(conn *pooledConn, args)` appends into `conn.buf[:0]`, one `netConn.Write`, stores the grown slice; short write or err returns that error
 - [ ] 1.3 Add `maxIdleEncodeBuf = 64 * 1024`; on reusable `release`, if `cap(conn.buf) > maxIdleEncodeBuf` set `conn.buf = nil`; add same-package test that a large SET then idle reuse leaves cap ≤ 64 KiB
 - [ ] 1.4 Keep `TestValueWithNewlinesSurvives` and argv assertions green; run `go test ./simpleredis/...` (excluding Yaegi benches if needed) until compiled tests pass

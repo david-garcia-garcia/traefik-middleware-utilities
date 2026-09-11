@@ -5,7 +5,7 @@ The client SHALL encode each command as the same RESP array of bulk strings dest
 
 #### Scenario: Encoded GET matches dest framing
 - **WHEN** GET is encoded for key `session:9f2c1ab4-user-token`
-- **THEN** the wire bytes equal dest framing `*2\r\n$3\r\nGET\r\n$28\r\nsession:9f2c1ab4-user-token\r\n`
+- **THEN** the wire bytes equal dest framing `*2\r\n$3\r\nGET\r\n$27\r\nsession:9f2c1ab4-user-token\r\n`
 
 #### Scenario: Every verb still works live on Redis and Dragonfly
 - **WHEN** a request is made on `/redis` (Redis `redis:7-alpine` at `redis:6379`) and on `/dragonfly` (Dragonfly `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379`) after the encoder change

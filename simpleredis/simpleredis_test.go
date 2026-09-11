@@ -774,3 +774,60 @@ func TestIncrGarbageIntegerPayload(t *testing.T) {
 		t.Fatalf("Incr garbage = %v, want %s", err, RedisIssue)
 	}
 }
+
+func TestAppendRESPGetMatchesDestFraming(t *testing.T) {
+	got := appendRESP(nil, [][]byte{[]byte("GET"), []byte("session:9f2c1ab4-user-token")})
+	want := "*2\r\n$3\r\nGET\r\n$27\r\nsession:9f2c1ab4-user-token\r\n"
+	if string(got) != want {
+		t.Fatalf("appendRESP GET = %q, want %q", got, want)
+	}
+}
+
+func TestIdleEncodeScratchTrimmedPast64KiB(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	if err := redis.Set("small", []byte("v"), 60); err != nil {
+		t.Fatalf("Set small: %v", err)
+	}
+	redis.mu.Lock()
+	if len(redis.idle) != 1 {
+		redis.mu.Unlock()
+		t.Fatalf("idle after small SET %d, want 1", len(redis.idle))
+	}
+	smallCap := cap(redis.idle[0].buf)
+	redis.mu.Unlock()
+	if smallCap == 0 {
+		t.Fatal("small SET dropped encode scratch, want retained")
+	}
+	if smallCap > maxIdleEncodeBuf {
+		t.Fatalf("small SET scratch cap %d, want <= %d", smallCap, maxIdleEncodeBuf)
+	}
+
+	large := make([]byte, maxIdleEncodeBuf+1)
+	if err := redis.Set("large", large, 60); err != nil {
+		t.Fatalf("Set large: %v", err)
+	}
+	redis.mu.Lock()
+	if len(redis.idle) != 1 {
+		redis.mu.Unlock()
+		t.Fatalf("idle after large SET %d, want 1", len(redis.idle))
+	}
+	largeCap := cap(redis.idle[0].buf)
+	redis.mu.Unlock()
+	if largeCap > maxIdleEncodeBuf {
+		t.Fatalf("idle encode scratch cap %d, want <= %d", largeCap, maxIdleEncodeBuf)
+	}
+
+	got, err := redis.Get("large")
+	if err != nil {
+		t.Fatalf("Get after trim: %v", err)
+	}
+	if len(got) != len(large) {
+		t.Fatalf("Get after trim len %d, want %d", len(got), len(large))
+	}
+	if fake.connections() != 1 {
+		t.Fatalf("dials %d, want 1 (reused after trim)", fake.connections())
+	}
+}

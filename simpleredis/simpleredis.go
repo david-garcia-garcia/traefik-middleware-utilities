@@ -24,9 +24,11 @@ const (
 
 const (
 	maxIdleConns = 8
-	idleTimeout  = 30 * time.Second
-	dialTimeout  = 2 * time.Second
-	ioTimeout    = 1 * time.Second
+	// maxIdleEncodeBuf is the largest encode scratch an idle conn may keep.
+	maxIdleEncodeBuf = 64 * 1024
+	idleTimeout      = 30 * time.Second
+	dialTimeout      = 2 * time.Second
+	ioTimeout        = 1 * time.Second
 )
 
 var (
@@ -37,11 +39,11 @@ var (
 	errIssue       = errors.New(RedisIssue)
 )
 
-// pooledConn is one TCP socket plus RESP reader/writer kept in the idle list.
+// pooledConn is one TCP socket plus RESP reader and encode scratch kept in the idle list.
 type pooledConn struct {
 	netConn  net.Conn
 	reader   *bufio.Reader
-	writer   *bufio.Writer
+	buf      []byte
 	lastUsed time.Time
 }
 
@@ -255,6 +257,10 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 		conn.close()
 		return
 	}
+	// Drop a huge encode scratch so one large SET cannot pin that idle conn.
+	if cap(conn.buf) > maxIdleEncodeBuf {
+		conn.buf = nil
+	}
 	sr.idle = append(sr.idle, conn)
 	sr.mu.Unlock()
 }
@@ -269,7 +275,6 @@ func (sr *SimpleRedis) dial() (*pooledConn, error) {
 	conn := &pooledConn{
 		netConn: netConn,
 		reader:  bufio.NewReader(netConn),
-		writer:  bufio.NewWriter(netConn),
 	}
 
 	// AUTH before SELECT so a passworded server accepts the session.
@@ -293,7 +298,7 @@ func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, erro
 	if err := conn.netConn.SetDeadline(time.Now().Add(ioTimeout)); err != nil {
 		return nil, false, errUnreachable
 	}
-	if err := writeCommand(conn.writer, args); err != nil {
+	if err := writeCommand(conn, args); err != nil {
 		return nil, false, ioError(err)
 	}
 	values, clean, err := readReply(conn.reader)
@@ -306,23 +311,36 @@ func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, erro
 	return values, true, err
 }
 
-// writeCommand writes one RESP array of bulk strings and flushes.
-func writeCommand(writer *bufio.Writer, args [][]byte) error {
-	if _, err := writer.WriteString("*" + strconv.Itoa(len(args)) + "\r\n"); err != nil {
+// appendRESP appends one RESP array of bulk strings onto buf using dest framing.
+func appendRESP(buf []byte, args [][]byte) []byte {
+	// Array header: *<count>\r\n
+	buf = append(buf, '*')
+	buf = strconv.AppendInt(buf, int64(len(args)), 10)
+	buf = append(buf, '\r', '\n')
+	// Each arg is a bulk string: $<len>\r\n<payload>\r\n
+	for _, arg := range args {
+		buf = append(buf, '$')
+		buf = strconv.AppendInt(buf, int64(len(arg)), 10)
+		buf = append(buf, '\r', '\n')
+		buf = append(buf, arg...)
+		buf = append(buf, '\r', '\n')
+	}
+	return buf
+}
+
+// writeCommand encodes args into conn.buf and issues one net.Conn.Write.
+func writeCommand(conn *pooledConn, args [][]byte) error {
+	buf := appendRESP(conn.buf[:0], args)
+	conn.buf = buf
+	// One Write; a short write or error leaves the socket dirty.
+	n, err := conn.netConn.Write(buf)
+	if err != nil {
 		return err
 	}
-	for _, arg := range args {
-		if _, err := writer.WriteString("$" + strconv.Itoa(len(arg)) + "\r\n"); err != nil {
-			return err
-		}
-		if _, err := writer.Write(arg); err != nil {
-			return err
-		}
-		if _, err := writer.WriteString("\r\n"); err != nil {
-			return err
-		}
+	if n != len(buf) {
+		return io.ErrShortWrite
 	}
-	return writer.Flush()
+	return nil
 }
 
 // readReply parses one RESP value. clean is false when the stream is no longer usable.
