@@ -18,3 +18,9 @@ phase: propose
 findings: none
 fixed: none
 skipped: product apply not started; six open questions resolved so Explore Decisions is None.
+
+## implement (2026-09-11)
+phase: implement
+findings: none
+fixed: retryDeadPool on exec; fake lost-reply tests; compose redis-drop/dragonfly-drop
+skipped: none; Explore Decisions still None (all six Q resolved)
