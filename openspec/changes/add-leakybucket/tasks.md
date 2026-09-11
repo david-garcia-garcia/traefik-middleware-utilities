@@ -6,8 +6,8 @@
 
 ## 2. Redis Eval and sync_rate
 
-- [ ] 2.1 Add `NewRedis` on `*simpleredis.SimpleRedis`; EVAL leak-then-add HASH `water`/`last`; KEYS[1]; no `table.maxn`; no Go SET/HSET of the hash; propagate `redis:unreachable` / `redis:timeout`
-- [ ] 2.2 `sync_rate=0` EVAL every Add/Take/Level; `>0` local_pours + timer EVAL; floor 20 ms; negative fails; `Sleep`/`Wake`/`Close` on Redis only
+- [x] 2.1 Add `NewRedis` on `*simpleredis.SimpleRedis`; EVAL leak-then-add HASH `water`/`last`; KEYS[1]; no `table.maxn`; no Go SET/HSET of the hash; propagate `redis:unreachable` / `redis:timeout`
+- [x] 2.2 `sync_rate=0` EVAL every Add/Take/Level; `>0` local_pours + timer EVAL; floor 20 ms; negative fails; `Sleep`/`Wake`/`Close` on Redis only
 - [ ] 2.3 Fake TCP unit tests: Eval encoding; two instances both pours count (no last-write-wins); over-allow bounded by sync interval
 - [ ] 2.4 Memory vs Redis agreement on the same leak/capacity sequence when `sync_rate=0`
 
