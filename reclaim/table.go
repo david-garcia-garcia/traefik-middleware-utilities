@@ -18,6 +18,14 @@ const (
 	MsgDispose = "reclaim_dispose"
 )
 
+// Hooks are the optional sleep, wake, and close funcs for one incarnation. A nil field skips
+// that event. The table stores this value at put and ignores it on a later Open for the same key.
+type Hooks struct {
+	Sleep func()
+	Wake  func()
+	Close func()
+}
+
 // Table stores one value per key and drives it through create, sleep, wake, and close.
 //
 //	       Open, key absent
@@ -36,8 +44,8 @@ const (
 //	              v
 //	           Close()  key deleted
 //
-// Every state change happens under t.mu; every call into the value (create, Wake, Sleep, Close)
-// happens outside it with the slot parked in slotBusy. One key's transitions are therefore
+// Every state change happens under t.mu; create and the stored hooks (Wake, Sleep, Close)
+// run outside it with the slot parked in slotBusy. One key's transitions are therefore
 // sequential, and a value that is slow to create or slow to sleep never blocks another key. An
 // Open or a drop that meets a busy slot waits on slot.ready and looks again.
 //
@@ -70,6 +78,8 @@ const (
 // the create failure it is permanently stuck with if it never got a value.
 type slot struct {
 	value any
+	// hooks are the Sleep, Wake, and Close funcs stored at put. Bind and reclaim do not replace them.
+	hooks Hooks
 	// createErr is what create returned. Every Open parked on ready replays it, and the slot is
 	// gone: a later Open creates a new incarnation rather than retrying this one.
 	createErr error
@@ -112,72 +122,40 @@ func waitCtx(ctx context.Context) {
 	}
 }
 
-// closer is an optional Close on a stored value, called once when the incarnation ends.
-// Sleep has always run first, so Close never has to handle the live state.
-type closer interface {
-	Close()
-}
-
-// sleeper is an optional Sleep on a stored value, called when its last holder is gone. The value
-// stays stored and keeps its identity; it releases what is expensive to hold idle.
-type sleeper interface {
-	Sleep()
-}
-
-// waker is an optional Wake on a stored value, called before Open hands a sleeping value back.
-// It cannot fail: a value that cannot guarantee resume does not implement Sleep and Wake.
-type waker interface {
-	Wake()
-}
-
-// The three lookups below are type switches rather than `value.(sleeper)` because a comma-ok
-// assertion to an interface panics under Yaegi ("reflect.Set: value of type interface {} is not
-// assignable to type interp.valueInterface") for a value that reached `any` by being passed in,
-// and a panic here runs on a background goroutine and would end the Traefik process. The type
-// switch reports no match instead.
-//
-// It reports no match a lot: Yaegi hands back a value returned through an interpreted
-// `func() (any, error)` as a synthesized struct type with no methods, so under the interpreter
-// none of the three ever matches and the optional lifecycle is inert. That is upstream and
-// predates this change (Close has never run interpreted either); see
-// knowledge/debt/2026-09-11-yaegi-drops-methods-on-any.md. Compiled callers get all four events.
-
-// sleepValue puts value to sleep if it has Sleep. Runs outside t.mu.
-func sleepValue(value any) {
-	switch typed := value.(type) {
-	case sleeper:
-		typed.Sleep()
+// sleepValue runs the stored Sleep hook when it is set. Runs outside t.mu.
+func sleepValue(hooks Hooks) {
+	if hooks.Sleep != nil {
+		hooks.Sleep()
 	}
 }
 
-// wakeValue wakes value if it has Wake. Runs outside t.mu, before Open returns.
-func wakeValue(value any) {
-	switch typed := value.(type) {
-	case waker:
-		typed.Wake()
+// wakeValue runs the stored Wake hook when it is set. Runs outside t.mu, before Open returns.
+func wakeValue(hooks Hooks) {
+	if hooks.Wake != nil {
+		hooks.Wake()
 	}
 }
 
-// closeValue closes value if it has Close. Runs outside t.mu, always after sleepValue.
-func closeValue(value any) {
-	switch typed := value.(type) {
-	case closer:
-		typed.Close()
+// closeValue runs the stored Close hook when it is set. Runs outside t.mu, always after sleepValue.
+func closeValue(hooks Hooks) {
+	if hooks.Close != nil {
+		hooks.Close()
 	}
 }
 
-// dispose closes the value and then reports the end, so reclaim_dispose means Close has returned.
-func dispose(key string, value any, logger *slog.Logger) {
-	closeValue(value)
+// dispose runs the Close hook and then reports the end, so reclaim_dispose means Close has returned.
+func dispose(key string, hooks Hooks, logger *slog.Logger) {
+	closeValue(hooks)
 	logger.Debug(MsgDispose, "key", key)
 }
 
 // Open returns the stored value for key, creating it once, and tracks ctx until it is done.
 // create takes no arguments: Yaegi cannot call func(context.Context) (any, error).
 // logger is required; it is the only logger for this Open and is stored on the slot for orphan
-// and dispose. A sleeping value is woken before Open returns, so a caller never receives one
-// asleep. If the value has Close(), the table calls it when this incarnation ends, after Sleep.
-func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, create func() (any, error)) (any, error) {
+// and dispose. hooks are stored on the incarnation at put; a later Open (bind or reclaim)
+// ignores this argument. A sleeping value is woken before Open returns, so a caller never
+// receives one asleep. The Close hook, when set, runs when this incarnation ends, after Sleep.
+func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
 	if t == nil {
 		return nil, fmt.Errorf("reclaim: open %q: nil table", key)
 	}
@@ -195,7 +173,7 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 			incarnation = &slot{state: slotBusy, ready: make(chan struct{}), logger: logger}
 			t.items[key] = incarnation
 			t.mu.Unlock()
-			return t.put(ctx, key, incarnation, logger, create)
+			return t.put(ctx, key, incarnation, logger, create, hooks)
 		}
 		switch incarnation.state {
 		case slotAwake:
@@ -233,7 +211,7 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 
 // put runs create for a slot this Open registered, then publishes the value or the failure to
 // every caller waiting on that slot.
-func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *slog.Logger, create func() (any, error)) (any, error) {
+func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
 	value, err := create()
 
 	t.mu.Lock()
@@ -248,6 +226,7 @@ func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *
 		return nil, err
 	}
 	incarnation.value = value
+	incarnation.hooks = hooks
 	incarnation.state = slotAwake
 	incarnation.holders++
 	// Reset is tests only and must not race Open on a key, but if it did it dropped this slot
@@ -275,9 +254,10 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 	}
 	incarnation.holders++
 	value := incarnation.value
+	storedHooks := incarnation.hooks
 	t.mu.Unlock()
 
-	wakeValue(value)
+	wakeValue(storedHooks)
 
 	t.mu.Lock()
 	incarnation.state = slotAwake
@@ -318,11 +298,12 @@ func (t *Table) drop(key string, incarnation *slot) {
 	incarnation.ready = make(chan struct{})
 	incarnation.woken = make(chan struct{})
 	woken := incarnation.woken
-	value, logger := incarnation.value, incarnation.logger
+	logger := incarnation.logger
+	storedHooks := incarnation.hooks
 	grace := t.grace
 	t.mu.Unlock()
 
-	sleepValue(value)
+	sleepValue(storedHooks)
 	// Orphan is written while the slot is still busy. Reset leaves a busy slot to the goroutine
 	// that owns the transition, so nothing else can write this incarnation's dispose line first.
 	logger.Debug(MsgOrphan, "key", key)
@@ -365,9 +346,10 @@ func (t *Table) expire(key string, incarnation *slot) {
 	if t.items[key] == incarnation {
 		delete(t.items, key)
 	}
-	value, logger := incarnation.value, incarnation.logger
+	logger := incarnation.logger
+	storedHooks := incarnation.hooks
 	t.mu.Unlock()
-	dispose(key, value, logger)
+	dispose(key, storedHooks, logger)
 }
 
 // Reset ends every incarnation on this table. An awake value is slept first, so Close never sees
@@ -390,7 +372,7 @@ func (t *Table) Reset() {
 
 	for key, incarnation := range items {
 		t.mu.Lock()
-		state, value, logger := incarnation.state, incarnation.value, incarnation.logger
+		state, storedHooks, logger := incarnation.state, incarnation.hooks, incarnation.logger
 		if state == slotAwake || state == slotAsleep {
 			incarnation.state = slotGone
 		}
@@ -398,11 +380,11 @@ func (t *Table) Reset() {
 
 		switch state {
 		case slotAwake:
-			sleepValue(value)
+			sleepValue(storedHooks)
 			logger.Debug(MsgOrphan, "key", key)
-			dispose(key, value, logger)
+			dispose(key, storedHooks, logger)
 		case slotAsleep:
-			dispose(key, value, logger)
+			dispose(key, storedHooks, logger)
 		case slotBusy, slotGone:
 			// The goroutine that owns this transition ends the incarnation itself: it finds the
 			// slot unmapped, or its grace wait already released by the loop above.

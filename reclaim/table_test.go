@@ -319,12 +319,23 @@ func (c *nilDoneCtx) cancel() { c.canceled.Store(true) }
 // recLogger is a debug logger writing into h.
 func recLogger(h slog.Handler) *slog.Logger { return slog.New(h) }
 
+// testLifeHooks binds life's Sleep, Wake, and Close methods as Open hooks.
+func testLifeHooks(life *lifecycle) Hooks {
+	return Hooks{Sleep: life.Sleep, Wake: life.Wake, Close: life.Close}
+}
+
+// testCloseHook is a Close-only Open hook for tests that assert disposal of a value.
+func testCloseHook(onClose func()) Hooks {
+	return Hooks{Close: onClose}
+}
+
 func TestTable_OpenCancelDispose(t *testing.T) {
 	h := &recHandler{}
 	tab := NewTable(30 * time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
 	var ended atomic.Bool
-	value, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return ending(1, &ended), nil })
+	stored := ending(1, &ended)
+	value, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return stored, nil }, testCloseHook(stored.Close))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -354,7 +365,7 @@ func TestTable_LifecycleIsCreateSleepWakeClose(t *testing.T) {
 		got, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
 			created++
 			return life, nil
-		})
+		}, testLifeHooks(life))
 		if err != nil {
 			t.Fatalf("open %d: %v", cycle, err)
 		}
@@ -389,6 +400,42 @@ func TestTable_LifecycleIsCreateSleepWakeClose(t *testing.T) {
 	}
 }
 
+func TestTable_LaterOpenDoesNotReplaceHooks(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	life := &lifecycle{}
+	ctx1, cancel1 := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel1()
+	waitKeyMsg(t, h, MsgOrphan, "a")
+
+	ignored := &lifecycle{}
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	if _, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil }, testLifeHooks(ignored)); err != nil {
+		t.Fatalf("open 2: %v", err)
+	}
+	if got := life.count("wake"); got != 1 {
+		t.Fatalf("stored Wake ran %d times, want 1", got)
+	}
+	if got := ignored.count("wake"); got != 0 {
+		t.Fatalf("later Open's Wake ran %d times, want 0", got)
+	}
+
+	cancel2()
+	waitUntil(t, func() bool { return life.count("sleep") == 2 })
+	tab.Reset()
+	waitKeyMsg(t, h, MsgDispose, "a")
+	if got := life.count("close"); got != 1 {
+		t.Fatalf("stored Close ran %d times, want 1", got)
+	}
+	if got := ignored.count("close"); got != 0 {
+		t.Fatalf("later Open's Close ran %d times, want 0", got)
+	}
+}
+
 func TestTable_SleepPrecedesCloseAtEveryGrace(t *testing.T) {
 	for _, grace := range []time.Duration{0, 5 * time.Millisecond} {
 		t.Run(grace.String(), func(t *testing.T) {
@@ -396,7 +443,7 @@ func TestTable_SleepPrecedesCloseAtEveryGrace(t *testing.T) {
 			tab := NewTable(grace)
 			life := &lifecycle{}
 			ctx, cancel := context.WithCancel(context.Background())
-			if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+			if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 				t.Fatalf("open: %v", err)
 			}
 			cancel()
@@ -415,7 +462,7 @@ func TestTable_OpenWaitsForWake(t *testing.T) {
 	life := &lifecycle{onWake: func() { <-release }}
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
 	cancel1()
@@ -425,7 +472,7 @@ func TestTable_OpenWaitsForWake(t *testing.T) {
 	defer cancel2()
 	returned := make(chan any, 1)
 	go func() {
-		got, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil })
+		got, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil }, Hooks{})
 		if err != nil {
 			t.Errorf("open 2: %v", err)
 		}
@@ -460,7 +507,7 @@ func TestTable_ConcurrentOpensOnSleepingValueWakeOnce(t *testing.T) {
 	life := &lifecycle{}
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
 	cancel1()
@@ -473,7 +520,7 @@ func TestTable_ConcurrentOpensOnSleepingValueWakeOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			got, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil })
+			got, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil }, Hooks{})
 			if err != nil {
 				t.Errorf("open: %v", err)
 			}
@@ -520,7 +567,7 @@ func TestTable_ConcurrentFirstOpensCreateOnce(t *testing.T) {
 				values = append(values, made)
 				valuesMu.Unlock()
 				return made, nil
-			})
+			}, Hooks{})
 			if err != nil {
 				t.Errorf("open %d: %v", i, err)
 			}
@@ -574,7 +621,7 @@ func TestTable_CreateErrorReachesEveryWaiter(t *testing.T) {
 					return nil, boom
 				}
 				return &counterClose{}, nil
-			})
+			}, Hooks{})
 			errs[i] = err
 		}(i)
 	}
@@ -593,7 +640,7 @@ func TestTable_CreateErrorReachesEveryWaiter(t *testing.T) {
 	}
 
 	// A later Open is free to try again.
-	value, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return &counterClose{}, nil })
+	value, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return &counterClose{}, nil }, Hooks{})
 	if err != nil || value == nil {
 		t.Fatalf("retry after a failed create: value %v err %v", value, err)
 	}
@@ -604,7 +651,7 @@ func TestTable_OpenDuringGraceReclaims(t *testing.T) {
 	tab := NewTable(graceNoRace)
 	var ended atomic.Bool
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	first, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return ending(1, &ended), nil })
+	first, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return ending(1, &ended), nil }, Hooks{})
 	if err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
@@ -614,7 +661,7 @@ func TestTable_OpenDuringGraceReclaims(t *testing.T) {
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
 	defer cancel2()
-	second, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil })
+	second, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil }, Hooks{})
 	if err != nil {
 		t.Fatalf("open 2: %v", err)
 	}
@@ -640,11 +687,11 @@ func TestTable_SecondCreateDisposeIgnored(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	make1 := func() (any, error) { created++; return ending(1, nil), nil }
-	first, err := tab.Open(ctx, "a", recLogger(h), make1)
+	first, err := tab.Open(ctx, "a", recLogger(h), make1, Hooks{})
 	if err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
-	second, err := tab.Open(ctx, "a", recLogger(h), make1)
+	second, err := tab.Open(ctx, "a", recLogger(h), make1, Hooks{})
 	if err != nil {
 		t.Fatalf("open 2: %v", err)
 	}
@@ -662,10 +709,10 @@ func TestTable_TwoOpensOneDispose(t *testing.T) {
 	var ended atomic.Bool
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return ending(1, &ended), nil }); err != nil {
+	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return ending(1, &ended), nil }, Hooks{}); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
-	if _, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil }); err != nil {
+	if _, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil }, Hooks{}); err != nil {
 		t.Fatalf("open 2: %v", err)
 	}
 
@@ -693,7 +740,8 @@ func TestTable_ZeroGraceEndsImmediately(t *testing.T) {
 	tab := NewTable(0)
 	var ended atomic.Bool
 	ctx, cancel := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return ending(1, &ended), nil }); err != nil {
+	stored := ending(1, &ended)
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return stored, nil }, testCloseHook(stored.Close)); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	cancel()
@@ -721,7 +769,7 @@ func TestTable_ZeroGraceRacingOpenIsPlainBind(t *testing.T) {
 	first := &lifecycle{onSleep: func() { close(sleeping); <-release }}
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return first, nil }); err != nil {
+	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return first, nil }, testLifeHooks(first)); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
 	cancel1()
@@ -732,7 +780,7 @@ func TestTable_ZeroGraceRacingOpenIsPlainBind(t *testing.T) {
 	second := &lifecycle{}
 	opened := make(chan any, 1)
 	go func() {
-		value, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { return second, nil })
+		value, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { return second, nil }, testLifeHooks(second))
 		if err != nil {
 			t.Errorf("open 2: %v", err)
 		}
@@ -774,7 +822,7 @@ func TestTable_ResetDuringSleepStillOrphansBeforeDispose(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	cancel()
@@ -814,7 +862,7 @@ func TestTable_AnOpenThatOnlyWaitsDoesNotTakeTheLogger(t *testing.T) {
 	life := &lifecycle{onSleep: func() { once.Do(func() { close(sleeping); <-release }) }}
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx1, "a", recLogger(held), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(ctx1, "a", recLogger(held), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
 	cancel1()
@@ -827,7 +875,7 @@ func TestTable_AnOpenThatOnlyWaitsDoesNotTakeTheLogger(t *testing.T) {
 	opened := make(chan struct{})
 	go func() {
 		defer close(opened)
-		if _, err := tab.Open(ctx2, "a", recLogger(waiting), func() (any, error) { return &lifecycle{}, nil }); err != nil {
+		if _, err := tab.Open(ctx2, "a", recLogger(waiting), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 			t.Errorf("open 2: %v", err)
 		}
 	}()
@@ -855,7 +903,7 @@ func TestTable_ResetRacingADropKeepsOrphanBeforeDispose(t *testing.T) {
 		tab := NewTable(graceNoRace)
 		ctx, cancel := context.WithCancel(context.Background())
 		life := &lifecycle{}
-		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 			t.Fatalf("round %d open: %v", round, err)
 		}
 
@@ -892,7 +940,7 @@ func TestTable_OpenWaitsForSleepThenWakes(t *testing.T) {
 	life := &lifecycle{onSleep: func() { once.Do(func() { close(sleeping); <-release }) }}
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
 	cancel1()
@@ -902,7 +950,7 @@ func TestTable_OpenWaitsForSleepThenWakes(t *testing.T) {
 	defer cancel2()
 	opened := make(chan any, 1)
 	go func() {
-		value, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil })
+		value, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil }, Hooks{})
 		if err != nil {
 			t.Errorf("open 2: %v", err)
 		}
@@ -936,7 +984,7 @@ func TestTable_OrphanPrecedesDisposeAtTinyGrace(t *testing.T) {
 		h := &recHandler{}
 		tab := NewTable(time.Nanosecond)
 		ctx, cancel := context.WithCancel(context.Background())
-		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return &lifecycle{}, nil }); err != nil {
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 			t.Fatalf("open: %v", err)
 		}
 		cancel()
@@ -957,7 +1005,7 @@ func TestTable_DisposeLogFollowsClose(t *testing.T) {
 		sawDispose.Store(countKeyMsg(h.events(), MsgDispose, "a") > 0)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	cancel()
@@ -980,7 +1028,7 @@ func TestTable_ResetDisposeLogFollowsClose(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 
@@ -1025,16 +1073,18 @@ func TestTable_HashChangeProof(t *testing.T) {
 	var ended []string
 
 	ctxA, cancelA := context.WithCancel(context.Background())
+	endA := &namedEnd{name: "a", mu: &mu, ended: &ended}
 	if _, err := tab.Open(ctxA, "a", recLogger(h), func() (any, error) {
-		return &namedEnd{name: "a", mu: &mu, ended: &ended}, nil
-	}); err != nil {
+		return endA, nil
+	}, testCloseHook(endA.Close)); err != nil {
 		t.Fatalf("open a: %v", err)
 	}
 	ctxB, cancelB := context.WithCancel(context.Background())
 	defer cancelB()
+	endB := &namedEnd{name: "b", mu: &mu, ended: &ended}
 	if _, err := tab.Open(ctxB, "b", recLogger(h), func() (any, error) {
-		return &namedEnd{name: "b", mu: &mu, ended: &ended}, nil
-	}); err != nil {
+		return endB, nil
+	}, testCloseHook(endB.Close)); err != nil {
 		t.Fatalf("open b: %v", err)
 	}
 
@@ -1059,14 +1109,14 @@ func TestDefault_OpenSharesIncarnation(t *testing.T) {
 	h := &recHandler{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	first, err := Open(ctx, "shared", recLogger(h), func() (any, error) { return ending(7, nil), nil })
+	first, err := Open(ctx, "shared", recLogger(h), func() (any, error) { return ending(7, nil), nil }, Hooks{})
 	if err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
 	second, err := Default().Open(ctx, "shared", recLogger(h), func() (any, error) {
 		t.Error("create ran again")
 		return nil, nil
-	})
+	}, Hooks{})
 	if err != nil {
 		t.Fatalf("open 2: %v", err)
 	}
@@ -1116,14 +1166,14 @@ func TestTable_OpenNilContextPanics(t *testing.T) {
 	}()
 	tab := NewTable(time.Millisecond)
 	//nolint:staticcheck // the nil context is the case under test
-	_, _ = tab.Open(nil, "a", recLogger(&recHandler{}), func() (any, error) { return ending(1, nil), nil })
+	_, _ = tab.Open(nil, "a", recLogger(&recHandler{}), func() (any, error) { return ending(1, nil), nil }, Hooks{})
 }
 
 func TestTable_OpenBackgroundDoesNotPanic(t *testing.T) {
 	tab := NewTable(time.Millisecond)
 	if _, err := tab.Open(context.Background(), "a", recLogger(&recHandler{}), func() (any, error) {
 		return ending(1, nil), nil
-	}); err != nil {
+	}, Hooks{}); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 }
@@ -1133,7 +1183,7 @@ func TestTable_HolderWithoutDoneChannelIsPolled(t *testing.T) {
 	tab := NewTable(5 * time.Millisecond)
 	holder := &nilDoneCtx{}
 	life := &lifecycle{}
-	if _, err := tab.Open(holder, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(holder, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	time.Sleep(60 * time.Millisecond)
@@ -1151,7 +1201,7 @@ func TestTable_ValueWithoutLifecycleMethodsStillDisposes(t *testing.T) {
 	h := &recHandler{}
 	tab := NewTable(time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
-	value, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "a bare string", nil })
+	value, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "a bare string", nil }, Hooks{})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -1170,7 +1220,7 @@ func TestTable_ValueWithOnlyCloseIsUnaffected(t *testing.T) {
 	tab := NewTable(5 * time.Millisecond)
 	value := &onlyCloser{}
 	ctx, cancel := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return value, nil }); err != nil {
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return value, nil }, testCloseHook(value.Close)); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	cancel()
@@ -1185,7 +1235,7 @@ func TestTable_ResetLogsOrphanThenDisposeAndKeepsNextIncarnation(t *testing.T) {
 	tab := NewTable(graceNoRace)
 	staleCtx, cancelStale := context.WithCancel(context.Background())
 	life := &lifecycle{}
-	if _, err := tab.Open(staleCtx, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(staleCtx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
 
@@ -1200,7 +1250,7 @@ func TestTable_ResetLogsOrphanThenDisposeAndKeepsNextIncarnation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	next := &lifecycle{}
-	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return next, nil }); err != nil {
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return next, nil }, testLifeHooks(next)); err != nil {
 		t.Fatalf("open 2: %v", err)
 	}
 	// The stale holder's watcher now fires; it must not touch the new incarnation.
@@ -1219,7 +1269,7 @@ func TestTable_ResetStopsGraceWait(t *testing.T) {
 	tab := NewTable(graceNoRace)
 	ctx, cancel := context.WithCancel(context.Background())
 	life := &lifecycle{}
-	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	cancel()
@@ -1255,7 +1305,7 @@ func TestTable_ConcurrentOpenSameKeySharesOneIncarnation(t *testing.T) {
 			value, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
 				created.Add(1)
 				return ending(1, nil), nil
-			})
+			}, Hooks{})
 			if err != nil {
 				t.Errorf("open %d: %v", i, err)
 			}
@@ -1284,14 +1334,14 @@ func TestTable_NilTableOpenErrors(t *testing.T) {
 	var tab *Table
 	if _, err := tab.Open(context.Background(), "a", recLogger(&recHandler{}), func() (any, error) {
 		return ending(1, nil), nil
-	}); err == nil {
+	}, Hooks{}); err == nil {
 		t.Fatal("no error from a nil table")
 	}
 }
 
 func TestTable_NilOpenLoggerRejected(t *testing.T) {
 	tab := NewTable(time.Millisecond)
-	if _, err := tab.Open(context.Background(), "a", nil, func() (any, error) { return ending(1, nil), nil }); err == nil {
+	if _, err := tab.Open(context.Background(), "a", nil, func() (any, error) { return ending(1, nil), nil }, Hooks{}); err == nil {
 		t.Fatal("no error from a nil logger")
 	}
 	if mappedKeys(tab) != 0 {
@@ -1308,7 +1358,7 @@ func TestTable_ConcurrentCancelLastHolders(t *testing.T) {
 	for i := 0; i < holders; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancels[i] = cancel
-		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }); err != nil {
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
 	}
@@ -1337,14 +1387,14 @@ func TestTable_HolderCountReleased(t *testing.T) {
 	tab := NewTable(graceNoRace)
 	keepCtx, keepCancel := context.WithCancel(context.Background())
 	defer keepCancel()
-	if _, err := tab.Open(keepCtx, "a", recLogger(h), func() (any, error) { return &lifecycle{}, nil }); err != nil {
+	if _, err := tab.Open(keepCtx, "a", recLogger(h), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 		t.Fatalf("open keep-alive: %v", err)
 	}
 	s := mustSlot(t, tab, "a")
 
 	for i := 0; i < 20; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
-		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil }); err != nil {
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { t.Error("create ran again"); return nil, nil }, Hooks{}); err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
 		cancel()
@@ -1360,7 +1410,7 @@ func TestTable_ManyKeysDisposeIndependently(t *testing.T) {
 	for i := 0; i < keys; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancels[i] = cancel
-		if _, err := tab.Open(ctx, "k"+strconv.Itoa(i), recLogger(h), func() (any, error) { return &lifecycle{}, nil }); err != nil {
+		if _, err := tab.Open(ctx, "k"+strconv.Itoa(i), recLogger(h), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
 	}
@@ -1384,11 +1434,11 @@ func TestTable_OrphanAndDisposeUseTheLastBindingLogger(t *testing.T) {
 	tab := NewTable(5 * time.Millisecond)
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx1, "a", recLogger(first), func() (any, error) { return &lifecycle{}, nil }); err != nil {
+	if _, err := tab.Open(ctx1, "a", recLogger(first), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
 	ctx2, cancel2 := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx2, "a", recLogger(second), func() (any, error) { t.Error("create ran again"); return nil, nil }); err != nil {
+	if _, err := tab.Open(ctx2, "a", recLogger(second), func() (any, error) { t.Error("create ran again"); return nil, nil }, Hooks{}); err != nil {
 		t.Fatalf("open 2: %v", err)
 	}
 
@@ -1416,7 +1466,7 @@ func TestTable_ReclaimRacesExpiry(t *testing.T) {
 		first, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) {
 			created.Add(1)
 			return &counterClose{}, nil
-		})
+		}, Hooks{})
 		if err != nil {
 			t.Fatalf("round %d open 1: %v", round, err)
 		}
@@ -1426,7 +1476,7 @@ func TestTable_ReclaimRacesExpiry(t *testing.T) {
 		second, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) {
 			created.Add(1)
 			return &counterClose{}, nil
-		})
+		}, Hooks{})
 		if err != nil {
 			t.Fatalf("round %d open 2: %v", round, err)
 		}
@@ -1454,7 +1504,7 @@ func TestTable_ZeroGraceOpenRacesCancel(t *testing.T) {
 		tab := NewTable(0)
 		h := &recHandler{}
 		ctx1, cancel1 := context.WithCancel(context.Background())
-		if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return &counterClose{}, nil }); err != nil {
+		if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return &counterClose{}, nil }, Hooks{}); err != nil {
 			t.Fatalf("round %d open 1: %v", round, err)
 		}
 
@@ -1465,7 +1515,7 @@ func TestTable_ZeroGraceOpenRacesCancel(t *testing.T) {
 		go func() { defer wg.Done(); cancel1() }()
 		go func() {
 			defer wg.Done()
-			value, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { return &counterClose{}, nil })
+			value, err := tab.Open(ctx2, "a", recLogger(h), func() (any, error) { return &counterClose{}, nil }, Hooks{})
 			if err != nil {
 				t.Errorf("round %d open 2: %v", round, err)
 			}
@@ -1497,13 +1547,18 @@ func TestTable_ResetRacingOpenClosesEveryValue(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
+			var stored *counterClose
 			_, _ = tab.Open(ctx, "a", recLogger(h), func() (any, error) {
-				value := &counterClose{}
+				stored = &counterClose{}
 				mu.Lock()
-				made = append(made, value)
+				made = append(made, stored)
 				mu.Unlock()
-				return value, nil
-			})
+				return stored, nil
+			}, Hooks{Close: func() {
+				if stored != nil {
+					stored.Close()
+				}
+			}})
 		}()
 		go func() { defer wg.Done(); tab.Reset() }()
 		wg.Wait()
@@ -1537,7 +1592,7 @@ func TestTable_GoroutinesReturnToBaseline(t *testing.T) {
 	for i := 0; i < keys; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancels[i] = cancel
-		if _, err := tab.Open(ctx, "k"+strconv.Itoa(i), recLogger(h), func() (any, error) { return &lifecycle{}, nil }); err != nil {
+		if _, err := tab.Open(ctx, "k"+strconv.Itoa(i), recLogger(h), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 			t.Fatalf("open %d: %v", i, err)
 		}
 	}
@@ -1557,7 +1612,7 @@ func TestTable_OpenLoggerLevelGatesPutDispose(t *testing.T) {
 	quiet := &levelGate{min: slog.LevelInfo}
 	tab := NewTable(time.Millisecond)
 	ctx, cancel := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx, "quiet", recLogger(quiet), func() (any, error) { return &lifecycle{}, nil }); err != nil {
+	if _, err := tab.Open(ctx, "quiet", recLogger(quiet), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 		t.Fatalf("open quiet: %v", err)
 	}
 	cancel()
@@ -1571,7 +1626,7 @@ func TestTable_OpenLoggerLevelGatesPutDispose(t *testing.T) {
 
 	loud := &levelGate{min: slog.LevelDebug}
 	ctx2, cancel2 := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx2, "loud", recLogger(loud), func() (any, error) { return &lifecycle{}, nil }); err != nil {
+	if _, err := tab.Open(ctx2, "loud", recLogger(loud), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 		t.Fatalf("open loud: %v", err)
 	}
 	cancel2()
