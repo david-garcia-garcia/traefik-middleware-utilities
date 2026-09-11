@@ -1,11 +1,11 @@
-Developer review: ready for review — 2026-09-11T22:02:08Z
+Developer review: ready for review — 2026-09-11T22:10:05Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** SimpleRedis adds Yaegi-safe `InitWithOptions` and `Options` (`DialTimeout`, `IoTimeout`, `IdleTimeout`, `MaxIdleConns`; zero means today's 2s / 1s / 30s / 8). Configured I/O timeout is proven with `BLPOP` against live Redis and Dragonfly; CI `Test` sets `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY`. `Init(host, pass, database)` is unchanged. Live-socket wait queue stays with perf-01.
+**Developers.** SimpleRedis adds Yaegi-safe `InitWithOptions` and `Options` (`DialTimeout`, `IoTimeout`, `IdleTimeout`, `MaxIdleConns`; zero means today's 2s / 1s / 30s / 8). Configured I/O timeout is proven with `BLPOP` against live Redis and Dragonfly; CI `Test` sets `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY`. `Init(host, pass, database)` is unchanged. Live-socket wait queue stays with perf-01. Usage packet `std_go_simpleredis` names those knobs and the live-skip rule.
 
 **End users.** None.
 
@@ -27,10 +27,10 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Seven-axis review is clean; one hard coverage item is done. CI succeeded. 0 items remain.
+Usage packet caught up; stale How-to/Gotcha produced. CI succeeded. 0 items remain.
 
 Priority: P2 — Redis slowness holds Traefik workers for a full second and fans out dials, with no caller-set shorter deadline
-Reviewed head: 7006b50
+Reviewed head: ee04962
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -47,7 +47,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-11-simpleredis-perf-02-io-timeout pushed | `git` origin/2026-09-11-simpleredis-perf-02-io-timeout |
 | OpenSpec | simpleredis-configurable-timeouts | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/16 | pr-host List/Create |
-| CI | build 34652000905 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652000905 | pr-host CI |
+| CI | build 34652640779 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652640779 | pr-host CI |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -61,7 +61,7 @@ Owner decision: Required. See Explore Decisions.
 None.
 
 ## How this fits together
-Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. Stub PR 16 hosts the card. Seven-axis review of HEAD `7006b50` is recorded; next is usage-doc impact then archive.
+Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. Stub PR 16 hosts the card. Usage packet is current; next is archive then pullrequest.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -98,7 +98,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 7006b5089c79f87a83c57603c22141a50c564eaf | Card must match the branch you measured |
+| Reviewed head | ee04962806412f9fab205caff939de8178ae22f1 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -112,9 +112,10 @@ Is this the best way to solve the issue? Yes versus master: expose the existing 
 
 ### Evidence
 What I checked:
-- seven axis files under the run root; coverage item Status done
+- devdocs-impact.md stale-usage on std_go_simpleredis taken
+- knowledge/devdocs/std_go_simpleredis.md on HEAD ee04962
 - OPEN PR 16, zero comments
-- CI run 34652000905: Lint success, Test success, Integration Tests success
+- CI run 34652640779: Lint success, Test success, Integration Tests success
 
 ### Rank-up moves
 None.

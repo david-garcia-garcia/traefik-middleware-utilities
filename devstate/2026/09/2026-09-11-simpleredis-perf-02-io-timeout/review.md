@@ -28,3 +28,9 @@ findings: 6 axes clean; 1 hard coverage done (Init/negative Options defaults)
 fixed: TestInitStoresDefaultTimeouts
 skipped: n/a
 
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: 1 unit SimpleRedis; stale-usage produced
+fixed: named timeout knobs and live-skip in std_go_simpleredis
+skipped: n/a
+
