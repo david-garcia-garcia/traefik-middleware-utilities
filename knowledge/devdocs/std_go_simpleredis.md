@@ -16,6 +16,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 - Do not dial in Traefik `New`. Call `Init` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, or `Eval`).
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
 - Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
+- Call `Eval(script, keys, args)` with the Lua body. The client caches SHA-1 and sends EVALSHA; on NOSCRIPT it falls back once to EVAL. Do not SCRIPT LOAD at Init.
 
 ## Pattern snippet
 
@@ -50,3 +51,4 @@ if err != nil {
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
+- Eval caches SHA-1 of each distinct script and sends EVALSHA. SCRIPT FLUSH or a restart yields NOSCRIPT; Eval then sends EVAL once and keeps the digest. Callers still pass the body.

@@ -19,6 +19,63 @@ BeforeAll {
 
     $script:BaseUrl = "http://localhost:8000"
     $script:TraefikApiUrl = "http://localhost:8080"
+    # SHA-1 of e2e/simpleredisprobe kongIncrbyExpireatScript (crypto/sha1 lowercase hex).
+    $script:KongEvalDigest = "ff5f5f110f45a4519e6747630d51c5a5687e9608"
+
+    function Invoke-RedisCli {
+        param(
+            [string]$BackendHost,
+            [string[]]$CliArgs
+        )
+        $output = docker compose exec -T redis redis-cli -h $BackendHost --raw @CliArgs
+        if ($LASTEXITCODE -ne 0) {
+            throw "redis-cli -h $BackendHost $($CliArgs -join ' ') failed: $output"
+        }
+        return "$output".Trim()
+    }
+
+    function Clear-ScriptCache {
+        param([string]$BackendHost)
+        Invoke-RedisCli -BackendHost $BackendHost -CliArgs @("SCRIPT", "FLUSH") | Out-Null
+    }
+
+    function Get-ScriptExists {
+        param(
+            [string]$BackendHost,
+            [string]$Digest
+        )
+        Invoke-RedisCli -BackendHost $BackendHost -CliArgs @("SCRIPT", "EXISTS", $Digest)
+    }
+
+    function Assert-SimpleRedisVerbHeaders {
+        param($Response)
+        $Response.Headers["X-SimpleRedis-Value"] | Should -Be "ok"
+        $Response.Headers["X-SimpleRedis-MGet"] | Should -Be "ok"
+        $Response.Headers["X-SimpleRedis-Del"] | Should -Be "ok"
+        $Response.Headers["X-SimpleRedis-Incr"] | Should -Be "1"
+        $Response.Headers["X-SimpleRedis-IncrBy"] | Should -Be "5"
+        $Response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
+        $Response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
+        $Response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        $Response.Headers["X-SimpleRedis-EvalAgain"] | Should -Be "3"
+        $Response.Headers["X-SimpleRedis-EvalDigest"] | Should -Be $script:KongEvalDigest
+    }
+
+    function Assert-EvalShaMissThenHit {
+        param(
+            [string]$Route,
+            [string]$BackendHost
+        )
+        Clear-ScriptCache -BackendHost $BackendHost
+        (Get-ScriptExists -BackendHost $BackendHost -Digest $script:KongEvalDigest) | Should -Be "0"
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl$Route" -UseBasicParsing -TimeoutSec 10
+        $response.StatusCode | Should -Be 200
+        Assert-SimpleRedisVerbHeaders -Response $response
+        (Get-ScriptExists -BackendHost $BackendHost -Digest $script:KongEvalDigest) | Should -Be "1"
+        $again = Invoke-WebRequest -Uri "$script:BaseUrl$Route" -UseBasicParsing -TimeoutSec 10
+        $again.StatusCode | Should -Be 200
+        $again.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+    }
 }
 
 Describe "reclaim Yaegi e2e" {
@@ -87,29 +144,11 @@ Describe "simpleredis Yaegi e2e" {
         $response.StatusCode | Should -Be 200
     }
 
-    It "GET /redis succeeds and echoes every SimpleRedis verb" {
-        $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis" -UseBasicParsing -TimeoutSec 10
-        $response.StatusCode | Should -Be 200
-        $response.Headers["X-SimpleRedis-Value"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-MGet"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Del"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Incr"] | Should -Be "1"
-        $response.Headers["X-SimpleRedis-IncrBy"] | Should -Be "5"
-        $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+    It "GET /redis proves EVALSHA miss then hit without stopping whoami-a or whoami-b" {
+        Assert-EvalShaMissThenHit -Route "/redis" -BackendHost "redis"
     }
 
-    It "GET /dragonfly succeeds and echoes every SimpleRedis verb" {
-        $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly" -UseBasicParsing -TimeoutSec 10
-        $response.StatusCode | Should -Be 200
-        $response.Headers["X-SimpleRedis-Value"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-MGet"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Del"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Incr"] | Should -Be "1"
-        $response.Headers["X-SimpleRedis-IncrBy"] | Should -Be "5"
-        $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
-        $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+    It "GET /dragonfly proves EVALSHA miss then hit without stopping whoami-a or whoami-b" {
+        Assert-EvalShaMissThenHit -Route "/dragonfly" -BackendHost "dragonfly"
     }
 }
