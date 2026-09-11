@@ -6,3 +6,4 @@
 - crowdsec
 - redis
 - dragonfly
+- kong

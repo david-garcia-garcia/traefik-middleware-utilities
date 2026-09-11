@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-kong-window-limiter
+jobName: 2026-09-11-kong-window-limiter
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: b67b359f1633995c805a8369847d34cb56453a1080c027334d5473611b9f6b87
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: add-ratelimit-sliding-window
+pr:
+  id: 5
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/5
