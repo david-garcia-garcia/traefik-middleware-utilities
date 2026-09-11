@@ -15,3 +15,9 @@ phase: propose
 findings: none
 fixed: none (no decode apply)
 skipped: none
+
+## implement (2026-09-11)
+phase: implement
+findings: none
+fixed: ReadSlice decode, copy-on-escape, parseLen, unit tests, benches, live Redis and Dragonfly (c07a9b9)
+skipped: none
