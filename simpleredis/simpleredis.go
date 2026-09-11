@@ -86,7 +86,7 @@ func (sr *SimpleRedis) Init(host, pass, database string) {
 
 // Get fetches the value for key name in redis.
 func (sr *SimpleRedis) Get(name string) ([]byte, error) {
-	values, err := sr.exec([]byte("GET"), []byte(name))
+	values, err := sr.exec(true, []byte("GET"), []byte(name))
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (sr *SimpleRedis) MGet(names []string) ([][]byte, error) {
 	for _, name := range names {
 		args = append(args, []byte(name))
 	}
-	values, err := sr.exec(args...)
+	values, err := sr.exec(true, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -118,35 +118,35 @@ func (sr *SimpleRedis) MGet(names []string) ([][]byte, error) {
 
 // Set updates the value for key name in redis with value data for duration.
 func (sr *SimpleRedis) Set(name string, data []byte, duration int64) error {
-	_, err := sr.exec([]byte("SET"), []byte(name), data, []byte("EX"), []byte(strconv.FormatInt(duration, 10)))
+	_, err := sr.exec(true, []byte("SET"), []byte(name), data, []byte("EX"), []byte(strconv.FormatInt(duration, 10)))
 	return err
 }
 
 // Del removes the key name in redis.
 func (sr *SimpleRedis) Del(name string) error {
-	_, err := sr.exec([]byte("DEL"), []byte(name))
+	_, err := sr.exec(true, []byte("DEL"), []byte(name))
 	return err
 }
 
 // Incr adds one to key name and returns the integer after the increment.
 func (sr *SimpleRedis) Incr(name string) (int64, error) {
-	return parseIntegerReply(sr.exec([]byte("INCR"), []byte(name)))
+	return parseIntegerReply(sr.exec(false, []byte("INCR"), []byte(name)))
 }
 
 // IncrBy adds delta to key name and returns the integer after the increment.
 func (sr *SimpleRedis) IncrBy(name string, delta int64) (int64, error) {
-	return parseIntegerReply(sr.exec([]byte("INCRBY"), []byte(name), []byte(strconv.FormatInt(delta, 10))))
+	return parseIntegerReply(sr.exec(false, []byte("INCRBY"), []byte(name), []byte(strconv.FormatInt(delta, 10))))
 }
 
 // Expire sets a TTL in seconds on key name. Integer 0 or 1 is success.
 func (sr *SimpleRedis) Expire(name string, seconds int64) error {
-	_, err := sr.exec([]byte("EXPIRE"), []byte(name), []byte(strconv.FormatInt(seconds, 10)))
+	_, err := sr.exec(true, []byte("EXPIRE"), []byte(name), []byte(strconv.FormatInt(seconds, 10)))
 	return err
 }
 
 // ExpireAt sets an absolute Unix expiry on key name. Integer 0 or 1 is success.
 func (sr *SimpleRedis) ExpireAt(name string, unixSeconds int64) error {
-	_, err := sr.exec([]byte("EXPIREAT"), []byte(name), []byte(strconv.FormatInt(unixSeconds, 10)))
+	_, err := sr.exec(true, []byte("EXPIREAT"), []byte(name), []byte(strconv.FormatInt(unixSeconds, 10)))
 	return err
 }
 
@@ -160,7 +160,7 @@ func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]by
 	for _, arg := range args {
 		wire = append(wire, []byte(arg))
 	}
-	return sr.exec(wire...)
+	return sr.exec(false, wire...)
 }
 
 // parseIntegerReply reads one decimal integer from a : reply. Garbage payload is redis:issue?.
@@ -178,8 +178,8 @@ func parseIntegerReply(values [][]byte, err error) (int64, error) {
 	return n, nil
 }
 
-// exec borrows a connection, runs one RESP command, and retries once when a reused idle socket is dead.
-func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
+// exec borrows a connection, runs one RESP command, and retries once when retryDeadPool is set and a reused idle socket is dead.
+func (sr *SimpleRedis) exec(retryDeadPool bool, args ...[]byte) ([][]byte, error) {
 	conn, reused, err := sr.borrow()
 	if err != nil {
 		return nil, err
@@ -187,7 +187,8 @@ func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
 	values, reusable, err := sr.do(conn, args)
 	sr.release(conn, reusable)
 	// Timeouts are not retried: a stalled peer will stall the next dial too.
-	if err == nil || reusable || !reused || err == errTimeout {
+	// INCR/INCRBY/EVAL pass retryDeadPool false so a lost reply cannot double-apply.
+	if err == nil || reusable || !reused || err == errTimeout || !retryDeadPool {
 		return values, err
 	}
 	// Dead pooled conn: borrow again so Close cannot skip the closed check.

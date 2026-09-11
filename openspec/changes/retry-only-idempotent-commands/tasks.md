@@ -1,13 +1,13 @@
 ## 1. Client retry gate
 
-- [ ] 1.1 Change `exec` to `exec(retryDeadPool bool, args ...[]byte)`. On a dead reused socket that is not a timeout, retry only when `retryDeadPool` is true; otherwise return the first `do` error without a second send. Do not parse the verb inside `exec`. Timeouts stay non-retried for every verb
-- [ ] 1.2 Pass `true` from Get, MGet, Set, Del, Expire, ExpireAt. Pass `false` from Incr, IncrBy, Eval. Leave exported signatures unchanged
+- [x] 1.1 Change `exec` to `exec(retryDeadPool bool, args ...[]byte)`. On a dead reused socket that is not a timeout, retry only when `retryDeadPool` is true; otherwise return the first `do` error without a second send. Do not parse the verb inside `exec`. Timeouts stay non-retried for every verb
+- [x] 1.2 Pass `true` from Get, MGet, Set, Del, Expire, ExpireAt. Pass `false` from Incr, IncrBy, Eval. Leave exported signatures unchanged
 
 ## 2. Fake lost-reply tests
 
-- [ ] 2.1 Add a test-named one-shot on dest `fakeRedis` (`closeBeforeReplyOnce` or equivalent): apply the command (mutate INCR/INCRBY/EVAL), then close without writing the reply. Do not add truncated-bulk
-- [ ] 2.2 Compiled test: warm the pool with Get, then one Incr with close-before-reply → `redis:unreachable`, stored `1`, one INCR on the fake. Mirror: close-before-reply Get still succeeds and the fake sees a second connection. Same IncrBy/Eval close-before-reply pins one apply
-- [ ] 2.3 Run `go test ./simpleredis/...` until compiled fake tests and existing Yaegi happy-path Incr/Eval pass. Do not add a Yaegi lost-reply harness
+- [x] 2.1 Add a test-named one-shot on dest `fakeRedis` (`closeBeforeReplyOnce` or equivalent): apply the command (mutate INCR/INCRBY/EVAL), then close without writing the reply. Do not add truncated-bulk
+- [x] 2.2 Compiled test: warm the pool with Get, then one Incr with close-before-reply → `redis:unreachable`, stored `1`, one INCR on the fake. Mirror: close-before-reply Get still succeeds and the fake sees a second connection. Same IncrBy/Eval close-before-reply pins one apply
+- [x] 2.3 Run `go test ./simpleredis/...` until compiled fake tests and existing Yaegi happy-path Incr/Eval pass. Do not add a Yaegi lost-reply harness
 
 ## 3. Compose drop-relay and Pester `/redis` `/dragonfly`
 

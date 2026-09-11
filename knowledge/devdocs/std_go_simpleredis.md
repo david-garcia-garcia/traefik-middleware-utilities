@@ -50,3 +50,4 @@ if err != nil {
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
+- After a dead reused socket, GET/MGET/SET/DEL/EXPIRE/EXPIREAT retry once. INCR/INCRBY/EVAL return `redis:unreachable` without a second send (a lost reply would double-apply). Timeouts are never retried.
