@@ -4,3 +4,8 @@
 priority: normal
 local: ext_geoblock_reclaim-source/
 description: Reclaim table package, tests, and specs in traefik-geoblock PR #83 — spin-off source.
+
+## Geoblock Pester integration
+priority: normal
+local: ext_geoblock_pester-integration/
+description: How geoblock starts Traefik in Docker and runs Pester e2e tests for Yaegi middleware.
