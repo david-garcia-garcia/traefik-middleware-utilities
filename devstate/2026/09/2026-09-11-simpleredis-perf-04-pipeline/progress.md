@@ -9,6 +9,6 @@ JobName: 2026-09-11-simpleredis-perf-04-pipeline
 | propose | [x] | [x] | 2026-09-11T21:52:41Z |
 | implement | [x] | [x] | 2026-09-11T22:09:36Z |
 | codereview | [x] | [x] | 2026-09-11T22:26:18Z |
-| devdocsimpact | [ ] | [ ] | |
+| devdocsimpact | [x] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
