@@ -607,6 +607,43 @@ func TestIoTimeout(t *testing.T) {
 	}
 }
 
+// TestConfiguredIoTimeoutFiresUnderDefault proves a short IoTimeout returns redis:timeout well under the 1s default.
+func TestConfiguredIoTimeoutFiresUnderDefault(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		time.Sleep(3 * time.Second)
+	}()
+
+	var redis SimpleRedis
+	redis.InitWithOptions(listener.Addr().String(), "", "", Options{IoTimeout: 50 * time.Millisecond})
+	started := time.Now()
+	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisTimeout {
+		t.Fatalf("Get = %v, want %s", err, RedisTimeout)
+	}
+	if elapsed := time.Since(started); elapsed >= time.Second {
+		t.Fatalf("elapsed %v, want well under 1s", elapsed)
+	}
+}
+
+// TestInitWithOptionsDoesNotDial proves InitWithOptions stores knobs without opening a socket.
+func TestInitWithOptionsDoesNotDial(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	var redis SimpleRedis
+	redis.InitWithOptions(addr, "", "", Options{IoTimeout: 50 * time.Millisecond})
+	if fake.connections() != 0 {
+		t.Fatalf("InitWithOptions opened %d connections, want 0", fake.connections())
+	}
+}
+
 func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
@@ -628,6 +665,114 @@ func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	}
 	if fake.connections() != 2 {
 		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+}
+
+// TestConfiguredIdleTimeoutOpensANewConnection proves an idle socket older than the configured IdleTimeout is not reused.
+func TestConfiguredIdleTimeoutOpensANewConnection(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	configuredIdle := 50 * time.Millisecond
+	var redis SimpleRedis
+	redis.InitWithOptions(addr, "", "", Options{IdleTimeout: configuredIdle})
+
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("first Get: %v", err)
+	}
+	redis.mu.Lock()
+	if len(redis.idle) != 1 {
+		redis.mu.Unlock()
+		t.Fatalf("idle = %d, want 1", len(redis.idle))
+	}
+	redis.idle[0].lastUsed = time.Now().Add(-configuredIdle - time.Millisecond)
+	redis.mu.Unlock()
+
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("Get after idle timeout: %v", err)
+	}
+	if fake.connections() != 2 {
+		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+}
+
+// TestConfiguredMaxIdleConnsClosesExtraIdle proves MaxIdleConns=1 keeps at most one idle socket after two in-flight Gets.
+func TestConfiguredMaxIdleConnsClosesExtraIdle(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	var accepts int
+	var mu sync.Mutex
+	bothAccepted := make(chan struct{})
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			accepts++
+			opened := accepts
+			mu.Unlock()
+			if opened == 2 {
+				close(bothAccepted)
+			}
+			go func(conn net.Conn) {
+				defer conn.Close()
+				reader := bufio.NewReader(conn)
+				for {
+					if _, err := readCommand(reader); err != nil {
+						return
+					}
+					<-bothAccepted
+					_, _ = io.WriteString(conn, "$1\r\nt\r\n")
+				}
+			}(conn)
+		}
+	}()
+
+	var redis SimpleRedis
+	redis.InitWithOptions(listener.Addr().String(), "", "", Options{MaxIdleConns: 1})
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := redis.Get("hit"); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	redis.mu.Lock()
+	idle := len(redis.idle)
+	redis.mu.Unlock()
+	if idle > 1 {
+		t.Fatalf("idle = %d, want at most 1", idle)
+	}
+	mu.Lock()
+	opened := accepts
+	mu.Unlock()
+	if opened != 2 {
+		t.Fatalf("opened %d connections, want 2", opened)
+	}
+}
+
+// TestConfiguredDialTimeoutExpiresUnderDefault proves a short DialTimeout to TEST-NET-1 returns redis:unreachable well under 2s.
+func TestConfiguredDialTimeoutExpiresUnderDefault(t *testing.T) {
+	configuredDial := 50 * time.Millisecond
+	var redis SimpleRedis
+	redis.InitWithOptions("192.0.2.1:1", "", "", Options{DialTimeout: configuredDial})
+	if redis.dialTimeout != configuredDial {
+		t.Fatalf("stored dialTimeout = %v, want %v", redis.dialTimeout, configuredDial)
+	}
+	started := time.Now()
+	if _, err := redis.Get("a"); err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
+	}
+	if elapsed := time.Since(started); elapsed >= 2*time.Second {
+		t.Fatalf("elapsed %v, want well under 2s", elapsed)
 	}
 }
 
