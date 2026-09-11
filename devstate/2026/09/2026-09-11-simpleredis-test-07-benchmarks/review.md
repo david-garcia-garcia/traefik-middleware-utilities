@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: none
 fixed: none
 skipped: none
+
+## archive (2026-09-11T22:18:48Z)
+phase: archive
+findings: none
+fixed: folded CI allocation-guard requirement into live std_go_simpleredis_resp-commands; moved change to archive/2026-09-12-simpleredis-hot-path-benchmarks
+skipped: none
