@@ -351,7 +351,11 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		return [][]byte{data}, true, nil
 	case '*':
 		count, convErr := strconv.Atoi(string(line[1:]))
-		if convErr != nil || count < 0 {
+		if convErr != nil {
+			return nil, false, errIssue
+		}
+		// *-1 is a legal RESP2 nil array (BLPOP timeout, EXEC abort); this client has no verb that receives it, so it is redis:issue? not redis:miss.
+		if count < 0 {
 			return nil, false, errIssue
 		}
 		values := make([][]byte, count)

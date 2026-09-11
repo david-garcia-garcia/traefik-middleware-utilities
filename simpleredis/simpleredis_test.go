@@ -255,6 +255,59 @@ func startStaticRedis(t *testing.T, reply string) string {
 	return listener.Addr().String()
 }
 
+// startWriteThenCloseRedis reads one command, writes a partial RESP reply, then closes the socket.
+func startWriteThenCloseRedis(t *testing.T, partialReply string) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		reader := bufio.NewReader(conn)
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		_, _ = io.WriteString(conn, partialReply)
+	}()
+	return listener.Addr().String()
+}
+
+// startRetryBorrowFailRedis accepts one connection, replies a GET hit, closes the listener, then replies malformed on the reused socket so the retry dial fails.
+func startRetryBorrowFailRedis(t *testing.T, malformedReply string) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		// Do not close conn: the client closes it after the dirty decode.
+		reader := bufio.NewReader(conn)
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		_, _ = io.WriteString(conn, "$1\r\nt\r\n")
+		_ = listener.Close()
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		_, _ = io.WriteString(conn, malformedReply)
+	}()
+	return listener.Addr().String()
+}
+
 func TestGetHitAndMiss(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
@@ -755,13 +808,120 @@ func TestEvalMixedArrayReply(t *testing.T) {
 	}
 }
 
-func TestEvalNestedArrayIsIssue(t *testing.T) {
-	addr := startStaticRedis(t, "*1\r\n*0\r\n")
+func TestMalformedReplyIsIssueAndNotPooled(t *testing.T) {
+	cases := []struct {
+		name  string
+		reply string
+	}{
+		{"http-shaped", "HTTP/1.1 400 Bad Request\r\n"},
+		{"unknown-type", "?huh\r\n"},
+		{"missing-cr", ":42\n"},
+		{"empty-line", "\r\n"},
+		{"unparseable-count", "*abc\r\n"},
+		{"null-array", "*-1\r\n"},
+		{"bad-element-type", "*1\r\n?bad\r\n"},
+		{"empty-element-line", "*1\r\n\r\n"},
+		{"nested-array", "*1\r\n*0\r\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := startStaticRedis(t, tc.reply)
+			var redis SimpleRedis
+			redis.Init(addr, "", "")
+			_, err := redis.Get("k")
+			if err == nil || err.Error() != RedisIssue {
+				t.Fatalf("Get = %v, want %s", err, RedisIssue)
+			}
+			if err.Error() == RedisMiss {
+				t.Fatalf("Get = %v, must not be %s", err, RedisMiss)
+			}
+			if len(redis.idle) != 0 {
+				t.Fatalf("idle = %d, want 0", len(redis.idle))
+			}
+		})
+	}
+}
+
+func TestTruncatedReplyIsUnreachableAndNotPooled(t *testing.T) {
+	cases := []struct {
+		name         string
+		partialReply string
+	}{
+		{"truncated-array", "*2\r\n$1\r\na\r\n"},
+		{"truncated-bulk", "$10\r\nabc"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := startWriteThenCloseRedis(t, tc.partialReply)
+			var redis SimpleRedis
+			redis.Init(addr, "", "")
+			_, err := redis.Get("k")
+			if err == nil || err.Error() != RedisUnreachable {
+				t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
+			}
+			if len(redis.idle) != 0 {
+				t.Fatalf("idle = %d, want 0", len(redis.idle))
+			}
+		})
+	}
+}
+
+func TestRetryBorrowFailsAfterDirtyReuse(t *testing.T) {
+	addr := startRetryBorrowFailRedis(t, "?huh\r\n")
 	var redis SimpleRedis
 	redis.Init(addr, "", "")
-	_, err := redis.Eval("return {{}}", nil, nil)
-	if err == nil || err.Error() != RedisIssue {
-		t.Fatalf("Eval nested = %v, want %s", err, RedisIssue)
+
+	got, err := redis.Get("hit")
+	if err != nil {
+		t.Fatalf("first Get: %v", err)
+	}
+	if string(got) != "t" {
+		t.Fatalf("first Get = %q, want t", got)
+	}
+	if len(redis.idle) != 1 {
+		t.Fatalf("after first Get idle = %d, want 1", len(redis.idle))
+	}
+
+	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("second Get = %v, want %s", err, RedisUnreachable)
+	}
+	if len(redis.idle) != 0 {
+		t.Fatalf("idle = %d, want 0", len(redis.idle))
+	}
+}
+
+func TestVerbArityMismatchIsIssueAndPooled(t *testing.T) {
+	cases := []struct {
+		name    string
+		reply   string
+		command func(*SimpleRedis) error
+	}{
+		{"get-empty-array", "*0\r\n", func(redis *SimpleRedis) error {
+			_, err := redis.Get("k")
+			return err
+		}},
+		{"get-two-bulks", "*2\r\n$1\r\na\r\n$1\r\nb\r\n", func(redis *SimpleRedis) error {
+			_, err := redis.Get("k")
+			return err
+		}},
+		{"incr-empty-array", "*0\r\n", func(redis *SimpleRedis) error {
+			_, err := redis.Incr("k")
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := startStaticRedis(t, tc.reply)
+			var redis SimpleRedis
+			redis.Init(addr, "", "")
+			err := tc.command(&redis)
+			if err == nil || err.Error() != RedisIssue {
+				t.Fatalf("command = %v, want %s", err, RedisIssue)
+			}
+			if len(redis.idle) != 1 {
+				t.Fatalf("idle = %d, want 1", len(redis.idle))
+			}
+		})
 	}
 }
 
