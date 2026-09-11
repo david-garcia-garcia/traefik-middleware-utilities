@@ -28,3 +28,9 @@ findings: Standards 1 judgement skipped; Nitpicks 1 hard fixed; Spec/Security/Pe
 fixed: `pooledIdle` `n` → `idleCount` (f36aed0)
 skipped: extract overlapping Pester assertion helper (judgement; Redis and Dragonfly Its stay separate)
 
+## devdocsimpact (2026-09-11T22:16:47Z)
+phase: devdocsimpact
+findings: none
+fixed: none
+skipped: none — SimpleRedis packet already has Language and usage enough to call; test-only apply; `clean` / pool discard not a middleware Language term
+

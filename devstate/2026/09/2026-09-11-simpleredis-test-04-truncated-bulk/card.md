@@ -1,4 +1,4 @@
-Developer review: ready for review — 2026-09-11T22:09:09Z
+Developer review: ready for review — 2026-09-11T22:16:47Z
 
 ## What this changes
 **Operators.** None.
@@ -36,17 +36,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Code review applied; Lint, Test, and Integration Tests succeeded. 0 items remain.
+Usage catalog measured with no packet, Language, or How-to gap. Lint, Test, and Integration Tests succeeded. 0 items remain.
 
 Priority: P3 — spec, docs, tests, or internal clarity — no current user or operator harm
-Reviewed head: 134d585
+Reviewed head: 2cee10a
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded — [run 34652488701](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652488701) |
+| CI proof | 6/6 | succeeded — [run 34653105837](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653105837) |
 | Local tests proof | N/A | `localTests: passed`; remote PR uses CI |
 | Review resolution | 6/6 | OPEN PR, no reviewer comments |
 
@@ -56,7 +56,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-11-simpleredis-test-04-truncated-bulk pushed | `git` / origin |
 | OpenSpec | simpleredis-truncated-bulk | `openspec/changes/simpleredis-truncated-bulk/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/19 | pr-host List |
-| CI | build 34652488701 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652488701 | Lint success, Test success, Integration Tests success |
+| CI | build 34653105837 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653105837 | Lint success, Test success, Integration Tests success |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -71,7 +71,7 @@ Owner decision: Required. See Explore Decisions.
 None.
 
 ## How this fits together
-Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk` → PR 19 → OpenSpec `simpleredis-truncated-bulk` applied; CI run 34652488701 succeeded.
+Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk` → PR 19 → OpenSpec `simpleredis-truncated-bulk` applied; usage catalog unchanged; CI run 34653105837 succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -106,7 +106,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 134d585ff7988b2d3e7c84355e5e3000a8fefbe9 | Card must match the branch you measured |
+| Reviewed head | 2cee10a73d5ef1607b65c08f024a0e7fba7af087 | Card must match the branch you measured |
 
 ### Stored data model
 - Changed: Redis/Dragonfly key `{prefix}:set` / value — bytes — sample `ok` → `srp:<unixnano>`. Upgrade: rewritten on next probe request.
@@ -121,8 +121,8 @@ Is this the best way to solve the issue? Yes versus dest: the finding is a missi
 ### Evidence
 What I checked:
 - Pin `origin/master` `7dc4b051` three-dot diff excluding `devstate/` and `.cursor/`
-- `go test ./simpleredis/...` passed after `pooledIdle` rename (`f36aed0`)
-- GitHub check runs on SHA `134d585`: Lint success, Test success, Integration Tests success, run 34652488701
+- `knowledge/devdocs/std_go_simpleredis.md` usage and Language enough to call SimpleRedis; `clean` / pool discard is not a middleware Language term
+- GitHub check runs on SHA `2cee10a`: Lint success, Test success, Integration Tests success, run 34653105837
 - Axis files: 1 judgement skipped, 1 hard renamed `n` → `idleCount`; no hard/missing/wrong left open
 
 ### Rank-up moves
