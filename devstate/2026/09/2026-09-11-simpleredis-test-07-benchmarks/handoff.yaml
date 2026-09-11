@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis-test-07-benchmarks
+jobName: 2026-09-11-simpleredis-test-07-benchmarks
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: d10e3acd130b818c6bf76be0bba4074985127ff333056461b33f75bf628fc3c6
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: "17"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/17
