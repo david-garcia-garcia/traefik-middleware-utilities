@@ -98,6 +98,10 @@ Describe "simpleredis Yaegi e2e" {
         $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        $response.Headers["X-SimpleRedis-DropIncr"] | Should -Be "redis:unreachable"
+        $response.Headers["X-SimpleRedis-DropIncrStored"] | Should -Be "1"
+        $response.Headers["X-SimpleRedis-DropEval"] | Should -Be "redis:unreachable"
+        $response.Headers["X-SimpleRedis-DropEvalStored"] | Should -Be "3"
     }
 
     It "GET /dragonfly succeeds and echoes every SimpleRedis verb" {
@@ -111,5 +115,9 @@ Describe "simpleredis Yaegi e2e" {
         $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        $response.Headers["X-SimpleRedis-DropIncr"] | Should -Be "redis:unreachable"
+        $response.Headers["X-SimpleRedis-DropIncrStored"] | Should -Be "1"
+        $response.Headers["X-SimpleRedis-DropEval"] | Should -Be "redis:unreachable"
+        $response.Headers["X-SimpleRedis-DropEvalStored"] | Should -Be "3"
     }
 }
