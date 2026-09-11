@@ -39,3 +39,9 @@ phase: archive
 findings: OpenSpec change simpleredis-exec-pipeline archived at openspec/changes/archive/2026-09-11-simpleredis-exec-pipeline/; Specs browse URLs point at that proposal.md; CI run 34655037346 succeeded (Lint, Test, Integration Tests); 6 assumed; verdict ready for review
 fixed: n/a
 skipped: n/a
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: OPEN PR 15; CI run 34655545330 succeeded (Lint, Test, Integration Tests) on 0aa6443; comments none; 6 assumed; verdict ready for review
+fixed: n/a
+skipped: n/a
