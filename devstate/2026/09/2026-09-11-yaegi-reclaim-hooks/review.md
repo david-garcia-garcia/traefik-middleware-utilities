@@ -35,3 +35,9 @@ phase: devdocsimpact
 findings: 2 units, 2 produced [x] (Close Language + Close usage on std_go_reclaim); remaining [ ] 0
 fixed: usage packet Close term and Close-hook usage/gotcha
 skipped: none
+
+## archive (2026-09-11)
+phase: archive
+findings: none (pullrequest remains)
+fixed: live specs folded (std_go_reclaim_value-lifecycle, std_go_reclaim_context-lease); Purpose aligned with Hooks (e8bbfa7)
+skipped: none
