@@ -13,15 +13,18 @@ import (
 
 // fakeRedis is an in-process RESP server backed by a string map.
 type fakeRedis struct {
-	mu         sync.Mutex
-	store      map[string]string
-	conns      int
-	auths      int
-	selects    int
-	gets       int
-	lastSet    []string
-	lastExpire []string
-	lastEval   []string
+	mu            sync.Mutex
+	store         map[string]string
+	loadedScripts map[string]string
+	conns         int
+	auths         int
+	selects       int
+	gets          int
+	evalShaCount  int
+	evalCount     int
+	lastSet       []string
+	lastExpire    []string
+	lastEval      []string
 }
 
 // startFakeRedis listens on a local TCP port and serves an in-process RESP map.
@@ -33,7 +36,7 @@ func startFakeRedis(t *testing.T, store map[string]string) (*fakeRedis, string) 
 	}
 	t.Cleanup(func() { _ = listener.Close() })
 
-	fake := &fakeRedis{store: store}
+	fake := &fakeRedis{store: store, loadedScripts: make(map[string]string)}
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -100,28 +103,21 @@ func (f *fakeRedis) serve(conn net.Conn) {
 		case "EXPIRE", "EXPIREAT":
 			f.lastExpire = append([]string(nil), args...)
 			_, _ = io.WriteString(conn, ":1\r\n")
-		case "EVAL":
-			f.lastEval = append([]string(nil), args...)
-			if args[1] == kongIncrbyExpireatScript && len(args) >= 6 {
-				key := args[3]
-				delta, convErr := strconv.ParseInt(args[4], 10, 64)
-				if convErr != nil {
-					_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
-					break
-				}
-				_, existed := f.store[key]
-				n, incrErr := incrementStored(f.store, key, delta)
-				if incrErr != nil {
-					_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
-					break
-				}
-				if !existed {
-					f.lastExpire = []string{"EXPIREAT", key, args[5]}
-				}
-				_, _ = fmt.Fprintf(conn, ":%d\r\n", n)
-			} else {
-				_, _ = io.WriteString(conn, ":0\r\n")
+		case evalShaVerb:
+			f.evalShaCount++
+			digest := args[1]
+			script, loaded := f.loadedScripts[digest]
+			if !loaded {
+				f.lastEval = append([]string(nil), args...)
+				_, _ = io.WriteString(conn, "-NOSCRIPT No matching script. Please use EVAL.\r\n")
+				break
 			}
+			f.writeEvalReply(conn, script, args)
+		case evalVerb:
+			f.evalCount++
+			script := args[1]
+			f.loadedScripts[scriptSHA1Hex(script)] = script
+			f.writeEvalReply(conn, script, args)
 		default:
 			_, _ = io.WriteString(conn, "+OK\r\n")
 		}
@@ -150,11 +146,43 @@ func (f *fakeRedis) lastExpireCommand() []string {
 	return append([]string(nil), f.lastExpire...)
 }
 
-// lastEvalCommand returns the last EVAL argv.
+// lastEvalCommand returns the last EVAL or EVALSHA argv.
 func (f *fakeRedis) lastEvalCommand() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.lastEval...)
+}
+
+// evalCommandCounts returns how many EVALSHA and EVAL commands the fake has seen.
+func (f *fakeRedis) evalCommandCounts() (evalSha, eval int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.evalShaCount, f.evalCount
+}
+
+// writeEvalReply runs the Kong incrby+expireat path or replies :0. lastEval is that argv.
+func (f *fakeRedis) writeEvalReply(conn net.Conn, script string, argv []string) {
+	f.lastEval = append([]string(nil), argv...)
+	if script == kongIncrbyExpireatScript && len(argv) >= 6 {
+		key := argv[3]
+		delta, convErr := strconv.ParseInt(argv[4], 10, 64)
+		if convErr != nil {
+			_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
+			return
+		}
+		_, existed := f.store[key]
+		n, incrErr := incrementStored(f.store, key, delta)
+		if incrErr != nil {
+			_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
+			return
+		}
+		if !existed {
+			f.lastExpire = []string{"EXPIREAT", key, argv[5]}
+		}
+		_, _ = fmt.Fprintf(conn, ":%d\r\n", n)
+		return
+	}
+	_, _ = io.WriteString(conn, ":0\r\n")
 }
 
 // handshakeCounts returns AUTH, SELECT, and GET commands seen on this fake.
@@ -724,8 +752,94 @@ func TestEvalArgvAndIntegerReply(t *testing.T) {
 		t.Fatalf("Eval = %q, want [7]", values)
 	}
 	got := fake.lastEvalCommand()
-	if len(got) != 6 || got[0] != "EVAL" || got[1] != kongIncrbyExpireatScript || got[2] != "1" || got[3] != "win" || got[4] != "7" || got[5] != "1700000000" {
-		t.Fatalf("Eval argv = %v", got)
+	if len(got) != 6 || got[0] != evalVerb || got[1] != kongIncrbyExpireatScript || got[2] != "1" || got[3] != "win" || got[4] != "7" || got[5] != "1700000000" {
+		t.Fatalf("fallback EVAL argv = %v", got)
+	}
+	evalSha, eval := fake.evalCommandCounts()
+	if evalSha != 1 || eval != 1 {
+		t.Fatalf("after first Eval EVALSHA=%d EVAL=%d, want 1, 1", evalSha, eval)
+	}
+}
+
+func TestEvalLaterSendsEvalShaNotBody(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	if _, err := redis.Eval(kongIncrbyExpireatScript, []string{"win"}, []string{"7", "1700000000"}); err != nil {
+		t.Fatalf("first Eval: %v", err)
+	}
+	values, err := redis.Eval(kongIncrbyExpireatScript, []string{"win2"}, []string{"7", "1700000000"})
+	if err != nil {
+		t.Fatalf("second Eval: %v", err)
+	}
+	if len(values) != 1 || string(values[0]) != "7" {
+		t.Fatalf("second Eval = %q, want [7]", values)
+	}
+	got := fake.lastEvalCommand()
+	digest := scriptSHA1Hex(kongIncrbyExpireatScript)
+	if len(got) != 6 || got[0] != evalShaVerb || got[1] != digest || got[2] != "1" || got[3] != "win2" || got[4] != "7" || got[5] != "1700000000" {
+		t.Fatalf("second argv = %v, want EVALSHA %s 1 win2 7 1700000000", got, digest)
+	}
+	for _, arg := range got {
+		if arg == kongIncrbyExpireatScript {
+			t.Fatalf("second argv included the script body: %v", got)
+		}
+	}
+	evalSha, eval := fake.evalCommandCounts()
+	if evalSha != 2 || eval != 1 {
+		t.Fatalf("after second Eval EVALSHA=%d EVAL=%d, want 2, 1", evalSha, eval)
+	}
+}
+
+func TestEvalTwoScriptsTwoDigests(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	if _, err := redis.Eval("return 1", nil, nil); err != nil {
+		t.Fatalf("script A first: %v", err)
+	}
+	if _, err := redis.Eval("return 1", nil, nil); err != nil {
+		t.Fatalf("script A second: %v", err)
+	}
+	argvA := fake.lastEvalCommand()
+	if len(argvA) < 2 || argvA[0] != evalShaVerb {
+		t.Fatalf("script A second argv = %v, want EVALSHA", argvA)
+	}
+	if _, err := redis.Eval("return 2", nil, nil); err != nil {
+		t.Fatalf("script B first: %v", err)
+	}
+	if _, err := redis.Eval("return 2", nil, nil); err != nil {
+		t.Fatalf("script B second: %v", err)
+	}
+	argvB := fake.lastEvalCommand()
+	if len(argvB) < 2 || argvB[0] != evalShaVerb {
+		t.Fatalf("script B second argv = %v, want EVALSHA", argvB)
+	}
+	if argvA[1] == argvB[1] {
+		t.Fatalf("scripts A and B shared digest %q", argvA[1])
+	}
+}
+
+func TestEvalEmptyKeysSendsNumkeysZero(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	if _, err := redis.Eval("return 1", nil, nil); err != nil {
+		t.Fatalf("first Eval: %v", err)
+	}
+	got := fake.lastEvalCommand()
+	if len(got) < 3 || got[0] != evalVerb || got[2] != "0" {
+		t.Fatalf("fallback EVAL argv = %v, want EVAL … 0", got)
+	}
+	if _, err := redis.Eval("return 1", nil, nil); err != nil {
+		t.Fatalf("second Eval: %v", err)
+	}
+	got = fake.lastEvalCommand()
+	if len(got) < 3 || got[0] != evalShaVerb || got[2] != "0" {
+		t.Fatalf("EVALSHA argv = %v, want EVALSHA … 0", got)
 	}
 }
 

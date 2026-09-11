@@ -3,6 +3,8 @@ package simpleredis
 
 import (
 	"bufio"
+	"crypto/sha1" //nolint:gosec // Redis EVALSHA digest is SHA-1
+	"encoding/hex"
 	"errors"
 	"io"
 	"net"
@@ -27,6 +29,11 @@ const (
 	idleTimeout  = 30 * time.Second
 	dialTimeout  = 2 * time.Second
 	ioTimeout    = 1 * time.Second
+
+	// Redis EVAL / EVALSHA verbs and the NOSCRIPT miss prefix (after '-' is stripped).
+	evalVerb       = "EVAL"
+	evalShaVerb    = "EVALSHA"
+	noScriptPrefix = "NOSCRIPT"
 )
 
 var (
@@ -59,6 +66,9 @@ type SimpleRedis struct {
 	mu     sync.Mutex
 	idle   []*pooledConn
 	closed bool
+
+	digestMu sync.Mutex
+	digests  map[string]string
 }
 
 // Close drains idle pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
@@ -150,17 +160,49 @@ func (sr *SimpleRedis) ExpireAt(name string, unixSeconds int64) error {
 	return err
 }
 
-// Eval runs a Lua script with KEYS then ARGV. numkeys is len(keys).
+// Eval runs a Lua script with KEYS then ARGV. Sends EVALSHA of a cached SHA-1; on NOSCRIPT falls back once to EVAL.
 func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]byte, error) {
+	digest := sr.cachedScriptDigest(script)
+	values, err := sr.exec(evalArgv(evalShaVerb, digest, keys, args)...)
+	// Miss: engine has no matching digest (FLUSH, restart); EVAL loads it.
+	if err != nil && strings.HasPrefix(err.Error(), noScriptPrefix) {
+		return sr.exec(evalArgv(evalVerb, script, keys, args)...)
+	}
+	return values, err
+}
+
+// cachedScriptDigest returns the SHA-1 hex of script, computing it once per distinct body.
+func (sr *SimpleRedis) cachedScriptDigest(script string) string {
+	sr.digestMu.Lock()
+	defer sr.digestMu.Unlock()
+	if sr.digests == nil {
+		sr.digests = make(map[string]string)
+	}
+	if digest, found := sr.digests[script]; found {
+		return digest
+	}
+	digest := scriptSHA1Hex(script)
+	sr.digests[script] = digest
+	return digest
+}
+
+// scriptSHA1Hex is Redis sha1hex of the script bytes (lowercase 40-char hex).
+func scriptSHA1Hex(script string) string {
+	sum := sha1.Sum([]byte(script)) //nolint:gosec // Redis EVALSHA digest is SHA-1
+	return hex.EncodeToString(sum[:])
+}
+
+// evalArgv builds EVAL or EVALSHA argv: verb, script-or-digest, decimal numkeys, keys, then args.
+func evalArgv(verb, scriptOrDigest string, keys, args []string) [][]byte {
 	wire := make([][]byte, 0, 3+len(keys)+len(args))
-	wire = append(wire, []byte("EVAL"), []byte(script), []byte(strconv.Itoa(len(keys))))
+	wire = append(wire, []byte(verb), []byte(scriptOrDigest), []byte(strconv.Itoa(len(keys))))
 	for _, key := range keys {
 		wire = append(wire, []byte(key))
 	}
 	for _, arg := range args {
 		wire = append(wire, []byte(arg))
 	}
-	return sr.exec(wire...)
+	return wire
 }
 
 // parseIntegerReply reads one decimal integer from a : reply. Garbage payload is redis:issue?.
