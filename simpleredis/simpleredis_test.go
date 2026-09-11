@@ -310,9 +310,9 @@ func serveRawReply(conn net.Conn, replies []rawReply, index int) {
 // pooledIdle is the idle-list length under the client mutex.
 func pooledIdle(sr *SimpleRedis) int {
 	sr.mu.Lock()
-	n := len(sr.idle)
+	idleCount := len(sr.idle)
 	sr.mu.Unlock()
-	return n
+	return idleCount
 }
 
 func TestGetHitAndMiss(t *testing.T) {
