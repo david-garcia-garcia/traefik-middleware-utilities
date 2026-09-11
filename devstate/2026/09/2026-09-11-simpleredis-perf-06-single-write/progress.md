@@ -6,7 +6,7 @@ JobName: 2026-09-11-simpleredis-perf-06-single-write
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T21:20:27Z |
 | explore | [x] | [x] | 2026-09-11T21:28:43Z |
-| propose | [x] | [ ] | |
+| propose | [x] | [x] | 2026-09-11T21:36:35Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
