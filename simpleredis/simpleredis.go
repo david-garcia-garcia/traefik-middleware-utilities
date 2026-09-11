@@ -50,11 +50,25 @@ func (c *pooledConn) close() {
 	_ = c.netConn.Close()
 }
 
+// Options is the Yaegi-safe dial, I/O, idle-age, and idle-list knobs for InitWithOptions.
+// Zero or negative duration, and MaxIdleConns of 0 or less, mean the session defaults.
+type Options struct {
+	DialTimeout  time.Duration
+	IoTimeout    time.Duration
+	IdleTimeout  time.Duration
+	MaxIdleConns int
+}
+
 // SimpleRedis is a pooled TCP RESP client. Init stores dial settings; commands dial on first use.
 type SimpleRedis struct {
 	host     string
 	pass     string
 	database string
+
+	dialTimeout  time.Duration
+	ioTimeout    time.Duration
+	idleTimeout  time.Duration
+	maxIdleConns int
 
 	mu     sync.Mutex
 	idle   []*pooledConn
@@ -77,11 +91,33 @@ func (sr *SimpleRedis) Close() {
 	}
 }
 
-// Init sets host, password, and database. Call once before concurrent use; not mutex-protected.
+// Init sets host, password, and database with default timeouts. Call once before concurrent use; not mutex-protected.
 func (sr *SimpleRedis) Init(host, pass, database string) {
+	sr.InitWithOptions(host, pass, database, Options{})
+}
+
+// InitWithOptions sets host, password, database, and timeout knobs. It does not dial. Call once before concurrent use; not mutex-protected.
+func (sr *SimpleRedis) InitWithOptions(host, pass, database string, opts Options) {
 	sr.host = host
 	sr.pass = pass
 	sr.database = database
+	// Zero or negative duration and MaxIdleConns <= 0 copy the package constants.
+	sr.dialTimeout = opts.DialTimeout
+	if sr.dialTimeout <= 0 {
+		sr.dialTimeout = dialTimeout
+	}
+	sr.ioTimeout = opts.IoTimeout
+	if sr.ioTimeout <= 0 {
+		sr.ioTimeout = ioTimeout
+	}
+	sr.idleTimeout = opts.IdleTimeout
+	if sr.idleTimeout <= 0 {
+		sr.idleTimeout = idleTimeout
+	}
+	sr.maxIdleConns = opts.MaxIdleConns
+	if sr.maxIdleConns <= 0 {
+		sr.maxIdleConns = maxIdleConns
+	}
 }
 
 // Get fetches the value for key name in redis.
@@ -215,7 +251,7 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 	for len(sr.idle) > 0 {
 		conn := sr.idle[len(sr.idle)-1]
 		sr.idle = sr.idle[:len(sr.idle)-1]
-		if now.Sub(conn.lastUsed) < idleTimeout {
+		if now.Sub(conn.lastUsed) < sr.idleTimeout {
 			reused = conn
 			break
 		}
@@ -250,7 +286,7 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 	conn.lastUsed = time.Now()
 
 	sr.mu.Lock()
-	if sr.closed || len(sr.idle) >= maxIdleConns {
+	if sr.closed || len(sr.idle) >= sr.maxIdleConns {
 		sr.mu.Unlock()
 		conn.close()
 		return
@@ -261,7 +297,7 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 
 // dial opens TCP to host, then AUTH and SELECT when those Init fields are set.
 func (sr *SimpleRedis) dial() (*pooledConn, error) {
-	dialer := net.Dialer{Timeout: dialTimeout}
+	dialer := net.Dialer{Timeout: sr.dialTimeout}
 	netConn, err := dialer.Dial("tcp", sr.host)
 	if err != nil {
 		return nil, errUnreachable
@@ -290,7 +326,7 @@ func (sr *SimpleRedis) dial() (*pooledConn, error) {
 
 // do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty.
 func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
-	if err := conn.netConn.SetDeadline(time.Now().Add(ioTimeout)); err != nil {
+	if err := conn.netConn.SetDeadline(time.Now().Add(sr.ioTimeout)); err != nil {
 		return nil, false, errUnreachable
 	}
 	if err := writeCommand(conn.writer, args); err != nil {
