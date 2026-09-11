@@ -25,6 +25,19 @@ func TestYaegi_TakeUntilDeny(t *testing.T) {
 	}
 }
 
+// TestYaegi_PeekThenTake proves interpreted Peek does not increment before Take. Traefik is not started.
+func TestYaegi_PeekThenTake(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	goPath := t.TempDir()
+	writeGopathWindowcounter(t, goPath)
+	writeGopathFile(t, goPath, "takeprobe", "roundtrip.go", takeprobeSrc)
+
+	got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.PeekThenTake(%q, %q)`, addr, "yaegi-peek-k"))
+	if got != "ok" {
+		t.Fatalf("yaegi peek: %q, want ok", got)
+	}
+}
+
 // TestYaegiLive_RedisAndDragonfly runs the same live Take scenarios interpreted against each engine.
 func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 	if testing.Short() {
@@ -64,6 +77,12 @@ func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.SlidingBoundary(%q, %q)`, backend.addr, t.Name()))
 				if got != "ok" {
 					t.Fatalf("yaegi live sliding: %q, want ok", got)
+				}
+			})
+			t.Run("peekThenTake", func(t *testing.T) {
+				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.PeekThenTake(%q, %q)`, backend.addr, t.Name()))
+				if got != "ok" {
+					t.Fatalf("yaegi live peek: %q, want ok", got)
 				}
 			})
 		})
@@ -264,6 +283,41 @@ func SlidingBoundary(host, key string) string {
 	}
 	if allowed {
 		return "doubled"
+	}
+	return "ok"
+}
+
+// PeekThenTake Peeks without incrementing then Takes once and expects estimate 1.
+func PeekThenTake(host, key string) string {
+	client := &simpleredis.SimpleRedis{}
+	client.Init(host, "", "")
+	limiter, err := windowcounter.New(client, 0)
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	const limit int64 = 5
+	window := time.Minute
+	for i := 0; i < 3; i++ {
+		allowed, estimated, peekErr := limiter.Peek(key, limit, window)
+		if peekErr != nil {
+			return "peek:" + peekErr.Error()
+		}
+		if !allowed {
+			return "peek-denied"
+		}
+		if estimated != 0 {
+			return "peek-est"
+		}
+	}
+	allowed, estimated, err := limiter.Take(key, limit, window)
+	if err != nil {
+		return "take:" + err.Error()
+	}
+	if !allowed {
+		return "take-denied"
+	}
+	if estimated != 1 {
+		return "take-est"
 	}
 	return "ok"
 }

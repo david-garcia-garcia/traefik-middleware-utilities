@@ -252,3 +252,184 @@ func TestAllow_IsTake(t *testing.T) {
 		t.Fatal("first Allow denied")
 	}
 }
+
+func TestPeek_DoesNotIncrement(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := New(client, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	const limit int64 = 5
+	window := time.Minute
+	for i := 0; i < 5; i++ {
+		allowed, estimated, peekErr := limiter.Peek("k", limit, window)
+		if peekErr != nil {
+			t.Fatal(peekErr)
+		}
+		if !allowed {
+			t.Fatalf("peek %d denied, estimated %v", i+1, estimated)
+		}
+		if estimated != 0 {
+			t.Fatalf("peek %d estimated %v want 0", i+1, estimated)
+		}
+	}
+	allowed, estimated, err := limiter.Take("k", limit, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !allowed {
+		t.Fatal("take after peeks denied")
+	}
+	if estimated != 1 {
+		t.Fatalf("take estimated %v want 1", estimated)
+	}
+}
+
+func TestPeek_AgreesWithTakeBeforeIncrement(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := New(client, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	const limit int64 = 3
+	window := time.Minute
+	for i := int64(0); i < limit-1; i++ {
+		if _, _, takeErr := limiter.Take("k", limit, window); takeErr != nil {
+			t.Fatal(takeErr)
+		}
+	}
+	peekAllowed, peekEstimated, err := limiter.Peek("k", limit, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	takeAllowed, takeEstimated, err := limiter.Take("k", limit, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if takeAllowed != peekAllowed {
+		t.Fatalf("take allowed %v peek allowed %v", takeAllowed, peekAllowed)
+	}
+	if takeEstimated != peekEstimated+1 {
+		t.Fatalf("take estimated %v peek estimated %v", takeEstimated, peekEstimated)
+	}
+}
+
+func TestPeek_StaysDeniedThenSlidesAllowed(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := New(client, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	window := 10 * time.Second
+	const limit int64 = 2
+	start := time.Unix(1_700_000_000, 0)
+	now := start
+	limiter.SetNowForTest(func() time.Time { return now })
+	for i := int64(0); i < limit+1; i++ {
+		if _, _, takeErr := limiter.Take("k", limit, window); takeErr != nil {
+			t.Fatal(takeErr)
+		}
+	}
+	allowed, estimated, err := limiter.Peek("k", limit, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allowed {
+		t.Fatalf("peek after fill allowed, estimated %v", estimated)
+	}
+	now = start.Add(window)
+	limiter.SetNowForTest(func() time.Time { return now })
+	allowed, estimated, err = limiter.Peek("k", limit, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allowed {
+		t.Fatalf("peek at next window start allowed, estimated %v (weight still 1)", estimated)
+	}
+	now = start.Add(window + 4*time.Second)
+	limiter.SetNowForTest(func() time.Time { return now })
+	allowed, estimated, err = limiter.Peek("k", limit, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !allowed {
+		t.Fatalf("peek after formula cooldown denied, estimated %v", estimated)
+	}
+	if estimated > float64(limit) {
+		t.Fatalf("allowed estimate %v want <= %d", estimated, limit)
+	}
+}
+
+func TestPeek_BufferedSkipStormDoesNotGetEveryCall(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := New(client, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	const limit int64 = 10
+	window := time.Minute
+	if _, _, err := limiter.Peek("k", limit, window); err != nil {
+		t.Fatal(err)
+	}
+	afterSeed := fake.getCallCount()
+	if afterSeed == 0 {
+		t.Fatal("seed peek sent no GET")
+	}
+	for i := 0; i < 20; i++ {
+		if _, _, peekErr := limiter.Peek("k", limit, window); peekErr != nil {
+			t.Fatal(peekErr)
+		}
+	}
+	if got := fake.getCallCount(); got != afterSeed {
+		t.Fatalf("skip storm GET %d want %d (seed only)", got, afterSeed)
+	}
+}
+
+func TestPeek_ExactGetsEveryCall(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := New(client, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	const n = 4
+	for i := 0; i < n; i++ {
+		if _, _, peekErr := limiter.Peek("k", 10, time.Minute); peekErr != nil {
+			t.Fatal(peekErr)
+		}
+	}
+	if got := fake.getCallCount(); got != 2*n {
+		t.Fatalf("exact peek GET %d want %d", got, 2*n)
+	}
+}
+
+func TestPeek_Unreachable(t *testing.T) {
+	client := &simpleredis.SimpleRedis{}
+	client.Init("127.0.0.1:1", "", "")
+	limiter, err := New(client, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = limiter.Peek("k", 1, time.Minute)
+	if err == nil || err.Error() != simpleredis.RedisUnreachable {
+		t.Fatalf("err %v want %s", err, simpleredis.RedisUnreachable)
+	}
+}

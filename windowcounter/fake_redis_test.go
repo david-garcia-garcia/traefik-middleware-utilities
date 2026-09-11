@@ -15,6 +15,7 @@ type testFakeRedis struct {
 	mu         sync.Mutex
 	store      map[string]string
 	lastExpire []string
+	getCalls   int
 }
 
 // startTestFakeRedis listens on a local TCP port and serves an in-process RESP map.
@@ -52,6 +53,7 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 		case "AUTH", "SELECT":
 			_, _ = io.WriteString(conn, "+OK\r\n")
 		case "GET":
+			f.getCalls++
 			_, _ = io.WriteString(conn, testBulk(f.store, args[1]))
 		case "INCR":
 			afterIncr, incrErr := incrementTestStore(f.store, args[1], 1)
@@ -96,6 +98,13 @@ func (f *testFakeRedis) lastExpireCommand() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.lastExpire...)
+}
+
+// getCallCount returns how many GET commands the fake has served.
+func (f *testFakeRedis) getCallCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.getCalls
 }
 
 // testBulk formats a GET/MGET bulk string or a miss.
