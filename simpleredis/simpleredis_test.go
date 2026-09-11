@@ -2,10 +2,12 @@ package simpleredis
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -253,6 +255,64 @@ func startStaticRedis(t *testing.T, reply string) string {
 		}
 	}()
 	return listener.Addr().String()
+}
+
+// rawReply is one canned wire blob written after a command on one Accept.
+type rawReply struct {
+	payload    []byte
+	closeAfter bool
+}
+
+// startRawReplyRedis listens locally and, per Accept, reads one command then writes that Accept's payload.
+func startRawReplyRedis(t *testing.T, replies []rawReply) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	var mu sync.Mutex
+	accept := 0
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			index := accept
+			accept++
+			mu.Unlock()
+			go serveRawReply(conn, replies, index)
+		}
+	}()
+	return listener.Addr().String()
+}
+
+// serveRawReply reads one command on conn, writes replies[index], and closes when closeAfter is set.
+func serveRawReply(conn net.Conn, replies []rawReply, index int) {
+	defer conn.Close()
+	if index < 0 || index >= len(replies) {
+		return
+	}
+	reader := bufio.NewReader(conn)
+	if _, err := readCommand(reader); err != nil {
+		return
+	}
+	reply := replies[index]
+	_, _ = conn.Write(reply.payload)
+	if reply.closeAfter {
+		return
+	}
+}
+
+// pooledIdle is the idle-list length under the client mutex.
+func pooledIdle(sr *SimpleRedis) int {
+	sr.mu.Lock()
+	n := len(sr.idle)
+	sr.mu.Unlock()
+	return n
 }
 
 func TestGetHitAndMiss(t *testing.T) {
@@ -772,5 +832,73 @@ func TestIncrGarbageIntegerPayload(t *testing.T) {
 	_, err := redis.Incr("k")
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("Incr garbage = %v, want %s", err, RedisIssue)
+	}
+}
+
+func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
+	truncated := append([]byte("$100\r\n"), bytes.Repeat([]byte("x"), 40)...)
+	ownValue := []byte("$5\r\nhello\r\n")
+	addr := startRawReplyRedis(t, []rawReply{
+		{payload: truncated, closeAfter: true},
+		{payload: ownValue, closeAfter: true},
+	})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	_, err := redis.Get("k")
+	if err == nil {
+		t.Fatal("truncated Get: want error")
+	}
+	if err.Error() == RedisIssue {
+		t.Fatalf("truncated Get = %v, must not be %s", err, RedisIssue)
+	}
+	if err.Error() != RedisUnreachable {
+		t.Fatalf("truncated Get = %v, want %s", err, RedisUnreachable)
+	}
+	if got := pooledIdle(&redis); got != 0 {
+		t.Fatalf("idle after truncated Get = %d, want 0", got)
+	}
+
+	got, err := redis.Get("k")
+	if err != nil {
+		t.Fatalf("second Get: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Fatalf("second Get = %q, want %q", got, "hello")
+	}
+}
+
+func TestMalformedBulkHeaderIsIssueAndNotPooled(t *testing.T) {
+	addr := startStaticRedis(t, "$abc\r\n")
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	_, err := redis.Get("k")
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("malformed bulk Get = %v, want %s", err, RedisIssue)
+	}
+	if got := pooledIdle(&redis); got != 0 {
+		t.Fatalf("idle after malformed bulk = %d, want 0", got)
+	}
+}
+
+func TestIllegalArrayElementHeadIsIssueAndNotPooled(t *testing.T) {
+	addr := startStaticRedis(t, "*1\r\n#x\r\n")
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	_, err := redis.Eval("return {1}", nil, nil)
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("illegal array head = %v, want %s", err, RedisIssue)
+	}
+	if got := pooledIdle(&redis); got != 0 {
+		t.Fatalf("idle after illegal array head = %d, want 0", got)
+	}
+}
+
+func TestReadBulkNonDollarHeadIsIssue(t *testing.T) {
+	_, err := readBulk(bufio.NewReader(strings.NewReader("unused")), []byte(":1"))
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("readBulk non-$ head = %v, want %s", err, RedisIssue)
 	}
 }
