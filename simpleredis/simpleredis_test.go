@@ -56,23 +56,23 @@ func (f *fakeRedis) serve(conn net.Conn) {
 		switch args[0] {
 		case "AUTH":
 			f.auths++
-			io.WriteString(conn, "+OK\r\n")
+			_, _ = io.WriteString(conn, "+OK\r\n")
 		case "SELECT":
 			f.selects++
-			io.WriteString(conn, "+OK\r\n")
+			_, _ = io.WriteString(conn, "+OK\r\n")
 		case "GET":
 			f.gets++
-			io.WriteString(conn, bulk(f.store, args[1]))
+			_, _ = io.WriteString(conn, bulk(f.store, args[1]))
 		case "MGET":
-			fmt.Fprintf(conn, "*%d\r\n", len(args)-1)
+			_, _ = fmt.Fprintf(conn, "*%d\r\n", len(args)-1)
 			for _, name := range args[1:] {
-				io.WriteString(conn, bulk(f.store, name))
+				_, _ = io.WriteString(conn, bulk(f.store, name))
 			}
 		case "SET":
 			f.store[args[1]] = args[2]
-			io.WriteString(conn, "+OK\r\n")
+			_, _ = io.WriteString(conn, "+OK\r\n")
 		default:
-			io.WriteString(conn, "+OK\r\n")
+			_, _ = io.WriteString(conn, "+OK\r\n")
 		}
 		f.mu.Unlock()
 	}
@@ -147,7 +147,7 @@ func startStaticRedis(t *testing.T, reply string) string {
 					if _, err := readCommand(reader); err != nil {
 						return
 					}
-					io.WriteString(conn, reply)
+					_, _ = io.WriteString(conn, reply)
 				}
 			}(conn)
 		}
@@ -425,7 +425,7 @@ func TestTimeoutOnReusedConnIsNotRetried(t *testing.T) {
 				if _, err := readCommand(reader); err != nil {
 					return
 				}
-				io.WriteString(conn, "$1\r\nt\r\n")
+				_, _ = io.WriteString(conn, "$1\r\nt\r\n")
 				time.Sleep(3 * time.Second)
 			}(conn)
 		}
