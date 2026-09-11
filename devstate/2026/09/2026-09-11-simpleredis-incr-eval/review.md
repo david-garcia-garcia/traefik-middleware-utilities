@@ -35,8 +35,10 @@ findings: stale-usage on std_go_simpleredis
 fixed: usage How-to, snippet, Gotchas
 skipped: n/a
 
-## archive (2026-09-11)
-phase: archive
-findings: fold std_go_simpleredis_resp-commands; moved to archive/2026-09-11-simpleredis-incr-eval
-fixed: live spec Incr/Expire/Eval
+skipped: n/a
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: WIP title dropped; CI succeeded
+fixed: PR title ready
 skipped: n/a
