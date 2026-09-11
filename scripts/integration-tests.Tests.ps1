@@ -40,7 +40,7 @@ BeforeAll {
         throw "CLIENT LIST on $BackendHost failed: $raw"
     }
 
-    function Invoke-OverlappingWhoami {
+    function Invoke-OverlappingRequests {
         param(
             [string]$Path
         )
@@ -158,7 +158,7 @@ Describe "simpleredis Yaegi e2e" {
     }
 
     It "GET /redis overlap leaves at most eight idle sockets" {
-        Invoke-OverlappingWhoami -Path /redis
+        Invoke-OverlappingRequests -Path /redis
         $remaining = 99
         $elapsed = 0
         do {
@@ -173,7 +173,7 @@ Describe "simpleredis Yaegi e2e" {
     }
 
     It "GET /dragonfly overlap leaves at most eight idle sockets" {
-        Invoke-OverlappingWhoami -Path /dragonfly
+        Invoke-OverlappingRequests -Path /dragonfly
         $remaining = 99
         $elapsed = 0
         do {

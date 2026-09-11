@@ -293,7 +293,7 @@ func startHoldFakeRedis(t *testing.T) *holdFakeRedis {
 	return fake
 }
 
-// serve reads one RESP command then waits for the hold before writing a GET hit.
+// serve holds each RESP command's reply on one accepted socket until releaseHeldReplies, then writes a GET hit.
 func (f *holdFakeRedis) serve(conn net.Conn) {
 	defer func() {
 		_ = conn.Close()
@@ -643,7 +643,7 @@ func TestStaleConnectionIsRetried(t *testing.T) {
 	}
 }
 
-func TestCloseDrainsIdleAndDoesNotRepool(t *testing.T) {
+func TestCloseDrainsIdleAndDoesNotRedial(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
 	redis.Init(addr, "", "")
