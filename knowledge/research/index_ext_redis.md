@@ -14,3 +14,8 @@ description: Redis EXPIRE/EXPIREAT integer :0/:1 replies, missing keys, and dele
 priority: normal
 local: ext_redis_eval/
 description: Redis EVAL argument shape, zero keys, Lua-to-RESP reply mapping, and script error format.
+
+## BLPOP
+priority: normal
+local: ext_redis_blpop/
+description: Redis BLPOP empty-list block of one connection, versus EVAL and CLIENT PAUSE whole-server stalls.
