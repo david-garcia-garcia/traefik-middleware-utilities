@@ -28,4 +28,10 @@ findings: Standards 3 (1 hard done, 2 judgement skipped); Nitpicks 2 hard done; 
 fixed: holdFakeRedis.serve comment; TestCloseDrainsIdleAndDoesNotRedial; Invoke-OverlappingRequests (436cdd0)
 skipped: two Duplicated Code judgement items (both overlap tests; both Pester Its)
 
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: 1 stale-usage produced, 0 skipped
+fixed: Close-on-release gotcha on knowledge/devdocs/std_go_simpleredis.md
+skipped: none
+
 
