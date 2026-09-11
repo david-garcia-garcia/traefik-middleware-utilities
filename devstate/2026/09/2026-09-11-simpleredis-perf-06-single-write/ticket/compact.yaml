@@ -1,0 +1,7 @@
+host: local
+ref: none
+title: "perf-06 — Per-argument write pattern costs 1,380 ns per command interpreted"
+url: none
+number: none
+source: simpleredisfixes/perf-06-single-write-encoding.md
+index: simpleredisfixes/README.md
