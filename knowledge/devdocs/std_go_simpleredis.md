@@ -48,5 +48,8 @@ if err != nil {
 - After `Close`, commands return `redis:unreachable` and do not redial.
 - Idle pool cap is eight after release; concurrent in-flight dials are not capped (copied client).
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
+- Do not adopt `unsafe` zero-copy between `string` and `[]byte`. Compiled it saves a little on Eval encode; under Yaegi (the Traefik plugin path) the legacy struct-header trick is a net loss versus inline `[]byte(s)`. Keep `[]byte(...)` / `string(...)` in session source.
+- Do not import `unsafe` in session source. Do not set `useUnsafe` on the plugin manifest or compose `settings.useunsafe`. Traefik registers unsafe symbols only when **both** the manifest and operator settings are true; manifest true and settings false refuses to load the plugin (`knowledge/research/ext_traefik_plugins_useunsafe/`).
+- Yaegi v0.16.1 does not export `unsafe.Slice` / `unsafe.String` / `StringData` / `SliceData` even when unsafe symbols are registered (`knowledge/research/ext_traefik_plugins_yaegi-unsafe/`).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
