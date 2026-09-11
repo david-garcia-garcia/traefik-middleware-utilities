@@ -36,3 +36,11 @@ localTests: passed
 head: 4e4b3ac6f3b50de499fa4c1a30592402e49b5e06
 ci: in progress run 34651875079
 
+## codereview (2026-09-11T22:11:52Z)
+phase: codereview
+findings: 5 standards, 4 nitpicks, 1 spec missing, 1 coverage hard; 1 coverage judgement skipped
+fixed: names, trail comments, Pester ninth waiter, idle>8 assert, reclaim timeout revert
+skipped: coverage judgement Close-during-borrow
+head: 0187664cdfc3543bd2d7885bdcae229579d1a7bb
+ci: in progress run 34652862680
+
