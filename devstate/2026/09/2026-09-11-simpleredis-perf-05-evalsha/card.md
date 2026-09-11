@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-11T22:25:37Z
+Developer review: ready for review — 2026-09-11T22:31:25Z
 
 ## What this changes
 **Operators.** None.
@@ -24,27 +24,27 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Change `simpleredis-evalsha` is archived and folded into `std_go_simpleredis_resp-commands`. CI on 962c586 is still running. 1 item remains.
+Change `simpleredis-evalsha` is archived and folded into `std_go_simpleredis_resp-commands`. CI on 0bf814c succeeded. 0 items remain.
 
 Priority: P3 — extra EVAL bytes on DestBranch; no wrong answers or outages
-Reviewed head: 962c586
+Reviewed head: 0bf814c
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI on the archive commit is still in progress |
-| CI proof | 3/6 | Lint succeeded; Test and Integration Tests in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653892678 |
+| Overall readiness | 6/6 | Checklist clear and CI succeeded |
+| CI proof | 6/6 | Lint, Test, and Integration Tests succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34654048698 |
 | Local tests proof | N/A | Remote CI is the proof axis |
 | Review resolution | 6/6 | No OPEN PR comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin 962c586 |
+| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin 0bf814c |
 | OpenSpec | simpleredis-evalsha archived | `openspec/changes/archive/2026-09-11-simpleredis-evalsha/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/13 | GitHub PR 13 |
-| CI | build 34653892678 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653892678 | GitHub check runs (Lint success; Test and Integration Tests in progress) |
+| CI | build 34654048698 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34654048698 | GitHub check runs (Lint success; Test success; Integration Tests success) |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -58,15 +58,13 @@ None.
 None.
 
 ## How this fits together
-Archive of `simpleredis-evalsha` on `2026-09-11-simpleredis-perf-05-evalsha` and stub PR 13. Catalog now requires EVALSHA-inside-Eval.
+Archive of `simpleredis-evalsha` on `2026-09-11-simpleredis-perf-05-evalsha` and PR 13. Catalog requires EVALSHA-inside-Eval. CI run 34654048698 succeeded.
 
 ## Explore Decisions
 None.
 
 ## Before merge
-- [x] Land EVALSHA inside `Eval` with NOSCRIPT fallback, Yaegi interp, and live Redis plus Dragonfly proof [P3]
-- [x] Fold delta into `std_go_simpleredis_resp-commands` and archive `simpleredis-evalsha`
-- [ ] CI on 962c586 (Test and Integration Tests still running) [P3]
+None.
 
 ## Findings
 None.
@@ -87,7 +85,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 962c586a67eae85d24e90b5810fa4b0f34cbe585 | Card must match the branch you measured |
+| Reviewed head | 0bf814c57e2370e334dff246861c7bdf599c5ced | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -101,10 +99,10 @@ Is this the best way to solve the issue? Yes — digest plus fallback beats ship
 
 ### Evidence
 What I checked:
-- `origin/master...HEAD` at 962c586 (Eval EVALSHA + NOSCRIPT fallback; catalog `std_go_simpleredis_resp-commands` folded; change archived)
+- `origin/master...HEAD` at 0bf814c (Eval EVALSHA + NOSCRIPT fallback; catalog `std_go_simpleredis_resp-commands` folded; change archived)
 - FindSpecHost: fold `std_go_simpleredis_resp-commands` high; validate_spec_map and validate_artifact_names clean
 - Seven-axis files under `devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/`; 0 hard/missing/wrong remaining
-- PR 13 OPEN; CI run 34653892678 in progress (Lint success)
+- PR 13 OPEN; title `⚡️ perf(simpleredis): send EVALSHA with NOSCRIPT fallback`; CI run 34654048698 success (Lint, Test, Integration Tests)
 - qualify: qualified-with-gaps; localTests: passed; change: simpleredis-evalsha (`handoff.yaml`)
 
 ### Rank-up moves

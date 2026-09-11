@@ -39,3 +39,9 @@ phase: archive
 findings: fold std_go_simpleredis_resp-commands high; validate clean; CI in progress on 962c586
 fixed: delta synced; change moved to archive/2026-09-11-simpleredis-evalsha
 skipped: n/a
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: reused PR 13; title ready; CI 34654048698 succeeded (Lint, Test, Integration Tests); verdict ready for review
+fixed: n/a
+skipped: n/a

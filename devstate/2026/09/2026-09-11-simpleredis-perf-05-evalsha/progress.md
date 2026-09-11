@@ -11,4 +11,4 @@ JobName: 2026-09-11-simpleredis-perf-05-evalsha
 | codereview | [x] | [x] | 2026-09-11T22:12:14Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:20:05Z |
 | archive | [x] | [x] | 2026-09-11T22:26:39Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T22:32:14Z |
