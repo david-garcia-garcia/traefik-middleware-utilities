@@ -29,3 +29,9 @@ phase: codereview
 findings: all seven axes none
 fixed: axis files on bus
 skipped: no hard items to apply
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: Reclaim table unit; findings none
+fixed: devdocs-impact.md
+skipped: no produce (usage already enough)
