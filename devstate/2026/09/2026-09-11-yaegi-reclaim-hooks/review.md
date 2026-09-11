@@ -23,3 +23,9 @@ phase: implement
 findings: none (codereview not run)
 fixed: Hooks on Open, Yaegi tests, reclaimprobe log host, Pester wrap-up, debt taken
 skipped: none
+
+## codereview (2026-09-11)
+phase: codereview
+findings: 1 Standards hard + 6 Nitpicks hard, all Status: done; Spec/Security/Performance/Dead/Coverage none
+fixed: live Purpose reverted; runSleep/runWake/runClose; probe capture created; yaegi locals interpreter/evaluated/hookCount
+skipped: none
