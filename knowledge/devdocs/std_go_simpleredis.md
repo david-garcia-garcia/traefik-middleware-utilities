@@ -14,6 +14,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 
 - Allocate `&simpleredis.SimpleRedis{}` and `Init(host, pass, database)` once before concurrent use.
 - Do not dial in Traefik `New`. Call `Init` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, `Eval`, or `MSetEX`).
+- Call `MSetEX(names, values, seconds)` or `MSetEXAt(names, values, unixSeconds)` for many keys with one TTL. Do not MSET then EXPIRE. Match integer `0` as `redis:issue?`.
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
 - Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Live files skip without `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY` or under `-short`. Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
 
@@ -51,7 +52,7 @@ if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 
 - After `Close`, commands return `redis:unreachable` and do not redial.
 - Idle pool cap is eight after release; concurrent in-flight dials are not capped (copied client).
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
-- `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
+- `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`. `MSetEX` / `MSetEXAt` integer `0` (and any integer other than `1`) is `redis:issue?`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
-- `MSetEX` / `MSetEXAt` reject empty or mismatched slices and more than 1024 pairs with `redis:issue?` before dial. Clustered engines need every key in one hash slot (hash tags); the client does not hash-tag or split.
-- Redis 7 and Dragonfly have no native `MSETEX`. The first call sends native, then caches Lua `EVAL` (names in KEYS, values then `EX`/`EXAT` then TTL in ARGV). Redis 8.4+ / Valkey 9.1+ stay on native after a successful `MSETEX`.
+- `MSetEX` / `MSetEXAt` reject empty or mismatched slices and more than 1024 pairs with `redis:issue?` before dial. Zero or negative TTL is passed through, same as `Set`. Clustered engines need every key in one hash slot (hash tags); the client does not hash-tag or split.
+- Redis 7 and Dragonfly have no native `MSETEX`. The first call sends native, then caches Lua `EVAL` (names in KEYS, values then `EX`/`EXAT` then TTL in ARGV). Redis 8.4+ / Valkey 9.1+ stay on native after a successful `MSETEX`. A later `ERR unknown command` recaches Lua and `EVAL`s that call. Past `MSetEXAt` may return no error while a later `Get` is `redis:miss`.
