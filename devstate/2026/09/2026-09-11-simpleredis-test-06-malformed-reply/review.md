@@ -12,8 +12,8 @@ findings: `*-1` stays `redis:issue?` + comment; arity-mismatch idle deviation; n
 fixed: n/a
 skipped: n/a
 
-## propose (2026-09-11)
-phase: propose
-findings: fold `std_go_simpleredis_resp-commands`; `*-1` stays issue; arity idle deviation kept
-fixed: n/a
+## implement (2026-09-11)
+phase: implement
+findings: `*-1` stays issue; malformed table + truncated write-then-close + retry-borrow + arity table; live Get-miss on both engines
+fixed: retry-borrow test waits for listener close so retry dial is unreachable not timeout
 skipped: n/a

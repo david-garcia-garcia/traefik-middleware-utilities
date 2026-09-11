@@ -7,7 +7,7 @@ JobName: 2026-09-11-simpleredis-test-06-malformed-reply
 | prepare | [x] | [x] | 2026-09-11T21:23:21Z |
 | explore | [x] | [x] | 2026-09-11T21:32:24Z |
 | propose | [x] | [x] | 2026-09-11T21:41:28Z |
-| implement | [ ] | [ ] | |
+| implement | [x] | [x] | 2026-09-11T22:03:28Z |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
