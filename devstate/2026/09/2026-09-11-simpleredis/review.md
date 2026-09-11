@@ -32,3 +32,9 @@ fixed: simpleredis_test.go WriteString/Fprintf errcheck
 skipped: none
 localTests: passed
 ci: 34581091629 success
+
+## codereview (2026-09-11)
+phase: codereview
+findings: Standards 4 hard, Nitpicks 3 hard, Performance 1 hard, Coverage 5 (4 hard 1 judgement)
+fixed: comments, Init/EX/AUTH/Del tests, Redis health ServiceName
+skipped: rename do; rewrite exec retry; max-open; probe 502 judgement
