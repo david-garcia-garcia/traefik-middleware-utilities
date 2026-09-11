@@ -7,3 +7,12 @@ qualify: qualified-with-gaps
 pr: 18
 head: f580d9f939bf20193c89f9290090ebcd9694e46c
 ci: in progress (Lint, Test, Integration Tests) run 34648939460
+
+## explore (2026-09-11T21:26:30Z)
+phase: explore
+findings: dest burst 320 Gets → 261 dials (idle cap 8); TestConcurrentCommandsStayWithinPool still passes
+fixed: none
+skipped: none
+assumed: poolSize 8, poolTimeout 1s, redis:unreachable, const-only Init, Pester hold+CLIENT LIST both engines, CI live env
+head: d67be5fc43a0afc8c91340b2e0f750c536c4152d
+ci: success run 34649105900 (measured on 74124f0)
