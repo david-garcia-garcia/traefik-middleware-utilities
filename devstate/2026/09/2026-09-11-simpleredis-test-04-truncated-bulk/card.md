@@ -1,20 +1,20 @@
-Developer review: in progress — 2026-09-11T21:21:31Z
+Developer review: in progress — 2026-09-11T21:29:42Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None versus `master` in product code. Prepare grounded the truncated-bulk / `clean == false` coverage ticket; tests are not on the branch yet.
+**Developers.** Research packet `ext_redis_resp_bulk-string` records RESP2 bulk `$<n>\r\n` plus CRLF and that a truncated payload is a transport fake, not a Redis command. Product tests for `clean == false` are not on the branch yet.
 
 **End users.** None.
 
 ## Motivation
-SimpleRedis Get and MGet decode Redis bulk strings on a pooled TCP socket. Dest already treats a short read as an unusable stream (`clean == false`) and closes that socket instead of returning it to the idle list. Nothing executes that branch.
+SimpleRedis Get and MGet decode Redis bulk strings on a pooled TCP socket. Dest already treats a short `io.ReadFull` as an unusable stream and closes that socket instead of returning it to the idle list. The `ReadFull` fail block (`401.52,403.3`) still has coverage count 0.
 
-On dest, a peer that announces `$100` and dies after 40 bytes leaves the reader mid-payload. If that socket were reused, the next Get or MGet would treat the leftover bytes as its own reply — one tenant's cached value, session token, or rate-limit verdict served to another. Today's tests still pass if `readBulk` starts reporting that stream as clean.
+On dest, a peer that announces `$100` and dies after 40 bytes leaves the reader mid-payload. If that socket were reused, the next Get or MGet would treat leftover bytes as its own reply. Today's compiled tests still pass if `readBulk` starts reporting that stream as clean. A throwaway truncated Get on dest already returned `redis:unreachable` with idle empty; the missing work is the committed invariant, not a decoder rewrite.
 
-Not merging leaves that leak as a code-review invariant only. The same Get/MGet own-value check has to hold on live Redis and live Dragonfly; dest already routes `/redis` and `/dragonfly`, but the truncated-payload unit path is still missing.
+Live `/redis` and `/dragonfly` Set the constant `"ok"`, so a swapped key would still look correct. Not merging leaves the pool-discard guard as a code-review invariant and the live own-value check vacuous.
 
 ```mermaid
 sequenceDiagram
@@ -36,17 +36,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Prepare is done; product tests are not on the branch yet. 4 items remain.
+Explore is written; product tests are not on the branch yet. 4 items remain.
 
 Priority: P3 — spec, docs, tests, or internal clarity — no current user or operator harm
-Reviewed head: c87bb80
-Owner decision: None.
+Reviewed head: fad9775
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI still running; no product apply yet |
-| CI proof | 3/6 | queued — [run 34648941801](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34648941801) |
+| Overall readiness | 3/6 | Explore done; CI in progress; no product apply yet |
+| CI proof | 3/6 | in progress — [run 34649600837](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34649600837) |
 | Local tests proof | N/A | `localTests: none`; remote PR uses CI |
 | Review resolution | 6/6 | OPEN PR, no reviewer comments |
 
@@ -56,7 +56,7 @@ Owner decision: None.
 | Branch | 2026-09-11-simpleredis-test-04-truncated-bulk pushed | `git` / origin |
 | OpenSpec | none | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/19 | pr-host List |
-| CI | build 34648941801 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34648941801 | GitHub check runs |
+| CI | build 34649600837 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34649600837 | GitHub check runs Test, Lint, Integration Tests |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -70,17 +70,28 @@ None.
 None.
 
 ## How this fits together
-Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk` → stub PR 19 → CI queued on the empty product delta.
+Local test-04 finding → branch `2026-09-11-simpleredis-test-04-truncated-bulk` → stub PR 19 → explore recorded; CI in progress on research plus bus commits.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| Can live Redis or Dragonfly announce `$100` and close after 40 bytes so truncated/`clean == false` is an e2e test? | additive asked | assumed — no. Official RESP is complete values (`ext_redis_resp_bulk-string`). Truncate stays unit-only on the raw-reply fake. Live engines prove Get/MGet own-value only. No new compose proxy. | explore |
+| Is compose “extend” new services/routes or new assertions on `/redis` and `/dragonfly`? | additive asked | assumed — existing `whoami-redis` / `whoami-dragonfly` and image pins stay. New Pester assertions (and probe payload) only. | explore |
+| How far must Pester go past today’s unique-key Get/MGet `"ok"` to prove the caller’s own value? | bounded asked | assumed — Set the per-request prefix as the payload; Pester requires Value == that token and MGet == Value; two overlapping GETs per route with distinct tokens. Do not add routes. | explore |
+| What fake covers truncated bytes without changing `startStaticRedis`? | additive asked | assumed — new helper in `simpleredis_test.go` only. First Accept truncates; later Accepts return a complete bulk. Malformed complete lines may use that helper or `startStaticRedis`; both assert `len(idle)==0`. | explore |
+| Is `len(idle)==0` still required if the second Get already returns the right key? | additive asked | assumed — yes. `exec` retries a dead reused socket, so a second Get can succeed even if the dirty conn was pooled. Idle==0 after the failed call is the anti-corruption assert; the second Get proves the client still dials a clean socket. | explore |
+| Do dest `readBulk` / `do` / `release` need a production change? | additive asked | assumed — no. Throwaway truncated Get on dest: `redis:unreachable`, idle 0, second Get `hello`. Implement lands tests; edit production only if those tests fail. | explore |
+| Coverage block ids `401.52,403.3` will move if `readBulk` is edited — what is the proof? | additive asked | assumed — invariant tests are the proof. After implement, measure that `401.52,403.3` (or the new id of the `ReadFull` fail block) is non-zero. Do not treat a hardcoded dest id as the only assertion. | explore |
+| How is `readBulk`’s non-`$` head (`390-392`) covered when `readReply` only calls it for `$`? | additive asked | assumed — same-package test calls `readBulk` with a non-`$` head and expects `redis:issue?`. Do not widen `readReply`. `$abc\r\n` covers the unparseable-length branch via Get. | explore |
+| Which spec leaves take the dirty-conn and live own-value requirements? | additive asked | assumed — fold into `std_go_simpleredis_tcp-session` (dirty reply not idle-pooled) and `std_go_simpleredis_resp-commands` (Pester unique own-value). No new spec folder. No rename. | explore |
 
 ## Before merge
 - [ ] [P3] Unit-test truncated bulk (`$100` / 40 bytes / close): `redis:unreachable`, idle empty, second command returns its own key's value
 - [ ] [P3] Unit-test malformed bulk header `$abc` and a non-`$`/:`/+` array element: `redis:issue?`, nothing pooled
-- [ ] [P3] Live Get/MGet on Redis and Dragonfly still return the caller's own value; extend compose + Pester `/redis` `/dragonfly`
+- [ ] [P3] Live Get/MGet on Redis and Dragonfly still return the caller's own unique value; Pester `/redis` `/dragonfly` (existing routes)
 - [ ] [P3] Any Lua in this change stays 5.1-safe with declared KEYS (Dragonfly)
 - [x] Stub PR 19 opened from `origin/master`
+- [x] Explore recorded (`devstate/.../explore.md`)
 
 ## Findings
 None.
@@ -95,26 +106,28 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | c87bb8041507560cd693cde855d3f3913c099e89 | Card must match the branch you measured |
+| Reviewed head | fad9775229a43afd418c1b74dfce8bd01ba683b6 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: keep dest `clean == false` on short read and prove it with a mid-stream fake, plus live Get/MGet own-value on Redis and Dragonfly — do not rewrite the decoder first.
+Best possible solution: keep dest `clean == false` on short read and prove it with a mid-stream fake plus `len(idle)==0`; live Get/MGet own-value uses a unique payload on existing `/redis` and `/dragonfly` — do not rewrite the decoder or `exec` retry first.
 
-Do we have a high-confidence way to reproduce? Yes — a fake that announces `$100`, writes 40 bytes, and closes; dest `startStaticRedis` cannot do that.
+Do we have a high-confidence way to reproduce? Yes — throwaway truncated Get on dest returned `redis:unreachable`, idle 0, second Get `hello`; dest `startStaticRedis` cannot express that.
 
-Is this the best way to solve the issue? Yes versus dest: the finding is a missing test, and dest already has the pool-destroy path.
+Is this the best way to solve the issue? Yes versus dest: the finding is a missing test, dest already has the pool-destroy path, and `exec` retry means idle==0 is the load-bearing assert.
 
 ### Evidence
 What I checked:
-- `readBulk` short-read and header branches, `do` `clean` handling, `release` (`simpleredis/simpleredis.go`, dest `7dc4b05`)
-- `startStaticRedis` always writes a full canned reply (`simpleredis/simpleredis_test.go`)
-- Compose `/redis` `/dragonfly` and Pester verb echo already exist (`docker-compose.yml`, `scripts/integration-tests.Tests.ps1`)
-- Probe Get/MGet uses a per-request key; Eval script already KEYS + Lua 5.1 (`e2e/simpleredisprobe/plugin.go`)
-- Research consumed: `knowledge/research/ext_redis_eval/notes.md`, `knowledge/research/ext_dragonfly_eval/notes.md`, `knowledge/research/ext_dragonfly_container-image/notes.md`
-- GitHub whoami `david-garcia-garcia` / David; PR 19 OPEN; checks queued on SHA `c87bb80`
+- `readBulk` / `do` / `release` / `exec` retry (`simpleredis/simpleredis.go`, dest `7dc4b05`)
+- Coverprofile `go test ./simpleredis -covermode=set`: `401.52,403.3` count 0; `390-392` and `394-396` count 0; array-element default `378.12` count 1
+- Throwaway truncated Get (deleted): `redis:unreachable`, idle 0, second Get `hello`
+- `startStaticRedis` always writes a full canned reply (`simpleredis/simpleredis_test.go:228-256`)
+- Probe Set `"ok"`; Pester two Its (`e2e/simpleredisprobe/plugin.go`, `scripts/integration-tests.Tests.ps1:90-114`)
+- Research: `knowledge/research/ext_redis_resp_bulk-string/notes.md`, `ext_redis_eval`, `ext_dragonfly_eval`
+- Usage consume: `knowledge/devdocs/std_go_simpleredis.md`
+- GitHub whoami `david-garcia-garcia` / David; PR 19 OPEN; checks in progress on SHA `fad9775`
 
 ### Rank-up moves
 None.
