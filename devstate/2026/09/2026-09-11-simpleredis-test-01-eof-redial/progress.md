@@ -6,7 +6,7 @@ JobName: 2026-09-11-simpleredis-test-01-eof-redial
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T21:24:32.936Z |
 | explore | [x] | [x] | 2026-09-11T21:33:22.645Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
