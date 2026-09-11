@@ -57,7 +57,7 @@ func evalClientprobe(t *testing.T, goPath, expr string) string {
 }
 
 // writeGopathSimpleredis copies non-test simpleredis sources into a GOPATH module tree.
-func writeGopathSimpleredis(t *testing.T, goPath string) {
+func writeGopathSimpleredis(t testing.TB, goPath string) {
 	t.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -93,7 +93,7 @@ func writeGopathSimpleredis(t *testing.T, goPath string) {
 }
 
 // writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
-func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
+func writeGopathFile(t testing.TB, goPath, pkg, name, src string) {
 	t.Helper()
 	dir := filepath.Join(goPath, "src", pkg)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

@@ -15,7 +15,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 - Allocate `&simpleredis.SimpleRedis{}` and `Init(host, pass, database)` once before concurrent use.
 - Do not dial in Traefik `New`. Call `Init` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, or `Eval`).
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
-- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
+- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Allocation guards are `TestAlloc*` functions that call `testing.Benchmark` with `ReportAllocs` and fail on over-budget allocs/op or B/op; they do not need `-bench`. Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
 
 ## Pattern snippet
 
@@ -38,6 +38,8 @@ if err != nil {
 ## Key files
 
 - `simpleredis/simpleredis.go` — session, pool, RESP
+- `simpleredis/bench_test.go` — encode/decode benches and CI alloc guards
+- `simpleredis/interpretedcost_test.go` — Yaegi unsafe/encode cost measurements
 - `simpleredis/yaegi_test.go` — interpreter Init/Get/Set/Del/Incr/Eval
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`

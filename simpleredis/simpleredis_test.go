@@ -25,7 +25,7 @@ type fakeRedis struct {
 }
 
 // startFakeRedis listens on a local TCP port and serves an in-process RESP map.
-func startFakeRedis(t *testing.T, store map[string]string) (*fakeRedis, string) {
+func startFakeRedis(t testing.TB, store map[string]string) (*fakeRedis, string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
