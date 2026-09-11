@@ -3,7 +3,7 @@
 ## Language
 
 **SimpleRedis**:
-A stdlib pooled TCP RESP client (`Init`, `Get`, `MGet`, `Set` with EX, `Del`, `Close`). `Init` stores host, password, and database and does not dial; the first command dials.
+A stdlib pooled TCP RESP client (`Init`, `Get`, `MGet`, `Set` with EX, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `Close`). `Init` stores host, password, and database and does not dial; the first command dials.
 _Avoid_: `go-redis`, miniredis, TLS, Unix sockets, renaming the package to `redis`
 
 ## Overview
@@ -15,7 +15,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 - Allocate `&simpleredis.SimpleRedis{}` and `Init(host, pass, database)` once before concurrent use.
 - Do not dial in Traefik `New`. Call `Init` there; first `Set`/`Get` in `ServeHTTP` after Redis is up.
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
-- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1`.
+- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
 
 ## Pattern snippet
 
@@ -31,7 +31,7 @@ got, err := client.Get("k")
 ## Key files
 
 - `simpleredis/simpleredis.go` — session, pool, RESP
-- `simpleredis/yaegi_test.go` — interpreter Init/Get/Set/Del
+- `simpleredis/yaegi_test.go` — interpreter Init/Get/Set/Del/Incr/Eval
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`
 

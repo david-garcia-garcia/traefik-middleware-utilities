@@ -8,4 +8,4 @@ description: How a Traefik middleware stores one value per key with create, slee
 ## SimpleRedis
 priority: normal
 local: std_go_simpleredis.md
-description: How a Traefik middleware Inits and speaks GET/MGET/SET/DEL over stdlib TCP RESP.
+description: How a Traefik middleware Inits and speaks GET/MGET/SET/DEL/INCR/EXPIRE/EVAL over stdlib TCP RESP.
