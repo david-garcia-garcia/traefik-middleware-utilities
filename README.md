@@ -2,7 +2,7 @@
 
 Shared Go libraries for Traefik middlewares.
 
-Traefik loads local and catalog plugins through [Yaegi](https://github.com/traefik/yaegi), an interpreter. This repo exists so the pieces those middlewares keep rewriting — Redis, a reclaim table, and a leaky bucket — live in one place and stay inside the subset of Go that Yaegi can run.
+Traefik loads local and catalog plugins through [Yaegi](https://github.com/traefik/yaegi), an interpreter. This repo exists so the pieces those middlewares keep rewriting — Redis, a reclaim table, and a sliding-window rate limit — live in one place and stay inside the subset of Go that Yaegi can run.
 
 ## Libraries
 
@@ -12,7 +12,7 @@ Introduced one at a time.
 | --- | --- | --- |
 | Reclaim table | Current | In-process table that tracks entries and reclaims them when they expire or are released. |
 | SimpleRedis | Current | Shared stdlib RESP client (GET/MGET/SET/DEL/INCR/EXPIRE/EVAL) middlewares import instead of inventing one. Apache-2.0 (copied from crowdsec-bouncer). |
-| Leaky bucket | Planned | Rate-limit primitive used by middlewares that need a classic leaky-bucket clock. |
+| Sliding-window rate limit | Current | Kong-style Redis/Dragonfly hit counter (`ratelimit/`). Local memory is only the `sync_rate` buffer. |
 
 ## Yaegi
 
@@ -33,8 +33,8 @@ If a change would be fine in compiled Go but fails under Yaegi, the Yaegi failur
 ```text
 reclaim/      reclaim table
 simpleredis/  stdlib RESP client (Apache-2.0)
+ratelimit/    sliding-window Redis/Dragonfly hit counter
 e2e/          fake Traefik plugins + Pester harness (Yaegi)
-bucket/       leaky bucket (later)
 ```
 
 Module path: `github.com/david-garcia-garcia/traefik-middleware-utilities`.
@@ -44,6 +44,7 @@ Module path: `github.com/david-garcia-garcia/traefik-middleware-utilities`.
 ```text
 go test ./reclaim/...
 go test ./simpleredis/...
+go test ./ratelimit/...
 ./Test-Integration.ps1
 ```
 
