@@ -58,7 +58,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return &middleware{next: next, client: client}, nil
 }
 
-// ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval, then copies results into headers.
+// ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, and a missing-key Get, then copies results into headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
 	setKey := prefix + ":set"
@@ -145,6 +145,13 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-Eval", string(evalValues[0]))
+
+	_, missErr := m.client.Get(prefix + ":missing")
+	if missErr == nil || missErr.Error() != simpleredis.RedisMiss {
+		http.Error(rw, "get miss", http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-GetMiss", simpleredis.RedisMiss)
 
 	m.next.ServeHTTP(rw, req)
 }
