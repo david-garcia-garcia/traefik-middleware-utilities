@@ -22,3 +22,10 @@ findings: idle-cap and Close-on-release tests landed; live overlap on Redis and 
 fixed: hold fake + idle ≤ 8; in-flight Close; afterIdleScanForTest; Pester CLIENT LIST remaining ≤ 8
 skipped: none
 
+## codereview (2026-09-11)
+phase: codereview
+findings: Standards 3 (1 hard done, 2 judgement skipped); Nitpicks 2 hard done; Spec/Security/Performance/Dead/Coverage none
+fixed: holdFakeRedis.serve comment; TestCloseDrainsIdleAndDoesNotRedial; Invoke-OverlappingRequests (436cdd0)
+skipped: two Duplicated Code judgement items (both overlap tests; both Pester Its)
+
+
