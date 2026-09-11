@@ -1,18 +1,18 @@
-Developer review: in progress — 2026-09-11T21:31:24Z
+Developer review: in progress — 2026-09-11T21:40:32Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** Explore keeps RESP2 `*-1` as `redis:issue?` (comment at `count < 0`); malformed coverage is a fake-server table plus write-then-close truncations; live `/redis` and `/dragonfly` stay and gain Get-miss. Versus `master` this branch still only adds `knowledge/research/ext_redis_resp_null-array/` — no decoder or test code yet.
+**Developers.** OpenSpec change `simpleredis-malformed-reply` folds dirty RESP decode (not pooled), `*-1` as `redis:issue?` not miss, Get/Incr arity, and live Get-miss on both engines into `std_go_simpleredis_resp-commands`, and adds `knowledge/research/ext_redis_resp_null-array/`. Versus `master` no decoder or test code has landed yet.
 
 **End users.** None.
 
 ## Motivation
-On `master`, `readReply` already fails empty lines, unknown type bytes, bad array counts (including `*-1`), missing CR, and truncated array elements as `redis:issue?` and marks the socket dirty. Almost none of those branches run. Only nested-array and garbage-integer cases exist, and they do not assert the idle list is empty. A proxy, TLS-as-plaintext, or HTTP on the Redis port is how those paths actually fire.
+On `master`, SimpleRedis already treats empty lines, unknown type bytes, bad array counts (including `*-1`), missing CR, and truncated elements as `redis:issue?` and marks the socket dirty. Almost none of those branches run. Only nested-array and garbage-integer cases exist, and they do not assert the idle list is empty. A proxy, TLS-as-plaintext, or HTTP on the Redis port is how those paths actually fire.
 
-If we do not merge the coverage, a later decoder change can ship with those failure modes unproven, and a reused poisoned connection can contaminate the next request. Live `/redis` and `/dragonfly` already prove the happy path; they do not prove the garbage path. Explore closed the open `*-1` choice: keep it as a protocol violation, not `redis:miss`.
+If we do not merge the coverage, a later decoder change can ship with those failure modes unproven, and a reused poisoned connection can contaminate the next request. Live `/redis` and `/dragonfly` already prove the happy path; they do not prove Get-miss (`$-1`) beside fake `*-1` as issue. Propose pins that contract in `std_go_simpleredis_resp-commands` before the tests land.
 
 ```mermaid
 sequenceDiagram
@@ -33,17 +33,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore closed `*-1` and the test shape; stub PR is open; CI is still running. 3 items remain before merge.
+Propose is apply-ready; stub PR is open; CI is still in progress. 2 items remain before merge.
 
 Priority: P3 — tests and decoder proof, no current operator or user harm
-Reviewed head: 059fe5b
-Owner decision: None.
+Reviewed head: 8d7e884
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI still in progress; explore only |
-| CI proof | 3/6 | Test, Integration Tests, and Lint in progress |
+| Overall readiness | 3/6 | CI still in progress; propose only |
+| CI proof | 3/6 | Test queued, Lint queued, Integration Tests in progress |
 | Local tests proof | N/A | Before implement; remote CI is the proof axis |
 | Review resolution | 6/6 | No PR comments |
 
@@ -51,14 +51,14 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-11-simpleredis-test-06-malformed-reply pushed | `git` / origin |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | simpleredis-malformed-reply | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/24 | pr-host List/Create |
-| CI | build 34649731758 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34649731758 | pr-host CI |
+| CI | build 34650442784 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650442784 | pr-host CI |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-None.
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-06-malformed-reply/openspec/changes/simpleredis-malformed-reply/proposal.md) — modified
 
 ## Deviations from the ask
 - taken: uniform `idle==0` on `Get` / `parseIntegerReply` arity mismatch → `idle==0` only on dirty decoder rows — `simpleredis/simpleredis.go` — those checks run after a clean `readReply`. Requester: not asked.
@@ -67,18 +67,18 @@ None.
 None.
 
 ## How this fits together
-Local test-06 finding → explore on `2026-09-11-simpleredis-test-06-malformed-reply` → PR 24 → CI run 34649731758 still in progress.
+Local test-06 finding → propose `simpleredis-malformed-reply` on `2026-09-11-simpleredis-test-06-malformed-reply` → PR 24 → CI run 34650442784 still in progress.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
 | --- | --- | --- | --- |
-| How to exercise `exec` borrow-failure on the retry attempt (`:195`) with a canned reply? | additive asked | assumed — dedicated one-accept helper (good first reply, then malformed on the reused socket, listener closed before retry dial). Expect `redis:unreachable` and `idle==0`. | explore |
-| Do `Get` / `parseIntegerReply` count-mismatch rows assert `len(idle)==0` the same as decoder poison? | additive asked | assumed — cover with canned `*0` / `*2`; assert `redis:issue?`; do not assert `idle==0`. | explore |
-| How do live Redis and Dragonfly stay in the proof if malformed cases are fake-server only? | additive asked | assumed — keep compose both engines and both whoami routes; extend probe + Pester with Get-miss on `/redis` and `/dragonfly`. | explore |
-| Which spec leaf takes malformed and null-array? | additive asked | assumed — delta on `std_go_simpleredis_resp-commands`. No new spec family. | explore |
+| How to exercise `exec` borrow-failure on the retry attempt (`:195`) with a canned reply? | additive asked | assumed — dedicated one-accept helper (good first reply, then malformed on the reused socket, listener closed before retry dial). Expect `redis:unreachable` and `idle==0`. | propose |
+| Do `Get` / `parseIntegerReply` count-mismatch rows assert `len(idle)==0` the same as decoder poison? | additive asked | assumed — cover with canned `*0` / `*2`; assert `redis:issue?`; do not assert `idle==0`. | propose |
+| How do live Redis and Dragonfly stay in the proof if malformed cases are fake-server only? | additive asked | assumed — keep compose both engines and both whoami routes; extend probe + Pester with Get-miss on `/redis` and `/dragonfly`. | propose |
 
 ## Before merge
 - [x] Decide RESP2 null-array (`*-1`) on explore.md — keep as `redis:issue?` + comment at `count < 0`
+- [x] Propose OpenSpec change `simpleredis-malformed-reply` (fold into `std_go_simpleredis_resp-commands`)
 - [ ] [P3] Table-driven fake-server malformed replies with `len(idle) == 0` on dirty rows
 - [ ] [P3] Keep live `/redis` and `/dragonfly` happy-path; extend Get-miss on both engines
 
@@ -93,28 +93,27 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 059fe5be24f3c7813bd6ca9dde705a4f0d8eba1b | Card must match the branch you measured |
+| Reviewed head | 8d7e88441a3db24302307fc89bed236bdab39752 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: keep `*-1` as issue (no verb receives a null array), prove poison paths with a fake-server table, and keep live Redis and Dragonfly so a decoder change cannot ship unproven.
+Best possible solution: pin `*-1` as issue (no verb receives a null array), prove poison with a fake-server table plus write-then-close truncations, and keep live Redis and Dragonfly Get-miss so a decoder change cannot ship unproven.
 
 Do we have a high-confidence way to reproduce? Yes, `startStaticRedis` canned replies plus a write-then-close helper for truncations, plus dest Pester `/redis` `/dragonfly`.
 
-Is this the best way to solve the issue? Yes versus `master`: pin `*-1` on purpose, do not map it to `redis:miss`, and do not drop live engines.
+Is this the best way to solve the issue? Yes versus `master`: specify the contract in the existing RESP-commands leaf, do not map `*-1` to `redis:miss`, and do not drop live engines.
 
 ### Evidence
 What I checked:
+- FindSpecHost fold into `std_go_simpleredis_resp-commands` (candidates: that leaf, `std_go_simpleredis_tcp-session`)
+- `openspec validate simpleredis-malformed-reply --strict --type change` — valid
 - `readReply` / `readLine` / `Get` / `parseIntegerReply` / `exec` retry-borrow (`simpleredis/simpleredis.go`)
-- Existing malformed tests: `TestEvalNestedArrayIsIssue`, `TestIncrGarbageIntegerPayload` (`simpleredis/simpleredis_test.go`)
-- Compose + Pester `/redis` `/dragonfly` already on dest
-- Official RESP2 null array (`*-1`) vs null bulk (`knowledge/research/ext_redis_resp_null-array/`)
-- Dragonfly KEYS + Lua 5.4 `table.maxn` (`knowledge/research/ext_dragonfly_eval/`)
-- PR 24 comments empty; CI run 34649731758 in progress
+- Official RESP2 null array (`knowledge/research/ext_redis_resp_null-array/`)
+- PR 24 comments empty; CI run 34650442784 in progress (SHA 8d7e884)
 
 ### Rank-up moves
 None.
