@@ -1,4 +1,4 @@
-// Package simpleredis is a stdlib pooled TCP RESP client (GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL).
+// Package simpleredis is a stdlib pooled TCP RESP client (GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL, MSetEX, MSetEXAt).
 package simpleredis
 
 import (
@@ -23,11 +23,30 @@ const (
 )
 
 const (
-	maxIdleConns = 8
-	idleTimeout  = 30 * time.Second
-	dialTimeout  = 2 * time.Second
-	ioTimeout    = 1 * time.Second
+	maxIdleConns   = 8
+	maxMSetEXPairs = 1024
+	idleTimeout    = 30 * time.Second
+	dialTimeout    = 2 * time.Second
+	ioTimeout      = 1 * time.Second
 )
+
+// groupWritePath is whether this client sends native MSETEX or the Lua fallback.
+type groupWritePath int
+
+const (
+	groupWriteUnknown groupWritePath = iota
+	groupWriteNative
+	groupWriteLua
+)
+
+// msetexFallbackScript sets each KEYS[i] to ARGV[i] with EX or EXAT from the last two ARGV.
+// Lua 5.1-safe: numeric for, no unpack / table.unpack / table.maxn. Keys stay in KEYS for Dragonfly.
+const msetexFallbackScript = `local token = ARGV[#ARGV - 1]
+local ttl = ARGV[#ARGV]
+for i = 1, #KEYS do
+  redis.call('SET', KEYS[i], ARGV[i], token, ttl)
+end
+return 1`
 
 var (
 	errUnreachable = errors.New(RedisUnreachable)
@@ -56,12 +75,13 @@ type SimpleRedis struct {
 	pass     string
 	database string
 
-	mu     sync.Mutex
-	idle   []*pooledConn
-	closed bool
+	mu         sync.Mutex
+	idle       []*pooledConn
+	closed     bool
+	groupWrite groupWritePath
 }
 
-// Close drains idle pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
+// Close drains idle pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval/MSetEX/MSetEXAt return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
 func (sr *SimpleRedis) Close() {
 	sr.mu.Lock()
 	if sr.closed {
@@ -161,6 +181,87 @@ func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]by
 		wire = append(wire, []byte(arg))
 	}
 	return sr.exec(wire...)
+}
+
+// MSetEX writes names and values with one shared TTL in seconds (native MSETEX or Lua fallback).
+func (sr *SimpleRedis) MSetEX(names []string, values [][]byte, seconds int64) error {
+	return sr.msetex(names, values, "EX", seconds)
+}
+
+// MSetEXAt writes names and values with one shared Unix expiry (native MSETEX or Lua fallback).
+func (sr *SimpleRedis) MSetEXAt(names []string, values [][]byte, unixSeconds int64) error {
+	return sr.msetex(names, values, "EXAT", unixSeconds)
+}
+
+// msetex validates the pair lists then sends native MSETEX, falling back to Eval on unknown-command.
+func (sr *SimpleRedis) msetex(names []string, values [][]byte, expireToken string, ttl int64) error {
+	if len(names) == 0 || len(names) != len(values) || len(names) > maxMSetEXPairs {
+		return errIssue
+	}
+	if sr.cachedGroupWrite() == groupWriteLua {
+		return sr.msetexEval(names, values, expireToken, ttl)
+	}
+	n, err := parseIntegerReply(sr.exec(msetexArgs(names, values, expireToken, ttl)...))
+	if unknownCommand(err) {
+		sr.storeGroupWrite(groupWriteLua)
+		return sr.msetexEval(names, values, expireToken, ttl)
+	}
+	if err == nil {
+		sr.storeGroupWrite(groupWriteNative)
+	}
+	return msetexSuccess(n, err)
+}
+
+// msetexEval runs the fallback script with names in KEYS and values then token then TTL in ARGV.
+func (sr *SimpleRedis) msetexEval(names []string, values [][]byte, expireToken string, ttl int64) error {
+	argv := make([]string, 0, len(values)+2)
+	for _, value := range values {
+		argv = append(argv, string(value))
+	}
+	argv = append(argv, expireToken, strconv.FormatInt(ttl, 10))
+	return msetexSuccess(parseIntegerReply(sr.Eval(msetexFallbackScript, names, argv)))
+}
+
+// cachedGroupWrite returns the capability cache. Callers must not hold mu.
+func (sr *SimpleRedis) cachedGroupWrite() groupWritePath {
+	sr.mu.Lock()
+	path := sr.groupWrite
+	sr.mu.Unlock()
+	return path
+}
+
+// storeGroupWrite records native or lua for this client. Callers must not hold mu.
+func (sr *SimpleRedis) storeGroupWrite(path groupWritePath) {
+	sr.mu.Lock()
+	sr.groupWrite = path
+	sr.mu.Unlock()
+}
+
+// msetexArgs is native MSETEX: numkeys, pairs in order, then EX or EXAT, then the decimal TTL.
+func msetexArgs(names []string, values [][]byte, expireToken string, ttl int64) [][]byte {
+	args := make([][]byte, 0, 4+2*len(names))
+	args = append(args, []byte("MSETEX"), []byte(strconv.Itoa(len(names))))
+	for i, name := range names {
+		args = append(args, []byte(name), values[i])
+	}
+	args = append(args, []byte(expireToken), []byte(strconv.FormatInt(ttl, 10)))
+	return args
+}
+
+// msetexSuccess is nil when the engine returned integer 1. Other integers are redis:issue?.
+func msetexSuccess(n int64, err error) error {
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return errIssue
+	}
+	return nil
+}
+
+// unknownCommand is true when Redis or Dragonfly rejected the verb as not in the command table.
+func unknownCommand(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "ERR unknown command")
 }
 
 // parseIntegerReply reads one decimal integer from a : reply. Garbage payload is redis:issue?.
