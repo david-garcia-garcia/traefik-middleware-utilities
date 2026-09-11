@@ -84,20 +84,20 @@ Both a `Hooks` struct and extra `func()` parameters fire under Yaegi v0.16.1 (cr
 
 - Q: Exact explicit-hook API shape on `Open` (function parameters vs struct)?
   Rank: bounded asked — existing `Open` contract; callers enumerated: `table.go:180`, `default.go:28`, `e2e/reclaimprobe/plugin.go:54`, 56 `Open` calls in `reclaim/table_test.go` (searched `*.go` for `.Open(`); all migrate here. Desired: “Change `Open` to take explicit lifecycle hooks”
-  Decision: assumed — last argument `reclaim.Hooks{Sleep, Wake, Close func()}`. Store on the slot at put; bind/reclaim ignore the new argument. Nil funcs skip. Callers close over the pointer set inside `create`.
-  By: explore
+  Decision: resolved — last argument `reclaim.Hooks{Sleep, Wake, Close func()}`. Store on the slot at put; bind/reclaim ignore the new argument. Nil funcs skip. Callers close over the pointer set inside `create`.
+  By: propose
 
 - Q: Do compiled callers keep optional methods on the value as a convenience wrapper, or migrate fully to explicit hooks?
   Rank: bounded asked — Desired: “not optional interface discovery on the stored value”; lookups are `sleepValue`/`wakeValue`/`closeValue` in `reclaim/table.go:146-167` (same file as Open; Reset/dispose call them)
-  Decision: assumed — full migrate. Delete `sleeper`/`waker`/`closer` type-switches. Compiled tests pass `Hooks{Sleep: life.Sleep, ...}`.
-  By: explore
+  Decision: resolved — full migrate. Delete `sleeper`/`waker`/`closer` type-switches. Compiled tests pass `Hooks{Sleep: life.Sleep, ...}`.
+  By: propose
 
 - Q: Which Yaegi import path and version pin matches Traefik v3.7.11 for unit tests?
   Rank: additive asked — new test dependency this change creates; Desired: “Add tests importing the actual Yaegi interpreter”; Out of scope: runtime vendor
-  Decision: assumed — `github.com/traefik/yaegi v0.16.1` (traefik@v3.7.11 `go.mod`). Test files only. GOPATH interp + `stdlib.Symbols`. No `unsafe`.
-  By: explore
+  Decision: resolved — `github.com/traefik/yaegi v0.16.1` (traefik@v3.7.11 `go.mod`). Test files only. GOPATH interp + `stdlib.Symbols`. No `unsafe`.
+  By: propose
 
 - Q: Where do Yaegi interpreter tests live, and what is the test host for all four hooks?
   Rank: additive asked — Desired: interpreter tests plus “a test host for the reclaim table that exercises all lifecycle hooks (likely log-only)” and Pester wrap-up
-  Decision: assumed — `reclaim/*_yaegi_test.go` (or `reclaim/yaegi_test.go`) imports yaegi; GOPATH consumer under testdata/temp. `e2e/reclaimprobe` is the log-only host (explicit hooks + slog). Pester: put/bind plus orphan/dispose and hook log lines on a reload path.
-  By: explore
+  Decision: resolved — `reclaim/*_yaegi_test.go` (or `reclaim/yaegi_test.go`) imports yaegi; GOPATH consumer under testdata/temp. `e2e/reclaimprobe` is the log-only host (explicit hooks + slog). Pester: put/bind plus orphan/dispose and hook log lines on a reload path (stop both whoami holders, then start within grace).
+  By: propose
