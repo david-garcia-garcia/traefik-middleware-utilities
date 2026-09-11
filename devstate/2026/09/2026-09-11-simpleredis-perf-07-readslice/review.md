@@ -27,3 +27,9 @@ phase: codereview
 findings: 1 Nitpicks hard + 1 Coverage hard Status: done; 1 Standards judgement skipped; Spec/Security/Performance/Dead none
 fixed: parseLen locals `length`/`digitByte`; TestParseLen overflow digits (3c1ec7c)
 skipped: Duplicated Code extract of two-site `+`/`:` copy (judgement; design-named shape)
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: missing-packet RESP decode; stale-usage SimpleRedis Key files
+fixed: created `knowledge/devdocs/std_go_simpleredis_resp-decode.md`; `index_std_go.md` row; SimpleRedis Key files pointer (701bee0)
+skipped: none
