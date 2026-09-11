@@ -10,5 +10,5 @@ JobName: 2026-09-11-simpleredis-incr-eval
 | implement | [x] | [x] | 2026-09-11T09:45:28Z |
 | codereview | [x] | [x] | 2026-09-11T09:53:01Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T10:02:01Z |
-| archive | [ ] | [ ] | |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
