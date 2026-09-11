@@ -24,12 +24,44 @@ BeforeAll {
         param(
             [string]$BackendHost
         )
-        $raw = docker compose exec -T redis redis-cli -h $BackendHost CLIENT LIST 2>&1 | Out-String
-        if ($LASTEXITCODE -ne 0) {
-            throw "CLIENT LIST on $BackendHost failed: $raw"
+        $raw = $null
+        $elapsed = 0
+        do {
+            $raw = docker compose exec -T redis redis-cli -h $BackendHost CLIENT LIST 2>&1
+            $code = $LASTEXITCODE
+            $text = "$raw"
+            if ($code -eq 0 -and $text -match 'id=') {
+                $lines = @($text -split "[\r\n]+" | Where-Object { $_ -match 'id=' })
+                return [Math]::Max(0, $lines.Count - 1)
+            }
+            Start-Sleep -Milliseconds 200
+            $elapsed += 200
+        } while ($elapsed -lt 2000)
+        throw "CLIENT LIST on $BackendHost failed: $raw"
+    }
+
+    function Invoke-OverlappingWhoami {
+        param(
+            [string]$Path
+        )
+        $baseUrl = $script:BaseUrl
+        $results = 1..16 | ForEach-Object -Parallel {
+            $url = "$using:baseUrl$using:Path"
+            $last = $null
+            foreach ($attempt in 1..4) {
+                try {
+                    return Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 30
+                }
+                catch {
+                    $last = $_
+                    Start-Sleep -Milliseconds 100
+                }
+            }
+            throw $last
+        } -ThrottleLimit 16
+        foreach ($response in $results) {
+            $response.StatusCode | Should -Be 200
         }
-        $lines = @($raw -split "[\r\n]+" | Where-Object { $_ -match 'id=' })
-        return [Math]::Max(0, $lines.Count - 1)
     }
 }
 
@@ -126,13 +158,7 @@ Describe "simpleredis Yaegi e2e" {
     }
 
     It "GET /redis overlap leaves at most eight idle sockets" {
-        $baseUrl = $script:BaseUrl
-        $results = 1..16 | ForEach-Object -Parallel {
-            Invoke-WebRequest -Uri "$using:baseUrl/redis" -UseBasicParsing -TimeoutSec 30
-        } -ThrottleLimit 16
-        foreach ($response in $results) {
-            $response.StatusCode | Should -Be 200
-        }
+        Invoke-OverlappingWhoami -Path /redis
         $remaining = 99
         $elapsed = 0
         do {
@@ -147,13 +173,7 @@ Describe "simpleredis Yaegi e2e" {
     }
 
     It "GET /dragonfly overlap leaves at most eight idle sockets" {
-        $baseUrl = $script:BaseUrl
-        $results = 1..16 | ForEach-Object -Parallel {
-            Invoke-WebRequest -Uri "$using:baseUrl/dragonfly" -UseBasicParsing -TimeoutSec 30
-        } -ThrottleLimit 16
-        foreach ($response in $results) {
-            $response.StatusCode | Should -Be 200
-        }
+        Invoke-OverlappingWhoami -Path /dragonfly
         $remaining = 99
         $elapsed = 0
         do {
