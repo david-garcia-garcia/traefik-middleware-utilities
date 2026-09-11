@@ -74,8 +74,12 @@ jobs:
         docker compose logs whoami-b
         echo "=== Redis logs ==="
         docker compose logs redis
+        echo "=== Dragonfly logs ==="
+        docker compose logs dragonfly
         echo "=== Whoami-redis logs ==="
         docker compose logs whoami-redis
+        echo "=== Whoami-dragonfly logs ==="
+        docker compose logs whoami-dragonfly
     - name: Cleanup
       if: always()
       run: docker compose down -v

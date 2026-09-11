@@ -11,7 +11,7 @@ Introduced one at a time.
 | Library | Status | Role |
 | --- | --- | --- |
 | Reclaim table | Current | In-process table that tracks entries and reclaims them when they expire or are released. |
-| SimpleRedis | Current | Shared stdlib RESP client (GET/MGET/SET/DEL) middlewares import instead of inventing one. Apache-2.0 (copied from crowdsec-bouncer). |
+| SimpleRedis | Current | Shared stdlib RESP client (GET/MGET/SET/DEL/INCR/EXPIRE/EVAL) middlewares import instead of inventing one. Apache-2.0 (copied from crowdsec-bouncer). |
 | Leaky bucket | Planned | Rate-limit primitive used by middlewares that need a classic leaky-bucket clock. |
 
 ## Yaegi

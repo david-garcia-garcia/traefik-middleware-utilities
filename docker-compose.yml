@@ -48,6 +48,12 @@ services:
     image: redis:7-alpine
     hostname: redis
 
+  dragonfly:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2
+    hostname: dragonfly
+    ulimits:
+      memlock: -1
+
   whoami-redis:
     image: traefik/whoami
     labels:
@@ -57,3 +63,13 @@ services:
       - "traefik.http.routers.simpleredis.middlewares=simpleredis@docker"
       - "traefik.http.services.simpleredis.loadbalancer.server.port=80"
       - "traefik.http.middlewares.simpleredis.plugin.simpleredisprobe.host=redis:6379"
+
+  whoami-dragonfly:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simpleredis-dragonfly.rule=PathPrefix(`/dragonfly`)"
+      - "traefik.http.routers.simpleredis-dragonfly.entrypoints=web"
+      - "traefik.http.routers.simpleredis-dragonfly.middlewares=simpleredis-dragonfly@docker"
+      - "traefik.http.services.simpleredis-dragonfly.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.simpleredis-dragonfly.plugin.simpleredisprobe.host=dragonfly:6379"

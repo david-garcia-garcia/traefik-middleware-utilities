@@ -87,9 +87,29 @@ Describe "simpleredis Yaegi e2e" {
         $response.StatusCode | Should -Be 200
     }
 
-    It "GET /redis succeeds and echoes the SET value" {
+    It "GET /redis succeeds and echoes every SimpleRedis verb" {
         $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis" -UseBasicParsing -TimeoutSec 10
         $response.StatusCode | Should -Be 200
         $response.Headers["X-SimpleRedis-Value"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-MGet"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-Del"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-Incr"] | Should -Be "1"
+        $response.Headers["X-SimpleRedis-IncrBy"] | Should -Be "5"
+        $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+    }
+
+    It "GET /dragonfly succeeds and echoes every SimpleRedis verb" {
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly" -UseBasicParsing -TimeoutSec 10
+        $response.StatusCode | Should -Be 200
+        $response.Headers["X-SimpleRedis-Value"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-MGet"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-Del"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-Incr"] | Should -Be "1"
+        $response.Headers["X-SimpleRedis-IncrBy"] | Should -Be "5"
+        $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
+        $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
     }
 }
