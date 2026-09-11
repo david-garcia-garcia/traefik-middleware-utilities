@@ -80,10 +80,10 @@ func (f *fakeRedis) commandReply(args []string) string {
 	switch args[0] {
 	case "AUTH":
 		f.auths++
-		return "+OK\r\n"
+		return statusOKReply
 	case "SELECT":
 		f.selects++
-		return "+OK\r\n"
+		return statusOKReply
 	case "GET":
 		f.gets++
 		return bulk(f.store, args[1])
@@ -96,23 +96,23 @@ func (f *fakeRedis) commandReply(args []string) string {
 	case "SET":
 		f.store[args[1]] = args[2]
 		f.lastSet = append([]string(nil), args...)
-		return "+OK\r\n"
+		return statusOKReply
 	case "INCR":
 		f.incrs++
 		afterIncr, incrErr := incrementStored(f.store, args[1], 1)
 		if incrErr != nil {
-			return "-ERR value is not an integer or out of range\r\n"
+			return incrementNotIntegerReply
 		}
 		return fmt.Sprintf(":%d\r\n", afterIncr)
 	case "INCRBY":
 		f.incrBys++
 		delta, convErr := strconv.ParseInt(args[2], 10, 64)
 		if convErr != nil {
-			return "-ERR value is not an integer or out of range\r\n"
+			return incrementNotIntegerReply
 		}
 		afterIncr, incrErr := incrementStored(f.store, args[1], delta)
 		if incrErr != nil {
-			return "-ERR value is not an integer or out of range\r\n"
+			return incrementNotIntegerReply
 		}
 		return fmt.Sprintf(":%d\r\n", afterIncr)
 	case "EXPIRE", "EXPIREAT":
@@ -125,12 +125,12 @@ func (f *fakeRedis) commandReply(args []string) string {
 			key := args[3]
 			delta, convErr := strconv.ParseInt(args[4], 10, 64)
 			if convErr != nil {
-				return "-ERR value is not an integer or out of range\r\n"
+				return incrementNotIntegerReply
 			}
 			_, existed := f.store[key]
 			n, incrErr := incrementStored(f.store, key, delta)
 			if incrErr != nil {
-				return "-ERR value is not an integer or out of range\r\n"
+				return incrementNotIntegerReply
 			}
 			if !existed {
 				f.lastExpire = []string{"EXPIREAT", key, args[5]}
@@ -139,7 +139,7 @@ func (f *fakeRedis) commandReply(args []string) string {
 		}
 		return ":0\r\n"
 	default:
-		return "+OK\r\n"
+		return statusOKReply
 	}
 }
 
@@ -237,6 +237,12 @@ if exists == 0 then
   redis.call("expireat", KEYS[1], ARGV[2])
 end
 return value`
+
+// statusOKReply is a RESP simple-string OK.
+const statusOKReply = "+OK\r\n"
+
+// incrementNotIntegerReply is the Redis error when INCR/INCRBY cannot parse the stored value.
+const incrementNotIntegerReply = "-ERR value is not an integer or out of range\r\n"
 
 // readCommand parses one RESP array of bulk strings from the fake client.
 func readCommand(reader *bufio.Reader) ([]string, error) {
