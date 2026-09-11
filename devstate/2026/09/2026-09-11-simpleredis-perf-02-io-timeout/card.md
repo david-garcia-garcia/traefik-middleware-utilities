@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-11T21:33:10Z
+Developer review: in progress — 2026-09-11T21:41:50Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** Research packets for Redis and Dragonfly `BLPOP` as the shared-CI stall; SimpleRedis timeouts are still compile-time constants on master.
+**Developers.** OpenSpec change `simpleredis-configurable-timeouts` folds `std_go_simpleredis_tcp-session` for `InitWithOptions` and zero-value timeout defaults; research packets document `BLPOP` as the live stall. SimpleRedis on master still uses compile-time constants.
 
 **End users.** None.
 
@@ -27,16 +27,16 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore recorded InitWithOptions, BLPOP live proof, and omit unused poolSize. Product apply has not started. 3 items remain.
+Propose landed the change artifacts; product apply has not started. 3 items remain.
 
 Priority: P2 — Redis slowness holds Traefik workers for a full second and fans out dials, with no caller-set shorter deadline
-Reviewed head: b20848e
+Reviewed head: c8c3fc1
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI still running; no product apply yet |
+| Overall readiness | 3/6 | CI still running; apply not started |
 | CI proof | 3/6 | Lint, Test, and Integration Tests in progress |
 | Local tests proof | N/A | Before implement; remote CI covers this host |
 | Review resolution | 6/6 | OPEN PR, no comments |
@@ -45,14 +45,14 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-11-simpleredis-perf-02-io-timeout pushed | `git` origin/2026-09-11-simpleredis-perf-02-io-timeout |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | simpleredis-configurable-timeouts | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/16 | pr-host List/Create |
-| CI | build 34649839773 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34649839773 | pr-host CI |
+| CI | build 34650584471 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650584471 | pr-host CI |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-None.
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-02-io-timeout/openspec/changes/simpleredis-configurable-timeouts/proposal.md) — modified
 
 ## Deviations from the ask
 - taken: finding listed poolSize/poolTimeout as config fields → Options has only DialTimeout, IoTimeout, IdleTimeout, MaxIdleConns — `simpleredis/simpleredis.go` — unused live-socket fields would lie until perf-01. Requester: not asked.
@@ -61,7 +61,7 @@ None.
 None.
 
 ## How this fits together
-Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. Stub PR 16 is the durable card host. Explore closed the stall and surface questions; apply is next.
+Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. Stub PR 16 hosts the card. OpenSpec change `simpleredis-configurable-timeouts` is proposed; implement applies it.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -71,7 +71,7 @@ Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` f
 | Whether unused poolSize/poolTimeout fields are stored as no-ops or omitted from the struct and only documented? | additive asked | assumed — omit from Options; document live-socket cap / wait queue as perf-01 | explore |
 | Must the Traefik probe Config expose the new timeouts for Pester, or are live Go tests against compose/CI ports enough? | additive asked | assumed — live Go tests are enough; probe stays Host only; CI test job sets SIMPLEREDIS_LIVE_REDIS and SIMPLEREDIS_LIVE_DRAGONFLY | explore |
 | How is configured DialTimeout proven if a blackhole SYN is not reliable in CI? | additive asked | assumed — package test that dial uses the stored duration plus hanging-SYN to 192.0.2.1 asserting redis:unreachable well under the 2s default; I/O timeout is the live-engine proof | explore |
-| Can MaxIdleConns 0 mean "keep no idle sockets", or is 0 the default eight? | additive asked | assumed — MaxIdleConns == 0 means eight; callers cannot express idle cap zero on this Options type | explore |
+| Can MaxIdleConns 0 mean "keep no idle sockets", or is 0 the default eight? | additive asked | assumed — MaxIdleConns <= 0 means eight; callers cannot express idle cap zero on this Options type | explore |
 | Rewrite the spec's "concurrent commands SHALL not open more than eight connections" now that MaxIdleConns is configurable? | bounded incidental | assumed — do not rewrite the live-socket claim; spec delta idle list at most MaxIdleConns (default 8); leave the live cap to perf-01 | explore |
 
 ## Before merge
@@ -90,9 +90,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
+| Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | b20848e9376b5a5f645c9f0c161046fd460311b9 | Card must match the branch you measured |
+| Reviewed head | c8c3fc1c140ee690aab40aaa1bb4361314648787 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -100,16 +100,15 @@ None.
 ### Technical review
 Best possible solution: Keep Init(host, pass, database) and today's defaults; add InitWithOptions with a plain Options struct; prove I/O timeout with BLPOP on both engines; leave the wait-queue to perf-01.
 
-Do we have a high-confidence way to reproduce? Yes — TestIoTimeout on the 1s constant; live proof planned as BLPOP against Redis and Dragonfly with a short IoTimeout.
+Do we have a high-confidence way to reproduce? Yes — TestIoTimeout on the 1s constant; live proof specified as BLPOP against Redis and Dragonfly with a short IoTimeout.
 
 Is this the best way to solve the issue? Yes versus master: expose the existing constants as caller-set deadlines without rewriting the pool.
 
 ### Evidence
 What I checked:
-- explore.md eight open questions, none blocked (run root)
-- deviations.md omit poolSize/poolTimeout from Options
-- knowledge/research/ext_redis_blpop and ext_dragonfly_blpop on HEAD b20848e
-- OPEN PR 16, zero comments, CI run 34649839773 in progress
+- openspec/changes/simpleredis-configurable-timeouts on HEAD c8c3fc1
+- specs.md fold std_go_simpleredis_tcp-session
+- OPEN PR 16, zero comments, CI run 34650584471 in progress
 
 ### Rank-up moves
 None.

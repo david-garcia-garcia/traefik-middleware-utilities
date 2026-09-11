@@ -10,3 +10,9 @@ findings: 8 open questions, none blocked; InitWithOptions; BLPOP live stall; omi
 fixed: n/a
 skipped: n/a
 
+## propose (2026-09-11)
+phase: propose
+findings: change simpleredis-configurable-timeouts; fold std_go_simpleredis_tcp-session
+fixed: n/a
+skipped: n/a
+
