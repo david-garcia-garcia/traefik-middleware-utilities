@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-11T21:30:35Z
+Developer review: in progress — 2026-09-11T21:39:11Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** Dest `SimpleRedis.Eval` still sends `EVAL` plus the full Lua body. This branch adds `ext_redis_evalsha` and `ext_dragonfly_evalsha` (NOSCRIPT prefix, SHA-1 digest) and records that Eval will send EVALSHA with a NOSCRIPT→EVAL fallback, proven live on `/redis` and `/dragonfly`.
+**Developers.** OpenSpec change `simpleredis-evalsha` folds EVALSHA-inside-Eval (NOSCRIPT→EVAL fallback, Yaegi, live Redis and Dragonfly SCRIPT FLUSH/EXISTS) into `std_go_simpleredis_resp-commands`. Product `Eval` still sends `EVAL` plus the full Lua body.
 
 **End users.** None.
 
@@ -24,32 +24,32 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore is recorded; product Eval is unchanged. 1 item remains before merge (the apply).
+Propose is recorded; product Eval is unchanged. 1 item remains before merge (the apply).
 
 Priority: P3 — extra EVAL bytes on DestBranch; no wrong answers or outages
-Reviewed head: e89554d
+Reviewed head: f00b5d4
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 3/6 | CI in progress; product apply has not started |
-| CI proof | 3/6 | Checks in progress on run 34649659559 |
+| CI proof | 3/6 | Checks in progress on run 34650365634 |
 | Local tests proof | N/A | Before implement; remote CI is the proof axis |
 | Review resolution | 6/6 | No OPEN PR comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin e89554d |
-| OpenSpec | none | `openspec/` unchanged vs master |
+| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin f00b5d4 |
+| OpenSpec | simpleredis-evalsha | `openspec/changes/simpleredis-evalsha/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/13 | GitHub PR 13 |
-| CI | build 34649659559 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34649659559 | GitHub check runs |
+| CI | build 34650365634 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650365634 | GitHub check runs |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-None.
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/openspec/changes/simpleredis-evalsha/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -58,7 +58,7 @@ None.
 None.
 
 ## How this fits together
-Explore is on branch `2026-09-11-simpleredis-perf-05-evalsha` and stub PR 13. Propose is next; `Eval` is not changed yet.
+Propose is on branch `2026-09-11-simpleredis-perf-05-evalsha` and stub PR 13. Implement is next; `Eval` is not changed yet.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -67,6 +67,7 @@ Explore is on branch `2026-09-11-simpleredis-perf-05-evalsha` and stub PR 13. Pr
 
 ## Before merge
 - [ ] Land EVALSHA inside `Eval` with NOSCRIPT fallback, Yaegi interp, and live Redis plus Dragonfly proof [P3]
+- [x] OpenSpec change `simpleredis-evalsha` ready
 - [x] Stub review PR opened
 
 ## Findings
@@ -80,9 +81,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | e89554def7d324049f77f81b78c34ada3e16ef5d | Card must match the branch you measured |
+| Reviewed head | f00b5d41bba7f1dea63a9b986881dd3628e2f2ff | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -96,11 +97,11 @@ Is this the best way to solve the issue? Yes — digest plus fallback beats ship
 
 ### Evidence
 What I checked:
-- `origin/master...HEAD` at e89554d (research packets + explore bus; no product Eval change)
-- NOSCRIPT prefix Redis 7 and Dragonfly v1.40.2 (`knowledge/research/ext_redis_evalsha/`, `knowledge/research/ext_dragonfly_evalsha/`)
-- Eval callers stay on `Eval` (`tokenbucket/redis.go`, `windowcounter/limiter.go`, `e2e/simpleredisprobe/plugin.go`)
-- PR 13 OPEN, checks in progress (run 34649659559)
-- qualify: qualified-with-gaps; explore: explore.md (`handoff.yaml`)
+- `origin/master...HEAD` at f00b5d4 (research packets + OpenSpec change; no product Eval change)
+- FindSpecHost fold `std_go_simpleredis_resp-commands` (high); `openspec validate simpleredis-evalsha --strict` valid
+- validate_artifact_names OK; validate_spec_map OK
+- PR 13 OPEN, checks in progress (run 34650365634)
+- qualify: qualified-with-gaps; explore: explore.md; change: simpleredis-evalsha (`handoff.yaml`)
 
 ### Rank-up moves
 None.

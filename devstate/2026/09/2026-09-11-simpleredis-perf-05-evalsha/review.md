@@ -9,3 +9,9 @@ phase: explore
 findings: 3 open questions (2 resolved, 1 assumed); none blocked; none structural incidental
 fixed: n/a
 skipped: n/a
+
+## propose (2026-09-11)
+phase: propose
+findings: fold std_go_simpleredis_resp-commands (high); OpenSpec valid; 1 assumed Q copied to card
+fixed: n/a
+skipped: n/a

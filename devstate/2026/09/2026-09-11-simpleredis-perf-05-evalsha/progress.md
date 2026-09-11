@@ -6,7 +6,7 @@ JobName: 2026-09-11-simpleredis-perf-05-evalsha
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T21:22:08Z |
 | explore | [x] | [x] | 2026-09-11T21:30:35Z |
-| propose | [x] | [ ] | |
+| propose | [x] | [x] | 2026-09-11T21:39:11Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
