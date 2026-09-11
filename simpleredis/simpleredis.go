@@ -444,22 +444,22 @@ func parseLen(digits []byte) (int, bool) {
 			return 0, false
 		}
 	}
-	n := 0
+	length := 0
 	for ; i < len(digits); i++ {
-		d := digits[i]
-		if d < '0' || d > '9' {
+		digitByte := digits[i]
+		if digitByte < '0' || digitByte > '9' {
 			return 0, false
 		}
-		digit := int(d - '0')
-		if n > (maxParseLen-digit)/10 {
+		digit := int(digitByte - '0')
+		if length > (maxParseLen-digit)/10 {
 			return 0, false
 		}
-		n = n*10 + digit
+		length = length*10 + digit
 	}
 	if negative {
-		return -n, true
+		return -length, true
 	}
-	return n, true
+	return length, true
 }
 
 // replyError maps AUTH-class Redis errors to redis:noauth and otherwise returns the payload text.

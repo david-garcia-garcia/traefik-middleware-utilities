@@ -917,6 +917,7 @@ func TestParseLen(t *testing.T) {
 		{in: "abc", wantOK: false},
 		{in: "1a", wantOK: false},
 		{in: "+1", wantOK: false},
+		{in: "9999999999999999999999999999999999999999", wantOK: false},
 	}
 	for _, test := range tests {
 		got, ok := parseLen([]byte(test.in))
