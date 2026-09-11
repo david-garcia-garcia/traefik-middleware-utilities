@@ -9,3 +9,9 @@ description: How a Traefik middleware stores one value per key with create, slee
 priority: normal
 local: std_go_simpleredis.md
 description: How a Traefik middleware Inits and speaks GET/MGET/SET/DEL/INCR/EXPIRE/EVAL over stdlib TCP RESP.
+
+## Rate limit window counter
+priority: normal
+local: std_go_ratelimit.md
+description: How a Traefik middleware Takes a sliding-window hit against Redis or Dragonfly via SimpleRedis.
+
