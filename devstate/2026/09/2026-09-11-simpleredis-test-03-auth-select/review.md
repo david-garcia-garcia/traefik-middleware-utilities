@@ -12,3 +12,10 @@ findings: coverage gap reproduced (dial AUTH/SELECT error blocks count 0); Redis
 fixed: none
 skipped: none
 
+## propose (2026-09-11)
+
+phase: propose
+findings: fold std_go_simpleredis_tcp-session and std_go_simpleredis_resp-commands; OpenSpec change simpleredis-test-03-auth-select valid
+fixed: none
+skipped: none
+
