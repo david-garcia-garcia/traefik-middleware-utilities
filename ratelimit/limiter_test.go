@@ -8,7 +8,7 @@ import (
 )
 
 func TestTake_NThenDeny(t *testing.T) {
-	_, addr := startTestFakeRedis(t, nil)
+	_, addr := startTestFakeRedis(t)
 	client := &simpleredis.SimpleRedis{}
 	client.Init(addr, "", "")
 	limiter, err := New(client, 0)
@@ -39,7 +39,7 @@ func TestTake_NThenDeny(t *testing.T) {
 }
 
 func TestTake_ExpireOnFirstHit(t *testing.T) {
-	fake, addr := startTestFakeRedis(t, nil)
+	fake, addr := startTestFakeRedis(t)
 	client := &simpleredis.SimpleRedis{}
 	client.Init(addr, "", "")
 	limiter, err := New(client, 0)
@@ -59,7 +59,7 @@ func TestTake_ExpireOnFirstHit(t *testing.T) {
 }
 
 func TestTake_SlidingBoundaryDoesNotDouble(t *testing.T) {
-	_, addr := startTestFakeRedis(t, nil)
+	_, addr := startTestFakeRedis(t)
 	client := &simpleredis.SimpleRedis{}
 	client.Init(addr, "", "")
 	limiter, err := New(client, 0)
@@ -112,7 +112,7 @@ func TestNew_NegativeSyncRate(t *testing.T) {
 }
 
 func TestBuffered_TwoClientsShareWithoutLastWriteWins(t *testing.T) {
-	_, addr := startTestFakeRedis(t, nil)
+	_, addr := startTestFakeRedis(t)
 	aClient := &simpleredis.SimpleRedis{}
 	aClient.Init(addr, "", "")
 	bClient := &simpleredis.SimpleRedis{}
@@ -155,7 +155,7 @@ func TestBuffered_TwoClientsShareWithoutLastWriteWins(t *testing.T) {
 }
 
 func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
-	_, addr := startTestFakeRedis(t, nil)
+	_, addr := startTestFakeRedis(t)
 	client := &simpleredis.SimpleRedis{}
 	client.Init(addr, "", "")
 	limiter, err := New(client, minSyncRate)
@@ -177,7 +177,7 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 }
 
 func TestAllow_IsTake(t *testing.T) {
-	_, addr := startTestFakeRedis(t, nil)
+	_, addr := startTestFakeRedis(t)
 	client := &simpleredis.SimpleRedis{}
 	client.Init(addr, "", "")
 	limiter, err := New(client, 0)

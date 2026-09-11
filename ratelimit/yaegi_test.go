@@ -14,7 +14,7 @@ import (
 
 // TestYaegi_TakeUntilDeny proves interpreted Take against a compiled fake. Traefik is not started.
 func TestYaegi_TakeUntilDeny(t *testing.T) {
-	_, addr := startTestFakeRedis(t, nil)
+	_, addr := startTestFakeRedis(t)
 	goPath := t.TempDir()
 	writeGopathLimiter(t, goPath)
 	writeGopathFile(t, goPath, "takeprobe", "roundtrip.go", takeprobeSrc)

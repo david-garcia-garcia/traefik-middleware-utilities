@@ -18,17 +18,14 @@ type testFakeRedis struct {
 }
 
 // startTestFakeRedis listens on a local TCP port and serves an in-process RESP map.
-func startTestFakeRedis(t *testing.T, store map[string]string) (*testFakeRedis, string) {
+func startTestFakeRedis(t *testing.T) (*testFakeRedis, string) {
 	t.Helper()
-	if store == nil {
-		store = map[string]string{}
-	}
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	fake := &testFakeRedis{store: store}
+	fake := &testFakeRedis{store: map[string]string{}}
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -99,18 +96,6 @@ func (f *testFakeRedis) lastExpireCommand() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.lastExpire...)
-}
-
-// storedCount is the integer at name, or 0 if missing.
-func (f *testFakeRedis) storedCount(name string) int64 {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	raw, found := f.store[name]
-	if !found {
-		return 0
-	}
-	n, _ := strconv.ParseInt(raw, 10, 64)
-	return n
 }
 
 func testBulk(store map[string]string, name string) string {
