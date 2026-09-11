@@ -27,3 +27,9 @@ phase: codereview
 findings: Standards 1 judgement skipped (`pooledConn.buf`); Nitpicks/Spec/Security/Performance/Dead/Coverage none; no hard/missing/wrong
 fixed: none
 skipped: Standards 1 Mysterious Name on `pooledConn.buf` (judgement; design named `buf`)
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: none
+fixed: n/a
+skipped: n/a
