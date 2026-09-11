@@ -5,7 +5,7 @@ JobName: 2026-09-11-leaky-bucket
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T20:48:46.184Z |
-| explore | [ ] | [ ] | |
+| explore | [x] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
