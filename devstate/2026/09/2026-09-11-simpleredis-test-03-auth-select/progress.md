@@ -11,4 +11,4 @@ JobName: 2026-09-11-simpleredis-test-03-auth-select
 | codereview | [x] | [x] | 2026-09-11T22:08:35Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:19:50Z |
 | archive | [x] | [x] | 2026-09-11T22:26:53Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T22:32:13Z |
