@@ -1,4 +1,4 @@
-package ratelimit
+package windowcounter
 
 import (
 	"os"
@@ -16,8 +16,8 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 		name string
 		addr string
 	}{
-		{"redis", os.Getenv("RATELIMIT_LIVE_REDIS")},
-		{"dragonfly", os.Getenv("RATELIMIT_LIVE_DRAGONFLY")},
+		{"redis", os.Getenv("WINDOWCOUNTER_LIVE_REDIS")},
+		{"dragonfly", os.Getenv("WINDOWCOUNTER_LIVE_DRAGONFLY")},
 	}
 	anyAddr := false
 	for _, backend := range backends {
@@ -31,7 +31,7 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 		})
 	}
 	if !anyAddr {
-		t.Skip("RATELIMIT_LIVE_REDIS and RATELIMIT_LIVE_DRAGONFLY unset")
+		t.Skip("WINDOWCOUNTER_LIVE_REDIS and WINDOWCOUNTER_LIVE_DRAGONFLY unset")
 	}
 }
 
@@ -145,7 +145,7 @@ func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 	client.Init(addr, "", "")
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		_, err := client.Incr("ratelimit-live-probe")
+		_, err := client.Incr("windowcounter-live-probe")
 		if err == nil {
 			return client
 		}

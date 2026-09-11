@@ -1,4 +1,4 @@
-package ratelimit
+package windowcounter
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 func TestYaegi_TakeUntilDeny(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
 	goPath := t.TempDir()
-	writeGopathLimiter(t, goPath)
+	writeGopathWindowcounter(t, goPath)
 	writeGopathFile(t, goPath, "takeprobe", "roundtrip.go", takeprobeSrc)
 
 	got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.UntilDeny(%q, %q, 3)`, addr, "yaegi-k"))
@@ -34,8 +34,8 @@ func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 		name string
 		addr string
 	}{
-		{"redis", os.Getenv("RATELIMIT_LIVE_REDIS")},
-		{"dragonfly", os.Getenv("RATELIMIT_LIVE_DRAGONFLY")},
+		{"redis", os.Getenv("WINDOWCOUNTER_LIVE_REDIS")},
+		{"dragonfly", os.Getenv("WINDOWCOUNTER_LIVE_DRAGONFLY")},
 	}
 	anyAddr := false
 	for _, backend := range backends {
@@ -46,7 +46,7 @@ func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 		backend := backend
 		t.Run(backend.name, func(t *testing.T) {
 			goPath := t.TempDir()
-			writeGopathLimiter(t, goPath)
+			writeGopathWindowcounter(t, goPath)
 			writeGopathFile(t, goPath, "takeprobe", "roundtrip.go", takeprobeSrc)
 			t.Run("exactNThenDeny", func(t *testing.T) {
 				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.UntilDeny(%q, %q, 3)`, backend.addr, t.Name()))
@@ -90,11 +90,11 @@ func evalTakeprobe(t *testing.T, goPath, expr string) string {
 	return evaluated.Interface().(string)
 }
 
-// writeGopathLimiter copies non-test ratelimit and simpleredis sources into a GOPATH module tree.
-func writeGopathLimiter(t *testing.T, goPath string) {
+// writeGopathWindowcounter copies non-test windowcounter and simpleredis sources into a GOPATH module tree.
+func writeGopathWindowcounter(t *testing.T, goPath string) {
 	t.Helper()
 	src := callerDir(t)
-	copyNonTestGo(t, src, goPath, "ratelimit")
+	copyNonTestGo(t, src, goPath, "windowcounter")
 	copyNonTestGo(t, filepath.Join(filepath.Dir(src), "simpleredis"), goPath, "simpleredis")
 }
 
@@ -129,7 +129,7 @@ func copyNonTestGo(t *testing.T, srcDir, goPath, pkg string) {
 	}
 }
 
-// callerDir is the directory of the test file that called writeGopathLimiter.
+// callerDir is the directory of the test file that called writeGopathWindowcounter.
 func callerDir(t *testing.T) string {
 	t.Helper()
 	_, thisFile, _, ok := runtime.Caller(1)
@@ -156,7 +156,7 @@ const takeprobeSrc = `package takeprobe
 import (
 	"time"
 
-	"github.com/david-garcia-garcia/traefik-middleware-utilities/ratelimit"
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter"
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
@@ -164,7 +164,7 @@ import (
 func UntilDeny(host, key string, limit int) string {
 	client := &simpleredis.SimpleRedis{}
 	client.Init(host, "", "")
-	limiter, err := ratelimit.New(client, 0)
+	limiter, err := windowcounter.New(client, 0)
 	if err != nil {
 		return "new:" + err.Error()
 	}
@@ -194,11 +194,11 @@ func BufferedShare(host, key string) string {
 	aClient.Init(host, "", "")
 	bClient := &simpleredis.SimpleRedis{}
 	bClient.Init(host, "", "")
-	a, err := ratelimit.New(aClient, time.Hour)
+	a, err := windowcounter.New(aClient, time.Hour)
 	if err != nil {
 		return "new-a:" + err.Error()
 	}
-	b, err := ratelimit.New(bClient, time.Hour)
+	b, err := windowcounter.New(bClient, time.Hour)
 	if err != nil {
 		return "new-b:" + err.Error()
 	}
@@ -238,7 +238,7 @@ func BufferedShare(host, key string) string {
 func SlidingBoundary(host, key string) string {
 	client := &simpleredis.SimpleRedis{}
 	client.Init(host, "", "")
-	limiter, err := ratelimit.New(client, 0)
+	limiter, err := windowcounter.New(client, 0)
 	if err != nil {
 		return "new:" + err.Error()
 	}

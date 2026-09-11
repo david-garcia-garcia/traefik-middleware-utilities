@@ -1,11 +1,11 @@
 ## Context
 
-DestBranch (`origin/master`) already has `simpleredis/` with `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `Get`, `MGet`, `Close`, and `reclaim.Hooks` (`Sleep`, `Wake`, `Close`). There is no `ratelimit/` package. README still lists leaky `bucket/` as Planned. Compose Redis/Dragonfly have no host ports; CI `test` is `go test -v ./...` without engines. Kong facts: `knowledge/research/ext_kong_rate-limiting_sliding-sync/`. Explore decisions: `devstate/explore.md`. See proposal.md for why. Specs: `std_go_ratelimit_sliding-take`, `std_go_ratelimit_sync-flush`.
+DestBranch (`origin/master`) already has `simpleredis/` with `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `Get`, `MGet`, `Close`, and `reclaim.Hooks` (`Sleep`, `Wake`, `Close`). There is no `windowcounter/` package. README still lists leaky `bucket/` as Planned. Compose Redis/Dragonfly have no host ports; CI `test` is `go test -v ./...` without engines. Kong facts: `knowledge/research/ext_kong_rate-limiting_sliding-sync/`. Explore decisions: `devstate/explore.md`. See proposal.md for why. Specs: `std_go_windowcounter_sliding-take`, `std_go_windowcounter_sync-flush`.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- One Yaegi-safe `ratelimit/` package that injects SimpleRedis and exposes Take plus reclaim-shaped hooks.
+- One Yaegi-safe `windowcounter/` package that injects SimpleRedis and exposes Take plus reclaim-shaped hooks.
 - Prove window math on a fake TCP Redis and on live Redis + Dragonfly from `go test` (including Yaegi).
 - Wire CI so live tests do not skip.
 
@@ -13,12 +13,12 @@ DestBranch (`origin/master`) already has `simpleredis/` with `Incr`, `IncrBy`, `
 - Token bucket, leaky bucket, `bucket/`, fixed window, EVALSHA, `go-redis`.
 - HTTP, 429, sleep/throttle, fail-open/fail-close, health gate.
 - Pester/Traefik plugin.
-- Importing `reclaim` from `ratelimit`.
+- Importing `reclaim` from `windowcounter`.
 - Closing the injected SimpleRedis from the limiter.
 
 ## Decisions
 
-1. **Package `ratelimit/`.** Dest siblings are folder=package (`reclaim/`, `simpleredis/`). README planned `bucket/` is the wrong primitive. Alternative: implement under `bucket/` — rejected; ticket locks `ratelimit/` and forbids leaky/token buckets.
+1. **Package `windowcounter/`.** Dest siblings are folder=package (`reclaim/`, `simpleredis/`). README planned `bucket/` is the wrong primitive. Alternative: implement under `bucket/` or `ratelimit/` — rejected; the job is a windowed hit counter, not Traefik RateLimit and not a leaky/token bucket.
 
 2. **Inject `*simpleredis.SimpleRedis`.** `New(redis *simpleredis.SimpleRedis, syncRate time.Duration) (*Limiter, error)`. Two instances with two clients share Redis keys. Alternative: limiter owns `Init`/`Close` of Redis — rejected; SimpleRedis is already the session owner and tests need two clients.
 
@@ -32,9 +32,9 @@ DestBranch (`origin/master`) already has `simpleredis/` with `Incr`, `IncrBy`, `
 
 7. **Test clock `SetNowForTest`.** Production uses `time.Now`. Boundary tests MUST NOT wait a real window. Name says test.
 
-8. **Live addrs via env; CI service containers.** `RATELIMIT_LIVE_REDIS` / `RATELIMIT_LIVE_DRAGONFLY`. Skip on short or empty. CI `test` job: Redis 7 alpine + Dragonfly `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` as services, env set, no `-short`. Optional TestMain `docker run` when env empty and not short. Alternative: reuse Traefik compose — rejected; those services have no host ports and Pester is not the suite.
+8. **Live addrs via env; CI service containers.** `WINDOWCOUNTER_LIVE_REDIS` / `WINDOWCOUNTER_LIVE_DRAGONFLY`. Skip on short or empty. CI `test` job: Redis 7 alpine + Dragonfly `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` as services, env set, no `-short`. Optional TestMain `docker run` when env empty and not short. Alternative: reuse Traefik compose — rejected; those services have no host ports and Pester is not the suite.
 
-9. **Yaegi GOPATH copies both packages.** Compiled test starts/skips engines; interpreted probe calls `Take`. stdlib only, `useunsafe` false. Fake TCP lives in `ratelimit` tests (SimpleRedis helper is unexported).
+9. **Yaegi GOPATH copies both packages.** Compiled test starts/skips engines; interpreted probe calls `Take`. stdlib only, `useunsafe` false. Fake TCP lives in `windowcounter` tests (SimpleRedis helper is unexported).
 
 ## Risks / Trade-offs
 

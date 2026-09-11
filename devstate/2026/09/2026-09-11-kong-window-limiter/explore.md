@@ -3,7 +3,7 @@ IssueKey: 2026-09-11-kong-window-limiter
 
 ## Concepts
 
-- **Windowed hit counter** — Redis integers per window, not a token/leaky bucket. Local memory is only the `sync_rate>0` buffer. Package `ratelimit/` (new). `ratelimit/` is not on dest (`master` HEAD); README still lists leaky `bucket/` as planned (`README.md`).
+- **Windowed hit counter** — Redis integers per window, not a token/leaky bucket. Local memory is only the `sync_rate>0` buffer. Package `windowcounter/` (new). `windowcounter/` is not on dest (`master` HEAD); README still lists leaky `bucket/` as planned (`README.md`).
 - **Sliding estimate** — `estimated = current + previous × (1 − elapsed/window)` ([Kong window types](https://developer.konghq.com/gateway/rate-limiting/window-types); ticket lock). At a new-window boundary, elapsed≈0 so previous still counts in full — that is what stops the fixed-window 2× dump. Fixed window is out of v1.
 - **Window keys** — two Redis integers for one opaque caller key: `{opaqueKey}:{windowStartUnix}` and the previous start (`windowStart − windowSec`). OSS Kong embeds route/service/period (`get_local_key` in [policies/init.lua](https://github.com/Kong/kong/blob/master/kong/plugins/rate-limiting/policies/init.lua)); that prefixing is the caller’s job here. TTL is **two** window lengths so the previous key survives. See `knowledge/research/ext_kong_rate-limiting_sliding-sync/`.
 - **SimpleRedis** — dest already has `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `Get`, `MGet`, `Close` (`simpleredis/simpleredis.go`). Missing keys on `Get` are `redis:miss`. Errors stay text (`redis:unreachable`, `redis:timeout`). No `go-redis`. No GET/SET race for the counter itself.
@@ -30,17 +30,17 @@ Gap measured: no `ratelimit/` tree on this worktree; README library row is still
 
 ## Decisions
 
-- New package `ratelimit/`. Caller injects `*simpleredis.SimpleRedis`. `New(redis, syncRate)`. `Take(key, limit, window)` returns `allowed bool, estimated float64, err`. `Allow` is the same method (alias). Prefixing is the caller’s job. No HTTP, 429, or sleep.
+- New package `windowcounter/`. Caller injects `*simpleredis.SimpleRedis`. `New(redis, syncRate)`. `Take(key, limit, window)` returns `allowed bool, estimated float64, err`. `Allow` is the same method (alias). Prefixing is the caller’s job. No HTTP, 429, or sleep.
 - Sliding only. Window length is a `time.Duration` with whole-second Redis TTL (`Expire`/`ExpireAt` are integer seconds). Sub-second windows are out of v1. Injectable `nowForTest` (`SetNowForTest`) for boundary math; production uses `time.Now`.
 - Exact: `Incr` current, `Expire(current, 2*windowSec)` when result is 1, `Get` previous (`redis:miss` → 0). Increment first, then allow iff `estimated <= limit`. Denied hits still occupy the window (Kong).
 - Buffered: per-key `redis_known` + `local_delta` (current) and a stored previous count. Flush EVAL matches the dest SimpleRedis Kong snippet (`exists` / `incrby` / `expireat` if new; `KEYS[1]`). `sync_rate < 0` fails `New`. `0 < sync_rate < 20ms` floors to 20ms.
 - Limiter methods `Sleep` / `Wake` / `Close` for `reclaim.Hooks`. Sleep: flush pending deltas then stop the ticker. Wake: start the ticker. Close: after Sleep (reclaim always Sleeps first); do not `Close` the injected SimpleRedis (shared client). `sync_rate=0`: hooks are no-ops besides stopping any leftover work. Use `time.NewTicker` + stop channel, not `time.Tick`.
 - Redis errors propagate. No fail-open, fail-close, or health gate.
-- README library row and layout become `ratelimit/` (this primitive). Do not add `bucket/`.
+- README library row and layout become `windowcounter/` (this primitive). Do not add `bucket/`.
 - Live tests: env `RATELIMIT_LIVE_REDIS` and `RATELIMIT_LIVE_DRAGONFLY` (`host:port`). `testing.Short` or missing addrs → skip. CI `test` job starts both engines (GitHub Actions service containers; Dragonfly image already pinned in compose: `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2`) and sets those env vars so the suite does **not** skip. Table-driven backend addr. When env is unset and not `-short`, compiled `TestMain` may `docker run` and skip if Docker is absent. Do not publish compose ports or reuse the Traefik integration job as the limiter suite.
 - Yaegi live: same scenarios; compiled test starts/skips engines; probe in GOPATH calls `Take`. Copy `ratelimit` and `simpleredis` non-test sources.
 - No Pester/Traefik plugin in this change (optional extra; bound the ask).
-- EVALSHA later. No `go-redis`. Usage packet `knowledge/devdocs/std_go_ratelimit.md` in propose/implement (no API on dest to document yet). Spec host: new `std_go_ratelimit_*` leaves under `std` / `go` (`openspec/specs/map.md`).
+- EVALSHA later. No `go-redis`. Usage packet `knowledge/devdocs/std_go_windowcounter.md` in propose/implement (no API on dest to document yet). Spec host: new `std_go_windowcounter_*` leaves under `std` / `go` (`openspec/specs/map.md`).
 
 ## Open questions
 

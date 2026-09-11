@@ -10,8 +10,8 @@ priority: normal
 local: std_go_simpleredis.md
 description: How a Traefik middleware Inits and speaks GET/MGET/SET/DEL/INCR/EXPIRE/EVAL over stdlib TCP RESP.
 
-## Rate limit window counter
+## Window counter
 priority: normal
-local: std_go_ratelimit.md
+local: std_go_windowcounter.md
 description: How a Traefik middleware Takes a sliding-window hit against Redis or Dragonfly via SimpleRedis.
 

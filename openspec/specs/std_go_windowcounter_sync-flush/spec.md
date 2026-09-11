@@ -2,7 +2,7 @@
 
 Exact versus buffered Redis sync for the sliding-window limiter: every Take hits Redis when `sync_rate` is zero; a timer flushes local deltas when `sync_rate` is positive. Sleep, Wake, and Close stop the flush goroutine on Traefik reload.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Exact mode increments Redis on every Take
 When `sync_rate` is zero, each Take SHALL send Redis `INCR` on the current-window key and SHALL set a TTL of two window lengths when that increment returns 1. Previous-window reads SHALL use `GET` (`redis:miss` counts as zero). Counter updates MUST NOT be a GET-then-SET of the integer.
@@ -40,7 +40,7 @@ The limiter SHALL export `Sleep`, `Wake`, and `Close` suitable for `reclaim.Hook
 - **AND** the SimpleRedis client remains usable by other callers
 
 ### Requirement: Live tests run on Redis and Dragonfly in CI
-Live tests SHALL table-drive Redis and Dragonfly addresses from `RATELIMIT_LIVE_REDIS` and `RATELIMIT_LIVE_DRAGONFLY`. They SHALL skip when `testing.Short` is set or an address is missing. CI MUST start both engines, set both addresses, and MUST NOT skip those tests. The same scenarios SHALL run interpreted (Yaegi) with the compiled test owning start and skip. Traefik and Pester MUST NOT be the behaviour proof.
+Live tests SHALL table-drive Redis and Dragonfly addresses from `WINDOWCOUNTER_LIVE_REDIS` and `WINDOWCOUNTER_LIVE_DRAGONFLY`. They SHALL skip when `testing.Short` is set or an address is missing. CI MUST start both engines, set both addresses, and MUST NOT skip those tests. The same scenarios SHALL run interpreted (Yaegi) with the compiled test owning start and skip. Traefik and Pester MUST NOT be the behaviour proof.
 
 #### Scenario: Both backends prove exact, buffered share, and sliding boundary
 - **WHEN** CI runs `go test` without `-short` with both live addrs set

@@ -5,7 +5,7 @@ IssueKey: 2026-09-11-kong-window-limiter
 `master` has SimpleRedis with INCR/EXPIRE/EVAL and reclaim lifecycle hooks, but no distributed window rate limiter. README still plans a leaky `bucket/` primitive. Middlewares need a Kong-style sliding-window counter (Redis/Dragonfly-backed, optional buffered `sync_rate`) that is Yaegi-safe and testable without Traefik HTTP probes.
 
 ## Current (code)
-- `ratelimit/` — not found.
+- `ratelimit/` — not found (handoff name is `windowcounter/`).
 - `bucket/` — not found; README lists leaky bucket as planned (`README.md`).
 - `simpleredis/simpleredis.go` — `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `Close`; errors as `redis:unreachable` / `redis:timeout` text.
 - `simpleredis/simpleredis_test.go` `startFakeRedis` — in-process RESP fake for unit tests; includes `kongIncrbyExpireatScript` (INCRBY + conditional EXPIREAT flush pattern).
@@ -18,7 +18,7 @@ IssueKey: 2026-09-11-kong-window-limiter
 - `knowledge/research/ext_redis_*`, `ext_dragonfly_eval/` — Redis/Dragonfly command facts; no Kong sliding-window research before this prepare.
 
 ## Desired
-- New `ratelimit/` package: opaque key + limit + window; `Take`/`Allow` returns allowed + usage; sliding window only (`estimated = current + previous × (1 − elapsed/window)`).
+- New `windowcounter/` package: opaque key + limit + window; `Take`/`Allow` returns allowed + usage; sliding window only (`estimated = current + previous × (1 − elapsed/window)`).
 - `sync_rate=0`: synchronous `Incr` every `Take`; expire on first hit in window.
 - `sync_rate>0`: admit from `redis_known + local_delta`; periodic timer flushes via `Eval` INCRBY + EXPIREAT-if-new (Kong OSS flush shape); min interval ~20ms floor.
 - Redis/Dragonfly via `simpleredis` only; propagate `redis:unreachable` / timeout; no fail-open/fail-close or health gate inside library.
@@ -30,7 +30,7 @@ IssueKey: 2026-09-11-kong-window-limiter
 - Pester/Traefik plugin optional; not a substitute for the Go live suite.
 
 ## Affected
-- `ratelimit/` (new)
+- `windowcounter/` (new)
 - `README.md` (library table and layout)
 - `.github/workflows/ci.yml` (live Redis/Dragonfly for limiter tests)
 - `docker-compose.yml` or test harness wiring for live addrs (explore)

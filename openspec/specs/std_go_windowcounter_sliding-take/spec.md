@@ -1,6 +1,6 @@
 ## Purpose
 
-Sliding-window HTTP rate-limit primitive: admit or deny a hit on an opaque key against a limit and window, using Redis integer counters for the current and previous windows. Callers own identity; the library never reads HTTP.
+Sliding-window hit counter: admit or deny a hit on an opaque key against a limit and window, using Redis integer counters for the current and previous windows. Callers own identity; the library never reads HTTP.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ When Redis is unreachable or times out, Take SHALL return that error (`redis:unr
 - **AND** MUST NOT admit or deny as a silent fallback
 
 ### Requirement: Unit and interpreter tests prove Take without Traefik
-Compiled unit tests SHALL prove encoder and window math against an in-process fake TCP Redis (no Docker). Interpreter tests that import Yaegi SHALL run the same live Take scenarios against GOPATH copies of non-test `ratelimit` and `simpleredis` sources, stdlib symbols only, `useunsafe` false. Those interpreter tests MUST NOT start Traefik. The compiled test owns process start and skip.
+Compiled unit tests SHALL prove encoder and window math against an in-process fake TCP Redis (no Docker). Interpreter tests that import Yaegi SHALL run the same live Take scenarios against GOPATH copies of non-test `windowcounter` and `simpleredis` sources, stdlib symbols only, `useunsafe` false. Those interpreter tests MUST NOT start Traefik. The compiled test owns process start and skip.
 
 #### Scenario: Yaegi Take against a fake
 - **WHEN** interpreted code constructs a limiter on a compiled fake Redis

@@ -1,5 +1,5 @@
-// Package ratelimit is a Yaegi-safe sliding-window hit counter on SimpleRedis.
-package ratelimit
+// Package windowcounter is a Yaegi-safe sliding-window hit counter on SimpleRedis.
+package windowcounter
 
 import (
 	"errors"
@@ -45,10 +45,10 @@ type windowState struct {
 // New builds a limiter on an already-Init SimpleRedis. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (INCR every Take).
 func New(redis *simpleredis.SimpleRedis, syncRate time.Duration) (*Limiter, error) {
 	if redis == nil {
-		return nil, errors.New("ratelimit: redis is required")
+		return nil, errors.New("windowcounter: redis is required")
 	}
 	if syncRate < 0 {
-		return nil, errors.New("ratelimit: sync_rate must not be negative")
+		return nil, errors.New("windowcounter: sync_rate must not be negative")
 	}
 	if syncRate > 0 && syncRate < minSyncRate {
 		syncRate = minSyncRate
@@ -78,7 +78,7 @@ func (l *Limiter) SetNowForTest(now func() time.Time) {
 func (l *Limiter) Take(key string, limit int64, window time.Duration) (bool, float64, error) {
 	windowSec := int64(window / time.Second)
 	if windowSec < 1 {
-		return false, 0, errors.New("ratelimit: window must be at least one second")
+		return false, 0, errors.New("windowcounter: window must be at least one second")
 	}
 	now := l.now()
 	windowStart := now.Unix() / windowSec * windowSec
