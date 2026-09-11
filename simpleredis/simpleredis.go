@@ -1,4 +1,4 @@
-// Package simpleredis is a stdlib pooled TCP RESP client (GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL).
+// Package simpleredis is a stdlib pooled TCP RESP client (GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL, ExecPipeline).
 package simpleredis
 
 import (
@@ -23,10 +23,11 @@ const (
 )
 
 const (
-	maxIdleConns = 8
-	idleTimeout  = 30 * time.Second
-	dialTimeout  = 2 * time.Second
-	ioTimeout    = 1 * time.Second
+	maxIdleConns        = 8
+	maxPipelineCommands = 64
+	idleTimeout         = 30 * time.Second
+	dialTimeout         = 2 * time.Second
+	ioTimeout           = 1 * time.Second
 )
 
 var (
@@ -61,7 +62,7 @@ type SimpleRedis struct {
 	closed bool
 }
 
-// Close drains idle pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
+// Close drains idle pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval/ExecPipeline return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
 func (sr *SimpleRedis) Close() {
 	sr.mu.Lock()
 	if sr.closed {
@@ -163,6 +164,23 @@ func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]by
 	return sr.exec(wire...)
 }
 
+// PipelineSlot is one command's reply inside an ExecPipeline batch.
+type PipelineSlot struct {
+	Values [][]byte
+	Err    error
+}
+
+// ExecPipeline encodes N RESP commands on one borrowed connection, flushes once, and reads N ordered slots. Empty or nil commands returns nil, nil and does not dial. More than 64 commands returns redis:issue? and does not send. The batch error is only I/O, protocol, cap, unreachable, or timeout; a per-element - reply lives on that slot's Err.
+func (sr *SimpleRedis) ExecPipeline(commands [][][]byte) ([]PipelineSlot, error) {
+	if len(commands) == 0 {
+		return nil, nil
+	}
+	if len(commands) > maxPipelineCommands {
+		return nil, errIssue
+	}
+	return sr.execPipeline(commands)
+}
+
 // parseIntegerReply reads one decimal integer from a : reply. Garbage payload is redis:issue?.
 func parseIntegerReply(values [][]byte, err error) (int64, error) {
 	if err != nil {
@@ -198,6 +216,27 @@ func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
 	values, reusable, err = sr.do(conn, args)
 	sr.release(conn, reusable)
 	return values, err
+}
+
+// execPipeline borrows a connection, writes N frames, flushes once, and retries once when a reused idle socket is dead before Flush.
+func (sr *SimpleRedis) execPipeline(commands [][][]byte) ([]PipelineSlot, error) {
+	conn, reused, err := sr.borrow()
+	if err != nil {
+		return nil, err
+	}
+	slots, reusable, flushed, err := sr.doPipeline(conn, commands)
+	sr.release(conn, reusable)
+	// After Flush, or on timeout, do not send the batch again (double-apply).
+	if err == nil || reusable || !reused || err == errTimeout || flushed {
+		return slots, err
+	}
+	conn, _, err = sr.borrow()
+	if err != nil {
+		return nil, err
+	}
+	slots, reusable, _, err = sr.doPipeline(conn, commands)
+	sr.release(conn, reusable)
+	return slots, err
 }
 
 // borrow takes an idle socket younger than idleTimeout, or dials a new one.
@@ -296,6 +335,9 @@ func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, erro
 	if err := writeCommand(conn.writer, args); err != nil {
 		return nil, false, ioError(err)
 	}
+	if err := conn.writer.Flush(); err != nil {
+		return nil, false, ioError(err)
+	}
 	values, clean, err := readReply(conn.reader)
 	if err != nil && !clean {
 		if err == errIssue {
@@ -306,7 +348,36 @@ func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, erro
 	return values, true, err
 }
 
-// writeCommand writes one RESP array of bulk strings and flushes.
+// doPipeline writes N RESP commands, flushes once, and reads N replies. flushed is true after Flush returns nil.
+func (sr *SimpleRedis) doPipeline(conn *pooledConn, commands [][][]byte) ([]PipelineSlot, bool, bool, error) {
+	if err := conn.netConn.SetDeadline(time.Now().Add(ioTimeout)); err != nil {
+		return nil, false, false, errUnreachable
+	}
+	// Encode every command before Flush so the socket sees one write.
+	for _, args := range commands {
+		if err := writeCommand(conn.writer, args); err != nil {
+			return nil, false, false, ioError(err)
+		}
+	}
+	if err := conn.writer.Flush(); err != nil {
+		return nil, false, false, ioError(err)
+	}
+	// Read one reply per command; a - reply is that slot only.
+	slots := make([]PipelineSlot, 0, len(commands))
+	for range commands {
+		values, clean, err := readReply(conn.reader)
+		if err != nil && !clean {
+			if err == errIssue {
+				return slots, false, true, errIssue
+			}
+			return slots, false, true, ioError(err)
+		}
+		slots = append(slots, PipelineSlot{Values: values, Err: err})
+	}
+	return slots, true, true, nil
+}
+
+// writeCommand encodes one RESP array of bulk strings. The caller Flushes.
 func writeCommand(writer *bufio.Writer, args [][]byte) error {
 	if _, err := writer.WriteString("*" + strconv.Itoa(len(args)) + "\r\n"); err != nil {
 		return err
@@ -322,7 +393,7 @@ func writeCommand(writer *bufio.Writer, args [][]byte) error {
 			return err
 		}
 	}
-	return writer.Flush()
+	return nil
 }
 
 // readReply parses one RESP value. clean is false when the stream is no longer usable.

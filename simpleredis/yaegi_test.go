@@ -39,6 +39,19 @@ func TestYaegi_IncrAndEval(t *testing.T) {
 	}
 }
 
+// TestYaegi_ExecPipeline proves interpreted ExecPipeline against a compiled fake. Traefik is not started.
+func TestYaegi_ExecPipeline(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{})
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.PipelineIncrGet(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi pipeline: %q, want ok", got)
+	}
+}
+
 // evalClientprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalClientprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -153,6 +166,35 @@ func IncrAndEval(host string) string {
 	}
 	if len(values) != 1 || string(values[0]) != "3" {
 		return fmt.Sprintf("eval:%q", values)
+	}
+	return "ok"
+}
+
+// PipelineIncrGet pipelines INCR then GET of that key.
+func PipelineIncrGet(host string) string {
+	client := &simpleredis.SimpleRedis{}
+	client.Init(host, "", "")
+	slots, err := client.ExecPipeline([][][]byte{
+		{[]byte("INCR"), []byte("yaegi-pipe")},
+		{[]byte("GET"), []byte("yaegi-pipe")},
+	})
+	if err != nil {
+		return "pipe:" + err.Error()
+	}
+	if len(slots) != 2 {
+		return fmt.Sprintf("len:%d", len(slots))
+	}
+	if slots[0].Err != nil {
+		return "incr:" + slots[0].Err.Error()
+	}
+	if len(slots[0].Values) != 1 || string(slots[0].Values[0]) != "1" {
+		return fmt.Sprintf("incr:%q", slots[0].Values)
+	}
+	if slots[1].Err != nil {
+		return "get:" + slots[1].Err.Error()
+	}
+	if len(slots[1].Values) != 1 || string(slots[1].Values[0]) != "1" {
+		return fmt.Sprintf("get:%q", slots[1].Values)
 	}
 	return "ok"
 }
