@@ -9,3 +9,9 @@ phase: explore
 findings: none
 fixed: none
 skipped: CI in progress; no axis files; no OpenSpec change yet
+
+## propose (2026-09-11)
+phase: propose
+findings: none
+fixed: none
+skipped: CI in progress; no axis files; implement not started
