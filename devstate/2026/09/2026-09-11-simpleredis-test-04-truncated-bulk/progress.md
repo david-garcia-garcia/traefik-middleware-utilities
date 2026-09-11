@@ -10,5 +10,5 @@ JobName: 2026-09-11-simpleredis-test-04-truncated-bulk
 | implement | [x] | [x] | 2026-09-11T22:01:00Z |
 | codereview | [x] | [x] | 2026-09-11T22:09:09Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:16:47Z |
-| archive | [ ] | [ ] | |
+| archive | [x] | [x] | 2026-09-11T22:24:34Z |
 | pullrequest | [ ] | [ ] | |

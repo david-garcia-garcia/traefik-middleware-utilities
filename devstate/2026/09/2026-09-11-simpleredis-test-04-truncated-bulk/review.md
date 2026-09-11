@@ -34,3 +34,9 @@ findings: none
 fixed: none
 skipped: none — SimpleRedis packet already has Language and usage enough to call; test-only apply; `clean` / pool discard not a middleware Language term
 
+## archive (2026-09-11T22:24:34Z)
+phase: archive
+findings: none
+fixed: folded deltas into live `std_go_simpleredis_tcp-session` and `std_go_simpleredis_resp-commands`; moved change to `openspec/changes/archive/2026-09-12-simpleredis-truncated-bulk/`
+skipped: pullrequest not started; CI Test and Integration Tests still in progress on `5e6ccfa`
+
