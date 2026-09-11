@@ -979,6 +979,61 @@ func TestPipelineTruncationIsNotRetried(t *testing.T) {
 	if got != 1 {
 		t.Fatalf("opened %d connections, want 1 (must not retry after Flush)", got)
 	}
+	redis.mu.Lock()
+	idle := len(redis.idle)
+	redis.mu.Unlock()
+	if idle != 0 {
+		t.Fatalf("idle = %d, want 0 (dirty conn must be closed, not pooled)", idle)
+	}
+}
+
+func TestPipelineTimeoutOnReusedConnIsNotRetried(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	var accepts int
+	var mu sync.Mutex
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			accepts++
+			mu.Unlock()
+			go func(conn net.Conn) {
+				defer conn.Close()
+				reader := bufio.NewReader(conn)
+				if _, err := readCommand(reader); err != nil {
+					return
+				}
+				_, _ = io.WriteString(conn, "$1\r\nt\r\n")
+				time.Sleep(3 * time.Second)
+			}(conn)
+		}
+	}()
+
+	var redis SimpleRedis
+	redis.Init(listener.Addr().String(), "", "")
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("first Get: %v", err)
+	}
+	_, err = redis.ExecPipeline([][][]byte{
+		{[]byte("GET"), []byte("hit")},
+		{[]byte("GET"), []byte("hit")},
+	})
+	if err == nil || err.Error() != RedisTimeout {
+		t.Fatalf("ExecPipeline = %v, want %s", err, RedisTimeout)
+	}
+	mu.Lock()
+	got := accepts
+	mu.Unlock()
+	if got != 1 {
+		t.Fatalf("opened %d connections, want 1 (timeout must not retry)", got)
+	}
 }
 
 func TestPipelineDeadIdleRetriedBeforeFlush(t *testing.T) {

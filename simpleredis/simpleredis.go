@@ -230,6 +230,7 @@ func (sr *SimpleRedis) execPipeline(commands [][][]byte) ([]PipelineSlot, error)
 	if err == nil || reusable || !reused || err == errTimeout || flushed {
 		return slots, err
 	}
+	// Dead pooled conn: borrow again so Close cannot skip the closed check.
 	conn, _, err = sr.borrow()
 	if err != nil {
 		return nil, err
