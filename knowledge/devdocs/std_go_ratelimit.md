@@ -50,5 +50,5 @@ if !allowed {
 
 - Window length is whole seconds (Redis TTL is integer seconds).
 - Denied Takes still increment.
-- After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's.
+- `Sleep` flushes pending deltas then stops the ticker. After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's.
 - EVAL scripts must list keys in `KEYS` (Dragonfly).
