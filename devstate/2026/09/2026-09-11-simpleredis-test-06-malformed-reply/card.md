@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-11T22:18:49Z
+Developer review: in progress — 2026-09-11T22:24:44Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** Dirty RESP decode returns `redis:issue?` or I/O and stays out of the idle pool; `*-1` stays `redis:issue?` not `redis:miss`; Get/Incr arity mismatch keeps a clean conn pooled; live Get-miss (`$-1`) is asserted on `/redis` and `/dragonfly`.
+**Developers.** Dirty RESP decode returns `redis:issue?` or I/O and stays out of the idle pool; `*-1` stays `redis:issue?` not `redis:miss`; Get/Incr arity mismatch keeps a clean conn pooled; live Get-miss (`$-1`) is asserted on `/redis` and `/dragonfly`; live catalog `std_go_simpleredis_resp-commands` now carries those contracts.
 
 **End users.** None.
 
@@ -33,10 +33,10 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Usage-doc impact is none (`std_go_simpleredis` already distinguishes `*-1` from `$-1`). CI on this head is still running. 1 item remains.
+Change `simpleredis-malformed-reply` is archived into the live catalog. CI on this head is still running. 1 item remains.
 
 Priority: P3 — tests and decoder proof, no current operator or user harm
-Reviewed head: 99a8289
+Reviewed head: 0a373b0
 Owner decision: None.
 
 ## Review scores
@@ -51,14 +51,14 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-11-simpleredis-test-06-malformed-reply pushed | `git` / origin |
-| OpenSpec | simpleredis-malformed-reply | `openspec/` |
+| OpenSpec | simpleredis-malformed-reply | `openspec/changes/archive/2026-09-11-simpleredis-malformed-reply/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/24 | pr-host List/Create |
-| CI | build 34653358963 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653358963 | pr-host CI |
+| CI | build 34653824876 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653824876 | pr-host CI |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-06-malformed-reply/openspec/changes/simpleredis-malformed-reply/proposal.md) — modified
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-test-06-malformed-reply/openspec/changes/archive/2026-09-11-simpleredis-malformed-reply/proposal.md) — modified
 
 ## Deviations from the ask
 - taken: uniform `idle==0` on `Get` / `parseIntegerReply` arity mismatch → `idle==0` only on dirty decoder rows — `simpleredis/simpleredis.go` (`Get`, `parseIntegerReply`, `release`) — those checks run after a clean `readReply`. Requester: not asked.
@@ -67,13 +67,13 @@ Owner decision: None.
 None.
 
 ## How this fits together
-Local test-06 finding → implement `simpleredis-malformed-reply` on `2026-09-11-simpleredis-test-06-malformed-reply` → PR 24 → CI run 34653358963 in progress.
+Local test-06 finding → implement `simpleredis-malformed-reply` on `2026-09-11-simpleredis-test-06-malformed-reply` → PR 24 → archive into live `std_go_simpleredis_resp-commands` → CI run 34653824876 in progress.
 
 ## Explore Decisions
 None.
 
 ## Before merge
-- [ ] CI run 34653358963 (Lint, Test, Integration Tests in progress)
+- [ ] CI run 34653824876 (Lint, Test, Integration Tests in progress)
 
 ## Findings
 None.
@@ -94,7 +94,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 99a8289448aead5a1bac1fd769aaa6d6ef90de99 | Card must match the branch you measured |
+| Reviewed head | 0a373b0f5aafc438dc80f3c57f717da52abdb1d8 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -109,10 +109,11 @@ Is this the best way to solve the issue? Yes versus `master`: keep dest `count <
 ### Evidence
 What I checked:
 - Pin `origin/master` `7dc4b051888d857869b4beb53cdd9579f930d3c1`; three-dot product diff excluding `devstate/` and `.cursor/`
-- Usage packet `knowledge/devdocs/std_go_simpleredis.md` already has the `*-1` vs `$-1` Gotcha; Language has SimpleRedis; findings none
+- FindSpecHost fold `std_go_simpleredis_resp-commands` (high); live spec synced; change moved to `openspec/changes/archive/2026-09-11-simpleredis-malformed-reply/`
+- validate_spec_map write then verify OK; validate_artifact_names OK
 - Seven-axis review: all axes `none.`
 - PR 24 comments: none
-- CI run 34653358963 in progress on 99a8289 (Lint, Test, Integration Tests); prior head fcdc1c1 Test failed (run 34653054907)
+- CI run 34653824876 in progress on 0a373b0 (Lint, Test, Integration Tests)
 
 ### Rank-up moves
 None.

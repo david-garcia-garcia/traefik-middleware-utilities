@@ -10,5 +10,5 @@ JobName: 2026-09-11-simpleredis-test-06-malformed-reply
 | implement | [x] | [x] | 2026-09-11T22:03:28Z |
 | codereview | [x] | [x] | 2026-09-11T22:13:19Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:18:49Z |
-| archive | [ ] | [ ] | |
+| archive | [x] | [x] | 2026-09-11T22:26:01Z |
 | pullrequest | [ ] | [ ] | |

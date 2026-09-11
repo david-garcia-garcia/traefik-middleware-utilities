@@ -29,3 +29,9 @@ phase: devdocsimpact
 findings: none; SimpleRedis packet already has the `*-1` Gotcha
 fixed: n/a
 skipped: n/a
+
+## archive (2026-09-11)
+phase: archive
+findings: fold std_go_simpleredis_resp-commands; live spec synced; change moved
+fixed: n/a
+skipped: n/a
