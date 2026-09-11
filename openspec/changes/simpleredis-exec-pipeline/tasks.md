@@ -14,9 +14,9 @@
 
 - [x] 3.1 After existing sequential verbs in `e2e/simpleredisprobe`, run one mixed `ExecPipeline` on unique per-request keys: INCR, EXPIRE, GET of that incr key, EVAL of `kongIncrbyExpireatScript` with `KEYS[1]` on a distinct eval key (Lua 5.1-safe); set `X-SimpleRedis-Pipeline` to `1:ok:1:3`; keep every existing `X-SimpleRedis-*` header; no new compose service, route, or Dragonfly pipeline flag
 - [x] 3.2 Pester asserts `X-SimpleRedis-Pipeline` is `1:ok:1:3` on `/redis` and `/dragonfly` and does not stop whoami-a/b
-- [ ] 3.3 Run `./Test-Integration.ps1` until Redis and Dragonfly Describes pass (live mixed-verb pipeline on both engines). Fake flush-count tests MUST NOT substitute for this
+- [x] 3.3 Run `./Test-Integration.ps1` until Redis and Dragonfly Describes pass (live mixed-verb pipeline on both engines). Fake flush-count tests MUST NOT substitute for this
 
 ## 4. Specs
 
-- [ ] 4.1 Confirm the change deltas `std_go_simpleredis_resp-commands` and `std_go_simpleredis_tcp-session` match the landed API
-- [ ] 4.2 Run `openspec validate simpleredis-exec-pipeline --strict`
+- [x] 4.1 Confirm the change deltas `std_go_simpleredis_resp-commands` and `std_go_simpleredis_tcp-session` match the landed API
+- [x] 4.2 Run `openspec validate simpleredis-exec-pipeline --strict`
