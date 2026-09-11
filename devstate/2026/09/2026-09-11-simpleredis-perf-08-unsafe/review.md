@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: none
 fixed: none
 skipped: none; usage already recorded no-adopt and CI guards
+
+## archive (2026-09-11)
+phase: archive
+findings: none
+fixed: folded ADDED requirements into live tcp-session and resp-commands; archived change to 2026-09-11-simpleredis-no-unsafe-zero-copy
+skipped: FindSpecHost Task tool missing — ran inline; fold targets unchanged; CI in progress on 0573621
