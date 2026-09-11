@@ -912,4 +912,3 @@ func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
 		t.Fatalf("reuse Get dialed, connections %d → %d", before, got)
 	}
 }
-
