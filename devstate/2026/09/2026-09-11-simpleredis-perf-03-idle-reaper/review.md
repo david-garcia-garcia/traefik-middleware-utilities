@@ -35,3 +35,9 @@ phase: devdocsimpact
 findings: none
 fixed: none (usage already enough; std_go_simpleredis gotcha from implement)
 skipped: none
+
+## archive (2026-09-11)
+phase: archive
+findings: None.
+fixed: fold std_go_simpleredis_tcp-session into live catalog; archived to 2026-09-12-simpleredis-idle-head-sweep
+skipped: none

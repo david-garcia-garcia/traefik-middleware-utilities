@@ -10,5 +10,5 @@ JobName: 2026-09-11-simpleredis-perf-03-idle-reaper
 | implement | [x] | [x] | 2026-09-11T21:46:29Z |
 | codereview | [x] | [x] | 2026-09-11T21:58:57Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:04:55Z |
-| archive | [ ] | [ ] | |
+| archive | [x] | [x] | 2026-09-11T22:11:29Z |
 | pullrequest | [ ] | [ ] | |
