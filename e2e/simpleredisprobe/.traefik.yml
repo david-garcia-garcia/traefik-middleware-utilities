@@ -1,0 +1,6 @@
+displayName: simpleredisprobe
+type: middleware
+import: github.com/david-garcia-garcia/simpleredisprobe
+summary: Fake Traefik middleware that SET+GETs via SimpleRedis for Yaegi e2e.
+testData:
+  host: redis:6379

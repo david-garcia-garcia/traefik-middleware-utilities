@@ -13,9 +13,12 @@ services:
       - "--entrypoints.web.address=:80"
       - "--experimental.localplugins.reclaimprobe.modulename=github.com/david-garcia-garcia/reclaimprobe"
       - "--experimental.localplugins.reclaimprobe.settings.useunsafe=false"
+      - "--experimental.localplugins.simpleredisprobe.modulename=github.com/david-garcia-garcia/simpleredisprobe"
+      - "--experimental.localplugins.simpleredisprobe.settings.useunsafe=false"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./e2e/reclaimprobe:/plugins-local/src/github.com/david-garcia-garcia/reclaimprobe
+      - ./e2e/simpleredisprobe:/plugins-local/src/github.com/david-garcia-garcia/simpleredisprobe
       - ./:/plugins-local/src/github.com/david-garcia-garcia/traefik-middleware-utilities
     ports:
       - "8000:80"
@@ -40,3 +43,17 @@ services:
       - "traefik.http.routers.reclaim-b.middlewares=reclaim-b@docker"
       - "traefik.http.services.reclaim-b.loadbalancer.server.port=80"
       - "traefik.http.middlewares.reclaim-b.plugin.reclaimprobe.key=shared"
+
+  redis:
+    image: redis:7-alpine
+    hostname: redis
+
+  whoami-redis:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simpleredis.rule=PathPrefix(`/redis`)"
+      - "traefik.http.routers.simpleredis.entrypoints=web"
+      - "traefik.http.routers.simpleredis.middlewares=simpleredis@docker"
+      - "traefik.http.services.simpleredis.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.simpleredis.plugin.simpleredisprobe.host=redis:6379"
