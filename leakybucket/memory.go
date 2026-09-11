@@ -21,6 +21,9 @@ type Memory struct {
 	buckets map[string]*memEntry
 }
 
+// maxMemorySources is Traefik's in-memory source cap (ttlmap maxSources).
+const maxMemorySources = 65536
+
 // NewMemory builds an in-process meter. leak is water per second.
 func NewMemory(leak, capacity float64, ttl time.Duration) (*Memory, error) {
 	if err := validateClock(leak, capacity, ttl); err != nil {
@@ -78,6 +81,9 @@ func (m *Memory) pourLocked(key string, poured float64) (bool, float64, time.Dur
 	}
 	if entry == nil {
 		m.dropExpired(now)
+		if len(m.buckets) >= maxMemorySources {
+			m.dropOne(now)
+		}
 		entry = &memEntry{}
 		m.buckets[key] = entry
 	}
@@ -90,9 +96,21 @@ func (m *Memory) pourLocked(key string, poured float64) (bool, float64, time.Dur
 
 // dropExpired removes buckets whose ttl has elapsed.
 func (m *Memory) dropExpired(now time.Time) {
-	for source, entry := range m.buckets {
+	for key, entry := range m.buckets {
 		if !now.Before(entry.expireAt) {
-			delete(m.buckets, source)
+			delete(m.buckets, key)
 		}
+	}
+}
+
+// dropOne removes one map slot when at cap so a new key can be stored.
+func (m *Memory) dropOne(now time.Time) {
+	m.dropExpired(now)
+	if len(m.buckets) < maxMemorySources {
+		return
+	}
+	for key := range m.buckets {
+		delete(m.buckets, key)
+		return
 	}
 }

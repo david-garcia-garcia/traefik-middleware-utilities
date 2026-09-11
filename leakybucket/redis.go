@@ -236,9 +236,9 @@ func (r *Redis) flushPending() error {
 	now := r.now()
 	nowMicro := now.UnixMicro()
 	nowUnix := now.Unix()
-	for redisKey, state := range r.keys {
+	for key, state := range r.keys {
 		if state.localPours > 0 {
-			values, err := r.redis.Eval(pourScript, []string{redisKey}, []string{
+			values, err := r.redis.Eval(pourScript, []string{key}, []string{
 				strconv.FormatFloat(r.clock.leak, 'f', -1, 64),
 				strconv.FormatFloat(r.clock.capacity, 'f', -1, 64),
 				strconv.FormatInt(r.clock.ttlSeconds(), 10),
@@ -263,7 +263,7 @@ func (r *Redis) flushPending() error {
 			}
 		}
 		if state.localPours == 0 && nowUnix >= state.expireAt.Unix() {
-			delete(r.keys, redisKey)
+			delete(r.keys, key)
 		}
 	}
 	return firstErr

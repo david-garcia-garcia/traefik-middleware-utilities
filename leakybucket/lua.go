@@ -1,7 +1,7 @@
 package leakybucket
 
 // pourScript leaks HASH water/last once, then adds ARGV delta when it would not exceed capacity.
-// KEYS[1] is the hash. table.maxn is not used (#rl_source == 4 for Dragonfly Lua 5.4).
+// KEYS[1] is the hash. table.maxn is not used (#hash == 4 for Dragonfly Lua 5.4).
 const pourScript = `
 local key = KEYS[1]
 local leak, capacity, ttl, now, delta = tonumber(ARGV[1]), tonumber(ARGV[2]), tonumber(ARGV[3]), tonumber(ARGV[4]),
@@ -9,10 +9,10 @@ local leak, capacity, ttl, now, delta = tonumber(ARGV[1]), tonumber(ARGV[2]), to
 
 local water = 0
 local last = 0
-local rl_source = redis.call('hgetall', key)
-if #rl_source == 4 then
-	last = tonumber(rl_source[2])
-	water = tonumber(rl_source[4])
+local hash = redis.call('hgetall', key)
+if #hash == 4 then
+	last = tonumber(hash[2])
+	water = tonumber(hash[4])
 end
 
 if now < last then

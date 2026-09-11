@@ -187,6 +187,25 @@ func TestNewRedis_RejectsNil(t *testing.T) {
 	}
 }
 
+func TestRedis_AddRejectsNLessThanOne(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := NewRedis(client, 1, 3, 0, testTTL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, addErr := limiter.Add("k", 0); !errors.Is(addErr, errPour) {
+		t.Fatalf("n 0: %v", addErr)
+	}
+	if _, _, _, addErr := limiter.Add("k", -1); !errors.Is(addErr, errPour) {
+		t.Fatalf("n -1: %v", addErr)
+	}
+	if got := fake.lastEvalCommand(); len(got) != 0 {
+		t.Fatalf("rejected pour still EVAL %v", got)
+	}
+}
+
 func TestNewRedis_RejectsNegativeSyncRate(t *testing.T) {
 	client := &simpleredis.SimpleRedis{}
 	if _, err := NewRedis(client, 1, 1, -time.Second, testTTL); !errors.Is(err, errSyncRate) {
@@ -230,6 +249,11 @@ func TestRedis_EvalBadReply(t *testing.T) {
 	_, _, _, err = limiter.Take("k")
 	if !errors.Is(err, errEvalFlag) {
 		t.Fatalf("want errEvalFlag, got %v", err)
+	}
+	fake.setEvalReply("*3\r\n$1\r\n1\r\n$1\r\n0\r\n$3\r\nxyz\r\n")
+	_, _, _, err = limiter.Take("k")
+	if !errors.Is(err, errEvalUntil) {
+		t.Fatalf("want errEvalUntil, got %v", err)
 	}
 }
 

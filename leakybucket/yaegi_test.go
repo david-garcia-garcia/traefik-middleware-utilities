@@ -216,9 +216,16 @@ func IdleThenTake(host, key string) string {
 			return "early"
 		}
 	}
+	allowed, _, _, err := limiter.Take(key)
+	if err != nil {
+		return "deny:" + err.Error()
+	}
+	if allowed {
+		return "not-denied"
+	}
 	now = now.Add(3 * time.Second)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, _, _, err := limiter.Take(key)
+	allowed, _, _, err = limiter.Take(key)
 	if err != nil {
 		return "drain:" + err.Error()
 	}
