@@ -10,5 +10,5 @@ JobName: 2026-09-11-simpleredis-feat-01-msetex
 | implement | [x] | [x] | 2026-09-11T22:20:00Z |
 | codereview | [x] | [x] | 2026-09-11T22:33:31Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:44:42Z |
-| archive | [ ] | [ ] | |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
