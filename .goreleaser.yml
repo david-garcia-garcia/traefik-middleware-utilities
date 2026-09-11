@@ -1,0 +1,43 @@
+project_name: traefik-middleware-utilities
+
+builds:
+# This repo is a library interpreted by Traefik Yaegi, not a compiled plugin.
+# Skip binaries; keep source archive, SBOM, and changelog.
+- skip: true
+
+release:
+  prerelease: auto
+
+source:
+  enabled: true
+
+sboms:
+- artifacts: source
+  documents:
+  - "${artifact}.cdx.sbom"
+  cmd: cyclonedx-gomod
+  args: [ "mod", "-licenses", "-json", "-output", "$document", "./.." ]
+
+milestones:
+- name_template: "{{ .Tag }}"
+  close: true
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+  - title: Features
+    regexp: "^.*feat[(\\\\w)]*:+.*$"
+    order: 0
+  - title: Fixes
+    regexp: "^.*fix[(\\\\w)]*:+.*$"
+    order: 1
+  - title: Documentation
+    regexp: "^.*docs[(\\\\w)]*:+.*$"
+    order: 2
+  - title: Others
+    order: 999
+  filters:
+    exclude:
+    - '^test:'
+    - '^Merge '
