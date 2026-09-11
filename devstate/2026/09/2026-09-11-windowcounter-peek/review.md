@@ -42,3 +42,9 @@ findings: fold both windowcounter leaves; archive 2026-09-11-windowcounter-peek
 fixed: main specs synced; change moved to archive
 skipped: none
 
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: title ready; CI 34638712870 succeeded; no PR comments
+fixed: PR #7 title and final card
+skipped: none
+

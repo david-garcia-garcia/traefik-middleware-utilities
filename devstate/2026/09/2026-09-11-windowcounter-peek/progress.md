@@ -11,4 +11,4 @@ JobName: 2026-09-11-windowcounter-peek
 | codereview | [x] | [x] | 2026-09-11T19:18:32Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T19:19:38Z |
 | archive | [x] | [x] | 2026-09-11T19:22:44Z |
-| pullrequest | [x] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T19:26:50Z |
