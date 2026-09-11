@@ -1,4 +1,4 @@
-// Package simpleredis is a stdlib pooled TCP RESP client (GET, MGET, SET with EX, DEL).
+// Package simpleredis is a stdlib pooled TCP RESP client (GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL).
 package simpleredis
 
 import (
@@ -50,7 +50,7 @@ func (c *pooledConn) close() {
 	_ = c.netConn.Close()
 }
 
-// SimpleRedis is a pooled TCP RESP client. Init stores dial settings; Get/MGet/Set/Del dial on first use.
+// SimpleRedis is a pooled TCP RESP client. Init stores dial settings; commands dial on first use.
 type SimpleRedis struct {
 	host     string
 	pass     string
@@ -61,7 +61,7 @@ type SimpleRedis struct {
 	closed bool
 }
 
-// Close drains idle pooled connections and stops pooling. Further Get/Set/Del/MGet return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
+// Close drains idle pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
 func (sr *SimpleRedis) Close() {
 	sr.mu.Lock()
 	if sr.closed {
@@ -126,6 +126,56 @@ func (sr *SimpleRedis) Set(name string, data []byte, duration int64) error {
 func (sr *SimpleRedis) Del(name string) error {
 	_, err := sr.exec([]byte("DEL"), []byte(name))
 	return err
+}
+
+// Incr adds one to key name and returns the integer after the increment.
+func (sr *SimpleRedis) Incr(name string) (int64, error) {
+	return parseIntegerReply(sr.exec([]byte("INCR"), []byte(name)))
+}
+
+// IncrBy adds delta to key name and returns the integer after the increment.
+func (sr *SimpleRedis) IncrBy(name string, delta int64) (int64, error) {
+	return parseIntegerReply(sr.exec([]byte("INCRBY"), []byte(name), []byte(strconv.FormatInt(delta, 10))))
+}
+
+// Expire sets a TTL in seconds on key name. Integer 0 or 1 is success.
+func (sr *SimpleRedis) Expire(name string, seconds int64) error {
+	_, err := sr.exec([]byte("EXPIRE"), []byte(name), []byte(strconv.FormatInt(seconds, 10)))
+	return err
+}
+
+// ExpireAt sets an absolute Unix expiry on key name. Integer 0 or 1 is success.
+func (sr *SimpleRedis) ExpireAt(name string, unixSeconds int64) error {
+	_, err := sr.exec([]byte("EXPIREAT"), []byte(name), []byte(strconv.FormatInt(unixSeconds, 10)))
+	return err
+}
+
+// Eval runs a Lua script with KEYS then ARGV. numkeys is len(keys).
+func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]byte, error) {
+	wire := make([][]byte, 0, 3+len(keys)+len(args))
+	wire = append(wire, []byte("EVAL"), []byte(script), []byte(strconv.Itoa(len(keys))))
+	for _, key := range keys {
+		wire = append(wire, []byte(key))
+	}
+	for _, arg := range args {
+		wire = append(wire, []byte(arg))
+	}
+	return sr.exec(wire...)
+}
+
+// parseIntegerReply reads one decimal integer from a : reply. Garbage payload is redis:issue?.
+func parseIntegerReply(values [][]byte, err error) (int64, error) {
+	if err != nil {
+		return 0, err
+	}
+	if len(values) != 1 {
+		return 0, errIssue
+	}
+	n, convErr := strconv.ParseInt(string(values[0]), 10, 64)
+	if convErr != nil {
+		return 0, errIssue
+	}
+	return n, nil
 }
 
 // exec borrows a connection, runs one RESP command, and retries once when a reused idle socket is dead.
@@ -248,6 +298,9 @@ func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, erro
 	}
 	values, clean, err := readReply(conn.reader)
 	if err != nil && !clean {
+		if err == errIssue {
+			return nil, false, errIssue
+		}
 		return nil, false, ioError(err)
 	}
 	return values, true, err
@@ -307,14 +360,24 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 			if headErr != nil {
 				return nil, false, headErr
 			}
-			data, bulkErr := readBulk(reader, head)
-			if bulkErr == errMiss {
-				continue
+			if len(head) == 0 {
+				return nil, false, errIssue
 			}
-			if bulkErr != nil {
-				return nil, false, bulkErr
+			switch head[0] {
+			case '$':
+				data, bulkErr := readBulk(reader, head)
+				if bulkErr == errMiss {
+					continue
+				}
+				if bulkErr != nil {
+					return nil, false, bulkErr
+				}
+				values[i] = data
+			case ':', '+':
+				values[i] = head[1:]
+			default:
+				return nil, false, errIssue
 			}
-			values[i] = data
 		}
 		return values, true, nil
 	default:

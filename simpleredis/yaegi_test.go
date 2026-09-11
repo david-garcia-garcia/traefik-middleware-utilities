@@ -26,6 +26,19 @@ func TestYaegi_InitGetSetDel(t *testing.T) {
 	}
 }
 
+// TestYaegi_IncrAndEval proves interpreted Incr and Eval against a compiled fake. Traefik is not started.
+func TestYaegi_IncrAndEval(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{})
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.IncrAndEval(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi incr+eval: %q, want ok", got)
+	}
+}
+
 // evalClientprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalClientprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -94,6 +107,8 @@ func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
 const clientprobeSrc = `package clientprobe
 
 import (
+	"fmt"
+
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
@@ -112,5 +127,33 @@ func RoundTrip(host string) string {
 		return "del:" + err.Error()
 	}
 	return string(got)
+}
+
+const kongScript = ` + "`" + `local exists = redis.call("exists", KEYS[1])
+local value = redis.call("incrby", KEYS[1], ARGV[1])
+if exists == 0 then
+  redis.call("expireat", KEYS[1], ARGV[2])
+end
+return value` + "`" + `
+
+// IncrAndEval Incs a missing key then Evals the Kong incrby+expireat snippet.
+func IncrAndEval(host string) string {
+	client := &simpleredis.SimpleRedis{}
+	client.Init(host, "", "")
+	n, err := client.Incr("yaegi-incr")
+	if err != nil {
+		return "incr:" + err.Error()
+	}
+	if n != 1 {
+		return fmt.Sprintf("incr:%d", n)
+	}
+	values, err := client.Eval(kongScript, []string{"yaegi-eval"}, []string{"3", "1700000000"})
+	if err != nil {
+		return "eval:" + err.Error()
+	}
+	if len(values) != 1 || string(values[0]) != "3" {
+		return fmt.Sprintf("eval:%q", values)
+	}
+	return "ok"
 }
 `
