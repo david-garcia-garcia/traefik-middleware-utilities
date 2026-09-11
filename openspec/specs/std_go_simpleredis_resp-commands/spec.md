@@ -1,6 +1,6 @@
 ## Purpose
 
-Defines the RESP commands a SimpleRedis client speaks after it holds a session: GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, and EVAL, plus the exported error strings callers match. Keys and values are opaque bytes. Interpreter tests prove Init/Get/Set/Del/Incr/Eval under Yaegi without starting Traefik.
+Defines the RESP commands a SimpleRedis client speaks after it holds a session: GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL, MSetEX, and MSetEXAt, plus the exported error strings callers match. Keys and values are opaque bytes. Interpreter tests prove Init/Get/Set/Del/Incr/Eval/MSetEX under Yaegi without starting Traefik.
 
 ## Requirements
 
