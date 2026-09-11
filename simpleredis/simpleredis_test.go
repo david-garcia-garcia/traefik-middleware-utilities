@@ -280,13 +280,14 @@ func startWriteThenCloseRedis(t *testing.T, partialReply string) string {
 }
 
 // startRetryBorrowFailRedis accepts one connection, replies a GET hit, closes the listener, then replies malformed on the reused socket so the retry dial fails.
-func startRetryBorrowFailRedis(t *testing.T, malformedReply string) string {
+func startRetryBorrowFailRedis(t *testing.T, malformedReply string) (addr string, listenerClosed <-chan struct{}) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
+	closed := make(chan struct{})
 
 	go func() {
 		conn, err := listener.Accept()
@@ -300,12 +301,13 @@ func startRetryBorrowFailRedis(t *testing.T, malformedReply string) string {
 		}
 		_, _ = io.WriteString(conn, "$1\r\nt\r\n")
 		_ = listener.Close()
+		close(closed)
 		if _, err := readCommand(reader); err != nil {
 			return
 		}
 		_, _ = io.WriteString(conn, malformedReply)
 	}()
-	return listener.Addr().String()
+	return listener.Addr().String(), closed
 }
 
 func TestGetHitAndMiss(t *testing.T) {
@@ -867,7 +869,7 @@ func TestTruncatedReplyIsUnreachableAndNotPooled(t *testing.T) {
 }
 
 func TestRetryBorrowFailsAfterDirtyReuse(t *testing.T) {
-	addr := startRetryBorrowFailRedis(t, "?huh\r\n")
+	addr, listenerClosed := startRetryBorrowFailRedis(t, "?huh\r\n")
 	var redis SimpleRedis
 	redis.Init(addr, "", "")
 
@@ -880,6 +882,11 @@ func TestRetryBorrowFailsAfterDirtyReuse(t *testing.T) {
 	}
 	if len(redis.idle) != 1 {
 		t.Fatalf("after first Get idle = %d, want 1", len(redis.idle))
+	}
+	select {
+	case <-listenerClosed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("listener did not close after the pooled hit")
 	}
 
 	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
