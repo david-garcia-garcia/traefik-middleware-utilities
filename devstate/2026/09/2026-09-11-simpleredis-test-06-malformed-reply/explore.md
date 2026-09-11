@@ -63,34 +63,34 @@ Usage packet `knowledge/devdocs/std_go_simpleredis.md` is enough to call the cli
 - Q: Null-array (`*-1`): keep as `redis:issue?` + destroy conn (comment at `:354`), or map to `errMiss` like null bulk?
   Rank: additive asked — comment (or a mapping) on the existing `count < 0` check; Desired and Unknowns name this decision; Current cites `:354`
   Decision: resolved — keep as protocol violation + comment at the `count < 0` check. `*-1` is a legal RESP2 nil array for BLPOP timeout and EXEC abort (`knowledge/research/ext_redis_resp_null-array/`); this client has no such verb; `errMiss` is the missing-key bulk (`$-1`). Do not leave it as an accidental `count < 0`.
-  By: explore
+  By: propose
 
 - Q: How to exercise `exec` borrow-failure on the retry attempt (`:195`) with a canned reply?
   Rank: additive asked — new test helper this change creates; Problem, Current `:195-197`, and Unknowns name the branch
   Decision: assumed — dedicated one-accept helper (good first reply, then malformed on the reused socket, listener closed before retry dial). Expect `redis:unreachable` and `idle==0`. Not a `startStaticRedis` table row.
-  By: explore
+  By: propose
 
 - Q: Do `Get` / `parseIntegerReply` count-mismatch rows assert `len(idle)==0` the same as decoder poison?
   Rank: additive asked — Desired names covering those branches via canned replies; Current cites `:93-95` and `:171-173`
   Decision: assumed — cover with canned `*0` / `*2`; assert `redis:issue?`; do **not** assert `idle==0` (conn is clean). Do not change `Get` / `release` to destroy on arity mismatch. Deviation recorded.
-  By: explore
+  By: propose
 
 - Q: How do live Redis and Dragonfly stay in the proof if malformed cases are fake-server only?
   Rank: additive asked — Desired and conductor HARD REQUIREMENT: both engines; extend compose + Pester `/redis` `/dragonfly`; do not replace live happy-path
   Decision: assumed — keep compose `redis:7-alpine` and `dragonfly:v1.40.2` and both whoami routes. Extend probe + Pester with Get-miss on `/redis` and `/dragonfly`. Table-driven malformed stays in-process. A decoder change still has to pass both live Its.
-  By: explore
+  By: propose
 
 - Q: Which Eval script may live tests send?
   Rank: additive asked — Desired: Lua 5.1-safe and KEYS listed (Dragonfly)
   Decision: resolved — keep `kongIncrbyExpireatScript` in `e2e/simpleredisprobe` and compiled/Yaegi tests. No `table.maxn`. No undeclared keys (`ext_dragonfly_eval`).
-  By: explore
+  By: propose
 
 - Q: Which spec leaf takes malformed and null-array?
   Rank: additive asked — Affected names `openspec/specs/std_go_simpleredis_resp-commands/spec.md` if the contract is specified
-  Decision: assumed — delta on `std_go_simpleredis_resp-commands` (dirty decode + idle; `*-1` is issue; live Get-miss on both engines). No new spec family.
-  By: explore
+  Decision: resolved — FindSpecHost fold into `std_go_simpleredis_resp-commands` (high). Small adjustment: dirty decode + idle, `*-1` is issue, Get/Incr arity, live Get-miss. Candidates: `std_go_simpleredis_resp-commands`, `std_go_simpleredis_tcp-session`. No new spec family.
+  By: propose
 
 - Q: Who already owns client address / user / tenant / Host for this client?
   Rank: additive asked — explore requires an owner when identity is in play; this unit does not reconstruct request identity
   Decision: resolved — none. `Init` host is the Redis/Dragonfly server address from caller config. The probe does not read `RemoteAddr` or forwarded headers.
-  By: explore
+  By: propose
