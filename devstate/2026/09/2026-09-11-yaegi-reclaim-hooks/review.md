@@ -17,3 +17,9 @@ phase: propose
 findings: qualified-with-gaps — change explicit-reclaim-lifecycle-hooks; four Open questions resolved; implement remains
 fixed: none (Open still master's type-switch)
 skipped: none
+
+## implement (2026-09-11)
+phase: implement
+findings: none (codereview not run)
+fixed: Hooks on Open, Yaegi tests, reclaimprobe log host, Pester wrap-up, debt taken
+skipped: none
