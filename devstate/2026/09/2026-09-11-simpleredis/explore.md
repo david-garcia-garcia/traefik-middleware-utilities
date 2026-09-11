@@ -67,56 +67,56 @@ Harness call sites (searched `docker-compose.yml`, `Test-Integration.ps1`, `scri
 
 **Apache-2.0 stays on the copied package, not a product LICENSE.** Dest has no root `LICENSE` (glob `LICENSE*` at repo root: not found). Adding one would relicense `reclaim/` without a criterion. Ship `simpleredis/LICENSE` (Apache-2.0 text plus the source appendix copyrights: Containous SAS, Traefik Labs). README states that copied client is Apache-2.0. No `go.mod` Redis require (research: stdlib only).
 
-**Specs/devdocs wait for propose/implement.** No dest SimpleRedis packet or spec leaf yet. Explore did not invent Language. Propose adds `std_go_simpleredis_*`. Implement/devdocsimpact write usage once the package exists.
+**Specs/devdocs wait for propose/implement.** No dest SimpleRedis packet or spec leaf yet. Explore did not invent Language. Propose adds `std_go_simpleredis_tcp-session` and `std_go_simpleredis_resp-commands`. Implement/devdocsimpact write usage once the package exists.
 
 ## Open questions
 
 - Q: Folder and import last segment — README `redis/` vs source package `simpleredis`?
   Rank: additive asked — new library this change creates; Desired 1 names the simpleredis copy so callers import it from this module; dest sibling `reclaim/` is folder=package
   Decision: assumed — `simpleredis/` and `package simpleredis`. README Layout `redis/` becomes `simpleredis/`. Do not change the package clause to `redis`.
-  By: explore
+  By: propose
 
 - Q: Ticket names simpleredis vs README “Redis connection” under `redis/`?
   Rank: additive asked — README Libraries/Layout are in Affected and Desired 4
   Decision: assumed — Libraries title SimpleRedis (exported type); Role is the shared stdlib RESP client; Status Current. “Redis connection” was the Planned placeholder.
-  By: explore
+  By: propose
 
 - Q: Does the host plugin share the reclaim compose project or get its own stack/ports?
   Rank: additive asked — new probe + compose services; Desired 3 names dest reclaim e2e (one compose, one runner); Out of scope allows sharing the harness
-  Decision: assumed — share `docker-compose.yml` project `reclaim-e2e`. Add redis + `simpleredisprobe` + a whoami that is not a/b. Do not change project name, `reclaim-e2e-traefik`, ports 8000/8080, or reclaim `/a` `/b`.
-  By: explore
+  Decision: assumed — share `docker-compose.yml` project `reclaim-e2e`. Add redis + `simpleredisprobe` + `whoami-redis` on `/redis`. Do not change project name, `reclaim-e2e-traefik`, ports 8000/8080, or reclaim `/a` `/b`.
+  By: propose
 
 - Q: Is e2e Redis a compose `redis` container or a fake like `startFakeRedis`?
   Rank: additive asked — new compose service; Desired 3 host plugin uses Redis; Desired 1 copies existing fake-TCP unit tests; Out of scope forbids miniredis
   Decision: assumed — Pester uses compose `redis:7-alpine` at `redis:6379` with no password and empty database. Copied unit tests and Yaegi go tests keep in-process fake TCP. No miniredis, no TLS, no Unix sockets.
-  By: explore
+  By: propose
 
 - Q: How does Apache-2.0 attribution land given dest has no root LICENSE?
   Rank: additive incidental — NOTICE/LICENSE on files this change creates; Affected says “Possibly root license/NOTICE”; no criterion names a product-wide LICENSE
   Decision: assumed — package-local `simpleredis/LICENSE` (Apache-2.0 + Containous SAS / Traefik Labs copyrights from source appendix). Do not add a repo-root LICENSE (would relicense reclaim). README notes the copied client is Apache-2.0.
-  By: explore
+  By: propose
 
 - Q: Does `Test-Integration.ps1` stay one script for both libraries or split?
   Rank: additive asked — extend the existing runner; Desired 3 following dest reclaim; CI integration job calls that one script
   Decision: assumed — one `Test-Integration.ps1` and one `scripts/integration-tests.Tests.ps1`. Add Redis and `/redis` waits plus a Describe that does not stop whoami-a/b. Do not split scripts or CI jobs.
-  By: explore
+  By: propose
 
 - Q: What is the fake middleware shape for Redis Yaegi e2e?
   Rank: additive asked — Desired 3 following dest `e2e/reclaimprobe/`
-  Decision: assumed — nested module `e2e/simpleredisprobe` (package `simpleredisprobe`) with Traefik `Config` / `CreateConfig` / `New`; `New` Inits the client (host from Config, default `redis:6379`); handler SET+GET plus a response header; GOPATH mounts plugin + this repo; no root `plugin.go`; `useunsafe: false`.
-  By: explore
+  Decision: assumed — nested module `e2e/simpleredisprobe` (package `simpleredisprobe`) with Traefik `Config` / `CreateConfig` / `New`; `New` Inits the client (host from Config, default `redis:6379`); handler SET+GET plus response header `X-SimpleRedis-Value`; GOPATH mounts plugin + this repo; no root `plugin.go`; `useunsafe: false`.
+  By: propose
 
 - Q: Where do Yaegi interpreter tests live?
   Rank: additive asked — Desired 2 names Yaegi-specific tests; dest pattern `reclaim/yaegi_test.go`
   Decision: assumed — `simpleredis/yaegi_test.go`. GOPATH copy of non-test sources; interp stdlib only. Compiled test owns the fake TCP listener; interpreted probe exercises Init/Get/Set/Del.
-  By: explore
+  By: propose
 
 - Q: Who already owns client address / user / tenant / Host for this client?
   Rank: additive asked — explore requires an owner when identity is in play; this unit does not reconstruct request identity
   Decision: resolved — none. `Init` host is the Redis server address from caller config. The probe does not read `RemoteAddr` or forwarded headers. Traefik still owns plugin `New` ctx.
-  By: explore
+  By: propose
 
 - Q: Does dest `go.mod` need a Redis client module?
   Rank: additive asked — dest `go.mod` currently requires only Yaegi; research: source client is stdlib TCP RESP
   Decision: resolved — no new require. Probe `go.mod` replace-imports this module only. Do not add Yaegi to the probe module.
-  By: explore
+  By: propose
