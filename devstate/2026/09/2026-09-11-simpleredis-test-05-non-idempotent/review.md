@@ -12,3 +12,9 @@ phase: explore
 findings: none
 fixed: none
 skipped: product apply not started; four assumed open questions copied to the card; two resolved rows omitted
+
+## propose (2026-09-11)
+phase: propose
+findings: none
+fixed: none
+skipped: product apply not started; six open questions resolved so Explore Decisions is None.
