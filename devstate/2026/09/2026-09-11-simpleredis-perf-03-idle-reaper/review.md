@@ -29,3 +29,9 @@ phase: codereview
 findings: Test coverage 1 hard (done); other axes none
 fixed: TestStaleIdleHeadPeelStopsAtStillValidHead (73efe0b)
 skipped: none
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: none
+fixed: none (usage already enough; std_go_simpleredis gotcha from implement)
+skipped: none
