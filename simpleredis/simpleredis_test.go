@@ -631,6 +631,70 @@ func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	}
 }
 
+func TestStaleIdleHeadIsClosedWhileTailStaysHot(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	proveIdleHeadSweep(t, &redis, "hit")
+}
+
+// waitIdleLen waits until len(idle) is want or the wait expires.
+func waitIdleLen(t *testing.T, client *SimpleRedis, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		client.mu.Lock()
+		got := len(client.idle)
+		client.mu.Unlock()
+		if got == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("idle = %d, want %d", got, want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// proveIdleHeadSweep fills two idle sockets, backdates the head past idleTimeout, then Gets.
+func proveIdleHeadSweep(t *testing.T, client *SimpleRedis, key string) {
+	t.Helper()
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := client.Get(key); err != nil {
+				t.Errorf("concurrent Get: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	waitIdleLen(t, client, 2)
+
+	client.mu.Lock()
+	head := client.idle[0]
+	head.lastUsed = time.Now().Add(-idleTimeout - time.Second)
+	client.mu.Unlock()
+
+	if _, err := client.Get(key); err != nil {
+		t.Fatalf("Get after stale head: %v", err)
+	}
+
+	client.mu.Lock()
+	for _, idleConn := range client.idle {
+		if idleConn == head {
+			client.mu.Unlock()
+			t.Fatal("stale head still in idle")
+		}
+	}
+	client.mu.Unlock()
+
+	if err := head.netConn.SetDeadline(time.Now()); err == nil {
+		t.Fatal("stale head socket still open")
+	}
+}
+
 func TestIncrMissingThenPresent(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	var redis SimpleRedis
