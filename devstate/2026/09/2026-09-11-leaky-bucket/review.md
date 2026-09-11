@@ -41,3 +41,12 @@ skipped: EVAL helper; flush pipeline; buffered Level; Wake after Sleep
 qualify: qualified-with-gaps
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9
 head: 1a9ab4f
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: stale-usage Key files and memory-cap Gotcha
+fixed: std_go_leakybucket Key files + Gotcha
+skipped: none
+qualify: qualified-with-gaps
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9
+head: f8e92b4
