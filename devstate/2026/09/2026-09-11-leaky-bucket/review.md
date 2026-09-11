@@ -32,3 +32,12 @@ skipped: n/a
 qualify: qualified-with-gaps
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9
 localTests: passed
+
+## codereview (2026-09-11)
+phase: codereview
+findings: P3 none; hard nitpicks/spec/perf/coverage applied; judgement skips
+fixed: lua hash name; memory 65536 cap; Yaegi deny-at-cap; Redis Add n<1; errEvalUntil
+skipped: EVAL helper; flush pipeline; buffered Level; Wake after Sleep
+qualify: qualified-with-gaps
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/9
+head: 1a9ab4f
