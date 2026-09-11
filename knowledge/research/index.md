@@ -29,3 +29,8 @@ description: Dragonfly Redis-compat scripting and official container image for C
 priority: normal
 local: index_ext_kong.md
 description: Kong Gateway rate-limiting window types and Redis sync_rate behavior for window counters.
+
+## go-redis
+priority: normal
+local: index_ext_go-redis.md
+description: go-redis client internals this product copies as stdlib-only control flow (not an import).
