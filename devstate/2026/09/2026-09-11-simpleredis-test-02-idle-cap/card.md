@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-11T22:23:56Z
+Developer review: ready for review — 2026-09-11T22:29:42Z
 
 ## What this changes
 **Operators.** None.
@@ -31,27 +31,27 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Idle-cap contracts are in the live catalog and the change is archived. CI on this head still has Test and Integration Tests running. 1 item remains.
+Ready for review. 0 items remain.
 
 Priority: P3 — tests and proof of existing idle-cap and Close-on-release guards; no current user or operator harm
-Reviewed head: 316ae38
+Reviewed head: f974cab
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI still in progress on this head |
-| CI proof | 3/6 | in progress — [run 34653725841](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653725841) |
+| Overall readiness | 6/6 | CI succeeded on this head; no open PR comments |
+| CI proof | 6/6 | succeeded — [run 34653964433](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653964433) |
 | Local tests proof | N/A | prHost github; CI proof covers remote |
 | Review resolution | 6/6 | no PR comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-11-simpleredis-test-02-idle-cap pushed | `git push` to origin; HEAD 316ae38 |
+| Branch | 2026-09-11-simpleredis-test-02-idle-cap pushed | `git` HEAD f974cab matches origin |
 | OpenSpec | test-idle-cap-and-release-after-close archived | `openspec/changes/archive/2026-09-11-test-idle-cap-and-release-after-close/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/14 | GitHub PR 14 |
-| CI | build 34653725841 in progress — Lint success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653725841/job/103441472535; Integration Tests in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653725841/job/103441472568; Test in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653725841/job/103441472288 | GitHub check runs on PR 14 |
+| CI | build 34653964433 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653964433 — Lint success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653964433/job/103442201051; Test success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653964433/job/103442201126; Integration Tests success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653964433/job/103442200918 | GitHub check runs on PR 14 head f974cab |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | comments.md absent; PR comment list empty |
 
@@ -65,7 +65,7 @@ None.
 None.
 
 ## How this fits together
-Idle-cap and Close-on-release proof is on branch `2026-09-11-simpleredis-test-02-idle-cap`, PR 14; the change is archived and the live tcp-session spec carries the idle-cap contracts; CI run 34653725841 in progress after that push.
+Idle-cap and Close-on-release proof is on branch `2026-09-11-simpleredis-test-02-idle-cap`, PR 14; the change is archived and the live tcp-session spec carries the idle-cap contracts; CI workflow CI run 34653964433 succeeded on f974cab.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -76,14 +76,7 @@ Idle-cap and Close-on-release proof is on branch `2026-09-11-simpleredis-test-02
 | Does the spec SHALL "Concurrent commands SHALL not open more than eight connections" stay, given usage says in-flight dials are not capped? | bounded asked | assumed — rewrite SHALL/scenario to idle ≤ 8 after overlap of more than eight; in-flight MAY exceed eight. Repair the 8-goroutine test. Add in-flight-Close scenario. | propose |
 
 ## Before merge
-- [ ] [P3] CI on this head (Lint succeeded; Test and Integration Tests in progress)
-- [x] Idle-cap delta folded into live `std_go_simpleredis_tcp-session`; change archived
-- [x] Usage packet Close-on-release gotcha (`std_go_simpleredis`)
-- [x] Seven-axis review written; hard items applied (436cdd0)
-- [x] Unit-test idle cap and in-flight Close so those `release` branches can fail
-- [x] Live overlap on Redis and Dragonfly must not leak idle sockets beyond the cap
-- [x] Stub PR opened
-- [x] Propose artifacts written
+None.
 
 ## Findings
 None.
@@ -104,7 +97,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 316ae385ab8c8492166db94e46a9f048b0280eda | Card must match the branch you measured |
+| Reviewed head | f974cabccaca64fa586042e4bacdb94303696097 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -119,10 +112,11 @@ Is this the best way to solve the issue? Yes versus DestBranch: prove idle ≤ 8
 ### Evidence
 What I checked:
 - Pin `origin/master` `7dc4b051888d857869b4beb53cdd9579f930d3c1` three-dot product diff (exclude `devstate/`, `.cursor/`)
-- FindSpecHost fold `std_go_simpleredis_tcp-session` (already journaled on specs.md); live catalog merged; `validate_spec_map` write then verify OK; `validate_artifact_names` OK; change moved to `openspec/changes/archive/2026-09-11-test-idle-cap-and-release-after-close/`
+- Fetch `origin/master` and merge into IssueKey: already up to date
+- One OPEN PR 14; title set to gitmoji ready form; comments.md absent
+- CI workflow CI run 34653964433 completed success on head f974cab; Lint / Test / Integration Tests all success
 - Seven axis files under the run root; hard items applied; 2 Standards judgement skipped
-- PR 14 OPEN, comments empty
-- CI run 34653725841 Lint success; Integration Tests in progress; Test in progress
+- Qualify from handoff.yaml: qualified-with-gaps
 
 ### Rank-up moves
 - Extract a shared overlap-launch helper if a later change must keep both idle-cap tests in lockstep

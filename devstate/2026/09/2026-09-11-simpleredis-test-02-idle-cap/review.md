@@ -40,4 +40,10 @@ findings: fold std_go_simpleredis_tcp-session; validate_spec_map write/verify an
 fixed: live catalog idle-cap and in-flight-Close requirements
 skipped: none
 
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: reused PR 14; dropped WIP; CI 34653964433 succeeded (Lint, Test, Integration Tests)
+fixed: title ✅ test(simpleredis): prove idle cap and release-after-Close; live Redis and Dragonfly overlap
+skipped: none
+
 
