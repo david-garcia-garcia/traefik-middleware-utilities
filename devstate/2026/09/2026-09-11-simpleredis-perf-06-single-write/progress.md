@@ -11,4 +11,4 @@ JobName: 2026-09-11-simpleredis-perf-06-single-write
 | codereview | [x] | [x] | 2026-09-11T22:03:55Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:10:14Z |
 | archive | [x] | [x] | 2026-09-11T22:15:55Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-11T22:22:35Z |
