@@ -289,6 +289,43 @@ func TestPeek_DoesNotIncrement(t *testing.T) {
 	}
 }
 
+func TestPeek_BufferedDoesNotIncrement(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := New(client, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	const limit int64 = 5
+	window := time.Minute
+	for i := 0; i < 5; i++ {
+		allowed, estimated, peekErr := limiter.Peek("k", limit, window)
+		if peekErr != nil {
+			t.Fatal(peekErr)
+		}
+		if !allowed {
+			t.Fatalf("peek %d denied, estimated %v", i+1, estimated)
+		}
+		if estimated != 0 {
+			t.Fatalf("peek %d estimated %v want 0", i+1, estimated)
+		}
+	}
+	allowed, estimated, err := limiter.Take("k", limit, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !allowed {
+		t.Fatal("take after buffered peeks denied")
+	}
+	if estimated != 1 {
+		t.Fatalf("take estimated %v want 1", estimated)
+	}
+}
+
 func TestPeek_AgreesWithTakeBeforeIncrement(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
 	client := &simpleredis.SimpleRedis{}
@@ -309,6 +346,43 @@ func TestPeek_AgreesWithTakeBeforeIncrement(t *testing.T) {
 	peekAllowed, peekEstimated, err := limiter.Peek("k", limit, window)
 	if err != nil {
 		t.Fatal(err)
+	}
+	takeAllowed, takeEstimated, err := limiter.Take("k", limit, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if takeAllowed != peekAllowed {
+		t.Fatalf("take allowed %v peek allowed %v", takeAllowed, peekAllowed)
+	}
+	if takeEstimated != peekEstimated+1 {
+		t.Fatalf("take estimated %v peek estimated %v", takeEstimated, peekEstimated)
+	}
+}
+
+func TestPeek_BufferedTakeThenPeekDenies(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := &simpleredis.SimpleRedis{}
+	client.Init(addr, "", "")
+	limiter, err := New(client, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	const limit int64 = 2
+	window := time.Minute
+	for i := int64(0); i < limit+1; i++ {
+		if _, _, takeErr := limiter.Take("k", limit, window); takeErr != nil {
+			t.Fatal(takeErr)
+		}
+	}
+	peekAllowed, peekEstimated, err := limiter.Peek("k", limit, window)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if peekAllowed {
+		t.Fatalf("buffered peek after fill allowed, estimated %v", peekEstimated)
 	}
 	takeAllowed, takeEstimated, err := limiter.Take("k", limit, window)
 	if err != nil {
