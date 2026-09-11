@@ -49,13 +49,13 @@ Usage packet `knowledge/devdocs/std_go_simpleredis.md` does not yet describe ret
 
 - Q: How to inject apply-then-drop on live Redis and Dragonfly?
   Rank: additive asked — new compose sidecar this change creates; Desired and HARD REQUIREMENT name live Redis and Dragonfly proof of Incr/Eval retry policy; compose + Pester `/redis` `/dragonfly`
-  Decision: assumed — one RESP drop-relay service in front of each engine (upstream `redis:6379` and `dragonfly:6379`). Forward command, read engine reply, close client without writing the reply for INCR/INCRBY/EVAL; pass other verbs through. Probe uses a second SimpleRedis client to that relay on the existing `/redis` and `/dragonfly` routes. Do not use DEBUG SLEEP, CLIENT KILL, or a timeout (timeout is already non-retry). Propose owns binary layout and header names.
-  By: explore
+  Decision: resolved — `e2e/respdroprelay` stdlib Go `main` (env `UPSTREAM`, listen `:6379`). Compose `redis-drop` (`UPSTREAM=redis:6379`) and `dragonfly-drop` (`UPSTREAM=dragonfly:6379`). Forward command, read engine reply, close client without writing the reply for INCR/INCRBY/EVAL; pass other verbs through. Probe `DropHost` second client; warm with a pass-through Get; headers `X-SimpleRedis-DropIncr`, `X-SimpleRedis-DropIncrStored`, `X-SimpleRedis-DropEval`, `X-SimpleRedis-DropEvalStored`. Do not use DEBUG SLEEP, CLIENT KILL, or a timeout.
+  By: propose
 
 - Q: Exact `exec` tagging shape (bool vs descriptor)?
   Rank: bounded asked — same 9 `exec` call sites; Desired “Tag retry-safety at the exec call site (bool or small descriptor)”
-  Decision: assumed — a bool at each wrapper (`true` for the six retry-safe verbs, `false` for INCR/INCRBY/EVAL). Propose names it. No descriptor type, no exported client option.
-  By: explore
+  Decision: resolved — bool `retryDeadPool` as the first `exec` argument (`true` for Get/MGet/Set/Del/Expire/ExpireAt, `false` for Incr/IncrBy/Eval). No descriptor type, no exported client option, no verb parse inside `exec`.
+  By: propose
 
 - Q: Invent the test-04 truncated-bulk fake here, or only close-before-reply?
   Rank: additive asked — Desired fake “execute, mutate store, close before writing the reply”; Out of scope names test-01–04
@@ -64,10 +64,10 @@ Usage packet `knowledge/devdocs/std_go_simpleredis.md` does not yet describe ret
 
 - Q: Must Yaegi tests cover the lost-reply error, or do compiled fake tests plus Pester suffice?
   Rank: additive asked — Affected “`simpleredis/yaegi_test.go` if interpreted Incr/Eval must see the same error”
-  Decision: assumed — compiled fake tests plus Pester `/redis` `/dragonfly` prove the policy. Yaegi keeps existing happy-path Incr/Eval (`TestYaegi_IncrAndEval`). Same `Error()` string; no new interp harness for close-before-reply.
-  By: explore
+  Decision: resolved — compiled fake tests plus Pester `/redis` `/dragonfly` prove the policy. Yaegi keeps existing happy-path Incr/Eval (`TestYaegi_IncrAndEval`). Same `Error()` string; no new interp harness for close-before-reply.
+  By: propose
 
 - Q: Which spec leaf owns the verb exception on retry?
   Rank: bounded asked — Desired names `openspec/specs/std_go_simpleredis_tcp-session/spec.md`; Affected allows `resp-commands` “if command-level retry is specified there”. Existing tcp-session requirement “A dead pooled connection SHALL be retried once unless the error is a timeout.”
-  Decision: assumed — tcp-session owns retry (narrow that sentence by verb). resp-commands stays command shapes only.
-  By: explore
+  Decision: resolved — fold into `std_go_simpleredis_tcp-session` (FindSpecHost: small adjustment to the retry owner; confidence high). resp-commands stays command shapes only; no retry delta there.
+  By: propose
