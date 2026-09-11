@@ -17,3 +17,9 @@ phase: propose
 findings: fold std_go_reclaim_context-lease; change reclaim-afterfunc-wait apply-ready
 fixed: OpenSpec artifacts, specs.md, PR #6 propose card
 skipped: AfterFunc SHALL; value-lifecycle rewrite
+
+## implement (2026-09-11)
+phase: implement
+findings: AfterFunc for Done()!=nil; poll for nil Done; localTests passed; CI succeeded
+fixed: dropWhenDone in reclaim/table.go, hold-time test, tasks.md
+skipped: none of the apply tasks
