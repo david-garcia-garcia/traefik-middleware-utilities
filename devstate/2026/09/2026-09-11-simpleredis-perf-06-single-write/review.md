@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: none
 fixed: n/a
 skipped: n/a
+
+## archive (2026-09-11)
+phase: archive
+findings: fold high into std_go_simpleredis_resp-commands and std_go_simpleredis_tcp-session; spec-map and artifact names clean; archived to 2026-09-11-simpleredis-single-write-encode; CI on 4b4a56b in progress
+fixed: live catalog ADDED encode framing, benches, idle scratch trim
+skipped: n/a
