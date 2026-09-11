@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: 0
 fixed: none (usage already enough)
 skipped: none
+
+## archive (2026-09-11T22:27:18.829Z)
+phase: archive
+findings: none
+fixed: folded peer-close idle requirement into live std_go_simpleredis_tcp-session; moved change to archive/2026-09-11-simpleredis-peer-close-eof-redial
+skipped: none
