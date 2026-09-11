@@ -5,7 +5,7 @@ JobName: 2026-09-11-kong-window-limiter
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-11T10:26:09Z |
-| explore | [x] | [ ] | |
+| explore | [x] | [x] | 2026-09-11T10:34:22Z |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
