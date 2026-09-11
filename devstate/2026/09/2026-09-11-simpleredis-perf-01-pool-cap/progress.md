@@ -10,5 +10,5 @@ JobName: 2026-09-11-simpleredis-perf-01-pool-cap
 | implement | [x] | [x] | 2026-09-11T21:58:29Z |
 | codereview | [x] | [x] | 2026-09-11T22:11:52Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T22:13:00Z |
-| archive | [x] | [ ] | 2026-09-11T22:14:00Z |
-| pullrequest | [ ] | [ ] | |
+| archive | [x] | [x] | 2026-09-11T22:14:00Z |
+| pullrequest | [x] | [x] | 2026-09-11T22:30:21Z |

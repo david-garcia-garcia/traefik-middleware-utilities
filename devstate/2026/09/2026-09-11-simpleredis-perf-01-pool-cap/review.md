@@ -55,3 +55,13 @@ phase: archive
 fold: std_go_simpleredis_tcp-session
 archive: openspec/changes/archive/2026-09-11-simpleredis-live-pool-cap
 
+## pullrequest (2026-09-11T22:30:21Z)
+phase: pullrequest
+findings: none
+fixed: live_test holds the in-use turn without Lua BUSY on shared CI Redis
+skipped: none
+head: b5193edc8fad5326b9f959d455326768ac7843ba
+ci: success run 34654132297 (Lint, Test, Integration Tests)
+pr: 18
+verdict: ready for review
+
