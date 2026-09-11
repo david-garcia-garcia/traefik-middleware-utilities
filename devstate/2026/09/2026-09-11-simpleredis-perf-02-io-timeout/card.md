@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-11T21:41:50Z
+Developer review: ready for review — 2026-09-11T21:54:40Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** OpenSpec change `simpleredis-configurable-timeouts` folds `std_go_simpleredis_tcp-session` for `InitWithOptions` and zero-value timeout defaults; research packets document `BLPOP` as the live stall. SimpleRedis on master still uses compile-time constants.
+**Developers.** SimpleRedis adds Yaegi-safe `InitWithOptions` and `Options` (`DialTimeout`, `IoTimeout`, `IdleTimeout`, `MaxIdleConns`; zero means today's 2s / 1s / 30s / 8). Configured I/O timeout is proven with `BLPOP` against live Redis and Dragonfly; CI `Test` sets `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY`. `Init(host, pass, database)` is unchanged. Live-socket wait queue stays with perf-01.
 
 **End users.** None.
 
@@ -27,18 +27,18 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Propose landed the change artifacts; product apply has not started. 3 items remain.
+Configurable timeouts and live Redis/Dragonfly proof are on the branch. CI succeeded. 0 items remain.
 
 Priority: P2 — Redis slowness holds Traefik workers for a full second and fans out dials, with no caller-set shorter deadline
-Reviewed head: c8c3fc1
+Reviewed head: 3891c2c
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI still running; apply not started |
-| CI proof | 3/6 | Lint, Test, and Integration Tests in progress |
-| Local tests proof | N/A | Before implement; remote CI covers this host |
+| Overall readiness | 6/6 | CI succeeded; no open PR comments |
+| CI proof | 6/6 | Lint, Test, and Integration Tests succeeded |
+| Local tests proof | N/A | Remote CI covers this host |
 | Review resolution | 6/6 | OPEN PR, no comments |
 
 ## Verification
@@ -47,8 +47,8 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-11-simpleredis-perf-02-io-timeout pushed | `git` origin/2026-09-11-simpleredis-perf-02-io-timeout |
 | OpenSpec | simpleredis-configurable-timeouts | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/16 | pr-host List/Create |
-| CI | build 34650584471 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34650584471 | pr-host CI |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 34651448864 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34651448864 | pr-host CI |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
@@ -61,7 +61,7 @@ Owner decision: Required. See Explore Decisions.
 None.
 
 ## How this fits together
-Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. Stub PR 16 hosts the card. OpenSpec change `simpleredis-configurable-timeouts` is proposed; implement applies it.
+Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. Stub PR 16 hosts the card. Apply is on HEAD `3891c2c`; next is seven-axis review then archive.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -75,9 +75,9 @@ Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` f
 | Rewrite the spec's "concurrent commands SHALL not open more than eight connections" now that MaxIdleConns is configurable? | bounded incidental | assumed — do not rewrite the live-socket claim; spec delta idle list at most MaxIdleConns (default 8); leave the live cap to perf-01 | explore |
 
 ## Before merge
-- [ ] [P2] Make dial, I/O, idle timeout, and idle cap configurable with today's numbers as defaults
-- [ ] [P2] Prove the new knobs on live Redis and Dragonfly (fake-server is not enough)
-- [ ] Keep poolSize/poolTimeout as knobs or documented tension; do not ship perf-01's wait-queue semaphore
+- [x] [P2] Make dial, I/O, idle timeout, and idle cap configurable with today's numbers as defaults
+- [x] [P2] Prove the new knobs on live Redis and Dragonfly (fake-server is not enough)
+- [x] Keep poolSize/poolTimeout as knobs or documented tension; do not ship perf-01's wait-queue semaphore
 
 ## Findings
 None.
@@ -92,7 +92,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | c8c3fc1c140ee690aab40aaa1bb4361314648787 | Card must match the branch you measured |
+| Reviewed head | 3891c2c559b1dc8d4f6bb50099c175321587d7f2 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -100,15 +100,16 @@ None.
 ### Technical review
 Best possible solution: Keep Init(host, pass, database) and today's defaults; add InitWithOptions with a plain Options struct; prove I/O timeout with BLPOP on both engines; leave the wait-queue to perf-01.
 
-Do we have a high-confidence way to reproduce? Yes — TestIoTimeout on the 1s constant; live proof specified as BLPOP against Redis and Dragonfly with a short IoTimeout.
+Do we have a high-confidence way to reproduce? Yes — TestIoTimeout on defaults; configured IoTimeout fake never-reply; live BLPOP on Redis and Dragonfly; hanging-SYN for DialTimeout.
 
 Is this the best way to solve the issue? Yes versus master: expose the existing constants as caller-set deadlines without rewriting the pool.
 
 ### Evidence
 What I checked:
-- openspec/changes/simpleredis-configurable-timeouts on HEAD c8c3fc1
-- specs.md fold std_go_simpleredis_tcp-session
-- OPEN PR 16, zero comments, CI run 34650584471 in progress
+- simpleredis/simpleredis.go Options and InitWithOptions on HEAD 3891c2c
+- simpleredis/live_test.go; CI test env SIMPLEREDIS_LIVE_REDIS and SIMPLEREDIS_LIVE_DRAGONFLY
+- OPEN PR 16, zero comments
+- CI run 34651448864: Lint success, Test success, Integration Tests success
 
 ### Rank-up moves
 None.

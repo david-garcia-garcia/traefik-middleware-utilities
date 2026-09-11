@@ -16,3 +16,9 @@ findings: change simpleredis-configurable-timeouts; fold std_go_simpleredis_tcp-
 fixed: n/a
 skipped: n/a
 
+## implement (2026-09-11)
+phase: implement
+findings: InitWithOptions + live BLPOP on Redis and Dragonfly; CI green
+fixed: timeouts configurable; localTests passed
+skipped: n/a
+
