@@ -255,6 +255,109 @@ func startStaticRedis(t *testing.T, reply string) string {
 	return listener.Addr().String()
 }
 
+// peerCloseFake is an in-process RESP server that closes the accepted socket after the first reply.
+type peerCloseFake struct {
+	mu          sync.Mutex
+	store       map[string]string
+	accepts     int
+	firstClosed chan struct{}
+}
+
+// startPeerCloseFake listens, answers the first command, then Close()s that accepted socket (not the client).
+// When acceptRetry is true, later accepts are served until read error. When false, the listener is closed after the first accept so a retry dial fails.
+func startPeerCloseFake(t *testing.T, store map[string]string, acceptRetry bool) (*peerCloseFake, string) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	fake := &peerCloseFake{
+		store:       store,
+		firstClosed: make(chan struct{}),
+	}
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		fake.mu.Lock()
+		fake.accepts++
+		fake.mu.Unlock()
+		fake.replyOnceAndClose(conn)
+		if !acceptRetry {
+			_ = listener.Close()
+			return
+		}
+		for {
+			next, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			fake.mu.Lock()
+			fake.accepts++
+			fake.mu.Unlock()
+			go fake.serveUntilReadError(next)
+		}
+	}()
+	return fake, listener.Addr().String()
+}
+
+// acceptsCount is how many TCP accepts the peer-close fake has seen.
+func (f *peerCloseFake) acceptsCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.accepts
+}
+
+// waitFirstClosed waits until the first accepted socket has been closed from the server.
+func (f *peerCloseFake) waitFirstClosed(t *testing.T) {
+	t.Helper()
+	select {
+	case <-f.firstClosed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("server did not close the accepted socket")
+	}
+}
+
+// replyOnceAndClose answers one command then Close()s the accepted socket.
+func (f *peerCloseFake) replyOnceAndClose(conn net.Conn) {
+	defer close(f.firstClosed)
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+	args, err := readCommand(reader)
+	if err != nil {
+		return
+	}
+	f.writeGetReply(conn, args)
+}
+
+// serveUntilReadError answers GET commands on one accepted socket until the client goes away.
+func (f *peerCloseFake) serveUntilReadError(conn net.Conn) {
+	defer conn.Close()
+	reader := bufio.NewReader(conn)
+	for {
+		args, err := readCommand(reader)
+		if err != nil {
+			return
+		}
+		f.writeGetReply(conn, args)
+	}
+}
+
+// writeGetReply writes a GET bulk reply for args, or a miss when the command is not GET.
+func (f *peerCloseFake) writeGetReply(conn net.Conn, args []string) {
+	name := ""
+	if len(args) >= 2 && args[0] == "GET" {
+		name = args[1]
+	}
+	f.mu.Lock()
+	reply := bulk(f.store, name)
+	f.mu.Unlock()
+	_, _ = io.WriteString(conn, reply)
+}
+
 func TestGetHitAndMiss(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
@@ -465,7 +568,8 @@ func TestUnreachableHost(t *testing.T) {
 	}
 }
 
-func TestStaleConnectionIsRetried(t *testing.T) {
+// TestClientClosedIdleConnSetDeadlineIsRetried proves client-fd close retries on SetDeadline/os.ErrClosed, not peer EOF.
+func TestClientClosedIdleConnSetDeadlineIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
 	redis.Init(addr, "", "")
@@ -474,6 +578,7 @@ func TestStaleConnectionIsRetried(t *testing.T) {
 		t.Fatalf("first Get: %v", err)
 	}
 
+	// Client-side close so SetDeadline fails with os.ErrClosed and ioError never sees io.EOF.
 	redis.mu.Lock()
 	for _, conn := range redis.idle {
 		conn.close()
@@ -482,13 +587,72 @@ func TestStaleConnectionIsRetried(t *testing.T) {
 
 	got, err := redis.Get("hit")
 	if err != nil {
-		t.Fatalf("Get on a dead pooled connection: %v", err)
+		t.Fatalf("Get on a client-closed pooled connection: %v", err)
 	}
 	if string(got) != "t" {
 		t.Fatalf("Get = %q, want %q", got, "t")
 	}
 	if fake.connections() != 2 {
 		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+}
+
+// TestPeerClosedIdleConnEOFIsRetried proves a server-closed idle socket is retried once on a new dial.
+func TestPeerClosedIdleConnEOFIsRetried(t *testing.T) {
+	fake, addr := startPeerCloseFake(t, map[string]string{"hit": "t"}, true)
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	got, err := redis.Get("hit")
+	if err != nil {
+		t.Fatalf("first Get: %v", err)
+	}
+	if string(got) != "t" {
+		t.Fatalf("first Get = %q, want t", got)
+	}
+	redis.mu.Lock()
+	if len(redis.idle) != 1 {
+		redis.mu.Unlock()
+		t.Fatalf("idle after first Get = %d, want 1", len(redis.idle))
+	}
+	dead := redis.idle[0]
+	redis.mu.Unlock()
+
+	fake.waitFirstClosed(t)
+
+	got, err = redis.Get("hit")
+	if err != nil {
+		t.Fatalf("second Get: %v", err)
+	}
+	if string(got) != "t" {
+		t.Fatalf("second Get = %q, want t", got)
+	}
+	if fake.acceptsCount() != 2 {
+		t.Fatalf("opened %d connections, want 2", fake.acceptsCount())
+	}
+	redis.mu.Lock()
+	for _, conn := range redis.idle {
+		if conn == dead {
+			redis.mu.Unlock()
+			t.Fatal("dead conn still in idle")
+		}
+	}
+	redis.mu.Unlock()
+}
+
+// TestPeerClosedIdleRetryBorrowFailsUnreachable proves retry borrow after peer close returns redis:unreachable when the listener is gone.
+func TestPeerClosedIdleRetryBorrowFailsUnreachable(t *testing.T) {
+	fake, addr := startPeerCloseFake(t, map[string]string{"hit": "t"}, false)
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("first Get: %v", err)
+	}
+	fake.waitFirstClosed(t)
+
+	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("second Get = %v, want %s", err, RedisUnreachable)
 	}
 }
 
