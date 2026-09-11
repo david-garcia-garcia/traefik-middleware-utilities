@@ -1,7 +1,7 @@
 ## 1. Memory pour
 
-- [ ] 1.1 Add `leakybucket/` with `NewMemory(leak, capacity, ttl)`, `Add(key, n)`, `Take(key)`, `Level(key)`, water clock, lazy ttl expire, `SetNowForTest`
-- [ ] 1.2 Reject `leak <= 0`, `capacity <= 0`, `ttl < 1s` at New; `n < 1` on Add
+- [x] 1.1 Add `leakybucket/` with `NewMemory(leak, capacity, ttl)`, `Add(key, n)`, `Take(key)`, `Level(key)`, water clock, lazy ttl expire, `SetNowForTest`
+- [x] 1.2 Reject `leak <= 0`, `capacity <= 0`, `ttl < 1s` at New; `n < 1` on Add
 - [ ] 1.3 Unit tests: pour to cap then deny; idle drain; Level after Δt; until-not-full; invalid New; no HTTP/source reads
 
 ## 2. Redis Eval and sync_rate
