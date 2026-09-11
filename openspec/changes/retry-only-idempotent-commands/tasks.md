@@ -21,8 +21,3 @@
 
 - [x] 4.1 Confirm the change delta `std_go_simpleredis_tcp-session` matches the landed retry gate, fake tests, and Pester `/redis` `/dragonfly` proof. Do not add a retry delta on `resp-commands`
 - [x] 4.2 Run `openspec validate --change retry-only-idempotent-commands --strict`
-
-## 4. Specs
-
-- [ ] 4.1 Confirm the change delta `std_go_simpleredis_tcp-session` matches the landed retry gate, fake tests, and Pester `/redis` `/dragonfly` proof. Do not add a retry delta on `resp-commands`
-- [ ] 4.2 Run `openspec validate --change retry-only-idempotent-commands --strict`
