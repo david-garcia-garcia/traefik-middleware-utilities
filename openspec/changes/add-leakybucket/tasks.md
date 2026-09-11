@@ -15,12 +15,12 @@
 
 - [x] 3.1 Live tests table-driven on `LEAKYBUCKET_LIVE_REDIS` / `LEAKYBUCKET_LIVE_DRAGONFLY`; skip on `testing.Short` or missing addrs; exact pour-to-cap then leak; buffered two-instance; memory/Redis agreement; both engines
 - [x] 3.2 Yaegi: GOPATH copy of non-test `leakybucket` and `simpleredis` sources; stdlib only; `useunsafe` false; compiled test owns start/skip; probe calls Take (fake + live)
-- [ ] 3.3 CI `test` job: set both `LEAKYBUCKET_LIVE_*` to the existing Redis/Dragonfly services; no `-short`
+- [x] 3.3 CI `test` job: set both `LEAKYBUCKET_LIVE_*` to the existing Redis/Dragonfly services; no `-short`
 - [x] 3.4 Run `go test ./leakybucket/...` on this host until passing (short/unit always; live when engines are up)
 
 ## 4. Docs and specs
 
-- [ ] 4.1 README Libraries/Layout/Tests: add Leaky bucket row beside Token bucket and Window counter
-- [ ] 4.2 Usage packet `knowledge/devdocs/std_go_leakybucket.md` and `index_std_go.md` row
-- [ ] 4.3 Confirm change specs `std_go_leakybucket_pour` and `std_go_leakybucket_sync-flush` match the API
-- [ ] 4.4 Run `openspec validate --change add-leakybucket --strict`
+- [x] 4.1 README Libraries/Layout/Tests: add Leaky bucket row beside Token bucket and Window counter
+- [x] 4.2 Usage packet `knowledge/devdocs/std_go_leakybucket.md` and `index_std_go.md` row
+- [x] 4.3 Confirm change specs `std_go_leakybucket_pour` and `std_go_leakybucket_sync-flush` match the API
+- [x] 4.4 Run `openspec validate --change add-leakybucket --strict`

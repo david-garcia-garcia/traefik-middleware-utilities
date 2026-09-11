@@ -20,3 +20,8 @@ priority: normal
 local: std_go_tokenbucket.md
 description: How a Traefik middleware Allows a Traefik RateLimit token-bucket consume in process or via SimpleRedis Eval.
 
+## Leaky bucket
+priority: normal
+local: std_go_leakybucket.md
+description: How a Traefik middleware Adds or Takes a leaky-bucket pour in process or via SimpleRedis Eval.
+
