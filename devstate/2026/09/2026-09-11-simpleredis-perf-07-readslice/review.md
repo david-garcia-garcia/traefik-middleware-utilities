@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: missing-packet RESP decode; stale-usage SimpleRedis Key files
 fixed: created `knowledge/devdocs/std_go_simpleredis_resp-decode.md`; `index_std_go.md` row; SimpleRedis Key files pointer (701bee0)
 skipped: none
+
+## archive (2026-09-11)
+phase: archive
+findings: new std_go_simpleredis_resp-decode; fold std_go_simpleredis_resp-commands; validate_spec_map and validate_artifact_names OK
+fixed: catalog synced; change moved to archive/2026-09-11-simpleredis-readslice-decode
+skipped: none
