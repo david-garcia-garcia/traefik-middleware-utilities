@@ -1,5 +1,5 @@
 {
-  "commentId": "pending",
+  "commentId": "pr-body",
   "issueKey": "2026-09-11-simpleredis-incr-eval",
   "markerValue": "2026-09-11-simpleredis-incr-eval",
   "issueHost": "local"
