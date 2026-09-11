@@ -59,19 +59,19 @@ func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 			writeGopathLeakybucket(t, goPath)
 			writeGopathFile(t, goPath, "takeprobe", "roundtrip.go", takeprobeSrc)
 			t.Run("exactPourThenLeak", func(t *testing.T) {
-				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.IdleThenTake(%q, %q)`, backend.addr, t.Name()))
+				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.IdleThenTake(%q, %q)`, backend.addr, liveKey(t)))
 				if got != "ok" {
 					t.Fatalf("yaegi live pour: %q, want ok", got)
 				}
 			})
 			t.Run("bufferedTwoInstances", func(t *testing.T) {
-				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.BufferedShare(%q, %q)`, backend.addr, t.Name()))
+				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.BufferedShare(%q, %q)`, backend.addr, liveKey(t)))
 				if got != "ok" {
 					t.Fatalf("yaegi live buffered: %q, want ok", got)
 				}
 			})
 			t.Run("memoryAgrees", func(t *testing.T) {
-				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.MemoryAgrees(%q, %q)`, backend.addr, t.Name()))
+				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.MemoryAgrees(%q, %q)`, backend.addr, liveKey(t)))
 				if got != "ok" {
 					t.Fatalf("yaegi live agree: %q, want ok", got)
 				}

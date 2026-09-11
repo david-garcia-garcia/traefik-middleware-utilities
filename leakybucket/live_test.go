@@ -35,6 +35,12 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 	}
 }
 
+// liveKey prefixes t.Name so this package's Redis keys cannot collide with tokenbucket live tests on the shared CI engines.
+func liveKey(t *testing.T) string {
+	t.Helper()
+	return "leakybucket:" + t.Name()
+}
+
 // runLiveBackend runs exact pour-to-cap then leak, buffered two-instance, and memory/Redis agreement against one engine.
 func runLiveBackend(t *testing.T, addr string) {
 	t.Helper()
@@ -46,7 +52,7 @@ func runLiveBackend(t *testing.T, addr string) {
 			t.Fatal(err)
 		}
 		limiter.SetNowForTest(func() time.Time { return now })
-		key := t.Name()
+		key := liveKey(t)
 		for i := 0; i < 3; i++ {
 			allowed, _, _, takeErr := limiter.Take(key)
 			if takeErr != nil {
@@ -86,7 +92,7 @@ func runLiveBackend(t *testing.T, addr string) {
 		}
 		a.SetNowForTest(func() time.Time { return now })
 		b.SetNowForTest(func() time.Time { return now })
-		key := t.Name()
+		key := liveKey(t)
 		if allowed, _, _, takeErr := a.Take(key); takeErr != nil || !allowed {
 			t.Fatalf("a take: allowed %v err %v", allowed, takeErr)
 		}
@@ -121,7 +127,7 @@ func runLiveBackend(t *testing.T, addr string) {
 		}
 		mem.SetNowForTest(func() time.Time { return now })
 		red.SetNowForTest(func() time.Time { return now })
-		key := t.Name()
+		key := liveKey(t)
 		for i := 0; i < 4; i++ {
 			mAllowed, mLevel, _, mErr := mem.Take(key)
 			if mErr != nil {
