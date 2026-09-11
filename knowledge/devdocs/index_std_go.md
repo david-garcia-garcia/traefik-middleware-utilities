@@ -15,3 +15,8 @@ priority: normal
 local: std_go_windowcounter.md
 description: How a Traefik middleware Takes a sliding-window hit against Redis or Dragonfly via SimpleRedis.
 
+## Token bucket
+priority: normal
+local: std_go_tokenbucket.md
+description: How a Traefik middleware Allows a Traefik RateLimit token-bucket consume in process or via SimpleRedis Eval.
+
