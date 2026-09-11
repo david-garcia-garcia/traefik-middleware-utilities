@@ -1,0 +1,15 @@
+issueKey: 2026-09-11-simpleredis-feat-01-msetex
+jobName: 2026-09-11-simpleredis-feat-01-msetex
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: d9b4ccc0f36f41ce23b1ccbcf3b91a536c8e4cc5c8d32dffd2b77cc4a776ac38
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
