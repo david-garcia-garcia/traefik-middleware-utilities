@@ -1,6 +1,6 @@
 # Yaegi stdlib `context.AfterFunc`
 
-Whether Yaegi v0.16.1 (Traefik v3.7.11 pin, this module's `go.mod`) exports `context.AfterFunc` in `stdlib.Symbols`, so interpreted `reclaim` can name it.
+Whether Yaegi v0.16.1 (Traefik v3.7.11 pin, this module's `go.mod`) exports `context.AfterFunc` in `stdlib.Symbols`, and whether interpreted code can call it.
 
 ## Symbol is present
 
@@ -19,8 +19,12 @@ Go `AfterFunc` does not call `f` when `ctx.Done()` is nil (`context.Background`,
 
 Source: https://pkg.go.dev/context@go1.21.13#AfterFunc ; extract `.sources/afterfunc.md`.
 
-## Interp call is not measured
+## Interp call runs
 
-Presence in `stdlib.Symbols` is not a proof that interpreted `reclaim/table.go` calling `context.AfterFunc` loads and runs under Traefik's GOPATH interpreter (`Use(stdlib.Symbols)`, `useunsafe: false`). That spike is still open.
+Interpreted code can **call** `context.AfterFunc` under Traefik's GOPATH interpreter. Throwaway probe (deleted after the run; not `go test` of this product): `go1.25.6`, `github.com/traefik/yaegi v0.16.1`, `interp.New(Options{GoPath})`, `Use(stdlib.Symbols)` only (`useunsafe` false). Shape copied from this repo `reclaim/yaegi_test.go` `evalHookprobe`.
 
-Loader flags: `ext_traefik_plugins_yaegi-generics/.sources/docker-compose.yml.md`.
+Eval of the symbol itself (`import "context"` then `Eval("context.AfterFunc")`) succeeded: `kind=func type=func(context.Context, func()) func() bool`. No eval error.
+
+Load/run of interpreted `afterprobe.RunAfterFunc()`: `WithCancel(Background())`, register `AfterFunc(ctx, f)` that increments an atomic, cancel, wait. Result `ran=1` (callback ran). No interp/eval error.
+
+Source: extract `.sources/yaegi-afterfunc-interp-probe.md` (`%TEMP%/yaegi-afterfunc-interp-probe`). Loader flags: `ext_traefik_plugins_yaegi-generics/.sources/docker-compose.yml.md`.

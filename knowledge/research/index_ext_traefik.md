@@ -13,4 +13,4 @@ description: Which generic and cross-package type shapes load under Traefik's Ya
 ## Yaegi context.AfterFunc
 priority: normal
 local: ext_traefik_plugins_yaegi-afterfunc/
-description: Whether Yaegi v0.16.1 stdlib.Symbols exports context.AfterFunc for interpreted reclaim.
+description: How Yaegi v0.16.1 maps and runs context.AfterFunc for interpreted reclaim.
