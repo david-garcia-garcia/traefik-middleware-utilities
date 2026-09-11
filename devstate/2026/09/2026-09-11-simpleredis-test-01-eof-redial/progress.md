@@ -4,7 +4,7 @@ JobName: 2026-09-11-simpleredis-test-01-eof-redial
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [x] | [ ] | |
+| prepare | [x] | [x] | 2026-09-11T21:24:32.936Z |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
