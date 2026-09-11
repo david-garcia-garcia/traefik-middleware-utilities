@@ -7,7 +7,7 @@ JobName: 2026-09-11-simpleredis-test-03-auth-select
 | prepare | [x] | [x] | 2026-09-11T21:21:24Z |
 | explore | [x] | [x] | 2026-09-11T21:34:11Z |
 | propose | [x] | [x] | 2026-09-11T21:41:52Z |
-| implement | [ ] | [ ] | |
+| implement | [x] | [x] | 2026-09-11T21:57:26Z |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |

@@ -19,3 +19,10 @@ findings: fold std_go_simpleredis_tcp-session and std_go_simpleredis_resp-comman
 fixed: none
 skipped: none
 
+## implement (2026-09-11)
+
+phase: implement
+findings: fake AUTH/SELECT failure tests; live skip-if-unset Redis and Dragonfly; CI passworded siblings; Pester 502 routes
+fixed: handshake coverage on dial AUTH/SELECT error blocks; probe Password/Database
+skipped: none
+
