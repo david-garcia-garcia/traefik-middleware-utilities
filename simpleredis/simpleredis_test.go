@@ -79,24 +79,24 @@ func (f *fakeRedis) serve(conn net.Conn) {
 			f.lastSet = append([]string(nil), args...)
 			_, _ = io.WriteString(conn, "+OK\r\n")
 		case "INCR":
-			n, incrErr := incrementStored(f.store, args[1], 1)
+			afterIncr, incrErr := incrementStored(f.store, args[1], 1)
 			if incrErr != nil {
 				_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
-			} else {
-				_, _ = fmt.Fprintf(conn, ":%d\r\n", n)
+				break
 			}
+			_, _ = fmt.Fprintf(conn, ":%d\r\n", afterIncr)
 		case "INCRBY":
 			delta, convErr := strconv.ParseInt(args[2], 10, 64)
 			if convErr != nil {
 				_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
 				break
 			}
-			n, incrErr := incrementStored(f.store, args[1], delta)
+			afterIncr, incrErr := incrementStored(f.store, args[1], delta)
 			if incrErr != nil {
 				_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
-			} else {
-				_, _ = fmt.Fprintf(conn, ":%d\r\n", n)
+				break
 			}
+			_, _ = fmt.Fprintf(conn, ":%d\r\n", afterIncr)
 		case "EXPIRE", "EXPIREAT":
 			f.lastExpire = append([]string(nil), args...)
 			_, _ = io.WriteString(conn, ":1\r\n")

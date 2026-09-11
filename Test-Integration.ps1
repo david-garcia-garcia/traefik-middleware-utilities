@@ -21,7 +21,7 @@ function Write-Step {
 
 function Test-RedisHealth {
     param(
-        [string]$RedisHost = "redis",
+        [string]$BackendHost = "redis",
         [string]$ServiceName = "redis",
         [int]$TimeoutSeconds = 90,
         [int]$RetryIntervalSeconds = 2
@@ -30,7 +30,7 @@ function Test-RedisHealth {
     Write-Step "Waiting for $ServiceName..."
     $elapsed = 0
     do {
-        $pong = docker compose exec -T redis redis-cli -h $RedisHost ping 2>$null
+        $pong = docker compose exec -T redis redis-cli -h $BackendHost ping 2>$null
         if ($LASTEXITCODE -eq 0 -and "$pong".Trim() -eq "PONG") {
             Write-Step "$ServiceName is ready"
             return $true
@@ -89,8 +89,8 @@ try {
     if (-not $SkipWait) {
         $ready = @(
             (Test-ServiceHealth -Url "http://localhost:8080/api/rawdata" -ServiceName "Traefik API"),
-            (Test-RedisHealth -RedisHost "redis" -ServiceName "redis"),
-            (Test-RedisHealth -RedisHost "dragonfly" -ServiceName "dragonfly"),
+            (Test-RedisHealth -BackendHost "redis" -ServiceName "redis"),
+            (Test-RedisHealth -BackendHost "dragonfly" -ServiceName "dragonfly"),
             (Test-ServiceHealth -Url "http://localhost:8000/a" -ServiceName "whoami /a"),
             (Test-ServiceHealth -Url "http://localhost:8000/b" -ServiceName "whoami /b"),
             (Test-ServiceHealth -Url "http://localhost:8000/redis" -ServiceName "whoami /redis"),

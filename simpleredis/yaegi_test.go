@@ -129,7 +129,7 @@ func RoundTrip(host string) string {
 	return string(got)
 }
 
-const kongScript = ` + "`" + `local exists = redis.call("exists", KEYS[1])
+const kongIncrbyExpireatScript = ` + "`" + `local exists = redis.call("exists", KEYS[1])
 local value = redis.call("incrby", KEYS[1], ARGV[1])
 if exists == 0 then
   redis.call("expireat", KEYS[1], ARGV[2])
@@ -140,14 +140,14 @@ return value` + "`" + `
 func IncrAndEval(host string) string {
 	client := &simpleredis.SimpleRedis{}
 	client.Init(host, "", "")
-	n, err := client.Incr("yaegi-incr")
+	afterIncr, err := client.Incr("yaegi-incr")
 	if err != nil {
 		return "incr:" + err.Error()
 	}
-	if n != 1 {
-		return fmt.Sprintf("incr:%d", n)
+	if afterIncr != 1 {
+		return fmt.Sprintf("incr:%d", afterIncr)
 	}
-	values, err := client.Eval(kongScript, []string{"yaegi-eval"}, []string{"3", "1700000000"})
+	values, err := client.Eval(kongIncrbyExpireatScript, []string{"yaegi-eval"}, []string{"3", "1700000000"})
 	if err != nil {
 		return "eval:" + err.Error()
 	}

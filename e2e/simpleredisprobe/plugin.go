@@ -73,12 +73,12 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
 	}
-	got, err := m.client.Get(setKey)
+	getValue, err := m.client.Get(setKey)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
 	}
-	rw.Header().Set("X-SimpleRedis-Value", string(got))
+	rw.Header().Set("X-SimpleRedis-Value", string(getValue))
 
 	slots, err := m.client.MGet([]string{setKey, prefix + ":missing"})
 	if err != nil {
@@ -135,16 +135,16 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("X-SimpleRedis-ExpireAt", "ok")
 
-	values, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalKey}, []string{"3", strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)})
+	evalValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalKey}, []string{"3", strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
 	}
-	if len(values) != 1 {
+	if len(evalValues) != 1 {
 		http.Error(rw, "eval slots", http.StatusBadGateway)
 		return
 	}
-	rw.Header().Set("X-SimpleRedis-Eval", string(values[0]))
+	rw.Header().Set("X-SimpleRedis-Eval", string(evalValues[0]))
 
 	m.next.ServeHTTP(rw, req)
 }
