@@ -1,4 +1,4 @@
-Developer review: ready for review — 2026-09-11T22:12:14Z
+Developer review: ready for review — 2026-09-11T22:18:39Z
 
 ## What this changes
 **Operators.** None.
@@ -24,27 +24,27 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Seven-axis review of `origin/master...HEAD` found no hard, missing, or wrong items. 0 items remain.
+Usage-doc impact of `origin/master...HEAD`: 1 unit SimpleRedis, findings none. 0 items remain.
 
 Priority: P3 — extra EVAL bytes on DestBranch; no wrong answers or outages
-Reviewed head: 89c5d22
+Reviewed head: 424c1f0
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | CI succeeded; no open PR comments; no open hard findings |
-| CI proof | 6/6 | Lint, Test, and Integration Tests succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652485555 |
+| Overall readiness | 6/6 | CI succeeded; no open PR comments; usage-doc findings none |
+| CI proof | 6/6 | Lint, Test, and Integration Tests succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653026508 |
 | Local tests proof | N/A | Remote CI is the proof axis |
 | Review resolution | 6/6 | No OPEN PR comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin 89c5d22 |
+| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin 424c1f0 |
 | OpenSpec | simpleredis-evalsha | `openspec/changes/simpleredis-evalsha/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/13 | GitHub PR 13 |
-| CI | build 34652485555 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34652485555 | GitHub check runs |
+| CI | build 34653026508 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653026508 | GitHub check runs |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -58,7 +58,7 @@ None.
 None.
 
 ## How this fits together
-Code review of `origin/master...HEAD` on `2026-09-11-simpleredis-perf-05-evalsha` and stub PR 13. No hard, missing, or wrong findings remain. Devdocs impact is next.
+Usage-doc impact of `origin/master...HEAD` on `2026-09-11-simpleredis-perf-05-evalsha` and stub PR 13. One unit SimpleRedis; findings none.
 
 ## Explore Decisions
 None.
@@ -68,6 +68,7 @@ None.
 - [x] OpenSpec change `simpleredis-evalsha` ready
 - [x] Stub review PR opened
 - [x] Seven-axis code review of the apply diff
+- [x] Usage-doc impact of the apply (SimpleRedis packet already matches EVALSHA-inside-Eval)
 
 ## Findings
 None.
@@ -88,7 +89,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 89c5d2275fb20e0ee3657921011145e86233237d | Card must match the branch you measured |
+| Reviewed head | 424c1f00c7ff5e8ccae6072213c8d74e48cbd772 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -102,9 +103,10 @@ Is this the best way to solve the issue? Yes — digest plus fallback beats ship
 
 ### Evidence
 What I checked:
-- `origin/master...HEAD` at 89c5d22 (`Eval` EVALSHA + NOSCRIPT fallback; probe digest/EvalAgain; Pester miss-then-hit)
+- `origin/master...HEAD` at 424c1f0 (`Eval` EVALSHA + NOSCRIPT fallback; probe digest/EvalAgain; Pester miss-then-hit)
+- `knowledge/devdocs/std_go_simpleredis.md` How-to and Gotchas already match EVALSHA-inside-Eval; 1 unit, findings none
 - Seven-axis files under `devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/`; 0 hard/missing/wrong remaining
-- PR 13 OPEN; Lint / Test / Integration Tests succeeded (run 34652485555)
+- PR 13 OPEN; Lint / Test / Integration Tests succeeded (run 34653026508)
 - qualify: qualified-with-gaps; localTests: passed; change: simpleredis-evalsha (`handoff.yaml`)
 
 ### Rank-up moves
