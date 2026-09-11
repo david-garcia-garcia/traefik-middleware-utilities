@@ -1,0 +1,15 @@
+issueKey: 2026-09-11-windowcounter-peek
+jobName: 2026-09-11-windowcounter-peek
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 873f623cc586e49cfd2c07ef536e11b6d889e71f799bb75d31c55f72850a0f52
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
