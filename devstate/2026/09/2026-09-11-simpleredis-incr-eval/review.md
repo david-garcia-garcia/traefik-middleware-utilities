@@ -22,3 +22,9 @@ phase: implement
 findings: Incr/Expire/Eval landed; e2e Redis+Dragonfly passed locally
 fixed: n/a
 skipped: n/a
+
+## codereview (2026-09-11)
+phase: codereview
+findings: Standards 3 (1 done, 2 skipped), Nitpicks 4 done, other axes none
+fixed: 27d70e5
+skipped: duplicated Kong script; duplicated Pester headers
