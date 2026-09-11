@@ -33,15 +33,15 @@ Gap measured (not a runtime crash): `go test ./simpleredis/...` passed (2026-09-
 
 - Q: How does the same Pester Describe prove Redis and Dragonfly without breaking reclaim e2e?
   Rank: additive asked — Desired E2E addendum; new whoami route this change creates; existing `/redis` and `/a` `/b` stay
-  Decision: assumed — keep project name `reclaim-e2e`; add `dragonfly` plus `whoami-dragonfly` with PathPrefix `/dragonfly` and plugin `host=dragonfly:6379`; keep `whoami-redis` at `redis:6379`; Pester asserts both routes; `Test-Integration.ps1` waits for Dragonfly health and `/dragonfly`; CI failure logs include the new service; do not `docker compose stop` whoami-a/b from the SimpleRedis Describe
-  By: explore
+  Decision: resolved — one reclaim-e2e compose; dragonfly + `/dragonfly`; keep `/redis` and `/a` `/b`; SimpleRedis Describe does not stop whoami-a/b
+  By: implement
 
 - Q: What probe shape proves every SimpleRedis interaction under Yaegi?
   Rank: additive asked — Desired E2E plus Affected `e2e/simpleredisprobe/`
-  Decision: assumed — one `ServeHTTP` runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval; unique keys per request so Redis and Dragonfly routes do not collide; one header per verb (keep `X-SimpleRedis-Value` for the GET after SET so the existing Pester It still holds); Eval uses the Kong `exists`+`incrby`+`expireat` snippet with one KEYS entry
-  By: explore
+  Decision: resolved — one ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval; unique keys per request; one header per verb; Eval uses Kong KEYS snippet
+  By: implement
 
 - Q: Does the Kong EVAL script return a top-level integer, so array parsing is only for other Eval callers?
   Rank: additive asked — Desired parser change; criterion names `$`/`: `/`+` array elements
-  Decision: assumed — implement the `*` extension anyway (Eval is documented as the same `[][]byte` as `exec`); e2e and Yaegi assert a top-level integer from that script; nested arrays remain `redis:issue?`
-  By: explore
+  Decision: resolved — `*` accepts `$`/`: `/`+`; nested `*` is `redis:issue?` with reusable false; e2e Eval returns integer `3`
+  By: implement
