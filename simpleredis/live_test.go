@@ -51,6 +51,7 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 	}
 }
 
+// runLivePoolBackend proves overlapping holds stay within eight and a ninth waiter is redis:unreachable.
 func runLivePoolBackend(t *testing.T, addr string) {
 	t.Helper()
 	client := waitLiveSimpleRedis(t, addr)
@@ -132,6 +133,7 @@ func runLivePoolBackend(t *testing.T, addr string) {
 	})
 }
 
+// waitLiveSimpleRedis Inits a client and waits until Set against addr succeeds.
 func waitLiveSimpleRedis(t *testing.T, addr string) *SimpleRedis {
 	t.Helper()
 	client := &SimpleRedis{}
@@ -147,6 +149,7 @@ func waitLiveSimpleRedis(t *testing.T, addr string) *SimpleRedis {
 	}
 }
 
+// requireProcNet skips when the runner cannot count ESTABLISHED sockets during a Lua hold.
 func requireProcNet(t *testing.T) {
 	t.Helper()
 	if _, err := os.Stat("/proc/net/tcp"); err != nil {
@@ -154,6 +157,7 @@ func requireProcNet(t *testing.T) {
 	}
 }
 
+// livePort parses the TCP port from a host:port live address.
 func livePort(t *testing.T, addr string) int {
 	t.Helper()
 	_, portStr, err := net.SplitHostPort(addr)
@@ -167,9 +171,10 @@ func livePort(t *testing.T, addr string) int {
 	return port
 }
 
+// countEstablishedToPort counts ESTABLISHED /proc/net/tcp(6) sockets whose remote port matches port.
 func countEstablishedToPort(port int) int {
 	hexPort := fmt.Sprintf("%04X", port)
-	n := 0
+	established := 0
 	for _, path := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -182,9 +187,9 @@ func countEstablishedToPort(port int) int {
 			}
 			remote := strings.ToUpper(fields[2])
 			if strings.HasSuffix(remote, ":"+hexPort) {
-				n++
+				established++
 			}
 		}
 	}
-	return n
+	return established
 }

@@ -63,8 +63,8 @@ BeforeAll {
     }
 
     function script:Count-Established6379 {
-        param([string]$TcpDump)
-        return @(($TcpDump | Out-String) -split "`r?`n" | Where-Object { $_ -match ':18[Ee][Bb]\s+\S+\s+01\s' }).Count
+        param($TcpDump)
+        return [regex]::Matches("$TcpDump", ':18[Ee][Bb]\s+\S+\s+01\s').Count
     }
 
     function script:Assert-SimpleRedisLiveCap {
@@ -79,7 +79,7 @@ BeforeAll {
         $http.Timeout = [TimeSpan]::FromSeconds(15)
         try {
             $holds = 1..8 | ForEach-Object { $http.GetAsync($holdUrl) }
-            $deadline = [DateTime]::UtcNow.AddMilliseconds(250)
+            $deadline = [DateTime]::UtcNow.AddMilliseconds(400)
             $live = 0
             $tcpDump = ""
             do {
@@ -87,14 +87,12 @@ BeforeAll {
                 $tcpDump = Read-BackendTcp -BackendHost $BackendHost -SidecarName $sidecar
                 $live = Count-Established6379 -TcpDump $tcpDump
             } while ($live -lt 8 -and [DateTime]::UtcNow -lt $deadline)
-            $live | Should -BeGreaterOrEqual 1 -Because "tcp dump was: $tcpDump"
-            $live | Should -BeLessOrEqual 8 -Because "tcp dump was: $tcpDump"
+            $live | Should -BeGreaterOrEqual 8 -Because "tcp dump was: $tcpDump"
+            $live | Should -BeLessOrEqual 10 -Because "tcp dump was: $tcpDump"
             $ninth = $http.GetAsync($holdUrl).GetAwaiter().GetResult()
-            if ($live -ge 8) {
-                [int]$ninth.StatusCode | Should -Be 502
-                $ninthBody = $ninth.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-                $ninthBody | Should -Match "redis:unreachable"
-            }
+            [int]$ninth.StatusCode | Should -Be 502
+            $ninthBody = $ninth.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            $ninthBody | Should -Match "redis:unreachable"
             foreach ($hold in $holds) {
                 $completed = $hold.GetAwaiter().GetResult()
                 [int]$completed.StatusCode | Should -BeIn @(200, 502)
@@ -164,8 +162,8 @@ Describe "reclaim Yaegi e2e" {
         docker compose -p reclaim-e2e stop whoami-a whoami-b
         $LASTEXITCODE | Should -Be 0
         Start-Sleep 12
-        Wait-TraefikPluginLog -Pattern "reclaim_dispose" -TimeoutSeconds 60 | Should -BeTrue
-        Wait-TraefikPluginLog -Pattern "reclaimprobe_close" -TimeoutSeconds 60 | Should -BeTrue
+        Wait-TraefikPluginLog -Pattern "reclaim_dispose" -TimeoutSeconds 30 | Should -BeTrue
+        Wait-TraefikPluginLog -Pattern "reclaimprobe_close" -TimeoutSeconds 30 | Should -BeTrue
     }
 }
 

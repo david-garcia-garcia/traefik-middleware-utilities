@@ -895,6 +895,9 @@ func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+	if got := len(redis.idle); got <= 8 {
+		t.Fatalf("idle %d after 12 Gets with poolSize 16, want more than eight kept", got)
+	}
 	if got := fake.connections(); got < 9 {
 		t.Fatalf("12 overlapping Get opened %d connections, want at least 9 so idle can exceed eight under poolSize 16", got)
 	}

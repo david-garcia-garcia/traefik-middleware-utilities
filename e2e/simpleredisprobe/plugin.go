@@ -71,8 +71,9 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return &middleware{next: next, client: client}, nil
 }
 
-// ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval, then copies results into headers.
+// ServeHTTP optionally holds one pool socket via ?hold= microseconds (Eval TIME-wait), then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval and copies results into headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	// Hold occupies a live turn so Pester can contend for the pool cap.
 	if hold := req.URL.Query().Get("hold"); hold != "" {
 		if _, err := m.client.Eval(timeWaitHoldScript, nil, []string{hold}); err != nil {
 			http.Error(rw, err.Error(), http.StatusBadGateway)
