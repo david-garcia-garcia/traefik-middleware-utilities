@@ -24,9 +24,11 @@ const (
 
 const (
 	maxIdleConns = 8
+	poolSize     = 8
 	idleTimeout  = 30 * time.Second
 	dialTimeout  = 2 * time.Second
 	ioTimeout    = 1 * time.Second
+	poolTimeout  = 200 * time.Millisecond
 )
 
 var (
@@ -56,9 +58,12 @@ type SimpleRedis struct {
 	pass     string
 	database string
 
-	mu     sync.Mutex
-	idle   []*pooledConn
-	closed bool
+	mu          sync.Mutex
+	idle        []*pooledConn
+	closed      bool
+	slots       chan struct{}
+	poolSize    int
+	poolTimeout time.Duration
 }
 
 // Close drains idle pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
@@ -75,6 +80,42 @@ func (sr *SimpleRedis) Close() {
 	for _, conn := range idle {
 		conn.close()
 	}
+}
+
+// liveCap is the total socket bound. Zero poolSize means the package default.
+func (sr *SimpleRedis) liveCap() int {
+	if sr.poolSize > 0 {
+		return sr.poolSize
+	}
+	return poolSize
+}
+
+// waitLimit is how long borrow waits for a free live slot. Zero poolTimeout means the package default.
+func (sr *SimpleRedis) waitLimit() time.Duration {
+	if sr.poolTimeout > 0 {
+		return sr.poolTimeout
+	}
+	return poolTimeout
+}
+
+// ensureSlots creates the free-slot channel once. Caller holds sr.mu.
+func (sr *SimpleRedis) ensureSlots() {
+	if sr.slots != nil {
+		return
+	}
+	capSize := sr.liveCap()
+	sr.slots = make(chan struct{}, capSize)
+	for i := 0; i < capSize; i++ {
+		sr.slots <- struct{}{}
+	}
+}
+
+// giveSlot returns one live-socket token. No-op before the pool is created.
+func (sr *SimpleRedis) giveSlot() {
+	if sr.slots == nil {
+		return
+	}
+	sr.slots <- struct{}{}
 }
 
 // Init sets host, password, and database. Call once before concurrent use; not mutex-protected.
@@ -200,18 +241,36 @@ func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
 	return values, err
 }
 
-// borrow takes an idle socket younger than idleTimeout, or dials a new one.
+// borrow waits for an in-use turn, then takes an idle socket younger than idleTimeout, or dials.
 func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
-	var reused *pooledConn
-	var stale []*pooledConn
-	now := time.Now()
-
 	sr.mu.Lock()
 	if sr.closed {
 		sr.mu.Unlock()
 		return nil, false, errUnreachable
 	}
-	// Idle sockets still inside idleTimeout are reused; older ones are closed after unlock.
+	sr.ensureSlots()
+	sr.mu.Unlock()
+
+	wait := sr.waitLimit()
+	timer := time.NewTimer(wait)
+	select {
+	case <-sr.slots:
+		if !timer.Stop() {
+			<-timer.C
+		}
+	case <-timer.C:
+		return nil, false, errUnreachable
+	}
+
+	var reused *pooledConn
+	var stale []*pooledConn
+	now := time.Now()
+	sr.mu.Lock()
+	if sr.closed {
+		sr.mu.Unlock()
+		sr.giveSlot()
+		return nil, false, errUnreachable
+	}
 	for len(sr.idle) > 0 {
 		conn := sr.idle[len(sr.idle)-1]
 		sr.idle = sr.idle[:len(sr.idle)-1]
@@ -229,34 +288,39 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 	if reused != nil {
 		return reused, true, nil
 	}
-
-	sr.mu.Lock()
-	closed := sr.closed
-	sr.mu.Unlock()
-	if closed {
-		return nil, false, errUnreachable
-	}
-	// Empty idle list: open a new TCP session (AUTH/SELECT in dial).
 	conn, err := sr.dial()
-	return conn, false, err
+	if err != nil {
+		sr.giveSlot()
+		return nil, false, err
+	}
+	return conn, false, nil
 }
 
-// release returns a clean conn to the idle list, or closes it when dirty, closed, or the idle cap is full.
+// release returns a clean conn to the idle list and frees the in-use turn, or closes it when dirty, closed, or idle is full at the live cap.
 func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 	if !reusable {
 		conn.close()
+		sr.giveSlot()
 		return
 	}
 	conn.lastUsed = time.Now()
 
 	sr.mu.Lock()
-	if sr.closed || len(sr.idle) >= maxIdleConns {
+	idleFull := len(sr.idle) >= maxIdleConns
+	inUse := 0
+	if sr.slots != nil {
+		inUse = sr.liveCap() - len(sr.slots)
+	}
+	live := len(sr.idle) + inUse
+	if sr.closed || (idleFull && live >= sr.liveCap()) {
 		sr.mu.Unlock()
 		conn.close()
+		sr.giveSlot()
 		return
 	}
 	sr.idle = append(sr.idle, conn)
 	sr.mu.Unlock()
+	sr.giveSlot()
 }
 
 // dial opens TCP to host, then AUTH and SELECT when those Init fields are set.

@@ -19,6 +19,7 @@ type fakeRedis struct {
 	auths      int
 	selects    int
 	gets       int
+	getDelay   time.Duration
 	lastSet    []string
 	lastExpire []string
 	lastEval   []string
@@ -68,6 +69,12 @@ func (f *fakeRedis) serve(conn net.Conn) {
 			_, _ = io.WriteString(conn, "+OK\r\n")
 		case "GET":
 			f.gets++
+			delay := f.getDelay
+			f.mu.Unlock()
+			if delay > 0 {
+				time.Sleep(delay)
+			}
+			f.mu.Lock()
 			_, _ = io.WriteString(conn, bulk(f.store, args[1]))
 		case "MGET":
 			_, _ = fmt.Fprintf(conn, "*%d\r\n", len(args)-1)
@@ -774,3 +781,132 @@ func TestIncrGarbageIntegerPayload(t *testing.T) {
 		t.Fatalf("Incr garbage = %v, want %s", err, RedisIssue)
 	}
 }
+
+func TestBurstGetsStayWithinLiveCap(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.mu.Lock()
+	fake.getDelay = 500 * time.Microsecond
+	fake.mu.Unlock()
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	const bursts = 5
+	const perBurst = 64
+	var wg sync.WaitGroup
+	for burst := 0; burst < bursts; burst++ {
+		wg.Add(perBurst)
+		for i := 0; i < perBurst; i++ {
+			go func() {
+				defer wg.Done()
+				if _, err := redis.Get("hit"); err != nil {
+					t.Errorf("Get: %v", err)
+				}
+			}()
+		}
+		wg.Wait()
+	}
+	if got := fake.connections(); got > poolSize {
+		t.Fatalf("burst Get opened %d connections, want at most %d", got, poolSize)
+	}
+}
+
+func TestOverlappingCallersDoNotDialPastLiveCap(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.mu.Lock()
+	fake.getDelay = 20 * time.Millisecond
+	fake.mu.Unlock()
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := redis.Get("hit"); err != nil {
+				t.Errorf("Get: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := fake.connections(); got > poolSize {
+		t.Fatalf("32 overlapping Get opened %d connections, want at most %d", got, poolSize)
+	}
+}
+
+func TestPoolWaitTimesOutWithoutExtraDial(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.mu.Lock()
+	fake.getDelay = 300 * time.Millisecond
+	fake.mu.Unlock()
+	var redis SimpleRedis
+	redis.poolSize = 2
+	redis.poolTimeout = 50 * time.Millisecond
+	redis.Init(addr, "", "")
+
+	started := make(chan struct{}, 2)
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			started <- struct{}{}
+			if _, err := redis.Get("hit"); err != nil {
+				t.Errorf("holder Get: %v", err)
+			}
+		}()
+	}
+	<-started
+	<-started
+	deadline := time.Now().Add(time.Second)
+	for fake.connections() < 2 {
+		if time.Now().After(deadline) {
+			t.Fatal("holders did not dial")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	_, err := redis.Get("hit")
+	if err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("waiter Get = %v, want %s", err, RedisUnreachable)
+	}
+	wg.Wait()
+	if got := fake.connections(); got > 2 {
+		t.Fatalf("timeout path opened %d connections, want at most 2", got)
+	}
+}
+
+func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.mu.Lock()
+	fake.getDelay = 20 * time.Millisecond
+	fake.mu.Unlock()
+	var redis SimpleRedis
+	redis.poolSize = 16
+	redis.Init(addr, "", "")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 12; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := redis.Get("hit"); err != nil {
+				t.Errorf("Get: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := fake.connections(); got < 9 {
+		t.Fatalf("12 overlapping Get opened %d connections, want at least 9 so idle can exceed eight under poolSize 16", got)
+	}
+	if got := fake.connections(); got > 16 {
+		t.Fatalf("opened %d connections, want at most 16", got)
+	}
+	before := fake.connections()
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("reuse Get: %v", err)
+	}
+	if got := fake.connections(); got != before {
+		t.Fatalf("reuse Get dialed, connections %d → %d", before, got)
+	}
+}
+
