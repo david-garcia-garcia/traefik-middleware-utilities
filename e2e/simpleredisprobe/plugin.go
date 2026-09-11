@@ -22,6 +22,19 @@ if exists == 0 then
 end
 return value`
 
+const timeWaitHoldScript = `local start = redis.call("TIME")
+local startSec = tonumber(start[1])
+local startUsec = tonumber(start[2])
+local need = tonumber(ARGV[1])
+while true do
+  local now = redis.call("TIME")
+  local elapsed = (tonumber(now[1]) - startSec) * 1000000 + (tonumber(now[2]) - startUsec)
+  if elapsed >= need then
+    break
+  end
+end
+return 1`
+
 // Config is the dynamic plugin settings Traefik decodes.
 type Config struct {
 	Host string `json:"host,omitempty" yaml:"host,omitempty"`
@@ -60,6 +73,14 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 
 // ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval, then copies results into headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	if hold := req.URL.Query().Get("hold"); hold != "" {
+		if _, err := m.client.Eval(timeWaitHoldScript, nil, []string{hold}); err != nil {
+			http.Error(rw, err.Error(), http.StatusBadGateway)
+			return
+		}
+		rw.Header().Set("X-SimpleRedis-Hold", "ok")
+	}
+
 	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
 	setKey := prefix + ":set"
 	incrKey := prefix + ":incr"
