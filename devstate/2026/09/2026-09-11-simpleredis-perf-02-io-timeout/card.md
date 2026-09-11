@@ -1,4 +1,4 @@
-Developer review: ready for review — 2026-09-11T22:18:15Z
+Developer review: ready for review — 2026-09-11T22:24:22Z
 
 ## What this changes
 **Operators.** None.
@@ -27,10 +27,10 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Change archived into the live tcp-session spec. CI succeeded. 0 items remain.
+WIP dropped. One OPEN PR. CI succeeded. 0 items remain.
 
 Priority: P2 — Redis slowness holds Traefik workers for a full second and fans out dials, with no caller-set shorter deadline
-Reviewed head: f0600e9
+Reviewed head: 4f53486
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -47,7 +47,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-11-simpleredis-perf-02-io-timeout pushed | `git` origin/2026-09-11-simpleredis-perf-02-io-timeout |
 | OpenSpec | simpleredis-configurable-timeouts | `openspec/changes/archive/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/16 | pr-host List/Create |
-| CI | build 34653251259 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653251259 | pr-host CI |
+| CI | build 34653707358 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34653707358 | pr-host CI |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -61,7 +61,7 @@ Owner decision: Required. See Explore Decisions.
 None.
 
 ## How this fits together
-Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. Stub PR 16 hosts the card. The change is archived; pullrequest drops WIP and waits for CI.
+Local finding perf-02 is on branch `2026-09-11-simpleredis-perf-02-io-timeout` from `master`. PR 16 is the durable card host, title ready, CI green.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -98,7 +98,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | f0600e983d4e2b128c2f24b8feeedad00e06b78e | Card must match the branch you measured |
+| Reviewed head | 4f534869fbdaae52aaa1b9d7cca8fc506c96d4b9 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -112,10 +112,10 @@ Is this the best way to solve the issue? Yes versus master: expose the existing 
 
 ### Evidence
 What I checked:
-- openspec/changes/archive/2026-09-11-simpleredis-configurable-timeouts on HEAD f0600e9
-- live spec fold std_go_simpleredis_tcp-session
+- PR 16 title ⚡️ perf(simpleredis): expose caller-set dial and I/O timeouts, state open
+- HEAD 4f53486 pushed
 - OPEN PR 16, zero comments
-- CI run 34653251259: Lint success, Test success, Integration Tests success
+- CI run 34653707358: Lint success, Test success, Integration Tests success
 
 ### Rank-up moves
 None.

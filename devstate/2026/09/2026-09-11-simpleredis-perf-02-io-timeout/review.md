@@ -40,3 +40,9 @@ findings: fold std_go_simpleredis_tcp-session; moved to archive/2026-09-11-simpl
 fixed: live catalog sync
 skipped: n/a
 
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: reused PR 16; WIP dropped; CI green
+fixed: n/a
+skipped: n/a
+
