@@ -47,3 +47,12 @@ skipped: none
 change: simpleredis-msetex
 specs: modified std_go_simpleredis_resp-commands
 ci: 34654939236 success
+
+## archive (2026-09-11)
+phase: archive
+findings: none
+fixed: delta synced into live std_go_simpleredis_resp-commands; change moved to openspec/changes/archive/2026-09-11-simpleredis-msetex
+skipped: none
+change: simpleredis-msetex
+specs: modified std_go_simpleredis_resp-commands
+ci: 34655629742 success
