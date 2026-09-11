@@ -32,11 +32,23 @@ jobs:
         image: redis:7-alpine
         ports:
         - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
       dragonfly:
         image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2
         ports:
         - 6380:6379
-        options: --ulimit memlock=-1
+        env:
+          HEALTHCHECK_PORT: "6379"
+        options: >-
+          --ulimit memlock=-1
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
     env:
       WINDOWCOUNTER_LIVE_REDIS: 127.0.0.1:6379
       WINDOWCOUNTER_LIVE_DRAGONFLY: 127.0.0.1:6380
@@ -48,7 +60,7 @@ jobs:
       with:
         go-version: "1.21"
     - name: Run Tests
-      run: go test -v ./...
+      run: go test -timeout 2m -count=1 -v ./...
 
   integration:
     name: Integration Tests

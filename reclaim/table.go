@@ -184,7 +184,7 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 			value := incarnation.value
 			t.mu.Unlock()
 			logger.Debug(MsgBind, "key", key)
-			go t.watch(key, incarnation, ctx)
+			t.dropWhenDone(key, incarnation, ctx)
 			return value, nil
 		case slotAsleep:
 			return t.reclaimLocked(ctx, key, incarnation, logger), nil
@@ -237,7 +237,7 @@ func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *
 
 	logger.Debug(MsgPut, "key", key)
 	logger.Debug(MsgBind, "key", key)
-	go t.watch(key, incarnation, ctx)
+	t.dropWhenDone(key, incarnation, ctx)
 	return value, nil
 }
 
@@ -266,8 +266,18 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 
 	logger.Debug(MsgReclaim, "key", key)
 	logger.Debug(MsgBind, "key", key)
-	go t.watch(key, incarnation, ctx)
+	t.dropWhenDone(key, incarnation, ctx)
 	return value
+}
+
+// dropWhenDone runs drop when ctx is done. A holder with a Done channel uses AfterFunc so the
+// hold does not park a waiter. A holder whose Done is nil still needs watch to poll Err.
+func (t *Table) dropWhenDone(key string, incarnation *slot, ctx context.Context) {
+	if ctx.Done() != nil {
+		context.AfterFunc(ctx, func() { t.drop(key, incarnation) })
+		return
+	}
+	go t.watch(key, incarnation, ctx)
 }
 
 // watch waits until ctx is done, then drops that holder from this slot.
