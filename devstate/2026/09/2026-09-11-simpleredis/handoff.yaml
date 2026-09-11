@@ -10,7 +10,7 @@ src: 926481495fadd3b1f5ac40311463a1940ce8aafe61515e7bc34d6ca078b7c365
 localTests: none
 requirement: requirement.md
 comments: none
-explore: none
+explore: explore.md
 change: none
 pr:
   id: "3"
