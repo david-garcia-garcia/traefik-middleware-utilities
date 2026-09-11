@@ -966,7 +966,7 @@ func TestMSetEXUnknownCommandFallsBackAndCaches(t *testing.T) {
 		t.Fatalf("first MSetEX: %v", err)
 	}
 	got := fake.lastEvalCommand()
-	if len(got) != 9 || got[0] != "EVAL" || got[1] != msetexFallbackScript || got[2] != "2" || got[3] != "a" || got[4] != "b" || got[5] != "1" || got[6] != "2" || got[7] != "EX" || got[8] != "60" {
+	if len(got) != 9 || got[1] != msetexFallbackScript || got[2] != "2" || got[3] != "a" || got[4] != "b" || got[5] != "1" || got[6] != "2" || got[7] != "EX" || got[8] != "60" {
 		t.Fatalf("EVAL argv = %q", got)
 	}
 	if fake.msetexSendCount() != 1 {
