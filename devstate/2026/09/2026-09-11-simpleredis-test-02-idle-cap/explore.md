@@ -33,19 +33,19 @@ Research: consumed `knowledge/research/index.md` → redis EVAL / dragonfly EVAL
 - Q: How to drive genuine overlap on DestBranch without `startSlowRedis` / `bench_test.go`?
   Rank: additive asked — new test helper this change creates next to `startFakeRedis`; Desired "Unit-test the idle cap: more overlapping commands than `maxIdleConns`"
   Decision: assumed — add a same-file hold fake (accept or reply gated on a channel) modeled on `TestTimeoutOnReusedConnIsNotRetried`'s delayed listener. Start 16 Gets, release the hold after ≥16 accepts, then assert `len(idle) <= 8` and live fake sockets equal `len(idle)` (excess closed, not leaked). Do not add `bench_test.go`.
-  By: explore
+  By: propose
 
 - Q: How does Pester observe idle socket count vs cap on live Redis and Dragonfly?
   Rank: additive asked — Desired "Extend compose + Pester `/redis` `/dragonfly`" and "live overlap against both engines must not leak idle sockets beyond the cap"
   Decision: assumed — fire 16 parallel `Invoke-WebRequest` at existing `/redis` and `/dragonfly` (plugin-internal overlap plus docker latency). After they finish, `docker compose exec redis redis-cli CLIENT LIST` and `docker compose exec redis redis-cli -h dragonfly CLIENT LIST` (bare command, no `TYPE`/`ID`). Count LF lines minus the listing client; remaining ≤ 8. No host port publish, no probe idle header, no `IdleCount` export. Existing ServeHTTP EVAL stays as-is (KEYS declared, Lua 5.1-safe).
-  By: explore
+  By: propose
 
 - Q: Can `Close` between idle scan and `dial` be made deterministic without a test hook?
   Rank: additive asked — Affected "simpleredis.go only if a test-only hook is required"; Desired "Cover `borrow` `:233-238` (test hook or targeted unit test), or document that race as untested"
   Decision: assumed — add a nil-checked same-package hook after the idle-scan unlock and before the second `closed` check; the test sets it to `Close`. Nil in production is not a pool-behavior change. Do not leave `:236-238` documented-untested while that hook is in scope.
-  By: explore
+  By: propose
 
 - Q: Does the spec SHALL "Concurrent commands SHALL not open more than eight connections" stay, given usage says in-flight dials are not capped?
   Rank: bounded asked — 3 live surfaces enumerated (searched `openspec/specs/std_go_simpleredis*`, `simpleredis/*_test.go`, `knowledge/devdocs/std_go_simpleredis.md` for "eight connections", "stay within the pool", `maxIdleConns`): `openspec/specs/std_go_simpleredis_tcp-session/spec.md` SHALL + scenario; `TestConcurrentCommandsStayWithinPool`; usage gotcha already correct. Archive copy not migrated. Desired + Tensions name matching the non-tautological idle-cap and in-flight-Close contracts.
   Decision: assumed — rewrite that SHALL/scenario to: after overlap of more than eight commands, idle ≤ 8; in-flight MAY exceed eight. Keep sequential-reuse. Add an in-flight-then-Close scenario. Repair `TestConcurrentCommandsStayWithinPool` so the goroutine count can violate the idle assertion (raise above 8, assert `len(idle) <= 8`). Keep Close-then-Get redial coverage; replace the vacuous final idle assertion with the in-flight-Close test that actually calls `release`.
-  By: explore
+  By: propose
