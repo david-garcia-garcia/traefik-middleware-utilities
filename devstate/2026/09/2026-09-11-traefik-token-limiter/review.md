@@ -31,3 +31,24 @@ fixed: n/a
 skipped: n/a
 localTests: passed
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8
+
+## codereview (2026-09-11)
+phase: codereview
+findings: P1 0; applied parse error, memory cap, Yaegi refund, extra tests; skipped backward-clock judgement
+fixed: errEvalWait, maxMemorySources 65536, Yaegi refund, ttl/nil/eval tests
+skipped: clock clamp judgement
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: none; std_go_tokenbucket.md already matches
+fixed: n/a
+skipped: n/a
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8
+
+## archive (2026-09-11)
+phase: archive
+findings: synced std_go_tokenbucket_allow and std_go_tokenbucket_lua-eval; moved to archive/2026-09-11-add-tokenbucket
+fixed: n/a
+skipped: n/a
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/8
