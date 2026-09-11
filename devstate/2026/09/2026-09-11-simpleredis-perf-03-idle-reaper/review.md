@@ -17,3 +17,9 @@ phase: propose
 findings: None.
 fixed: none (OpenSpec change simpleredis-idle-head-sweep; fold std_go_simpleredis_tcp-session)
 skipped: none
+
+## implement (2026-09-11)
+phase: implement
+findings: None.
+fixed: peel stale idle heads in release; fake two-entry unit; live Redis+Dragonfly live_test.go; CI SIMPLEREDIS_LIVE_*; usage gotcha
+skipped: none

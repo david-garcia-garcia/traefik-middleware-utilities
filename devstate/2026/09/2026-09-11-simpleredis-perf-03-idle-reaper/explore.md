@@ -48,28 +48,28 @@ Measured (worktree `2026-09-11-simpleredis-perf-03-idle-reaper`): `go test ./sim
 
 - Q: How to prove idle-head reap / no landmine on live Redis and Dragonfly as well as the fake-server unit test?
   Rank: additive asked — new `live_test.go` this change creates; Desired “Prove idle-head reap / no landmine on both live Redis and Dragonfly”; Unknowns names the seam
-  Decision: assumed — same-package `simpleredis/live_test.go` table-driven on both engines; two idle conns (concurrent commands then release), backdate head `lastUsed`, run a command, assert stale socket closed and not in `sr.idle`, command succeeds. Fake-server unit test keeps the same two-entry recipe. Skip on `-short` or missing addrs. CI sets both addrs. Yaegi does not backdate unexported fields; do not add a test-only export.
-  By: propose
+  Decision: resolved — same-package `simpleredis/live_test.go` table-driven on both engines; two idle conns (concurrent commands then release), backdate head `lastUsed`, run a command, assert stale socket closed and not in `sr.idle`, command succeeds. Fake-server unit test keeps the same two-entry recipe. Skip on `-short` or missing addrs. CI sets both addrs. Yaegi does not backdate unexported fields; do not add a test-only export. `go test ./simpleredis/ -run TestLive_RedisAndDragonfly|TestStaleIdleHeadIsClosedWhileTailStaysHot` passed on 127.0.0.1:6379 (Redis) and 127.0.0.1:6380 (Dragonfly).
+  By: implement
 
 - Q: Does the live landmine proof need the server to close idle clients (`timeout`), or is client-side `lastUsed` backdate plus a closed-socket assertion enough?
   Rank: additive asked — Unknowns names timeout vs lastUsed; Out of scope “Making Redis/Dragonfly server timeout a product setting”
-  Decision: assumed — client-side `lastUsed` backdate plus “closed and not in `sr.idle`” is enough on both engines. Do not set compose/CI server `timeout`. Do not add `CLIENT LIST` to the client.
-  By: propose
+  Decision: resolved — client-side `lastUsed` backdate plus “closed and not in `sr.idle`” is enough on both engines. Do not set compose/CI server `timeout`. Do not add `CLIENT LIST` to the client.
+  By: implement
 
 - Q: Must compose, Pester `/redis` `/dragonfly`, and `e2e/simpleredisprobe` change if live Go tests already cover both engines?
   Rank: additive asked — Desired “Extend docker-compose.yml, Pester, and e2e/simpleredisprobe if that is what the live proof needs”; Unknowns names “if needed”
-  Decision: assumed — not needed. Live Go tests are the proof. Leave compose, Pester headers, and the probe as Yaegi verb smoke. Do not wait 30s in Pester.
-  By: propose
+  Decision: resolved — not needed. Live Go tests are the proof. Leave compose, Pester headers, and the probe as Yaegi verb smoke. Do not wait 30s in Pester.
+  By: implement
 
 - Q: Live env var names, and does CI reuse the existing Redis/Dragonfly pair?
   Rank: additive asked — Desired live both engines; sibling packages already use per-package `*_LIVE_*` on the same CI services
-  Decision: assumed — `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY`. Reuse CI `127.0.0.1:6379` and `127.0.0.1:6380`. Skip without addrs or under `-short`. CI `test` job sets both. Do not reuse `WINDOWCOUNTER_LIVE_*` / `TOKENBUCKET_LIVE_*` (packages skip independently).
-  By: propose
+  Decision: resolved — `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY`. Reuse CI `127.0.0.1:6379` and `127.0.0.1:6380`. Skip without addrs or under `-short`. CI `test` job sets both. Do not reuse `WINDOWCOUNTER_LIVE_*` / `TOKENBUCKET_LIVE_*` (packages skip independently).
+  By: implement
 
 - Q: Peel the whole stale prefix from the head, or only one or two head entries per `release` (letter of “O(1)–O(2)”)?
   Rank: additive asked — Desired “a connection past idleTimeout cannot sit behind a recycled tail” and “drop head entries older than idleTimeout”; “O(1)–O(2) (head only, not a full scan)” is the bound on how far to look
-  Decision: assumed — while `idle[0]` is older than `idleTimeout`, close and drop it; stop at the first still-valid head. Do not inspect past that into the hot tail. LIFO means stale entries are the prefix; leaving a stale middle would violate Desired.
-  By: propose
+  Decision: resolved — while `idle[0]` is older than `idleTimeout`, close and drop it; stop at the first still-valid head. Do not inspect past that into the hot tail. LIFO means stale entries are the prefix; leaving a stale middle would violate Desired.
+  By: implement
 
 - Q: Who already owns idle-socket age / pool membership that a live or Pester proof would read?
   Rank: additive asked — Desired live proof; One job, one owner for lastUsed/idle
