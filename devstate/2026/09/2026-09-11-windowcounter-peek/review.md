@@ -36,3 +36,9 @@ findings: none — Peek Language and How-to already on std_go_windowcounter.md
 fixed: none
 skipped: none
 
+## archive (2026-09-11)
+phase: archive
+findings: fold both windowcounter leaves; archive 2026-09-11-windowcounter-peek
+fixed: main specs synced; change moved to archive
+skipped: none
+
