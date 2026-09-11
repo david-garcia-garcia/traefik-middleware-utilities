@@ -66,6 +66,13 @@ previous incarnation or from `Reset` MUST NOT change a later incarnation of the 
 - **THEN** `Open` returns an error
 - **AND** no incarnation is stored
 
+#### Scenario: Nil-Done holder stays live until Err is set
+- **WHEN** `Open` binds a holder whose `Done` is nil
+- **AND** that holder has not set `Err`
+- **THEN** the incarnation stays live
+- **WHEN** that holder then sets `Err` without closing a `Done` channel
+- **THEN** the table drops that holder
+
 ### Requirement: Cancel then open within grace does not dispose
 When every bound context for a key is Done, the table SHALL put the stored value to sleep and
 keep it for a grace period before it disposes of it. If the same key is opened again with a live
@@ -182,6 +189,11 @@ contexts are Done and its incarnation has ended.
 - **WHEN** `Reset` is called on a table that still has an incarnation
 - **AND** the Close hook is set
 - **THEN** that func has returned before `reclaim_dispose` is emitted for that key
+
+#### Scenario: Cancellable holders do not park a waiter for the hold
+- **WHEN** many keys are opened with holder contexts whose `Done` is non-nil
+- **AND** those contexts are still live
+- **THEN** the table owns no more goroutines than it did before those `Open` calls
 
 #### Scenario: Goroutines do not outlive the incarnation
 - **WHEN** many keys are opened, then every holder context is Done and every incarnation has ended
