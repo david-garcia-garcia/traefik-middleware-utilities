@@ -15,3 +15,9 @@ phase: propose
 findings: fold std_go_simpleredis_resp-commands (high); OpenSpec valid; 1 assumed Q copied to card
 fixed: n/a
 skipped: n/a
+
+## implement (2026-09-11)
+phase: implement
+findings: EVALSHA-inside-Eval landed; localTests passed; CI Lint/Test/Integration succeeded
+fixed: n/a
+skipped: n/a

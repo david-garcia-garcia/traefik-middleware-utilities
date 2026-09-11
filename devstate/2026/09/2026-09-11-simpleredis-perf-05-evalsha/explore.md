@@ -47,8 +47,8 @@ Caller Eval(script, keys, args)
 
 - Q: How can probe/Pester prove EVALSHA vs a one-shot EVAL on a live engine?
   Rank: additive asked — Desired live Redis+Dragonfly proof; new headers/tests on existing `/redis` `/dragonfly`
-  Decision: assumed — no new compose service. Probe sets `X-SimpleRedis-EvalDigest` and a second Eval header. Pester `SCRIPT FLUSH` + `SCRIPT EXISTS` via `redis:7-alpine` `redis-cli` (`-h redis` and `-h dragonfly`): miss (`0`) then GET succeeds then hit (`1`). Fake tests assert EVALSHA argv. Keep Yaegi fallback on the fake.
-  By: explore
+  Decision: resolved — no new compose service. Probe sets `X-SimpleRedis-EvalDigest` and `X-SimpleRedis-EvalAgain`. Pester `SCRIPT FLUSH` + `SCRIPT EXISTS` via `redis:7-alpine` `redis-cli` (`-h redis` and `-h dragonfly`): miss (`0`) then GET succeeds then hit (`1`). Fake tests assert EVALSHA argv. Yaegi fallback stays on the fake. `./Test-Integration.ps1` 8/8.
+  By: implement
 
 - Q: Is `std_go_tokenbucket_lua-eval` "v1 MUST NOT use EVALSHA" only a caller-surface rule, or must that spec be rewritten when Eval internally uses EVALSHA?
   Rank: additive asked — Unknowns names this spec question; no tokenbucket caller migrates (they already call `Eval`; searched `*.go` for `.Eval(`)
