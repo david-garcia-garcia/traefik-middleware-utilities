@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis-perf-08-unsafe
+jobName: 2026-09-11-simpleredis-perf-08-unsafe
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 96e0818d372e711ff778f2f1a328ba7c2d0f617de70903ae3dd305a237fd9eed
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: "22"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/22
