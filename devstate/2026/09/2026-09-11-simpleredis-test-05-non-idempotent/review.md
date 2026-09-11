@@ -36,3 +36,9 @@ phase: devdocsimpact
 findings: stale-usage SimpleRedis std_go_simpleredis already matching
 fixed: none
 skipped: none; Explore Decisions still None (all six Q resolved)
+
+## archive (2026-09-11)
+phase: archive
+findings: none
+fixed: change archived to openspec/changes/archive/2026-09-11-retry-only-idempotent-commands/
+skipped: none; Explore Decisions still None (all six Q resolved)
