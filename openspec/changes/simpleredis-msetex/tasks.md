@@ -21,7 +21,7 @@
 
 - [x] 4.1 Extend `e2e/simpleredisprobe` `ServeHTTP` to call `MSetEX` and `MSetEXAt` on per-request keys, then Eval `return redis.call('TTL', KEYS[1])`; headers `X-SimpleRedis-MSetEX` and `X-SimpleRedis-MSetEX-TTL`. Keep existing verbs and `X-SimpleRedis-Value`
 - [x] 4.2 Confirm compose still has `/redis` and `/dragonfly` probe routes on `redis:7-alpine` and `dragonfly:v1.40.2`. Do not add a Valkey service. Pester asserts the new headers on both routes and does not stop whoami-a/b
-- [ ] 4.3 Run `./Test-Integration.ps1` until Redis and Dragonfly Describes pass and reclaim stays green
+- [x] 4.3 Run `./Test-Integration.ps1` until Redis and Dragonfly Describes pass and reclaim stays green
 
 ## 5. Specs and usage
 
