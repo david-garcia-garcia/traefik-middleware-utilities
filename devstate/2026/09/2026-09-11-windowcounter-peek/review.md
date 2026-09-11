@@ -5,3 +5,10 @@ phase: prepare
 findings: qualified — Peek missing on DestBranch Take; buffered windowLocked GET-when-delta-0 vs skip-storm no-flood
 fixed: bus, requirement, stub PR #7
 skipped: none
+
+## explore (2026-09-11)
+phase: explore
+findings: Peek is Take without increment; skip-storm must not use windowLocked; exact Peek is two GET; extract shared window math
+fixed: explore.md, deviations.md, PR #7 card
+skipped: none
+
