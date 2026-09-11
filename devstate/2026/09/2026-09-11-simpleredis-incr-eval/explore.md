@@ -28,8 +28,8 @@ Gap measured (not a runtime crash): `go test ./simpleredis/...` passed (2026-09-
 
 - Q: Which Dragonfly image and tag does compose pin?
   Rank: additive asked — Desired E2E addendum names a Dragonfly backend; this change creates the service
-  Decision: assumed — add compose service `dragonfly` speaking Redis protocol on 6379 with no password and empty database; pin `image:tag` from `knowledge/research/ext_dragonfly_container-image` when that folder exists; do not reuse `redis:7-alpine` as a stand-in
-  By: explore
+  Decision: resolved — `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2`; hostname `dragonfly`, internal 6379, no password; `ulimits.memlock: -1`; no host-port publish (same as redis); do not use Docker Hub `dragonflydb/dragonfly`
+  By: propose
 
 - Q: How does the same Pester Describe prove Redis and Dragonfly without breaking reclaim e2e?
   Rank: additive asked — Desired E2E addendum; new whoami route this change creates; existing `/redis` and `/a` `/b` stay
