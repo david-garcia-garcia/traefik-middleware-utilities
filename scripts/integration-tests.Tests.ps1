@@ -19,6 +19,18 @@ BeforeAll {
 
     $script:BaseUrl = "http://localhost:8000"
     $script:TraefikApiUrl = "http://localhost:8080"
+
+    function Get-BackendIdleClients {
+        param(
+            [string]$BackendHost
+        )
+        $raw = docker compose exec -T redis redis-cli -h $BackendHost CLIENT LIST 2>&1 | Out-String
+        if ($LASTEXITCODE -ne 0) {
+            throw "CLIENT LIST on $BackendHost failed: $raw"
+        }
+        $lines = @($raw -split "[\r\n]+" | Where-Object { $_ -match 'id=' })
+        return [Math]::Max(0, $lines.Count - 1)
+    }
 }
 
 Describe "reclaim Yaegi e2e" {
@@ -111,5 +123,47 @@ Describe "simpleredis Yaegi e2e" {
         $response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
         $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+    }
+
+    It "GET /redis overlap leaves at most eight idle sockets" {
+        $baseUrl = $script:BaseUrl
+        $results = 1..16 | ForEach-Object -Parallel {
+            Invoke-WebRequest -Uri "$using:baseUrl/redis" -UseBasicParsing -TimeoutSec 30
+        } -ThrottleLimit 16
+        foreach ($response in $results) {
+            $response.StatusCode | Should -Be 200
+        }
+        $remaining = 99
+        $elapsed = 0
+        do {
+            $remaining = Get-BackendIdleClients -BackendHost redis
+            if ($remaining -le 8) {
+                break
+            }
+            Start-Sleep -Milliseconds 200
+            $elapsed += 200
+        } while ($elapsed -lt 2000)
+        $remaining | Should -BeLessOrEqual 8
+    }
+
+    It "GET /dragonfly overlap leaves at most eight idle sockets" {
+        $baseUrl = $script:BaseUrl
+        $results = 1..16 | ForEach-Object -Parallel {
+            Invoke-WebRequest -Uri "$using:baseUrl/dragonfly" -UseBasicParsing -TimeoutSec 30
+        } -ThrottleLimit 16
+        foreach ($response in $results) {
+            $response.StatusCode | Should -Be 200
+        }
+        $remaining = 99
+        $elapsed = 0
+        do {
+            $remaining = Get-BackendIdleClients -BackendHost dragonfly
+            if ($remaining -le 8) {
+                break
+            }
+            Start-Sleep -Milliseconds 200
+            $elapsed += 200
+        } while ($elapsed -lt 2000)
+        $remaining | Should -BeLessOrEqual 8
     }
 }
