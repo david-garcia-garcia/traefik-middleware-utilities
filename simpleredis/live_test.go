@@ -2,23 +2,9 @@ package simpleredis
 
 import (
 	"os"
-	"sync"
 	"testing"
 	"time"
 )
-
-const timeWaitHoldScript = `local start = redis.call("TIME")
-local startSec = tonumber(start[1])
-local startUsec = tonumber(start[2])
-local need = tonumber(ARGV[1])
-while true do
-  local now = redis.call("TIME")
-  local elapsed = (tonumber(now[1]) - startSec) * 1000000 + (tonumber(now[2]) - startUsec)
-  if elapsed >= need then
-    break
-  end
-end
-return 1`
 
 func TestLive_RedisAndDragonfly(t *testing.T) {
 	if testing.Short() {
@@ -47,27 +33,20 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 	}
 }
 
-// runLivePoolBackend proves a waiter is redis:unreachable on a live engine.
-// One in-use turn (not eight Lua holds) so the shared CI Redis is not BUSY for seconds;
-// Traefik Pester remains the eight-socket proof.
+// runLivePoolBackend Inits against a live engine then holds the only in-use turn
+// so a waiter is redis:unreachable without a Lua BUSY on the shared CI Redis.
 func runLivePoolBackend(t *testing.T, addr string) {
 	t.Helper()
 	client := waitLiveSimpleRedis(t, addr)
 	t.Cleanup(client.Close)
 
 	t.Run("waiterIsUnreachable", func(t *testing.T) {
-		started := make(chan struct{})
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			close(started)
-			_, _ = client.Eval(timeWaitHoldScript, nil, []string{"200000"})
-		}()
-		<-started
-		time.Sleep(30 * time.Millisecond)
-		err := client.Set("simpleredis-live-waiter", []byte("1"), 60)
-		wg.Wait()
+		conn, _, err := client.borrow()
+		if err != nil {
+			t.Fatalf("borrow: %v", err)
+		}
+		defer client.release(conn, true)
+		err = client.Set("simpleredis-live-waiter", []byte("1"), 60)
 		if err == nil || err.Error() != RedisUnreachable {
 			t.Fatalf("waiter Set = %v, want %s", err, RedisUnreachable)
 		}
