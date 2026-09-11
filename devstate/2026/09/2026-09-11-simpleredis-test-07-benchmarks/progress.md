@@ -9,6 +9,6 @@ JobName: 2026-09-11-simpleredis-test-07-benchmarks
 | propose | [x] | [x] | 2026-09-11T21:37:08Z |
 | implement | [x] | [x] | 2026-09-11T21:51:28Z |
 | codereview | [x] | [x] | 2026-09-11T22:04:05Z |
-| devdocsimpact | [ ] | [ ] | |
+| devdocsimpact | [x] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
