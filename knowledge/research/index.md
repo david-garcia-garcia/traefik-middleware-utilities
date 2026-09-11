@@ -29,3 +29,8 @@ description: Dragonfly Redis-compat scripting and official container image for C
 priority: normal
 local: index_ext_kong.md
 description: Kong Gateway rate-limiting window types and Redis sync_rate behavior for window counters.
+
+## leaky-bucket
+priority: normal
+local: index_ext_leaky-bucket.md
+description: Classic leaky-bucket meter named by the leakybucket package, as distinct from token-bucket and window counters.
