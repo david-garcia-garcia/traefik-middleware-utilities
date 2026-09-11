@@ -26,3 +26,10 @@ findings: fake AUTH/SELECT failure tests; live skip-if-unset Redis and Dragonfly
 fixed: handshake coverage on dial AUTH/SELECT error blocks; probe Password/Database
 skipped: none
 
+## codereview (2026-09-11)
+
+phase: codereview
+findings: none
+fixed: none
+skipped: none
+
