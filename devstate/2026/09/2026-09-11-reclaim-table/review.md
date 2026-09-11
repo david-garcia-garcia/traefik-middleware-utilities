@@ -45,3 +45,10 @@ phase: pullrequest
 findings: none
 fixed: n/a
 skipped: remote PR (prHost local)
+
+## pullrequest (2026-09-11T05:41:52Z)
+phase: pullrequest
+findings: none
+fixed: GitHub Actions CI + goreleaser; PR summary set to delivery card
+skipped: n/a
+

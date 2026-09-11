@@ -2,7 +2,7 @@ issueKey: 2026-09-11-reclaim-table
 jobName: 2026-09-11-reclaim-table
 issueHost: local
 issueRef: none
-prHost: local
+prHost: github
 repoSlug: traefik-middleware-utilities
 destBranch: initial
 qualify: qualified-with-gaps
@@ -12,4 +12,6 @@ requirement: requirement.md
 comments: none
 explore: explore.md
 change: add-reclaim-table
-pr: none
+pr:
+  id: "1"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/1

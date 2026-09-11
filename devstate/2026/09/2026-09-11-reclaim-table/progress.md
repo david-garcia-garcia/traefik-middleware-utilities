@@ -11,4 +11,4 @@ JobName: 2026-09-11-reclaim-table
 | codereview | [x] | [x] | 2026-09-11T05:18:40Z |
 | devdocsimpact | [x] | [x] | 2026-09-11T05:25:30Z |
 | archive | [x] | [x] | 2026-09-11T05:25:30Z |
-| pullrequest | [x] | [x] | 2026-09-11T05:25:30Z |
+| pullrequest | [x] | [x] | 2026-09-11T05:41:52Z |
