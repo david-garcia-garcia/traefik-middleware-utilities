@@ -9,6 +9,6 @@ JobName: 2026-09-11-simpleredis-perf-02-io-timeout
 | propose | [x] | [x] | 2026-09-11T21:41:50Z |
 | implement | [x] | [x] | 2026-09-11T21:54:40Z |
 | codereview | [x] | [x] | 2026-09-11T22:02:08Z |
-| devdocsimpact | [ ] | [ ] | |
+| devdocsimpact | [x] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
