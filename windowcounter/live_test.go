@@ -35,7 +35,7 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 	}
 }
 
-// runLiveBackend runs exact N-then-deny, buffered two-client share, and sliding-at-boundary against one engine.
+// runLiveBackend runs exact N-then-deny, buffered two-client share, sliding-at-boundary, and Peek-then-Take against one engine.
 func runLiveBackend(t *testing.T, addr string) {
 	t.Helper()
 	client := waitLiveClient(t, addr)
@@ -134,6 +134,34 @@ func runLiveBackend(t *testing.T, addr string) {
 		}
 		if allowed {
 			t.Fatal("sliding boundary doubled like a fixed window")
+		}
+	})
+	t.Run("peekThenTake", func(t *testing.T) {
+		limiter, err := New(client, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		key := t.Name()
+		const limit int64 = 5
+		window := time.Minute
+		for i := 0; i < 3; i++ {
+			allowed, estimated, peekErr := limiter.Peek(key, limit, window)
+			if peekErr != nil {
+				t.Fatal(peekErr)
+			}
+			if !allowed {
+				t.Fatalf("peek %d denied, estimated %v", i+1, estimated)
+			}
+		}
+		allowed, estimated, err := limiter.Take(key, limit, window)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !allowed {
+			t.Fatal("take after peeks denied")
+		}
+		if estimated != 1 {
+			t.Fatalf("take estimated %v want 1", estimated)
 		}
 	})
 }

@@ -74,12 +74,22 @@ func (l *Limiter) SetNowForTest(now func() time.Time) {
 	l.now = now
 }
 
-// Take counts one hit on key against limit and window, then returns whether it is allowed and the sliding estimate.
-func (l *Limiter) Take(key string, limit int64, window time.Duration) (bool, float64, error) {
+// slidingWindow is the Redis keys, previous-window weight, and TTL for one Take or Peek at now.
+type slidingWindow struct {
+	currentKey  string
+	previousKey string
+	weight      float64
+	ttlSec      int64
+	expireAt    int64
+}
+
+// slidingAt builds the current and previous window keys and the previous-window weight.
+func (l *Limiter) slidingAt(key string, window time.Duration) (slidingWindow, error) {
 	windowSec := int64(window / time.Second)
 	if windowSec < 1 {
-		return false, 0, errors.New("windowcounter: window must be at least one second")
+		return slidingWindow{}, errors.New("windowcounter: window must be at least one second")
 	}
+	// Keys and previous-window weight at the caller's clock (whole seconds).
 	now := l.now()
 	windowStart := now.Unix() / windowSec * windowSec
 	previousStart := windowStart - windowSec
@@ -88,15 +98,38 @@ func (l *Limiter) Take(key string, limit int64, window time.Duration) (bool, flo
 	if weight < 0 {
 		weight = 0
 	}
-	currentKey := redisWindowKey(key, windowStart)
-	previousKey := redisWindowKey(key, previousStart)
 	ttlSec := 2 * windowSec
-	expireAt := windowStart + ttlSec
+	return slidingWindow{
+		currentKey:  redisWindowKey(key, windowStart),
+		previousKey: redisWindowKey(key, previousStart),
+		weight:      weight,
+		ttlSec:      ttlSec,
+		expireAt:    windowStart + ttlSec,
+	}, nil
+}
 
-	if l.syncRate == 0 {
-		return l.takeExact(currentKey, previousKey, ttlSec, weight, limit)
+// Take counts one hit on key against limit and window, then returns whether it is allowed and the sliding estimate.
+func (l *Limiter) Take(key string, limit int64, window time.Duration) (bool, float64, error) {
+	sliding, err := l.slidingAt(key, window)
+	if err != nil {
+		return false, 0, err
 	}
-	return l.takeBuffered(currentKey, previousKey, expireAt, weight, limit)
+	if l.syncRate == 0 {
+		return l.takeExact(sliding.currentKey, sliding.previousKey, sliding.ttlSec, sliding.weight, limit)
+	}
+	return l.takeBuffered(sliding.currentKey, sliding.previousKey, sliding.expireAt, sliding.weight, limit)
+}
+
+// Peek returns whether a hit would be allowed and the sliding estimate without incrementing.
+func (l *Limiter) Peek(key string, limit int64, window time.Duration) (bool, float64, error) {
+	sliding, err := l.slidingAt(key, window)
+	if err != nil {
+		return false, 0, err
+	}
+	if l.syncRate == 0 {
+		return l.peekExact(sliding.currentKey, sliding.previousKey, sliding.weight, limit)
+	}
+	return l.peekBuffered(sliding.currentKey, sliding.previousKey, sliding.expireAt, sliding.weight, limit)
 }
 
 // Allow is an alias for Take for callers who prefer Allow.
@@ -140,6 +173,56 @@ func (l *Limiter) takeBuffered(currentKey, previousKey string, expireAt int64, w
 	current := currentState.redisKnown + currentState.localDelta
 	estimated := float64(current) + float64(previous)*weight
 	return estimated <= float64(limit), estimated, nil
+}
+
+// peekExact GETs current and previous without INCR or EXPIRE, then compares the estimate.
+func (l *Limiter) peekExact(currentKey, previousKey string, weight float64, limit int64) (bool, float64, error) {
+	current, err := l.getCount(currentKey)
+	if err != nil {
+		return false, 0, err
+	}
+	previous, err := l.getCount(previousKey)
+	if err != nil {
+		return false, 0, err
+	}
+	estimated := float64(current) + float64(previous)*weight
+	return estimated <= float64(limit), estimated, nil
+}
+
+// peekBuffered reads redis_known + local_delta under the Take lock without incrementing.
+func (l *Limiter) peekBuffered(currentKey, previousKey string, expireAt int64, weight float64, limit int64) (bool, float64, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	current, err := l.peekCountLocked(currentKey, expireAt)
+	if err != nil {
+		return false, 0, err
+	}
+	previous, err := l.bufferedCountLocked(previousKey)
+	if err != nil {
+		return false, 0, err
+	}
+	estimated := float64(current) + float64(previous)*weight
+	return estimated <= float64(limit), estimated, nil
+}
+
+// peekCountLocked returns redis_known + local_delta without incrementing. GET only on first sight of redisKey.
+func (l *Limiter) peekCountLocked(redisKey string, expireAt int64) (int64, error) {
+	state := l.windows[redisKey]
+	if state != nil {
+		// Already in the buffer: do not GET just because localDelta is 0.
+		if expireAt > state.expireAt {
+			state.expireAt = expireAt
+		}
+		return state.redisKnown + state.localDelta, nil
+	}
+	// Seed redis_known from Redis on first sight of this window key.
+	known, err := l.getCount(redisKey)
+	if err != nil {
+		return 0, err
+	}
+	l.windows[redisKey] = &windowState{redisKnown: known, expireAt: expireAt}
+	return known, nil
 }
 
 // windowLocked returns the buffer for a Redis key, seeding redis_known from GET on first sight.
