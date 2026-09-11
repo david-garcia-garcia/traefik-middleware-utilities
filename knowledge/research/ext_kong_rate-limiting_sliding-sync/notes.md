@@ -29,7 +29,13 @@ end
 
 OSS `sync_rate != -1` path uses `rate_limited_sync` timer at `conf.sync_rate` seconds; local admit uses `cur_usage + cur_delta` until flush ([same file](https://github.com/Kong/kong/blob/master/kong/plugins/rate-limiting/policies/init.lua)).
 
-OSS exact path (`sync_rate == -1` / realtime) uses EVAL INCR + EXPIRE on first hit per request ([same file](https://github.com/Kong/kong/blob/master/kong/plugins/rate-limiting/policies/init.lua)). Ticket maps exact mode to `sync_rate=0` with `Incr` every `Take`.
+OSS exact path (`sync_rate == -1` / realtime) uses EVAL INCR + EXPIRE on first hit per request, returning `result_incr - 1` (count before this hit) from `usage()`, then `increment()` is a no-op ([same file](https://github.com/Kong/kong/blob/master/kong/plugins/rate-limiting/policies/init.lua)). Ticket maps exact mode to Advanced `sync_rate=0` with `Incr` every `Take` (not EVAL).
+
+## Redis key shape (OSS)
+
+OSS `get_local_key` is `ratelimit:{route_id}:{service_id}:{identifier}:{period_date}:{period}` ([same file](https://github.com/Kong/kong/blob/master/kong/plugins/rate-limiting/policies/init.lua)). Period dates come from Kong `timestamp.get_timestamps`. That plugin embeds route/service; this library’s caller owns prefixing. Sliding needs two integer keys (current and previous window), not Kong’s multi-period map.
+
+OSS `EXPIRATION[period]` is sized for a fixed window. Sliding must keep the previous window key alive into the next window, so TTL is two window lengths.
 
 ## Dragonfly constraints (shared scripts)
 
