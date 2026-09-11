@@ -14,7 +14,7 @@ Developer review: ready for review — 2026-09-11T05:41:52Z
 
 Traefik middlewares need one shared value per key while any plugin instance holds it, and a cheap sleep window after the last holder drops. That table lived only in `traefik-geoblock` PR #83.
 
-On `origin/initial` this repo had no module and no GitHub Actions. Compiled `go test` cannot see interpreter-only failures, and a PR with no workflows reports nothing.
+On `origin/master` this repo had no module and no GitHub Actions. Compiled `go test` cannot see interpreter-only failures, and a PR with no workflows reports nothing.
 
 If we do not land this library with a Traefik local-plugin e2e and the geoblock-style CI jobs, other middleware repos keep copying reclaim and this PR would look mergeable with no checks.
 

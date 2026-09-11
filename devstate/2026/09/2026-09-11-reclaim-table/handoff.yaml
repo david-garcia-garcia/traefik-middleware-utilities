@@ -4,7 +4,7 @@ issueHost: local
 issueRef: none
 prHost: github
 repoSlug: traefik-middleware-utilities
-destBranch: initial
+destBranch: master
 qualify: qualified-with-gaps
 src: 7b22b63df6d2e5aeaafe77685a3d8e5bfe472a1fe87488779699b90dcd13a65f
 localTests: passed

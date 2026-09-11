@@ -48,6 +48,6 @@ go test ./reclaim/...
 
 `Test-Integration.ps1` starts Traefik v3.7.11 with a fake local plugin (`e2e/reclaimprobe`) so reclaim runs under Yaegi. Docker is required.
 
-CI (`.github/workflows/ci.yml`) runs golangci-lint, `go test -v ./...`, and that same Pester harness on every pull request and on pushes to `initial`.
+CI (`.github/workflows/ci.yml`) runs golangci-lint, `go test -v ./...`, and that same Pester harness on every pull request and on pushes to `master`.
 
 Tag a version (`v1.0.0`) to cut a GitHub release via GoReleaser (source archive + SBOM; no plugin binary).
