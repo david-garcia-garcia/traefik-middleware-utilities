@@ -14,3 +14,8 @@ description: Redis EXPIRE/EXPIREAT integer :0/:1 replies, missing keys, and dele
 priority: normal
 local: ext_redis_eval/
 description: Redis EVAL argument shape, zero keys, Lua-to-RESP reply mapping, and script error format.
+
+## Pipelining
+priority: normal
+local: ext_redis_pipelining/
+description: Redis RESP pipelining: one write of N commands, N ordered replies, mixed verbs including EVAL, and -ERR vs I/O.
