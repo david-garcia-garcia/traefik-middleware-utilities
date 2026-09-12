@@ -10,5 +10,5 @@ JobName: 2026-09-12-ci-e2e-split-engines
 | implement | [x] | [x] | 2026-09-12T16:16:18Z |
 | codereview | [x] | [ ] | |
 | devdocsimpact | [x] | [ ] | |
-| archive | [ ] | [ ] | |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
