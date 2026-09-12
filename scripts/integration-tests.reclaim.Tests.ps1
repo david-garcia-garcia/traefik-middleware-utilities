@@ -6,8 +6,8 @@ Describe "reclaim Yaegi e2e" {
     }
 
     It "both routes succeed and share one reclaim incarnation" {
-        $a = Invoke-WebRequest -Uri "$env:INTEGRATION_BASE_URL/a" -UseBasicParsing -TimeoutSec 10
-        $b = Invoke-WebRequest -Uri "$env:INTEGRATION_BASE_URL/b" -UseBasicParsing -TimeoutSec 10
+        $a = Invoke-WebRequest -Uri "$(Get-IntegrationBaseUrl)/a" -UseBasicParsing -TimeoutSec 10
+        $b = Invoke-WebRequest -Uri "$(Get-IntegrationBaseUrl)/b" -UseBasicParsing -TimeoutSec 10
         $a.StatusCode | Should -Be 200
         $b.StatusCode | Should -Be 200
         $idA = $a.Headers["X-Reclaim-ID"]
@@ -34,8 +34,8 @@ Describe "reclaim Yaegi e2e" {
         $elapsed = 0
         do {
             try {
-                $a = Invoke-WebRequest -Uri "$env:INTEGRATION_BASE_URL/a" -UseBasicParsing -TimeoutSec 10
-                $b = Invoke-WebRequest -Uri "$env:INTEGRATION_BASE_URL/b" -UseBasicParsing -TimeoutSec 10
+                $a = Invoke-WebRequest -Uri "$(Get-IntegrationBaseUrl)/a" -UseBasicParsing -TimeoutSec 10
+                $b = Invoke-WebRequest -Uri "$(Get-IntegrationBaseUrl)/b" -UseBasicParsing -TimeoutSec 10
                 if ($a.StatusCode -eq 200 -and $b.StatusCode -eq 200) {
                     $ready = $true
                     break
