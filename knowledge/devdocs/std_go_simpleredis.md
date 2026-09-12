@@ -44,7 +44,10 @@ if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 
 - `simpleredis/simpleredis.go` — client, New, Close
 - `simpleredis/config.go` — freeze-at-New knobs
 - `simpleredis/pool.go` — in-use turns, unused sockets, dial
-- `simpleredis/commands.go` — verbs, exec, retry
+- `simpleredis/commands.go` — thin verbs
+- `simpleredis/commands_exec.go` — exec, retry
+- `simpleredis/commands_eval.go` — Eval (EVALSHA, NOSCRIPT → EVAL)
+- `simpleredis/commands_msetex.go` — MSetEX / MSetEXAt, capability cache
 - `simpleredis/resp.go` — RESP codec
 - `simpleredis/yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval/MSetEX
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin
