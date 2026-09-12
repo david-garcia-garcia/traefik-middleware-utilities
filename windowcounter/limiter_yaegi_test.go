@@ -38,60 +38,6 @@ func TestYaegi_PeekThenTake(t *testing.T) {
 	}
 }
 
-// TestYaegiLive_RedisAndDragonfly runs the same live Take scenarios interpreted against each engine.
-func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
-	if testing.Short() {
-		t.Skip("live engines skipped under -short")
-	}
-	backends := []struct {
-		name string
-		addr string
-	}{
-		{"redis", os.Getenv("WINDOWCOUNTER_LIVE_REDIS")},
-		{"dragonfly", os.Getenv("WINDOWCOUNTER_LIVE_DRAGONFLY")},
-	}
-	anyAddr := false
-	for _, backend := range backends {
-		if backend.addr == "" {
-			continue
-		}
-		anyAddr = true
-		backend := backend
-		t.Run(backend.name, func(t *testing.T) {
-			goPath := t.TempDir()
-			writeGopathWindowcounter(t, goPath)
-			writeGopathFile(t, goPath, "takeprobe", "roundtrip.go", takeprobeSrc)
-			t.Run("exactNThenDeny", func(t *testing.T) {
-				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.UntilDeny(%q, %q, 3)`, backend.addr, t.Name()))
-				if got != "ok" {
-					t.Fatalf("yaegi live take: %q, want ok", got)
-				}
-			})
-			t.Run("bufferedTwoClients", func(t *testing.T) {
-				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.BufferedShare(%q, %q)`, backend.addr, t.Name()))
-				if got != "ok" {
-					t.Fatalf("yaegi live buffered: %q, want ok", got)
-				}
-			})
-			t.Run("slidingBoundary", func(t *testing.T) {
-				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.SlidingBoundary(%q, %q)`, backend.addr, t.Name()))
-				if got != "ok" {
-					t.Fatalf("yaegi live sliding: %q, want ok", got)
-				}
-			})
-			t.Run("peekThenTake", func(t *testing.T) {
-				got := evalTakeprobe(t, goPath, fmt.Sprintf(`takeprobe.PeekThenTake(%q, %q)`, backend.addr, t.Name()))
-				if got != "ok" {
-					t.Fatalf("yaegi live peek: %q, want ok", got)
-				}
-			})
-		})
-	}
-	if !anyAddr {
-		t.Skip("live addrs unset")
-	}
-}
-
 // evalTakeprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalTakeprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -173,6 +119,7 @@ func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
 const takeprobeSrc = `package takeprobe
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter"
@@ -313,6 +260,123 @@ func PeekThenTake(host, key string) string {
 	}
 	if estimated != 1 {
 		return "take-est"
+	}
+	return "ok"
+}
+
+// PeekDeniedThenSlides fills the window, Peeks denied, then Peeks allowed after the formula cools.
+func PeekDeniedThenSlides(host, key string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host})
+	limiter, err := windowcounter.New(client, 0)
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	window := 10 * time.Second
+	const limit int64 = 2
+	start := time.Unix(1700000000, 0)
+	now := start
+	limiter.SetNowForTest(func() time.Time { return now })
+	for i := int64(0); i < limit+1; i++ {
+		if _, _, takeErr := limiter.Take(key, limit, window); takeErr != nil {
+			return "fill:" + takeErr.Error()
+		}
+	}
+	allowed, _, err := limiter.Peek(key, limit, window)
+	if err != nil {
+		return "peek-fill:" + err.Error()
+	}
+	if allowed {
+		return "peek-fill-allowed"
+	}
+	now = start.Add(window)
+	limiter.SetNowForTest(func() time.Time { return now })
+	allowed, _, err = limiter.Peek(key, limit, window)
+	if err != nil {
+		return "peek-boundary:" + err.Error()
+	}
+	if allowed {
+		return "peek-boundary-allowed"
+	}
+	now = start.Add(window + 4*time.Second)
+	limiter.SetNowForTest(func() time.Time { return now })
+	allowed, estimated, err := limiter.Peek(key, limit, window)
+	if err != nil {
+		return "peek-slide:" + err.Error()
+	}
+	if !allowed {
+		return "peek-slide-denied"
+	}
+	if estimated > float64(limit) {
+		return "peek-slide-est"
+	}
+	return "ok"
+}
+
+// BufferedPeek Peeks without incrementing on a buffered limiter, then Takes once.
+func BufferedPeek(host, key string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host})
+	limiter, err := windowcounter.New(client, time.Hour)
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	now := time.Unix(1700000000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	const limit int64 = 5
+	window := time.Minute
+	for i := 0; i < 5; i++ {
+		allowed, estimated, peekErr := limiter.Peek(key, limit, window)
+		if peekErr != nil {
+			return "peek:" + peekErr.Error()
+		}
+		if !allowed {
+			return "peek-denied"
+		}
+		if estimated != 0 {
+			return "peek-est"
+		}
+	}
+	allowed, estimated, err := limiter.Take(key, limit, window)
+	if err != nil {
+		return "take:" + err.Error()
+	}
+	if !allowed {
+		return "take-denied"
+	}
+	if estimated != 1 {
+		return "take-est"
+	}
+	limiter.Close()
+	return "ok"
+}
+
+// ExpireOnFirstHit Takes once then expects a positive TTL on the current window key.
+func ExpireOnFirstHit(host, key string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host})
+	limiter, err := windowcounter.New(client, 0)
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	window := 10 * time.Second
+	now := time.Unix(1700000000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	if _, _, err := limiter.Take(key, 5, window); err != nil {
+		return "take:" + err.Error()
+	}
+	windowStart := now.Unix() / 10 * 10
+	redisKey := key + ":" + strconv.FormatInt(windowStart, 10)
+	values, err := client.Eval("return redis.call('TTL', KEYS[1])", []string{redisKey}, nil)
+	if err != nil {
+		return "ttl:" + err.Error()
+	}
+	if len(values) != 1 {
+		return "ttl-slots"
+	}
+	ttl, err := strconv.ParseInt(string(values[0]), 10, 64)
+	if err != nil {
+		return "ttl-parse"
+	}
+	if ttl <= 0 {
+		return "ttl-zero"
 	}
 	return "ok"
 }

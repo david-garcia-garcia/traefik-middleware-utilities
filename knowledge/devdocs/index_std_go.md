@@ -25,3 +25,8 @@ priority: normal
 local: std_go_tokenbucket.md
 description: How a Traefik middleware Allows a Traefik RateLimit token-bucket consume in process or via SimpleRedis Eval.
 
+## Test suites
+priority: normal
+local: std_go_test-suites.md
+description: Lint, unit Go, Go E2E (live Redis and Dragonfly), and Pester — what each suite is for and how test files are named.
+
