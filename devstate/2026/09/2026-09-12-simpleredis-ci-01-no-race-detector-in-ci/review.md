@@ -14,3 +14,11 @@ findings: none
 fixed: none
 skipped: none
 decisions: unit test job -race 10m; reuse dest concurrent canaries; e2e stays plain
+
+## propose (2026-09-12)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: add-ci-unit-race-detector
+specs: fold std_go_ci_test-suites
