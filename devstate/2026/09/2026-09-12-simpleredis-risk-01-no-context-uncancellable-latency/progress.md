@@ -6,7 +6,7 @@ JobName: 2026-09-12-simpleredis-risk-01-no-context-uncancellable-latency
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-12T12:36:07Z |
 | explore | [x] | [x] | 2026-09-12T12:43:01Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
