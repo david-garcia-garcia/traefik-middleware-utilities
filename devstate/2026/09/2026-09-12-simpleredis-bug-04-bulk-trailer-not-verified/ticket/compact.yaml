@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: "bug-04 — `readBulk` never verifies the bulk trailer, so a reply can be declared clean while desynced"
+url: none
+number: none
