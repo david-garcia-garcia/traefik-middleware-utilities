@@ -9,6 +9,6 @@ JobName: 2026-09-12-simpleredis-risk-05-freeinuseturn-blocks-when-full
 | propose | [x] | [x] | 2026-09-12T12:43:29.6261474Z |
 | implement | [x] | [x] | 2026-09-12T12:47:19.9247924Z |
 | codereview | [x] | [x] | 2026-09-12T12:50:11.1289102Z |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
+| devdocsimpact | [x] | [ ] | |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
