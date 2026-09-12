@@ -11,7 +11,7 @@ localTests: none
 requirement: requirement.md
 comments: none
 explore: explore.md
-change: none
+change: simpleredis-over-free-nonblocking
 pr:
   id: "31"
   url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/31
