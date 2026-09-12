@@ -97,4 +97,26 @@ ci: success run 34683648616 (Lint, Test, Integration Tests)
 pr: 18
 verdict: ready for review
 
+## codereview (2026-09-12T08:43:56Z)
+phase: codereview
+findings: 1 standards hard (Init comments), 1 spec wrong (Pester slack), 1 coverage hard (pool-wait retry), 1 coverage judgement
+fixed: probe New trail; TestShouldRetryPoolWaitIsFalse; waiter elapsed < 2*PoolTimeout
+skipped: Pester ESTABLISHED slack 10 (unfiltered :6379; CLIENT LIST blocked during Lua hold)
+head: 9357939e718b6523351ac40b62b8daae3b1d100e
+ci: success run 34683954594 (Lint, Test, Integration Tests)
+pr: 18
+verdict: ready for review
+
+## pullrequest (2026-09-12T08:43:56Z)
+phase: pullrequest
+findings: none
+fixed: delivery card and PR title retargeted to New(Config) + live pool cap + file split + root LICENSE
+skipped: none
+localTests: passed (`go test -count=1 -short ./simpleredis` after pool-wait proof)
+head: 9357939e718b6523351ac40b62b8daae3b1d100e
+ci: success run 34683954594 (Lint, Test, Integration Tests)
+pr: 18
+verdict: ready for review
+title: feat(simpleredis)!: cap live pool; construct with New(Config)
+
 
