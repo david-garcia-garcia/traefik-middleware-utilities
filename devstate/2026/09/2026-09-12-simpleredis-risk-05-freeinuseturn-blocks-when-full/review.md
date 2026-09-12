@@ -17,3 +17,12 @@ skipped: none
 hang: reproduced (throwaway TestThrowawayFreeInUseTurnHang, deleted)
 ci: 34694187751 in progress
 
+## propose (2026-09-12)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: simpleredis-over-free-nonblocking
+ci: 34694359738 in progress
+
+
