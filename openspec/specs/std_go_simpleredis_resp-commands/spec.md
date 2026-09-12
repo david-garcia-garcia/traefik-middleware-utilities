@@ -230,12 +230,24 @@ Compose SHALL add sibling Redis and Dragonfly services with requirepass. Compose
 - **AND** each body contains `ERR DB index is out of range`
 - **AND** neither test stops `whoami-a` or `whoami-b`
 
+### Requirement: ScriptSHA1Hex is Redis sha1hex
+The package SHALL export `ScriptSHA1Hex(script string) string`. It SHALL return the SHA-1 of the script bytes as lowercase 40-character hex (Redis `sha1hex`). The client MUST NOT keep a digest table or mutex for scripts. Tests that import Yaegi v0.16.1 SHALL prove interpreted code can call `ScriptSHA1Hex` under GOPATH with stdlib symbols only and `useunsafe` false.
+
+#### Scenario: ScriptSHA1Hex is 40-char lowercase hex
+- **WHEN** `ScriptSHA1Hex` is called with a Lua body
+- **THEN** the result is 40 lowercase hex characters
+- **AND** that value equals SHA-1 of those script bytes
+
+#### Scenario: Yaegi ScriptSHA1Hex
+- **WHEN** interpreted code calls `ScriptSHA1Hex` with a script body
+- **THEN** the result equals the compiled `ScriptSHA1Hex` of that body
+
 ### Requirement: Eval sends EVALSHA then EVAL on NOSCRIPT
-`Eval(script, keys, args)` SHALL keep the public signature `Eval(script string, keys []string, args []string) ([][]byte, error)`. Callers pass the script body; they MUST NOT pass a digest. `Eval` SHALL hash the script body on each call (SHA-1 lowercase hex; cheap; no map, no lock) and send Redis `EVALSHA`, that digest, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. When the error text from that command starts with `NOSCRIPT`, `Eval` SHALL send `EVAL` once with the same script body, `numkeys`, keys, and args. That EVAL is the only place the script body is sent to Redis/Dragonfly so the engine stores it. That `NOSCRIPT` MUST NOT be returned to the caller as the command result. The client MUST NOT send `SCRIPT LOAD` at `Init`. The client MUST NOT export `EvalSha` or `ScriptLoad`. The client MUST NOT keep a digest table or mutex for scripts. The return SHALL keep the same `[][]byte` shape: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or other server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). A Lua indexed table SHALL decode only as a flat array whose elements are bulk strings or integers (or status). Nested tables and `{ err = "..." }` inside an array SHALL return `redis:unsupported-reply`. Scripts that return several values MUST wrap each slot with Lua `tostring` (or return numbers, which become integers). Scripts that touch keys MUST list those keys in `keys` and MUST NOT use `table.maxn`.
+`Eval(ctx, script, digest, keys, args)` SHALL have the public signature `Eval(ctx context.Context, script string, digest string, keys []string, args []string) ([][]byte, error)`. Callers SHALL pass the script body and the SHA-1 hex from `ScriptSHA1Hex` (or an equivalent Redis `sha1hex`). `Eval` MUST NOT hash the script body. `Eval` MUST NOT check that `digest` equals `ScriptSHA1Hex(script)`. `Eval` SHALL send Redis `EVALSHA`, the caller `digest`, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. When the error text from that command starts with `NOSCRIPT`, `Eval` SHALL send `EVAL` once with the same script body, `numkeys`, keys, and args. That EVAL is the only place the script body is sent to Redis/Dragonfly so the engine stores it. That `NOSCRIPT` MUST NOT be returned to the caller as the command result. The client MUST NOT send `SCRIPT LOAD` at `Init`. The client MUST NOT export `EvalSha` or `ScriptLoad`. The client MUST NOT keep a digest table or mutex for scripts. The return SHALL keep the same `[][]byte` shape: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or other server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). A Lua indexed table SHALL decode only as a flat array whose elements are bulk strings or integers (or status). Nested tables and `{ err = "..." }` inside an array SHALL return `redis:unsupported-reply`. Scripts that return several values MUST wrap each slot with Lua `tostring` (or return numbers, which become integers). Scripts that touch keys MUST list those keys in `keys` and MUST NOT use `table.maxn`.
 
 #### Scenario: Later Eval sends EVALSHA not the body
-- **WHEN** Eval is called twice with the same script, one key, and two args against a fake that already has that digest
-- **THEN** the second command sent is `EVALSHA`, the SHA-1 hex of that script, `1`, that key, then those args
+- **WHEN** Eval is called twice with the same script, that script’s `ScriptSHA1Hex` digest, one key, and two args against a fake that already has that digest
+- **THEN** the second command sent is `EVALSHA`, that digest, `1`, that key, then those args
 - **AND** the second argv MUST NOT include the script body
 
 #### Scenario: First EVALSHA miss falls back to EVAL
@@ -246,20 +258,25 @@ Compose SHALL add sibling Redis and Dragonfly services with requirepass. Compose
 
 #### Scenario: After EVAL the digest hits
 - **WHEN** EVAL has loaded that digest on the fake
-- **AND** Eval is called again with the same script
+- **AND** Eval is called again with the same script and that digest
 - **THEN** the command sent is `EVALSHA` with that digest
 - **AND** Eval succeeds without a second EVAL
 
 #### Scenario: Two scripts two digests
-- **WHEN** Eval is called with script A then with a different script B
+- **WHEN** Eval is called with script A and its digest then with a different script B and its digest
 - **THEN** the `EVALSHA` argv digests differ
+
+#### Scenario: Eval uses the caller digest
+- **WHEN** Eval is called with a script and a digest equal to `ScriptSHA1Hex` of that script
+- **THEN** the `EVALSHA` argv digest is that caller string
+- **AND** Eval MUST NOT replace it with a newly hashed value
 
 #### Scenario: Eval integer reply
 - **WHEN** Redis replies to EVALSHA or EVAL with a `:` integer
 - **THEN** Eval returns one `[][]byte` element whose bytes are that decimal payload
 
 #### Scenario: Eval empty keys
-- **WHEN** Eval is called with a script, no keys, and no args
+- **WHEN** Eval is called with a script, its digest, no keys, and no args
 - **THEN** the command sent includes `numkeys` `0`
 
 #### Scenario: Eval three bulk strings
@@ -501,6 +518,19 @@ Compiled tests SHALL run `MSetEX` against each of Redis 7 and Dragonfly whose li
 - **WHEN** a live address is set
 - **AND** MSetEXAt is called with a Unix timestamp in the past
 - **THEN** a later Get of that key is `redis:miss`
+
+### Requirement: Public verbs take a context
+Each public command (`Get`, `MGet`, `Set`, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `MSetEX`, `MSetEXAt`) SHALL take `context.Context` as its first argument. There SHALL NOT be a matching `*Context` twin or an unadorned method that wraps `context.Background()`. A caller with no deadline SHALL pass `context.Background()` at the call site. Wire behavior SHALL include the session overall deadline and zero-Config defaults specified on `std_go_simpleredis_tcp-session`.
+
+#### Scenario: Get sends GET
+- **WHEN** Get is called with a context and a key
+- **THEN** the session sends Redis GET for that key
+- **AND** a bulk reply returns those bytes
+
+#### Scenario: Already-cancelled Get does not send
+- **WHEN** Get is called with a context that is already cancelled
+- **THEN** the call returns that context's `Err()`
+- **AND** the session MUST NOT send GET
 
 ### Requirement: SimpleRedis test package compiles
 `go test ./simpleredis/` SHALL compile as one binary. Tests that write a temp GOPATH for Yaegi, including interpreted-cost measurements, MUST use the same-package helper the interpreter tests already define. The package MUST NOT fail to compile because that helper is missing. CI `go test ./...` MUST keep compiling this package.

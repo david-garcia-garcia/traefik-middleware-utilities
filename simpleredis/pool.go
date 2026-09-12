@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"time"
 )
@@ -65,7 +66,7 @@ func (sr *SimpleRedis) freeInUseTurn() {
 }
 
 // borrow waits for an in-use turn, then takes an unused socket younger than idleTimeout, or dials.
-func (sr *SimpleRedis) borrow() (*pooledConn, error) {
+func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error) {
 	// closed is atomic; inUseTurns is written once in New before concurrent use.
 	if sr.closed.Load() {
 		return nil, errUnreachable
@@ -73,19 +74,30 @@ func (sr *SimpleRedis) borrow() (*pooledConn, error) {
 	if sr.inUseTurns == nil {
 		return nil, errUnreachable
 	}
+	if err := contextStop(ctx); err != nil {
+		return nil, err
+	}
 
 	// Uncontended borrow must not allocate a timer; the wait exists only for a waiter past poolSize.
 	select {
 	case <-sr.inUseTurns:
 	default:
-		// Waiter past poolSize: allocate a stoppable timer (not time.After).
+		// Waiter past poolSize: PoolTimeout timer, or ctx.Done when the command deadline is sooner.
 		timer := time.NewTimer(sr.inUseTurnWait())
 		select {
 		case <-sr.inUseTurns:
 			if !timer.Stop() {
 				<-timer.C
 			}
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, ctx.Err()
 		case <-timer.C:
+			if err := contextStop(ctx); err != nil {
+				return nil, err
+			}
 			return nil, errPoolWait
 		}
 	}
@@ -103,7 +115,7 @@ func (sr *SimpleRedis) borrow() (*pooledConn, error) {
 		return reused, nil
 	}
 	// Idle miss: dial while still holding the turn.
-	conn, err := sr.dial()
+	conn, err := sr.dial(ctx)
 	if err != nil {
 		sr.freeInUseTurn()
 		return nil, err
@@ -111,7 +123,7 @@ func (sr *SimpleRedis) borrow() (*pooledConn, error) {
 	return conn, nil
 }
 
-// takeIdleConn pops unused sockets until one is younger than idleTimeout. Stale sockets are returned for close after the lock. closed is true when Close ran.
+// takeIdleConn sweeps unused sockets older than idleTimeout, then pops the newest survivor. Stale sockets are returned for close after the lock. closed is true when Close ran.
 func (sr *SimpleRedis) takeIdleConn() (reused *pooledConn, stale []*pooledConn, closed bool) {
 	sr.idleConnsMu.Lock()
 	defer sr.idleConnsMu.Unlock()
@@ -119,15 +131,22 @@ func (sr *SimpleRedis) takeIdleConn() (reused *pooledConn, stale []*pooledConn, 
 		return nil, nil, true
 	}
 	now := time.Now()
-	for len(sr.idleConns) > 0 {
-		conn := sr.idleConns[len(sr.idleConns)-1]
-		sr.idleConns = sr.idleConns[:len(sr.idleConns)-1]
+	// Keep still-young sockets in place; collect stale for close after unlock.
+	survivors := sr.idleConns[:0]
+	for _, conn := range sr.idleConns {
 		if now.Sub(conn.lastUsed) < sr.idleTimeout {
-			return conn, stale, false
+			survivors = append(survivors, conn)
+			continue
 		}
 		stale = append(stale, conn)
 	}
-	return nil, stale, false
+	sr.idleConns = survivors
+	// LIFO: reuse the newest survivor.
+	if n := len(sr.idleConns); n > 0 {
+		reused = sr.idleConns[n-1]
+		sr.idleConns = sr.idleConns[:n-1]
+	}
+	return reused, stale, false
 }
 
 // release returns a clean conn to idleConns and frees the in-use turn, or closes it when dirty, closed, or idleConns is full at the live cap.
@@ -160,10 +179,17 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 }
 
 // dial opens TCP to host, then AUTH and SELECT when those New fields are set.
-func (sr *SimpleRedis) dial() (*pooledConn, error) {
-	dialer := net.Dialer{Timeout: sr.dialTimeout}
-	netConn, err := dialer.Dial("tcp", sr.host)
+// Dialer.Timeout is the per-attempt cap; DialContext also honors ctx (overall budget or caller).
+func (sr *SimpleRedis) dial(ctx context.Context) (*pooledConn, error) {
+	if err := contextStop(ctx); err != nil {
+		return nil, err
+	}
+	dialer := net.Dialer{Timeout: sr.DialTimeout()}
+	netConn, err := dialer.DialContext(ctx, "tcp", sr.host)
 	if err != nil {
+		if stop := contextStop(ctx); stop != nil {
+			return nil, stop
+		}
 		return nil, errUnreachable
 	}
 	conn := &pooledConn{
@@ -174,13 +200,13 @@ func (sr *SimpleRedis) dial() (*pooledConn, error) {
 
 	// AUTH before SELECT so a passworded server accepts the session.
 	if sr.pass != "" {
-		if _, _, err = sr.do(conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
 			conn.close()
 			return nil, err
 		}
 	}
 	if sr.database != "" {
-		if _, _, err = sr.do(conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
 			conn.close()
 			return nil, err
 		}

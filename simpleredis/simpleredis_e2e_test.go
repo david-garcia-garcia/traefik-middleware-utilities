@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"os"
 	"strconv"
@@ -93,7 +94,7 @@ const ttlScript = `return redis.call('TTL', KEYS[1])`
 // assertLiveTTLPositive Evals TTL for key and fails unless the remaining seconds are positive.
 func assertLiveTTLPositive(t *testing.T, client *SimpleRedis, key string) {
 	t.Helper()
-	values, err := client.Eval(ttlScript, []string{key}, nil)
+	values, err := client.Eval(context.Background(), ttlScript, ScriptSHA1Hex(ttlScript), []string{key}, nil)
 	if err != nil {
 		t.Fatalf("TTL Eval: %v", err)
 	}
@@ -112,7 +113,7 @@ func waitLiveSimpleRedis(t *testing.T, addr string) *SimpleRedis {
 	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: 80 * time.Millisecond})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		if err := client.Set("simpleredis-live-probe", []byte("1"), 60); err == nil {
+		if err := client.Set(context.Background(), "simpleredis-live-probe", []byte("1"), 60); err == nil {
 			return client
 		} else if time.Now().After(deadline) {
 			t.Fatalf("live %s: %v", addr, err)
@@ -177,7 +178,7 @@ func clientKillFromSidecarForTest(t *testing.T, host, filter, value string) int 
 // clientIDOnConnForTest sends CLIENT ID on pooled and clears the I/O deadline afterward.
 func clientIDOnConnForTest(t *testing.T, sr *SimpleRedis, pooled *pooledConn) string {
 	t.Helper()
-	values, reusable, err := sr.do(pooled, [][]byte{[]byte("CLIENT"), []byte("ID")})
+	values, reusable, err := sr.do(context.Background(), pooled, [][]byte{[]byte("CLIENT"), []byte("ID")})
 	_ = pooled.netConn.SetDeadline(time.Time{})
 	if err != nil {
 		t.Fatalf("CLIENT ID: %v", err)

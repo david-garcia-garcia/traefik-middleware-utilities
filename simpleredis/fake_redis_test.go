@@ -187,7 +187,7 @@ func (f *fakeRedis) commandReply(args []string) string {
 	case evalVerb:
 		f.evals++
 		script := args[1]
-		f.loadedScripts[scriptSHA1Hex(script)] = script
+		f.loadedScripts[ScriptSHA1Hex(script)] = script
 		return f.evalScriptReply(script, args)
 	default:
 		return statusOKReply
@@ -277,6 +277,13 @@ func (f *fakeRedis) lastExpireCommand() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.lastExpire...)
+}
+
+// loadScriptDigestForTest pretends Redis already compiled script under digest.
+func (f *fakeRedis) loadScriptDigestForTest(digest, script string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.loadedScripts[digest] = script
 }
 
 // lastEvalCommand returns the last EVAL or EVALSHA argv.

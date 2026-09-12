@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"math"
 	"net"
@@ -18,10 +19,10 @@ func TestValueWithNewlinesSurvives(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	if err := redis.Set("range-index", []byte(index), 60); err != nil {
+	if err := redis.Set(context.Background(), "range-index", []byte(index), 60); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
-	got, err := redis.Get("range-index")
+	got, err := redis.Get(context.Background(), "range-index")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -35,7 +36,7 @@ func TestMGetKeepsValuesWithNewlinesAligned(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"range-index": index, "a": "t", "c": "f"})
 	redis := New(Config{Host: addr})
 
-	got, err := redis.MGet([]string{"range-index", "a", "c"})
+	got, err := redis.MGet(context.Background(), []string{"range-index", "a", "c"})
 	if err != nil {
 		t.Fatalf("MGet: %v", err)
 	}
@@ -48,7 +49,7 @@ func TestMGetRejectsShortReply(t *testing.T) {
 	addr := startStaticRedis(t, "*2\r\n$1\r\nt\r\n$1\r\nf\r\n")
 	redis := New(Config{Host: addr})
 
-	if _, err := redis.MGet([]string{"a", "b", "c"}); err == nil || err.Error() != RedisIssue {
+	if _, err := redis.MGet(context.Background(), []string{"a", "b", "c"}); err == nil || err.Error() != RedisIssue {
 		t.Fatalf("MGet with 2 values for 3 keys = %v, want %s", err, RedisIssue)
 	}
 }
@@ -69,7 +70,7 @@ func TestIoTimeout(t *testing.T) {
 	}()
 
 	redis := New(Config{Host: listener.Addr().String()})
-	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisTimeout {
+	if _, err := redis.Get(context.Background(), "hit"); err == nil || err.Error() != RedisTimeout {
 		t.Fatalf("Get = %v, want %s", err, RedisTimeout)
 	}
 }
@@ -77,7 +78,7 @@ func TestIoTimeout(t *testing.T) {
 func TestEvalMixedArrayReply(t *testing.T) {
 	addr := startStaticRedis(t, "*3\r\n$3\r\nfoo\r\n:7\r\n+OK\r\n")
 	redis := New(Config{Host: addr})
-	values, err := redis.Eval("return {1}", nil, nil)
+	values, err := redis.Eval(context.Background(), "return {1}", ScriptSHA1Hex("return {1}"), nil, nil)
 	if err != nil {
 		t.Fatalf("Eval mixed: %v", err)
 	}
@@ -156,7 +157,7 @@ func TestMalformedReplyIsIssueAndNotPooled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			addr := startStaticRedis(t, tc.reply)
 			redis := New(Config{Host: addr})
-			_, err := redis.Get("k")
+			_, err := redis.Get(context.Background(), "k")
 			if err == nil || err.Error() != RedisIssue {
 				t.Fatalf("Get = %v, want %s", err, RedisIssue)
 			}
@@ -185,7 +186,7 @@ func TestUnsupportedReplyIsNotPooled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			addr := startStaticRedis(t, tc.reply)
 			redis := New(Config{Host: addr})
-			_, err := redis.Get("k")
+			_, err := redis.Get(context.Background(), "k")
 			if err == nil || err.Error() != RedisUnsupportedReply {
 				t.Fatalf("Get = %v, want %s", err, RedisUnsupportedReply)
 			}
@@ -202,7 +203,7 @@ func TestUnsupportedReplyIsNotPooled(t *testing.T) {
 func TestEvalNestedArrayRedials(t *testing.T) {
 	addr, accepts := startFirstAcceptThenRestRedis(t, "*1\r\n*1\r\n$1\r\na\r\n", "*3\r\n$4\r\ntrue\r\n$1\r\n0\r\n$1\r\n0\r\n")
 	redis := New(Config{Host: addr, MaxRetries: -1})
-	_, err := redis.Eval("return {1,{2}}", nil, nil)
+	_, err := redis.Eval(context.Background(), "return {1,{2}}", ScriptSHA1Hex("return {1,{2}}"), nil, nil)
 	if err == nil || err.Error() != RedisUnsupportedReply {
 		t.Fatalf("Eval nested = %v, want %s", err, RedisUnsupportedReply)
 	}
@@ -215,7 +216,7 @@ func TestEvalNestedArrayRedials(t *testing.T) {
 	if got := accepts(); got != 1 {
 		t.Fatalf("accepts after nested Eval = %d, want 1", got)
 	}
-	values, err := redis.Eval("return {tostring(true), tostring(0), tostring(0)}", nil, nil)
+	values, err := redis.Eval(context.Background(), "return {tostring(true), tostring(0), tostring(0)}", ScriptSHA1Hex("return {tostring(true), tostring(0), tostring(0)}"), nil, nil)
 	if err != nil {
 		t.Fatalf("Eval after redial: %v", err)
 	}
@@ -230,7 +231,7 @@ func TestEvalNestedArrayRedials(t *testing.T) {
 func TestEvalTokenBucketThreeBulkStrings(t *testing.T) {
 	addr := startStaticRedis(t, "*3\r\n$4\r\ntrue\r\n$1\r\n0\r\n$1\r\n0\r\n")
 	redis := New(Config{Host: addr})
-	values, err := redis.Eval("return {tostring(true), tostring(0), tostring(0)}", nil, nil)
+	values, err := redis.Eval(context.Background(), "return {tostring(true), tostring(0), tostring(0)}", ScriptSHA1Hex("return {tostring(true), tostring(0), tostring(0)}"), nil, nil)
 	if err != nil {
 		t.Fatalf("Eval three bulk: %v", err)
 	}
@@ -251,7 +252,7 @@ func TestTruncatedReplyIsUnreachableAndNotPooled(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			addr := startWriteThenCloseRedis(t, tc.partialReply)
 			redis := New(Config{Host: addr, MaxRetries: -1})
-			_, err := redis.Get("k")
+			_, err := redis.Get(context.Background(), "k")
 			if err == nil || err.Error() != RedisUnreachable {
 				t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
 			}
@@ -266,7 +267,7 @@ func TestRetryBorrowFailsAfterDirtyReuse(t *testing.T) {
 	addr, listenerClosed := startRetryBorrowFailRedis(t, "$10\r\nabc")
 	redis := New(Config{Host: addr, MaxRetries: 1, MinRetryBackoff: -1})
 
-	got, err := redis.Get("hit")
+	got, err := redis.Get(context.Background(), "hit")
 	if err != nil {
 		t.Fatalf("first Get: %v", err)
 	}
@@ -282,7 +283,7 @@ func TestRetryBorrowFailsAfterDirtyReuse(t *testing.T) {
 		t.Fatal("listener did not close after the pooled hit")
 	}
 
-	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
+	if _, err := redis.Get(context.Background(), "hit"); err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("second Get = %v, want %s", err, RedisUnreachable)
 	}
 	if len(redis.idleConns) != 0 {
@@ -293,7 +294,7 @@ func TestRetryBorrowFailsAfterDirtyReuse(t *testing.T) {
 func TestIncrGarbageIntegerPayload(t *testing.T) {
 	addr := startStaticRedis(t, ":not-an-int\r\n")
 	redis := New(Config{Host: addr})
-	_, err := redis.Incr("k")
+	_, err := redis.Incr(context.Background(), "k")
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("Incr garbage = %v, want %s", err, RedisIssue)
 	}
@@ -346,7 +347,7 @@ func TestWrongBulkTrailerIsIssueAndNotPooled(t *testing.T) {
 	})
 	redis := New(Config{Host: addr, PoolSize: 1, MaxRetries: -1})
 
-	_, err := redis.Get("k")
+	_, err := redis.Get(context.Background(), "k")
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("first Get = %v, want %s", err, RedisIssue)
 	}
@@ -354,7 +355,7 @@ func TestWrongBulkTrailerIsIssueAndNotPooled(t *testing.T) {
 		t.Fatalf("idle after first Get = %d, want 0", got)
 	}
 
-	got, err := redis.Get("k")
+	got, err := redis.Get(context.Background(), "k")
 	if err != nil {
 		t.Fatalf("second Get: %v", err)
 	}
@@ -366,12 +367,12 @@ func TestWrongBulkTrailerIsIssueAndNotPooled(t *testing.T) {
 func TestHeldIntegerSliceSurvivesLaterRead(t *testing.T) {
 	addr := startSequentialRedis(t, []string{":111\r\n", ":222\r\n"})
 	redis := New(Config{Host: addr})
-	first, err := redis.Eval("return 111", nil, nil)
+	first, err := redis.Eval(context.Background(), "return 111", ScriptSHA1Hex("return 111"), nil, nil)
 	if err != nil || len(first) != 1 {
 		t.Fatalf("first Eval: %v %q", err, first)
 	}
 	held := first[0]
-	second, err := redis.Eval("return 222", nil, nil)
+	second, err := redis.Eval(context.Background(), "return 222", ScriptSHA1Hex("return 222"), nil, nil)
 	if err != nil || len(second) != 1 || string(second[0]) != "222" {
 		t.Fatalf("second Eval: %v %q", err, second)
 	}
@@ -383,12 +384,12 @@ func TestHeldIntegerSliceSurvivesLaterRead(t *testing.T) {
 func TestHeldStatusSliceSurvivesLaterRead(t *testing.T) {
 	addr := startSequentialRedis(t, []string{"+FIRST\r\n", "+SECOND\r\n"})
 	redis := New(Config{Host: addr})
-	first, err := redis.Eval("return 'FIRST'", nil, nil)
+	first, err := redis.Eval(context.Background(), "return 'FIRST'", ScriptSHA1Hex("return 'FIRST'"), nil, nil)
 	if err != nil || len(first) != 1 {
 		t.Fatalf("first Eval: %v %q", err, first)
 	}
 	held := first[0]
-	second, err := redis.Eval("return 'SECOND'", nil, nil)
+	second, err := redis.Eval(context.Background(), "return 'SECOND'", ScriptSHA1Hex("return 'SECOND'"), nil, nil)
 	if err != nil || len(second) != 1 || string(second[0]) != "SECOND" {
 		t.Fatalf("second Eval: %v %q", err, second)
 	}
@@ -400,13 +401,13 @@ func TestHeldStatusSliceSurvivesLaterRead(t *testing.T) {
 func TestArraySlotsSurviveLaterRead(t *testing.T) {
 	addr := startSequentialRedis(t, []string{"*2\r\n:7\r\n+OK\r\n", ":1\r\n"})
 	redis := New(Config{Host: addr})
-	slots, err := redis.Eval("return {7, 'OK'}", nil, nil)
+	slots, err := redis.Eval(context.Background(), "return {7, 'OK'}", ScriptSHA1Hex("return {7, 'OK'}"), nil, nil)
 	if err != nil || len(slots) != 2 {
 		t.Fatalf("array Eval: %v %q", err, slots)
 	}
 	heldInteger := slots[0]
 	heldStatus := slots[1]
-	later, err := redis.Eval("return 1", nil, nil)
+	later, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil)
 	if err != nil || len(later) != 1 || string(later[0]) != "1" {
 		t.Fatalf("later Eval: %v %q", err, later)
 	}
@@ -420,7 +421,7 @@ func TestLongStatusLineIsIssueAndNotPooled(t *testing.T) {
 	payload := strings.Repeat("A", 5000)
 	addr := startStaticRedis(t, "+"+payload+"\r\n")
 	redis := New(Config{Host: addr})
-	_, err := redis.Eval("return 'x'", nil, nil)
+	_, err := redis.Eval(context.Background(), "return 'x'", ScriptSHA1Hex("return 'x'"), nil, nil)
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("long status: %v, want %s", err, RedisIssue)
 	}
@@ -496,7 +497,7 @@ func TestReadLineShortestLegalLines(t *testing.T) {
 func TestGarbageBulkLengthIsIssue(t *testing.T) {
 	addr := startStaticRedis(t, "$abc\r\n")
 	redis := New(Config{Host: addr})
-	_, err := redis.Get("k")
+	_, err := redis.Get(context.Background(), "k")
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("garbage bulk = %v, want %s", err, RedisIssue)
 	}
@@ -508,7 +509,7 @@ func TestGarbageBulkLengthIsIssue(t *testing.T) {
 func TestGarbageArrayLengthIsIssue(t *testing.T) {
 	addr := startStaticRedis(t, "*\r\n")
 	redis := New(Config{Host: addr})
-	_, err := redis.Eval("return {}", nil, nil)
+	_, err := redis.Eval(context.Background(), "return {}", ScriptSHA1Hex("return {}"), nil, nil)
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("garbage array = %v, want %s", err, RedisIssue)
 	}
@@ -582,7 +583,7 @@ func TestReadReply256MiBHeaderDoesNotAllocatePayload(t *testing.T) {
 func TestGetOverCapBulkIsIssue(t *testing.T) {
 	addr := startStaticRedis(t, "$"+strconv.Itoa(maxBulkLength+1)+"\r\n")
 	redis := New(Config{Host: addr})
-	_, err := redis.Get("k")
+	_, err := redis.Get(context.Background(), "k")
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("over-cap Get = %v, want %s", err, RedisIssue)
 	}
@@ -595,7 +596,7 @@ func TestGetOverCapBulkIsIssue(t *testing.T) {
 func TestMGetOverCapBulkElementIsIssue(t *testing.T) {
 	addr := startStaticRedis(t, "*1\r\n$"+strconv.Itoa(maxBulkLength+1)+"\r\n")
 	redis := New(Config{Host: addr})
-	_, err := redis.MGet([]string{"k"})
+	_, err := redis.MGet(context.Background(), []string{"k"})
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("over-cap MGet = %v, want %s", err, RedisIssue)
 	}
