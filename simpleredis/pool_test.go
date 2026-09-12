@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -337,7 +338,9 @@ func TestPoolWaitTimesOutWithoutExtraDial(t *testing.T) {
 	}
 }
 
-func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
+// TestConcurrentGetsQuiesceAtMaxIdleConns proves overlapping Gets above the idle cap
+// leave unused sockets at MaxIdleConns (default 8) and close the extras on the fake.
+func TestConcurrentGetsQuiesceAtMaxIdleConns(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.mu.Lock()
 	fake.getDelay = 20 * time.Millisecond
@@ -355,12 +358,10 @@ func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if got := len(redis.idleConns); got <= 8 {
-		t.Fatalf("idle %d after 12 Gets with poolSize 16, want more than maxIdleConns kept", got)
+	if got := len(redis.idleConns); got != 8 {
+		t.Fatalf("idle %d after 12 Gets with poolSize 16, want maxIdleConns 8", got)
 	}
-	if got := fake.connections(); got < 9 {
-		t.Fatalf("12 overlapping Get opened %d connections, want at least 9 so idle can exceed maxIdleConns under poolSize 16", got)
-	}
+	fake.waitOpenSocketsEqual(t, 8)
 	if got := fake.connections(); got > 16 {
 		t.Fatalf("opened %d connections, want at most 16", got)
 	}
@@ -370,6 +371,49 @@ func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
 	}
 	if got := fake.connections(); got != before {
 		t.Fatalf("reuse Get dialed, connections %d -> %d", before, got)
+	}
+}
+
+// TestIdleCapAfterSequentialRelease proves borrow/release trims unused sockets to
+// min(MaxIdleConns, PoolSize) and the fake's still-open count matches that idle list.
+func TestIdleCapAfterSequentialRelease(t *testing.T) {
+	rows := []struct {
+		poolSize int
+		maxIdle  int
+	}{
+		{8, 2},
+		{16, 1},
+		{2, 8},
+		{8, 8},
+	}
+	for _, row := range rows {
+		row := row
+		wantIdle := row.maxIdle
+		if row.poolSize < wantIdle {
+			wantIdle = row.poolSize
+		}
+		t.Run(fmt.Sprintf("poolSize=%d maxIdleConns=%d", row.poolSize, row.maxIdle), func(t *testing.T) {
+			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+			redis := New(Config{Host: addr, PoolSize: row.poolSize, MaxIdleConns: row.maxIdle})
+			conns := make([]*pooledConn, row.poolSize)
+			for i := 0; i < row.poolSize; i++ {
+				conn, err := redis.borrow()
+				if err != nil {
+					t.Fatalf("borrow %d: %v", i, err)
+				}
+				conns[i] = conn
+			}
+			for i := 0; i < row.poolSize; i++ {
+				redis.release(conns[i], true)
+				if got := len(redis.idleConns); got > wantIdle {
+					t.Fatalf("idle %d after release %d, want at most %d", got, i+1, wantIdle)
+				}
+			}
+			if got := len(redis.idleConns); got != wantIdle {
+				t.Fatalf("idle %d after poolSize %d maxIdleConns %d, want %d", got, row.poolSize, row.maxIdle, wantIdle)
+			}
+			fake.waitOpenSocketsEqual(t, wantIdle)
+		})
 	}
 }
 
