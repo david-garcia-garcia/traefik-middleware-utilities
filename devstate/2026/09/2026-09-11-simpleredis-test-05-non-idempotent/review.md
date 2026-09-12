@@ -48,3 +48,9 @@ phase: pullrequest
 findings: none
 fixed: none
 skipped: none; Explore Decisions still None (all six Q resolved); PR 21 summary set; CI Lint/Test/Integration Tests success on run 34655026399
+
+## codereview (2026-09-12)
+phase: codereview
+findings: Nitpicks 2 hard (both done); Test coverage 2 hard (both done); other axes 0
+fixed: renamed retryBackoff local `d` to `backoff`; `readRawRESP` `$` branch uses `raw`; `TestClosedClientUnreachableIsNotRetried`; `TestRetryableRedisRepliesAreRetried`; gosec G115/G404 nolint on math/rand jitter
+skipped: none; Explore Decisions still None (all six Q resolved)
