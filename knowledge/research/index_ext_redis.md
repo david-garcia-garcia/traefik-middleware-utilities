@@ -24,3 +24,8 @@ description: Redis EVALSHA SHA-1 digest, volatile script cache, and NOSCRIPT mis
 priority: normal
 local: ext_redis_resp_bulk-string/
 description: RESP2 bulk-string wire form, null bulk, and why a truncated payload is a transport fake not a Redis command.
+
+## MSETEX
+priority: normal
+local: ext_redis_msetex/
+description: Redis 8.4 MSETEX argv/reply and Redis 7 unknown-command detection for engines that lack it.

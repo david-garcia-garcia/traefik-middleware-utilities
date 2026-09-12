@@ -19,6 +19,15 @@ This matches Redis's documented rule (all accessed keys must be passed as EVAL k
 
 Scripts ported from Redis that call `table.maxn(t)` will fail on Dragonfly unless rewritten (use `#t` for dense sequences, or explicit numeric-key scan for sparse tables).
 
+## Lua 5.4 vs Redis 5.1 — `unpack` / `table.unpack`
+
+| Environment | Lua | Spread a table into args |
+|-------------|-----|--------------------------|
+| Redis EVAL | 5.1 | Global `unpack` ([Lua 5.1 manual — unpack](https://www.lua.org/manual/5.1/manual.html#pdf-unpack), [.sources/lua51-unpack.md](.sources/lua51-unpack.md)) |
+| Dragonfly EVAL | 5.4.4 | `table.unpack` only ([Lua 5.4 manual — table.unpack](https://www.lua.org/manual/5.4/manual.html#pdf-table.unpack), [.sources/lua54-table-unpack.md](.sources/lua54-table-unpack.md)). Dragonfly polyfills `table.getn`/`table.setn`/`foreach`/`foreachi`, **not** `unpack` ([dragonfly@36eaa12:interpreter_polyfill.h](https://github.com/dragonflydb/dragonfly/blob/36eaa127c2e5dd4f84724828a4c7c1412c4be90c/src/core/interpreter_polyfill.h), [.sources/interpreter-polyfill.md](.sources/interpreter-polyfill.md)) |
+
+A script that calls `unpack(...)` runs on Redis and fails on Dragonfly. A script that calls `table.unpack(...)` runs on Dragonfly and fails on Redis 5.1. Shared fallback scripts must use a numeric `for` over `#KEYS` / `#t` and must not call either name.
+
 Dragonfly also documents Lua-integer support not present in Redis 5.1. ([differences.md — Lua](https://github.com/dragonflydb/dragonfly/blob/main/docs/differences.md), [.sources/differences-lua.md](.sources/differences-lua.md))
 
 ## Script error wire format
