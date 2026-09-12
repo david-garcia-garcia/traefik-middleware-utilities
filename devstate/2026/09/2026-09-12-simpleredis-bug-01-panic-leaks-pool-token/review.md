@@ -27,3 +27,9 @@ phase: codereview
 findings: P3 1 coverage hard (idle not pooled)
 fixed: pooledIdle==0 after recovered panics (9aa8aa1)
 skipped: none
+
+## devdocsimpact (2026-09-12)
+phase: devdocsimpact
+findings: none
+fixed: none
+skipped: none; std_go_simpleredis.md panic gotcha already landed in implement

@@ -9,6 +9,6 @@ JobName: 2026-09-12-simpleredis-bug-01-panic-leaks-pool-token
 | propose | [x] | [x] | 2026-09-12T12:44:50.736Z |
 | implement | [x] | [x] | 2026-09-12T12:48:32.048Z |
 | codereview | [x] | [x] | 2026-09-12T12:53:31.603Z |
-| devdocsimpact | [x] | [ ] | |
+| devdocsimpact | [x] | [x] | 2026-09-12T12:54:42.356Z |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
