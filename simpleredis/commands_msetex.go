@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"context"
 	"strconv"
 	"strings"
 )
@@ -29,27 +30,27 @@ return 1`
 var msetexFallbackDigest = ScriptSHA1Hex(msetexFallbackScript)
 
 // MSetEX writes names and values with one shared TTL in seconds (native MSETEX or Lua fallback).
-func (sr *SimpleRedis) MSetEX(names []string, values [][]byte, seconds int64) error {
-	return sr.msetex(names, values, "EX", seconds)
+func (sr *SimpleRedis) MSetEX(ctx context.Context, names []string, values [][]byte, seconds int64) error {
+	return sr.msetex(ctx, names, values, "EX", seconds)
 }
 
 // MSetEXAt writes names and values with one shared Unix expiry (native MSETEX or Lua fallback).
-func (sr *SimpleRedis) MSetEXAt(names []string, values [][]byte, unixSeconds int64) error {
-	return sr.msetex(names, values, "EXAT", unixSeconds)
+func (sr *SimpleRedis) MSetEXAt(ctx context.Context, names []string, values [][]byte, unixSeconds int64) error {
+	return sr.msetex(ctx, names, values, "EXAT", unixSeconds)
 }
 
 // msetex validates the pair lists then sends native MSETEX, falling back to Eval on unknown-command.
-func (sr *SimpleRedis) msetex(names []string, values [][]byte, expireToken string, ttl int64) error {
+func (sr *SimpleRedis) msetex(ctx context.Context, names []string, values [][]byte, expireToken string, ttl int64) error {
 	if len(names) == 0 || len(names) != len(values) || len(names) > maxMSetEXPairs {
 		return errIssue
 	}
 	if sr.cachedGroupWrite() == groupWriteLua {
-		return sr.msetexEval(names, values, expireToken, ttl)
+		return sr.msetexEval(ctx, names, values, expireToken, ttl)
 	}
-	n, err := parseIntegerReply(sr.exec(msetexArgs(names, values, expireToken, ttl)...))
+	n, err := parseIntegerReply(sr.exec(ctx, msetexArgs(names, values, expireToken, ttl)...))
 	if unknownCommand(err) {
 		sr.storeGroupWrite(groupWriteLua)
-		return sr.msetexEval(names, values, expireToken, ttl)
+		return sr.msetexEval(ctx, names, values, expireToken, ttl)
 	}
 	if err == nil {
 		sr.storeGroupWrite(groupWriteNative)
@@ -58,13 +59,13 @@ func (sr *SimpleRedis) msetex(names []string, values [][]byte, expireToken strin
 }
 
 // msetexEval runs the fallback script with names in KEYS and values then token then TTL in ARGV.
-func (sr *SimpleRedis) msetexEval(names []string, values [][]byte, expireToken string, ttl int64) error {
+func (sr *SimpleRedis) msetexEval(ctx context.Context, names []string, values [][]byte, expireToken string, ttl int64) error {
 	argv := make([]string, 0, len(values)+2)
 	for _, value := range values {
 		argv = append(argv, string(value))
 	}
 	argv = append(argv, expireToken, strconv.FormatInt(ttl, 10))
-	return msetexSuccess(parseIntegerReply(sr.Eval(msetexFallbackScript, msetexFallbackDigest, names, argv)))
+	return msetexSuccess(parseIntegerReply(sr.Eval(ctx, msetexFallbackScript, msetexFallbackDigest, names, argv)))
 }
 
 // cachedGroupWrite returns the capability cache. Callers must not hold groupWriteMu.

@@ -119,6 +119,7 @@ func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
 const takeprobeSrc = `package takeprobe
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -135,7 +136,7 @@ func UntilDeny(host, key string, limit int) string {
 	}
 	n := int64(limit)
 	for i := int64(0); i < n; i++ {
-		allowed, _, takeErr := limiter.Take(key, n, time.Minute)
+		allowed, _, takeErr := limiter.Take(context.Background(), key, n, time.Minute)
 		if takeErr != nil {
 			return "take:" + takeErr.Error()
 		}
@@ -143,7 +144,7 @@ func UntilDeny(host, key string, limit int) string {
 			return "early"
 		}
 	}
-	allowed, _, err := limiter.Take(key, n, time.Minute)
+	allowed, _, err := limiter.Take(context.Background(), key, n, time.Minute)
 	if err != nil {
 		return "deny:" + err.Error()
 	}
@@ -168,14 +169,14 @@ func BufferedShare(host, key string) string {
 	const limit int64 = 3
 	window := time.Minute
 	for i := 0; i < 2; i++ {
-		allowed, _, takeErr := a.Take(key, limit, window)
+		allowed, _, takeErr := a.Take(context.Background(), key, limit, window)
 		if takeErr != nil {
 			return "a:" + takeErr.Error()
 		}
 		if !allowed {
 			return "a-early"
 		}
-		allowed, _, takeErr = b.Take(key, limit, window)
+		allowed, _, takeErr = b.Take(context.Background(), key, limit, window)
 		if takeErr != nil {
 			return "b:" + takeErr.Error()
 		}
@@ -185,7 +186,7 @@ func BufferedShare(host, key string) string {
 	}
 	a.Sleep()
 	b.Sleep()
-	allowed, _, err := a.Take(key, limit, window)
+	allowed, _, err := a.Take(context.Background(), key, limit, window)
 	if err != nil {
 		return "share:" + err.Error()
 	}
@@ -210,7 +211,7 @@ func SlidingBoundary(host, key string) string {
 	now := time.Unix(start, 0).Add(9 * time.Second)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := int64(0); i < limit; i++ {
-		allowed, _, takeErr := limiter.Take(key, limit, window)
+		allowed, _, takeErr := limiter.Take(context.Background(), key, limit, window)
 		if takeErr != nil {
 			return "fill:" + takeErr.Error()
 		}
@@ -220,7 +221,7 @@ func SlidingBoundary(host, key string) string {
 	}
 	now = time.Unix(start, 0).Add(window)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, _, err := limiter.Take(key, limit, window)
+	allowed, _, err := limiter.Take(context.Background(), key, limit, window)
 	if err != nil {
 		return "boundary:" + err.Error()
 	}
@@ -240,7 +241,7 @@ func PeekThenTake(host, key string) string {
 	const limit int64 = 5
 	window := time.Minute
 	for i := 0; i < 3; i++ {
-		allowed, estimated, peekErr := limiter.Peek(key, limit, window)
+		allowed, estimated, peekErr := limiter.Peek(context.Background(), key, limit, window)
 		if peekErr != nil {
 			return "peek:" + peekErr.Error()
 		}
@@ -251,7 +252,7 @@ func PeekThenTake(host, key string) string {
 			return "peek-est"
 		}
 	}
-	allowed, estimated, err := limiter.Take(key, limit, window)
+	allowed, estimated, err := limiter.Take(context.Background(), key, limit, window)
 	if err != nil {
 		return "take:" + err.Error()
 	}
@@ -277,11 +278,11 @@ func PeekDeniedThenSlides(host, key string) string {
 	now := start
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := int64(0); i < limit+1; i++ {
-		if _, _, takeErr := limiter.Take(key, limit, window); takeErr != nil {
+		if _, _, takeErr := limiter.Take(context.Background(), key, limit, window); takeErr != nil {
 			return "fill:" + takeErr.Error()
 		}
 	}
-	allowed, _, err := limiter.Peek(key, limit, window)
+	allowed, _, err := limiter.Peek(context.Background(), key, limit, window)
 	if err != nil {
 		return "peek-fill:" + err.Error()
 	}
@@ -290,7 +291,7 @@ func PeekDeniedThenSlides(host, key string) string {
 	}
 	now = start.Add(window)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, _, err = limiter.Peek(key, limit, window)
+	allowed, _, err = limiter.Peek(context.Background(), key, limit, window)
 	if err != nil {
 		return "peek-boundary:" + err.Error()
 	}
@@ -299,7 +300,7 @@ func PeekDeniedThenSlides(host, key string) string {
 	}
 	now = start.Add(window + 4*time.Second)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, estimated, err := limiter.Peek(key, limit, window)
+	allowed, estimated, err := limiter.Peek(context.Background(), key, limit, window)
 	if err != nil {
 		return "peek-slide:" + err.Error()
 	}
@@ -324,7 +325,7 @@ func BufferedPeek(host, key string) string {
 	const limit int64 = 5
 	window := time.Minute
 	for i := 0; i < 5; i++ {
-		allowed, estimated, peekErr := limiter.Peek(key, limit, window)
+		allowed, estimated, peekErr := limiter.Peek(context.Background(), key, limit, window)
 		if peekErr != nil {
 			return "peek:" + peekErr.Error()
 		}
@@ -335,7 +336,7 @@ func BufferedPeek(host, key string) string {
 			return "peek-est"
 		}
 	}
-	allowed, estimated, err := limiter.Take(key, limit, window)
+	allowed, estimated, err := limiter.Take(context.Background(), key, limit, window)
 	if err != nil {
 		return "take:" + err.Error()
 	}
@@ -359,12 +360,12 @@ func ExpireOnFirstHit(host, key string) string {
 	window := 10 * time.Second
 	now := time.Unix(1700000000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Take(key, 5, window); err != nil {
+	if _, _, err := limiter.Take(context.Background(), key, 5, window); err != nil {
 		return "take:" + err.Error()
 	}
 	windowStart := now.Unix() / 10 * 10
 	redisKey := key + ":" + strconv.FormatInt(windowStart, 10)
-	values, err := client.Eval("return redis.call('TTL', KEYS[1])", simpleredis.ScriptSHA1Hex("return redis.call('TTL', KEYS[1])"), []string{redisKey}, nil)
+	values, err := client.Eval(context.Background(), "return redis.call('TTL', KEYS[1])", simpleredis.ScriptSHA1Hex("return redis.call('TTL', KEYS[1])"), []string{redisKey}, nil)
 	if err != nil {
 		return "ttl:" + err.Error()
 	}

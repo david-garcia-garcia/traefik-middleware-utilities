@@ -1,6 +1,7 @@
 package tokenbucket
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -98,7 +99,7 @@ func runLiveBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 3; i++ {
-			allowed, _, allowErr := limiter.Allow(key)
+			allowed, _, allowErr := limiter.Allow(context.Background(), key)
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
@@ -106,7 +107,7 @@ func runLiveBackend(t *testing.T, addr string) {
 				t.Fatalf("burst %d denied", i+1)
 			}
 		}
-		allowed, wait, err := limiter.Allow(key)
+		allowed, wait, err := limiter.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,7 +130,7 @@ func runLiveBackend(t *testing.T, addr string) {
 		b.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 3; i++ {
-			allowed, _, allowErr := a.Allow(key)
+			allowed, _, allowErr := a.Allow(context.Background(), key)
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
@@ -137,7 +138,7 @@ func runLiveBackend(t *testing.T, addr string) {
 				t.Fatalf("a burst %d denied", i+1)
 			}
 		}
-		allowed, _, err := b.Allow(key)
+		allowed, _, err := b.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,11 +159,11 @@ func runLiveBackend(t *testing.T, addr string) {
 		red.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 4; i++ {
-			mAllowed, mWait, mErr := mem.Allow(key)
+			mAllowed, mWait, mErr := mem.Allow(context.Background(), key)
 			if mErr != nil {
 				t.Fatal(mErr)
 			}
-			rAllowed, rWait, rErr := red.Allow(key)
+			rAllowed, rWait, rErr := red.Allow(context.Background(), key)
 			if rErr != nil {
 				t.Fatal(rErr)
 			}
@@ -182,7 +183,7 @@ func runLiveBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 3; i++ {
-			allowed, _, allowErr := limiter.Allow(key)
+			allowed, _, allowErr := limiter.Allow(context.Background(), key)
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
@@ -190,14 +191,14 @@ func runLiveBackend(t *testing.T, addr string) {
 				t.Fatalf("burst %d denied", i+1)
 			}
 		}
-		allowed, wait, err := limiter.Allow(key)
+		allowed, wait, err := limiter.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if allowed || wait <= time.Microsecond {
 			t.Fatalf("want deny wait>maxDelay, got allowed %v wait %v", allowed, wait)
 		}
-		allowedAfterRefund, waitAfterRefund, err := limiter.Allow(key)
+		allowedAfterRefund, waitAfterRefund, err := limiter.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -216,7 +217,7 @@ func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 	client := simpleredis.New(simpleredis.Config{Host: addr})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		_, err := client.Eval("return 1", simpleredis.ScriptSHA1Hex("return 1"), nil, nil)
+		_, err := client.Eval(context.Background(), "return 1", simpleredis.ScriptSHA1Hex("return 1"), nil, nil)
 		if err == nil {
 			return client
 		}

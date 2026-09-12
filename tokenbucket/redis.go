@@ -1,6 +1,7 @@
 package tokenbucket
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -47,7 +48,10 @@ func (r *Redis) SetNowForTest(now func() time.Time) {
 }
 
 // Allow consumes one token for key via Eval and returns whether it is allowed plus how long to wait.
-func (r *Redis) Allow(key string) (bool, time.Duration, error) {
+func (r *Redis) Allow(ctx context.Context, key string) (bool, time.Duration, error) {
+	if err := ctx.Err(); err != nil {
+		return false, 0, err
+	}
 	nowMicro := r.now().UnixMicro()
 	args := []string{
 		strconv.FormatFloat(r.clock.limitPerMicro(), 'f', -1, 64),
@@ -57,7 +61,7 @@ func (r *Redis) Allow(key string) (bool, time.Duration, error) {
 		strconv.FormatInt(r.clock.maxDelay.Microseconds(), 10),
 	}
 	// Script owns HGETALL/HSET/EXPIRE. Go only maps wait to allowed.
-	values, err := r.redis.Eval(allowScript, allowScriptDigest, []string{key}, args)
+	values, err := r.redis.Eval(ctx, allowScript, allowScriptDigest, []string{key}, args)
 	if err != nil {
 		return false, 0, err
 	}

@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"net"
 	"sync"
@@ -39,10 +40,10 @@ func TestTimeoutOnReusedConnIsNotRetried(t *testing.T) {
 	}()
 
 	redis := New(Config{Host: listener.Addr().String()})
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("first Get: %v", err)
 	}
-	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisTimeout {
+	if _, err := redis.Get(context.Background(), "hit"); err == nil || err.Error() != RedisTimeout {
 		t.Fatalf("second Get = %v, want %s", err, RedisTimeout)
 	}
 	mu.Lock()
@@ -56,12 +57,12 @@ func TestTimeoutOnReusedConnIsNotRetried(t *testing.T) {
 func TestLostReplyIncrIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
 
 	fake.armCloseBeforeReplyOnceForTest()
-	gotIncr, err := redis.Incr("counter")
+	gotIncr, err := redis.Incr(context.Background(), "counter")
 	if err != nil {
 		t.Fatalf("Incr after close-before-reply: %v", err)
 	}
@@ -75,7 +76,7 @@ func TestLostReplyIncrIsRetried(t *testing.T) {
 		t.Fatalf("opened %d connections, want 2", fake.connections())
 	}
 
-	got, err := redis.Get("counter")
+	got, err := redis.Get(context.Background(), "counter")
 	if err != nil {
 		t.Fatalf("Get after lost-reply Incr: %v", err)
 	}
@@ -87,12 +88,12 @@ func TestLostReplyIncrIsRetried(t *testing.T) {
 func TestLostReplyIncrByIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
 
 	fake.armCloseBeforeReplyOnceForTest()
-	gotIncr, err := redis.IncrBy("counter", 5)
+	gotIncr, err := redis.IncrBy(context.Background(), "counter", 5)
 	if err != nil {
 		t.Fatalf("IncrBy after close-before-reply: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestLostReplyIncrByIsRetried(t *testing.T) {
 		t.Fatalf("opened %d connections, want 2", fake.connections())
 	}
 
-	got, err := redis.Get("counter")
+	got, err := redis.Get(context.Background(), "counter")
 	if err != nil {
 		t.Fatalf("Get after lost-reply IncrBy: %v", err)
 	}
@@ -118,12 +119,12 @@ func TestLostReplyIncrByIsRetried(t *testing.T) {
 func TestLostReplyEvalIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
 
 	fake.armCloseBeforeReplyOnceForTest()
-	values, err := redis.Eval(kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win"}, []string{"7", "1700000000"})
+	values, err := redis.Eval(context.Background(), kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win"}, []string{"7", "1700000000"})
 	if err != nil {
 		t.Fatalf("Eval after close-before-reply: %v", err)
 	}
@@ -138,7 +139,7 @@ func TestLostReplyEvalIsRetried(t *testing.T) {
 		t.Fatalf("opened %d connections, want 2", fake.connections())
 	}
 
-	got, err := redis.Get("win")
+	got, err := redis.Get(context.Background(), "win")
 	if err != nil {
 		t.Fatalf("Get after lost-reply Eval: %v", err)
 	}
@@ -150,12 +151,12 @@ func TestLostReplyEvalIsRetried(t *testing.T) {
 func TestLostReplyIncrMaxRetriesOff(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr, MaxRetries: -1})
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
 
 	fake.armCloseBeforeReplyOnceForTest()
-	_, err := redis.Incr("counter")
+	_, err := redis.Incr(context.Background(), "counter")
 	if err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("Incr = %v, want %s", err, RedisUnreachable)
 	}
@@ -166,7 +167,7 @@ func TestLostReplyIncrMaxRetriesOff(t *testing.T) {
 		t.Fatalf("opened %d connections, want 1", fake.connections())
 	}
 
-	got, err := redis.Get("counter")
+	got, err := redis.Get(context.Background(), "counter")
 	if err != nil {
 		t.Fatalf("Get after lost-reply Incr: %v", err)
 	}
@@ -178,12 +179,12 @@ func TestLostReplyIncrMaxRetriesOff(t *testing.T) {
 func TestLostReplyGetIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
 
 	fake.armCloseBeforeReplyOnceForTest()
-	got, err := redis.Get("hit")
+	got, err := redis.Get(context.Background(), "hit")
 	if err != nil {
 		t.Fatalf("Get after close-before-reply: %v", err)
 	}
@@ -200,7 +201,7 @@ func TestLoadingReplyIsRetried(t *testing.T) {
 	redis := New(Config{Host: addr})
 
 	fake.armErrorReplyOnceForTest("-LOADING Redis is loading the dataset in memory\r\n")
-	got, err := redis.Get("hit")
+	got, err := redis.Get(context.Background(), "hit")
 	if err != nil {
 		t.Fatalf("Get after LOADING: %v", err)
 	}
@@ -214,7 +215,7 @@ func TestTryAgainReplyIsRetried(t *testing.T) {
 	redis := New(Config{Host: addr})
 
 	fake.armErrorReplyOnceForTest("-TRYAGAIN Try again later\r\n")
-	got, err := redis.Incr("counter")
+	got, err := redis.Incr(context.Background(), "counter")
 	if err != nil {
 		t.Fatalf("Incr after TRYAGAIN: %v", err)
 	}
@@ -241,7 +242,7 @@ func TestRetryableRedisRepliesAreRetried(t *testing.T) {
 			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 			redis := New(Config{Host: addr})
 			fake.armErrorReplyOnceForTest(tc.reply)
-			got, err := redis.Get("hit")
+			got, err := redis.Get(context.Background(), "hit")
 			if err != nil {
 				t.Fatalf("Get after %s: %v", tc.name, err)
 			}

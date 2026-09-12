@@ -1,0 +1,8 @@
+{
+  "commentId": "pr-body",
+  "issueKey": "2026-09-12-simpleredis-risk-01-no-context-uncancellable-latency",
+  "markerValue": "2026-09-12-simpleredis-risk-01-no-context-uncancellable-latency",
+  "issueHost": "local",
+  "startedAt": "2026-09-12T12:32:02Z",
+  "ack": "Developer agent: started — 2026-09-12T12:32:02Z"
+}

@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"context"
 	"testing"
 )
 
@@ -8,7 +9,7 @@ func TestEvalArgvAndIntegerReply(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	values, err := redis.Eval(kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win"}, []string{"7", "1700000000"})
+	values, err := redis.Eval(context.Background(), kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win"}, []string{"7", "1700000000"})
 	if err != nil {
 		t.Fatalf("Eval: %v", err)
 	}
@@ -29,10 +30,10 @@ func TestEvalLaterSendsEvalShaNotBody(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	if _, err := redis.Eval(kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win"}, []string{"7", "1700000000"}); err != nil {
+	if _, err := redis.Eval(context.Background(), kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win"}, []string{"7", "1700000000"}); err != nil {
 		t.Fatalf("first Eval: %v", err)
 	}
-	values, err := redis.Eval(kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win2"}, []string{"7", "1700000000"})
+	values, err := redis.Eval(context.Background(), kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win2"}, []string{"7", "1700000000"})
 	if err != nil {
 		t.Fatalf("second Eval: %v", err)
 	}
@@ -59,20 +60,20 @@ func TestEvalTwoScriptsTwoDigests(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	if _, err := redis.Eval("return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
+	if _, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
 		t.Fatalf("script A first: %v", err)
 	}
-	if _, err := redis.Eval("return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
+	if _, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
 		t.Fatalf("script A second: %v", err)
 	}
 	argvA := fake.lastEvalCommand()
 	if len(argvA) < 2 || argvA[0] != evalShaVerb {
 		t.Fatalf("script A second argv = %v, want EVALSHA", argvA)
 	}
-	if _, err := redis.Eval("return 2", ScriptSHA1Hex("return 2"), nil, nil); err != nil {
+	if _, err := redis.Eval(context.Background(), "return 2", ScriptSHA1Hex("return 2"), nil, nil); err != nil {
 		t.Fatalf("script B first: %v", err)
 	}
-	if _, err := redis.Eval("return 2", ScriptSHA1Hex("return 2"), nil, nil); err != nil {
+	if _, err := redis.Eval(context.Background(), "return 2", ScriptSHA1Hex("return 2"), nil, nil); err != nil {
 		t.Fatalf("script B second: %v", err)
 	}
 	argvB := fake.lastEvalCommand()
@@ -88,14 +89,14 @@ func TestEvalEmptyKeysSendsNumkeysZero(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	if _, err := redis.Eval("return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
+	if _, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
 		t.Fatalf("first Eval: %v", err)
 	}
 	got := fake.lastEvalCommand()
 	if len(got) < 3 || got[0] != evalVerb || got[2] != "0" {
 		t.Fatalf("fallback EVAL argv = %v, want EVAL … 0", got)
 	}
-	if _, err := redis.Eval("return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
+	if _, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
 		t.Fatalf("second Eval: %v", err)
 	}
 	got = fake.lastEvalCommand()
@@ -107,7 +108,7 @@ func TestEvalEmptyKeysSendsNumkeysZero(t *testing.T) {
 func TestEvalEmptyKeys(t *testing.T) {
 	addr := startStaticRedis(t, ":1\r\n")
 	redis := New(Config{Host: addr})
-	values, err := redis.Eval("return 1", ScriptSHA1Hex("return 1"), nil, nil)
+	values, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil)
 	if err != nil {
 		t.Fatalf("Eval empty: %v", err)
 	}
@@ -137,7 +138,7 @@ func TestEvalUsesCallerDigest(t *testing.T) {
 		t.Fatal("caller digest collided with ScriptSHA1Hex(script)")
 	}
 	fake.loadScriptDigestForTest(digest, script)
-	if _, err := redis.Eval(script, digest, nil, nil); err != nil {
+	if _, err := redis.Eval(context.Background(), script, digest, nil, nil); err != nil {
 		t.Fatalf("Eval: %v", err)
 	}
 	got := fake.lastEvalCommand()
