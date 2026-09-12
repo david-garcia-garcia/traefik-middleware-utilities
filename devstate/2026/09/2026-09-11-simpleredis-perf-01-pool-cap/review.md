@@ -75,4 +75,15 @@ ci: in progress run 34681172795
 pr: 18
 verdict: in progress
 
+## codereview (2026-09-12T07:58:52Z)
+phase: codereview
+findings: 1 spec wrong
+fixed: unparam unused borrow bool; live/archive spec names poolSize/liveCap() not eight as the only bound
+skipped: Pester ESTABLISHED slack 10 (unfiltered :6379; CLIENT LIST blocked during Lua hold)
+head: 639ca94a6fe62613c15a948b6dbad80f3bdc576d
+ci: success run 34682004100 (Lint, Test, Integration Tests)
+pr: 18
+verdict: ready for review
+merge: origin/master already contained (332ee737); no new conflicts
+
 
