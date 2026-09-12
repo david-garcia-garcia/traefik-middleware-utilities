@@ -15,3 +15,9 @@ phase: propose
 findings: none
 fixed: none (artifacts only)
 skipped: new spec leaf (folded std_go_simpleredis_tcp-session)
+
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: release idle-only trim; TestIdleCapAfterSequentialRelease; TestConcurrentGetsQuiesceAtMaxIdleConns
+skipped: clamp MaxIdleConns; idle reaper
