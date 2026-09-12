@@ -3,3 +3,9 @@ phase: prepare
 findings: dest already defines writeGopathFile and tracks interpretedcost_test.go; ticket measured the caller dirty tree
 fixed: none
 skipped: shared internal helper package; apm_modules gitignore; other simpleredisfixes2 files
+
+## explore (2026-09-12)
+phase: explore
+findings: dest compile exit 0; five TestYaegi_* PASS; helper already on dest
+fixed: none
+skipped: shared helper extract; apm_modules gitignore; copying caller untracked files
