@@ -15,3 +15,9 @@ phase: propose
 findings: fold std_go_simpleredis_resp-commands; dest already has helper
 fixed: OpenSpec change simpleredis-test-binary-compile
 skipped: shared helper extract; copying caller files
+
+## implement (2026-09-12)
+phase: implement
+findings: dest compile and Yaegi already green; no helper added
+fixed: none (dest already had writeGopathFile)
+skipped: copying caller files; shared helper extract
