@@ -1,5 +1,5 @@
 {
-  "commentId": "local",
+  "commentId": "pr-body",
   "issueKey": "2026-09-12-simpleredis-api-01-sentinels-not-exported",
   "markerValue": "2026-09-12-simpleredis-api-01-sentinels-not-exported",
   "issueHost": "local"
