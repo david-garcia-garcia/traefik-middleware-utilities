@@ -171,8 +171,7 @@ import (
 )
 
 func PourToCapThenDeny(host, key string) string {
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	limiter, err := leakybucket.NewRedis(client, 1, 3, 0, 2*time.Second)
 	if err != nil {
 		return "new:" + err.Error()
@@ -199,8 +198,7 @@ func PourToCapThenDeny(host, key string) string {
 }
 
 func IdleThenTake(host, key string) string {
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	limiter, err := leakybucket.NewRedis(client, 1, 3, 0, 2*time.Second)
 	if err != nil {
 		return "new:" + err.Error()
@@ -236,10 +234,8 @@ func IdleThenTake(host, key string) string {
 }
 
 func BufferedShare(host, key string) string {
-	aClient := &simpleredis.SimpleRedis{}
-	aClient.Init(host, "", "")
-	bClient := &simpleredis.SimpleRedis{}
-	bClient.Init(host, "", "")
+	aClient := simpleredis.New(simpleredis.Config{Host: host})
+	bClient := simpleredis.New(simpleredis.Config{Host: host})
 	a, err := leakybucket.NewRedis(aClient, 1, 3, time.Hour, 2*time.Second)
 	if err != nil {
 		return "new-a:" + err.Error()
@@ -279,8 +275,7 @@ func BufferedShare(host, key string) string {
 }
 
 func MemoryAgrees(host, key string) string {
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	mem, err := leakybucket.NewMemory(2, 2, 2*time.Second)
 	if err != nil {
 		return "mem:" + err.Error()

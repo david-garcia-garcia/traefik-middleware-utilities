@@ -47,7 +47,7 @@ func startTestFakeRedis(t *testing.T) (*testFakeRedis, string) {
 	return fake, listener.Addr().String()
 }
 
-// serve answers AUTH/SELECT/EVAL on one accepted socket.
+// serve answers AUTH/SELECT/EVALSHA/EVAL on one accepted socket.
 func (f *testFakeRedis) serve(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
@@ -60,6 +60,9 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 		switch args[0] {
 		case "AUTH", "SELECT":
 			_, _ = io.WriteString(conn, "+OK\r\n")
+		case "EVALSHA":
+			// No script cache: NOSCRIPT so SimpleRedis Eval falls back to EVAL.
+			_, _ = io.WriteString(conn, "-NOSCRIPT No matching script. Please use EVAL.\r\n")
 		case "EVAL":
 			f.lastEval = append([]string(nil), args...)
 			if f.evalReply != "" {

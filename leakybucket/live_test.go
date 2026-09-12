@@ -150,8 +150,7 @@ func runLiveBackend(t *testing.T, addr string) {
 // waitLiveClient retries Eval until the engine accepts connections or the wait expires.
 func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 	t.Helper()
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: addr})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		_, err := client.Eval("return 1", nil, nil)

@@ -28,7 +28,7 @@ _Avoid_: GET-then-SET of `{water, last}`; replica HSET of the hash
 
 ## Overview
 
-Import `github.com/david-garcia-garcia/traefik-middleware-utilities/leakybucket`. For Redis, inject an already-`Init`ed `*simpleredis.SimpleRedis`. Prefix keys in the caller. Pass Redis `Sleep`/`Wake`/`Close` as `reclaim.Hooks` when the meter is stored in a reclaim table. Do not close the Redis client from the limiter.
+Import `github.com/david-garcia-garcia/traefik-middleware-utilities/leakybucket`. For Redis, inject a SimpleRedis from `simpleredis.New`. Prefix keys in the caller. Pass Redis `Sleep`/`Wake`/`Close` as `reclaim.Hooks` when the meter is stored in a reclaim table. Do not close the Redis client from the limiter.
 
 ## How to use
 

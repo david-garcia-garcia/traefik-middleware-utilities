@@ -34,7 +34,7 @@ type keyState struct {
 	expireAt   time.Time
 }
 
-// NewRedis builds a Redis meter on an already-Init SimpleRedis. leak is water per second. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (EVAL every Add).
+// NewRedis builds a Redis meter on a SimpleRedis from simpleredis.New. leak is water per second. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (EVAL every Add).
 func NewRedis(redis *simpleredis.SimpleRedis, leak, capacity float64, syncRate, ttl time.Duration) (*Redis, error) {
 	if redis == nil {
 		return nil, errRedis

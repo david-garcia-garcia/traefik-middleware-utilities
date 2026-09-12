@@ -10,6 +10,12 @@ import (
 
 const testTTL = 2 * time.Second
 
+// newSimpleRedisForTest returns a New client for tests.
+func newSimpleRedisForTest(t testing.TB, host string) *simpleredis.SimpleRedis {
+	t.Helper()
+	return simpleredis.New(simpleredis.Config{Host: host})
+}
+
 func TestNewMemory_RejectsInvalidClock(t *testing.T) {
 	if _, err := NewMemory(0, 1, testTTL); !errors.Is(err, errLeak) {
 		t.Fatalf("leak 0: %v", err)
@@ -189,8 +195,7 @@ func TestNewRedis_RejectsNil(t *testing.T) {
 
 func TestRedis_AddRejectsNLessThanOne(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := NewRedis(client, 1, 3, 0, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -215,8 +220,7 @@ func TestNewRedis_RejectsNegativeSyncRate(t *testing.T) {
 
 func TestNewRedis_FloorsSyncRateBelow20ms(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := NewRedis(client, 1, 1, time.Millisecond, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -230,8 +234,7 @@ func TestNewRedis_FloorsSyncRateBelow20ms(t *testing.T) {
 func TestRedis_EvalBadReply(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
 	fake.setEvalReply("*1\r\n$1\r\n1\r\n")
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := NewRedis(client, 1, 1, 0, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -259,8 +262,7 @@ func TestRedis_EvalBadReply(t *testing.T) {
 
 func TestRedis_EvalEncoding(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := NewRedis(client, 1, 3, 0, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -278,10 +280,8 @@ func TestRedis_EvalEncoding(t *testing.T) {
 
 func TestRedis_TwoInstancesBothPoursCount(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	aClient := &simpleredis.SimpleRedis{}
-	aClient.Init(addr, "", "")
-	bClient := &simpleredis.SimpleRedis{}
-	bClient.Init(addr, "", "")
+	aClient := newSimpleRedisForTest(t, addr)
+	bClient := newSimpleRedisForTest(t, addr)
 	a, err := NewRedis(aClient, 1, 3, time.Hour, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -318,10 +318,8 @@ func TestRedis_TwoInstancesBothPoursCount(t *testing.T) {
 
 func TestRedis_OverAllowBoundedBySyncInterval(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	aClient := &simpleredis.SimpleRedis{}
-	aClient.Init(addr, "", "")
-	bClient := &simpleredis.SimpleRedis{}
-	bClient.Init(addr, "", "")
+	aClient := newSimpleRedisForTest(t, addr)
+	bClient := newSimpleRedisForTest(t, addr)
 	a, err := NewRedis(aClient, 1, 2, time.Hour, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -371,8 +369,7 @@ func TestRedis_OverAllowBoundedBySyncInterval(t *testing.T) {
 
 func TestMemoryAndRedis_Agree(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	mem, err := NewMemory(2, 2, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -414,8 +411,7 @@ func TestMemoryAndRedis_Agree(t *testing.T) {
 }
 
 func TestRedis_Unreachable(t *testing.T) {
-	client := &simpleredis.SimpleRedis{}
-	client.Init("127.0.0.1:1", "", "")
+	client := newSimpleRedisForTest(t, "127.0.0.1:1")
 	limiter, err := NewRedis(client, 1, 1, 0, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -428,8 +424,7 @@ func TestRedis_Unreachable(t *testing.T) {
 
 func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := NewRedis(client, 1, 1, minSyncRate, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -457,8 +452,7 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 
 func TestBuffered_TickerFlushesWithoutSleep(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := NewRedis(client, 1, 10, time.Millisecond, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -487,8 +481,7 @@ func TestBuffered_TickerFlushesWithoutSleep(t *testing.T) {
 
 func TestNewRedis_ExactModeHasNoTicker(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := NewRedis(client, 1, 1, 0, testTTL)
 	if err != nil {
 		t.Fatal(err)

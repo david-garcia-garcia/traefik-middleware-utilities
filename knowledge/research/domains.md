@@ -7,4 +7,5 @@
 - redis
 - dragonfly
 - kong
+- go-redis
 - leaky-bucket
