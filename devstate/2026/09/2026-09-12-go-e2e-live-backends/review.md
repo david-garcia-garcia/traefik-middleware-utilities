@@ -23,3 +23,12 @@ fixed: none
 skipped: none
 change: add-go-e2e-live-backends
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
+
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: CI job split, domain `_e2e_test.go`, AUTH/SELECT fold into `pool_e2e_test.go`
+skipped: none
+localTests: passed
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
+ci: 34692351607 in progress
