@@ -18,7 +18,7 @@ func TestYaegi_NewGetSetDel(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.RoundTrip(%q)`, addr))
 	if got != "ok" {
@@ -31,7 +31,7 @@ func TestYaegi_IncrAndEval(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.IncrAndEval(%q)`, addr))
 	if got != "ok" {
@@ -44,7 +44,7 @@ func TestYaegi_EvalNoScriptFallback(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.EvalNoScript(%q)`, addr))
 	if got != "ok" {
@@ -57,7 +57,7 @@ func TestYaegi_ExecPipeline(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.PipelineIncrGet(%q)`, addr))
 	if got != "ok" {
@@ -118,14 +118,14 @@ func writeGopathSimpleredis(t testing.TB, goPath string) {
 	}
 }
 
-// writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
-func writeGopathFile(t testing.TB, goPath, pkg, name, src string) {
+// writeGopathClientprobe writes the interpreted clientprobe package under GOPATH/src/clientprobe.
+func writeGopathClientprobe(t testing.TB, goPath string) {
 	t.Helper()
-	dir := filepath.Join(goPath, "src", pkg)
+	dir := filepath.Join(goPath, "src", "clientprobe")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "roundtrip.go"), []byte(clientprobeSrc), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
