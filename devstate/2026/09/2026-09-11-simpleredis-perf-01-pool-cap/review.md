@@ -65,3 +65,14 @@ ci: success run 34654132297 (Lint, Test, Integration Tests)
 pr: 18
 verdict: ready for review
 
+## codereview (2026-09-12T07:38:06Z)
+phase: codereview
+findings: 1 standards hard, 1 nitpicks hard, 1 spec missing, 1 spec wrong
+fixed: timeWaitHoldScript comment; Pester `$established`; live spec compiled waiter vs Pester default poolSize
+skipped: Pester ESTABLISHED slack 10 (unfiltered :6379; CLIENT LIST blocked during Lua hold)
+head: 8d884ef6e48a245ca2730f6074e189cdb7fcd1d2
+ci: in progress run 34681172795
+pr: 18
+verdict: in progress
+
+
