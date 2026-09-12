@@ -14,3 +14,10 @@ findings: none
 fixed: none
 skipped: none
 assumptions: MaxInt64 header digits; no identity owner
+
+## propose (2026-09-12)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: simpleredis-reply-alloc-caps

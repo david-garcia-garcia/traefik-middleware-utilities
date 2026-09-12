@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-12T12:41:57Z
+Developer review: in progress — 2026-09-12T12:45:46Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** Notes a deferred cumulative array-reply budget at `knowledge/debt/2026-09-12-simpleredis-cumulative-array-reply-budget.md`. No `$`/`*` decode ceiling has landed yet.
+**Developers.** Adds OpenSpec change `simpleredis-reply-alloc-caps` folding `std_go_simpleredis_resp-decode` and `std_go_simpleredis_resp-commands`. Notes a deferred cumulative array-reply budget. No runtime `$`/`*` ceiling has landed yet.
 
 **End users.** None.
 
@@ -27,17 +27,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore recorded (`qualified-with-gaps`). Caps and tests are not applied. 2 items remain.
+Propose recorded. Caps and tests are not applied. 2 items remain.
 
 Priority: P1 — a remote peer can size a heap allocation large enough to kill the Traefik process today
-Reviewed head: 77b8a42
+Reviewed head: 68e7735
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 3/6 | CI still in progress on the stub PR |
-| CI proof | 3/6 | Lint, Test, Go E2E, Integration Tests queued — [run 34694330457](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34694330457) |
+| CI proof | 3/6 | Lint, Test, Go E2E, Integration Tests queued — [run 34694552421](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34694552421) |
 | Local tests proof | N/A | Before implement; remote CI is the proof axis |
 | Review resolution | 6/6 | OPEN PR 34; no reviewer comments |
 
@@ -45,14 +45,15 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-12-simpleredis-bug-02-unbounded-reply-allocation pushed | `git` / GitHub |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | simpleredis-reply-alloc-caps | `openspec/changes/simpleredis-reply-alloc-caps/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/34 | pr-host |
-| CI | build 34694330457 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34694330457 | GitHub check runs |
+| CI | build 34694552421 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34694552421 | GitHub check runs |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no `comments.md` |
 
 ## Specs
-None.
+- [std_go_simpleredis_resp-decode](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/openspec/changes/simpleredis-reply-alloc-caps/proposal.md) — modified
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/openspec/changes/simpleredis-reply-alloc-caps/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -61,7 +62,7 @@ None.
 - [ ] [Cumulative array-reply decode budget](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/knowledge/debt/2026-09-12-simpleredis-cumulative-array-reply-budget.md) — per-element and count caps still allow a huge total array reply.
 
 ## How this fits together
-Local ticket on branch `2026-09-12-simpleredis-bug-02-unbounded-reply-allocation` opened PR 34 against `master`. Explore kept the ticket caps; apply has not started.
+Local ticket on branch `2026-09-12-simpleredis-bug-02-unbounded-reply-allocation` opened PR 34 against `master`. Propose folded decode and commands specs; apply has not started.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -74,6 +75,7 @@ Local ticket on branch `2026-09-12-simpleredis-bug-02-unbounded-reply-allocation
 - [ ] Prove over-cap, panic-length, and `$268435456` allocation with `readReply` tests
 - [x] Stub PR 34 opened
 - [x] Explore recorded package consts and test spelling
+- [x] OpenSpec change `simpleredis-reply-alloc-caps` proposed
 
 ## Findings
 None.
@@ -86,9 +88,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | No spec.md vs `master` yet |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 77b8a426a9a767aac2e52245cda5f5609b11ce26 | Card must match the branch you measured |
+| Reviewed head | 68e7735e9508145103ac03444e4e1c28e6224f25 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -102,12 +104,9 @@ Is this the best way to solve the issue? Yes — ticket-named consts, not Config
 
 ### Evidence
 What I checked:
-- `simpleredis/resp.go` `readBulk` `make([]byte, length+2)`, `readReply` `*` `make([][]byte, count)`, `parseLen` overflow, `ioError` (worktree at 77b8a42)
-- `simpleredis/commands_exec.go` `shouldRetry` / `retryLimits` (3 extra retries)
-- `simpleredis/resp_test.go` garbage length and truncated `$10`; no `$268435456` alloc guard
-- `simpleredis/bench_test.go` `TestAllocDecodeBulk100KB` is 100 KB, under 64 MiB
-- `openspec/specs/std_go_simpleredis_resp-decode/spec.md` requires `make([]byte, length+2)` + `ReadFull`
-- PR 34; checks queued (run 34694330457)
+- OpenSpec change `simpleredis-reply-alloc-caps` validates strict
+- FindSpecHost fold `std_go_simpleredis_resp-decode` and `std_go_simpleredis_resp-commands`
+- PR 34; checks queued (run 34694552421)
 
 ### Rank-up moves
 None.
