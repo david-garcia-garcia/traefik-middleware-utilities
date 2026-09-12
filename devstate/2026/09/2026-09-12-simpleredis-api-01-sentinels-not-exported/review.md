@@ -28,3 +28,9 @@ findings: none
 fixed: export sentinels, IsMiss, wrapping tests, Yaegi clientprobe
 skipped: none
 localTests: passed
+
+## codereview (2026-09-12)
+phase: codereview
+findings: Standards 1 hard (stale Yaegi comment)
+fixed: Yaegi MatchSentinels comment SHA 7e2b88e
+skipped: none
