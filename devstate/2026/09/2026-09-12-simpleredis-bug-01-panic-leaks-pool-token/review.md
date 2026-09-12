@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: none
 fixed: none
 skipped: none; std_go_simpleredis.md panic gotcha already landed in implement
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: folded panic-unwind into std_go_simpleredis_tcp-session; moved change to archive
+skipped: none
