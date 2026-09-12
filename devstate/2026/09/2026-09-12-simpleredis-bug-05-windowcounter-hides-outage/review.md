@@ -29,3 +29,9 @@ phase: codereview
 findings: nitpicks 1 done; coverage 2 done; dead 1 skipped (flushFailedAt)
 fixed: early-return membership; Sleep and Peek probe tests
 skipped: flushFailedAt unused (Desired names the store; LastFlushError out of scope)
+
+## devdocsimpact (2026-09-12)
+phase: devdocsimpact
+findings: stale-usage Window counter — packet already names buffered flush-error
+fixed: impact report; no further produce
+skipped: none
