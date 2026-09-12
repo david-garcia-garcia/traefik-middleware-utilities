@@ -7,7 +7,7 @@ The CI job that runs golangci-lint. It does not execute tests and does not start
 _Avoid_: calling lint “test”; treating a green lint job as proof of Redis behaviour
 
 **Unit Go**:
-Compiled `go test` against in-process fakes (fake TCP Redis, in-memory limiters). Needs no backend services. CI job `test` passes `-short` so live files skip and `TestAlloc*` run. Ubuntu CI has gcc; local Windows without gcc cannot run `-race`.
+Compiled `go test` against in-process fakes (fake TCP Redis, in-memory limiters). Needs no backend services. CI job `test` (`Unit`) passes `-short` so live files skip and `TestAlloc*` run. Ubuntu CI has gcc; local Windows without gcc cannot run `-race`.
 _Avoid_: starting Redis in the unit job; proving engine compatibility here
 
 **Unit race**:
@@ -29,7 +29,7 @@ Four suites, five jobs (`test` and `race` are both unit). Put a new proof in the
 ## How to use
 
 - Lint: `.github/workflows/ci.yml` job `lint` (`.golangci.yml`).
-- Unit: `go test -short ./...`. CI job `test`: `go test -short -timeout 2m -count=1 -v ./...`. Files `{domain}_test.go` (and `{domain}_yaegi_test.go` against a compiled fake).
+- Unit: `go test -short ./...`. CI job `test` (`Unit`): `go test -short -timeout 2m -count=1 -v ./...`. Files `{domain}_test.go` (and `{domain}_yaegi_test.go` against a compiled fake).
 - Unit race: CI job `race`: `go test -race -short -timeout 10m -count=1 -v ./...`. Same files as unit. `TestAlloc*` skip.
 - Go E2E: `go test ./...` with both `*_LIVE_REDIS` and `*_LIVE_DRAGONFLY` set. Files `{domain}_e2e_test.go` and `{domain}_yaegi_e2e_test.go` sit next to that domain’s `.go` and `{domain}_test.go`. Shared skip/wait helpers that are not one domain live in `{package}_e2e_test.go` (same job as `fake_redis_test.go` for the fake peer). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` with the same both-or-neither rule.
 - Pester: `./Test-Integration.ps1`. Docker required.
@@ -48,7 +48,7 @@ limiter_yaegi_e2e_test.go # interpreted, live
 
 ## Key files
 
-- `.github/workflows/ci.yml` — jobs `lint`, `test` (`-short`, no `-race`, no services), `race` (`Unit race`, `-race -short`), `e2e` (`Go E2E`, no `-race`), `integration` (Pester)
+- `.github/workflows/ci.yml` — jobs `lint`, `test` (`Unit`, `-short`, no `-race`, no services), `race` (`Unit race`, `-race -short`), `e2e` (`Go E2E`, no `-race`), `integration` (Pester)
 - `simpleredis/commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, `simpleredis_e2e_test.go`, `yaegi_e2e_test.go`
 - `windowcounter/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
 - `tokenbucket/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`

@@ -58,7 +58,7 @@ Module path: `github.com/david-garcia-garcia/traefik-middleware-utilities`.
 Four suites (see `knowledge/devdocs/std_go_test-suites.md`):
 
 ```text
-go test -short ./...          # unit Go — fake TCP, no Redis (CI job test; TestAlloc* run)
+go test -short ./...          # unit Go — fake TCP, no Redis (CI job Unit; TestAlloc* run)
 go test -race -short ./...   # same suite under the detector (CI job race; needs gcc)
 go test ./...                # also Go E2E when *_LIVE_REDIS and *_LIVE_DRAGONFLY are set
 ./Test-Integration.ps1      # Pester — Traefik local plugins

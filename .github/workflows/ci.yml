@@ -25,7 +25,7 @@ jobs:
         version: latest
 
   test:
-    name: Test
+    name: Unit
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Repository
