@@ -21,3 +21,10 @@ findings: none
 fixed: none
 skipped: none
 change: simpleredis-reply-alloc-caps
+
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: caps and tests
+skipped: none
+localTests: passed
