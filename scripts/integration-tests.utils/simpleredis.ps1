@@ -1,9 +1,5 @@
 # SimpleRedis HTTP probe helpers for Pester. Dot-sourced via Import.ps1.
-
-$script:SimpleRedisEngines = @(
-    @{ Engine = "redis"; BackendHost = "redis" }
-    @{ Engine = "dragonfly"; BackendHost = "dragonfly" }
-)
+# Engine comes from INTEGRATION_ENGINE (set by Test-Integration.ps1 -Engine).
 
 $script:KongIncrbyExpireatScript = @'
 local exists = redis.call("exists", KEYS[1])

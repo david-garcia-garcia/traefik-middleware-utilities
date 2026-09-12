@@ -15,3 +15,11 @@
   Why: headers existed only because success forwarded to whoami, so the body was whoami HTML; failures already used 502 + body. Mapping SimpleRedis to HTTP lets the tests stay in Pester.
   By: implement
   Requester: confirmed
+
+- [x] taken  CI engine jobs instead of duplicate Redis and Dragonfly Pester Its
+  Asked: one It per engine (or `-TestCases` redis/dragonfly in the same job).
+  Instead: one SimpleRedis file; `INTEGRATION_ENGINE` selects the backend; CI is `Integration Tests` (reclaim), `Integration Tests Redis`, and `Integration Tests Dragonfly`.
+  Owner: `.github/workflows/ci.yml`
+  Why: Redis and Dragonfly are the same Traefik proof; Go E2E already splits engines into jobs so a fail names the backend.
+  By: implement
+  Requester: confirmed

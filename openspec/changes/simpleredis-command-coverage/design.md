@@ -28,7 +28,7 @@ See proposal.md. Dest `ServeHTTP` runs every public verb on one request and copi
 
 6. **Yaegi LiveVerbs.** Add MGet, IncrBy, Expire, ExpireAt, MSetEXAt on the existing interpreted helper. Fake-TCP Yaegi stays; Traefik is Pester.
 
-7. **Pester files by domain.** `scripts/integration-tests.reclaim.Tests.ps1` and `scripts/integration-tests.simpleredis.Tests.ps1`. Helpers in `scripts/integration-tests.utils/` (not `*Tests.ps1`). Redis and Dragonfly stay engines of SimpleRedis (`-TestCases`), not separate files. `Test-Integration.ps1` runs every `scripts/*.Tests.ps1`.
+7. **Pester files by domain; engines are CI jobs.** `scripts/integration-tests.reclaim.Tests.ps1` and `scripts/integration-tests.simpleredis.Tests.ps1`. Helpers in `scripts/integration-tests.utils/` (not `*Tests.ps1`). Redis and Dragonfly are CI jobs that set `-Engine` on the same SimpleRedis file (`INTEGRATION_ENGINE`); no `-TestCases`. Reclaim is `Integration Tests`. Local `./Test-Integration.ps1` runs reclaim then both engines.
 
 ## Risks / Trade-offs
 
