@@ -170,6 +170,7 @@ const clientprobeSrc = `package clientprobe
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
@@ -246,7 +247,7 @@ func MSetEXNative(host string) string {
 	return "ok"
 }
 
-// LiveVerbs runs New plus Get, Set, Del, Incr, Eval, and MSetEX against a live engine.
+// LiveVerbs runs New plus Get, MGet, Set, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against a live engine.
 func LiveVerbs(host, key string) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
 	if err := client.Set(key, []byte("ok"), 60); err != nil {
@@ -259,6 +260,13 @@ func LiveVerbs(host, key string) string {
 	if string(got) != "ok" {
 		return "get:" + string(got)
 	}
+	slots, err := client.MGet([]string{key, key + "-missing"})
+	if err != nil {
+		return "mget:" + err.Error()
+	}
+	if len(slots) != 2 || string(slots[0]) != "ok" || slots[1] != nil {
+		return fmt.Sprintf("mget:%q", slots)
+	}
 	if err := client.Del(key); err != nil {
 		return "del:" + err.Error()
 	}
@@ -268,6 +276,27 @@ func LiveVerbs(host, key string) string {
 	}
 	if n != 1 {
 		return fmt.Sprintf("incr:%d", n)
+	}
+	by, err := client.IncrBy(key+"-by", 5)
+	if err != nil {
+		return "incrby:" + err.Error()
+	}
+	if by != 5 {
+		return fmt.Sprintf("incrby:%d", by)
+	}
+	expireKey := key + "-ex"
+	if err := client.Set(expireKey, []byte("1"), 60); err != nil {
+		return "expire-set:" + err.Error()
+	}
+	if err := client.Expire(expireKey, 90); err != nil {
+		return "expire:" + err.Error()
+	}
+	expireAtKey := key + "-exat"
+	if err := client.Set(expireAtKey, []byte("1"), 60); err != nil {
+		return "expireat-set:" + err.Error()
+	}
+	if err := client.ExpireAt(expireAtKey, time.Now().Unix()+90); err != nil {
+		return "expireat:" + err.Error()
 	}
 	values, err := client.Eval("return 1", nil, nil)
 	if err != nil {
@@ -286,6 +315,17 @@ func LiveVerbs(host, key string) string {
 	}
 	if string(got) != "ok" {
 		return "msetex-get:" + string(got)
+	}
+	msetexAtKey := key + "-ma"
+	if err := client.MSetEXAt([]string{msetexAtKey}, [][]byte{[]byte("ok")}, time.Now().Unix()+90); err != nil {
+		return "msetexat:" + err.Error()
+	}
+	got, err = client.Get(msetexAtKey)
+	if err != nil {
+		return "msetexat-get:" + err.Error()
+	}
+	if string(got) != "ok" {
+		return "msetexat-get:" + string(got)
 	}
 	return "ok"
 }

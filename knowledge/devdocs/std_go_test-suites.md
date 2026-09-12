@@ -66,6 +66,6 @@ limiter_yaegi_e2e_test.go # interpreted, live
 
 - Unit CI does not start Redis. A test that needs a live engine belongs in `*_e2e_test.go`, not `{domain}_test.go`.
 - Unit CI on Ubuntu runs `test` without `-race` (`TestAlloc*` run) and `race` with `-race` (`TestAlloc*` skip). A green race job does not prove `inUseTurns` length or idle-cap accounting.
-- Pester `/redis` and `/dragonfly` headers are Traefik proof. Compiled `*_e2e_test.go` is the client/limiter proof.
+- Pester `/redis/<case>` and `/dragonfly/<case>` are Traefik proof (one `It` per verb). Exact `/redis` and `/dragonfly` are health Set+Get. Compiled `*_e2e_test.go` is the client/limiter proof.
 - Auth/SELECT handshake failure is Go E2E: SELECT 99 on dest engines (`pool_e2e_test.go`); WRONGPASS on `SIMPLEREDIS_LIVE_*_AUTH`. Malformed RESP and LOADING retry stay on fake TCP.
 - Reclaim has no Redis client; it has no Go E2E files.

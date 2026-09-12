@@ -55,26 +55,24 @@ BeforeAll {
         Invoke-RedisCli -BackendHost $BackendHost -CliArgs @("SCRIPT", "EXISTS", $Digest)
     }
 
-    function Assert-SimpleRedisVerbHeaders {
-        param($Response)
-        $value = Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Value"
-        $value | Should -Match '^srp:\d+$'
-        (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-MGet") | Should -Be $value
-        $Response.Headers["X-SimpleRedis-Del"] | Should -Be "ok"
-        $Response.Headers["X-SimpleRedis-Incr"] | Should -Be "1"
-        $Response.Headers["X-SimpleRedis-IncrBy"] | Should -Be "5"
-        $Response.Headers["X-SimpleRedis-Expire"] | Should -Be "ok"
-        $Response.Headers["X-SimpleRedis-ExpireAt"] | Should -Be "ok"
-        $Response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
-        $Response.Headers["X-SimpleRedis-EvalAgain"] | Should -Be "3"
-        $Response.Headers["X-SimpleRedis-EvalDigest"] | Should -Be $script:KongEvalDigest
-        $Response.Headers["X-SimpleRedis-GetMiss"] | Should -Be "redis:miss"
-        $Response.Headers["X-SimpleRedis-MSetEX"] | Should -Be "ok"
-        [int](@($Response.Headers["X-SimpleRedis-MSetEX-TTL"])[0]) | Should -BeGreaterThan 0
-        $Response.Headers["X-SimpleRedis-DropIncr"] | Should -Be "2"
-        $Response.Headers["X-SimpleRedis-DropIncrStored"] | Should -Be "2"
-        $Response.Headers["X-SimpleRedis-DropEval"] | Should -Be "6"
-        $Response.Headers["X-SimpleRedis-DropEvalStored"] | Should -Be "6"
+    function Invoke-SimpleRedisCase {
+        param(
+            [string]$Engine,
+            [string]$Case
+        )
+        Invoke-WebRequest -Uri "$script:BaseUrl/$Engine/$Case" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
+    }
+
+    function Assert-SimpleRedisHeaderCase {
+        param(
+            [string]$Engine,
+            [string]$Case,
+            [string]$Header,
+            [string]$Expected
+        )
+        $response = Invoke-SimpleRedisCase -Engine $Engine -Case $Case
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        (Get-SimpleRedisHeader -Response $response -Name $Header) | Should -Be $Expected
     }
 
     function Assert-EvalShaMissThenHit {
@@ -86,7 +84,8 @@ BeforeAll {
         (Get-ScriptExists -BackendHost $BackendHost -Digest $script:KongEvalDigest) | Should -Be "0"
         $response = Invoke-WebRequest -Uri "$script:BaseUrl$Route" -UseBasicParsing -TimeoutSec 10
         $response.StatusCode | Should -Be 200
-        Assert-SimpleRedisVerbHeaders -Response $response
+        $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        $response.Headers["X-SimpleRedis-EvalDigest"] | Should -Be $script:KongEvalDigest
         (Get-ScriptExists -BackendHost $BackendHost -Digest $script:KongEvalDigest) | Should -Be "1"
         $again = Invoke-WebRequest -Uri "$script:BaseUrl$Route" -UseBasicParsing -TimeoutSec 10
         $again.StatusCode | Should -Be 200
@@ -99,10 +98,10 @@ BeforeAll {
         $second = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15 -SkipHttpErrorCheck
         $first.StatusCode | Should -Be 200 -Because $first.Content
         $second.StatusCode | Should -Be 200 -Because $second.Content
-        Assert-SimpleRedisVerbHeaders -Response $first
-        Assert-SimpleRedisVerbHeaders -Response $second
         $a = Get-SimpleRedisHeader -Response $first -Name "X-SimpleRedis-Value"
         $b = Get-SimpleRedisHeader -Response $second -Name "X-SimpleRedis-Value"
+        $a | Should -Match '^srp:\d+$'
+        $b | Should -Match '^srp:\d+$'
         $a | Should -Not -Be $b
     }
 
@@ -298,12 +297,138 @@ Describe "simpleredis Yaegi e2e" {
         $response.StatusCode | Should -Be 200
     }
 
-    It "GET /redis proves EVALSHA miss then hit without stopping whoami-a or whoami-b" {
-        Assert-EvalShaMissThenHit -Route "/redis" -BackendHost "redis"
+    It "GET /redis/get returns unique Set token" {
+        $response = Invoke-SimpleRedisCase -Engine redis -Case get
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        (Get-SimpleRedisHeader -Response $response -Name "X-SimpleRedis-Value") | Should -Match '^srp:\d+$'
     }
 
-    It "GET /dragonfly proves EVALSHA miss then hit without stopping whoami-a or whoami-b" {
-        Assert-EvalShaMissThenHit -Route "/dragonfly" -BackendHost "dragonfly"
+    It "GET /dragonfly/get returns unique Set token" {
+        $response = Invoke-SimpleRedisCase -Engine dragonfly -Case get
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        (Get-SimpleRedisHeader -Response $response -Name "X-SimpleRedis-Value") | Should -Match '^srp:\d+$'
+    }
+
+    It "GET /redis/mget returns the Set token in slot 0" {
+        $response = Invoke-SimpleRedisCase -Engine redis -Case mget
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        (Get-SimpleRedisHeader -Response $response -Name "X-SimpleRedis-MGet") | Should -Match '^srp:\d+$'
+    }
+
+    It "GET /dragonfly/mget returns the Set token in slot 0" {
+        $response = Invoke-SimpleRedisCase -Engine dragonfly -Case mget
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        (Get-SimpleRedisHeader -Response $response -Name "X-SimpleRedis-MGet") | Should -Match '^srp:\d+$'
+    }
+
+    It "GET /redis/del succeeds" {
+        Assert-SimpleRedisHeaderCase -Engine redis -Case del -Header "X-SimpleRedis-Del" -Expected "ok"
+    }
+
+    It "GET /dragonfly/del succeeds" {
+        Assert-SimpleRedisHeaderCase -Engine dragonfly -Case del -Header "X-SimpleRedis-Del" -Expected "ok"
+    }
+
+    It "GET /redis/incr returns 1" {
+        Assert-SimpleRedisHeaderCase -Engine redis -Case incr -Header "X-SimpleRedis-Incr" -Expected "1"
+    }
+
+    It "GET /dragonfly/incr returns 1" {
+        Assert-SimpleRedisHeaderCase -Engine dragonfly -Case incr -Header "X-SimpleRedis-Incr" -Expected "1"
+    }
+
+    It "GET /redis/incrby returns 5" {
+        Assert-SimpleRedisHeaderCase -Engine redis -Case incrby -Header "X-SimpleRedis-IncrBy" -Expected "5"
+    }
+
+    It "GET /dragonfly/incrby returns 5" {
+        Assert-SimpleRedisHeaderCase -Engine dragonfly -Case incrby -Header "X-SimpleRedis-IncrBy" -Expected "5"
+    }
+
+    It "GET /redis/expire succeeds" {
+        Assert-SimpleRedisHeaderCase -Engine redis -Case expire -Header "X-SimpleRedis-Expire" -Expected "ok"
+    }
+
+    It "GET /dragonfly/expire succeeds" {
+        Assert-SimpleRedisHeaderCase -Engine dragonfly -Case expire -Header "X-SimpleRedis-Expire" -Expected "ok"
+    }
+
+    It "GET /redis/expireat succeeds" {
+        Assert-SimpleRedisHeaderCase -Engine redis -Case expireat -Header "X-SimpleRedis-ExpireAt" -Expected "ok"
+    }
+
+    It "GET /dragonfly/expireat succeeds" {
+        Assert-SimpleRedisHeaderCase -Engine dragonfly -Case expireat -Header "X-SimpleRedis-ExpireAt" -Expected "ok"
+    }
+
+    It "GET /redis/eval returns 3 and the Kong digest" {
+        $response = Invoke-SimpleRedisCase -Engine redis -Case eval
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        $response.Headers["X-SimpleRedis-EvalDigest"] | Should -Be $script:KongEvalDigest
+    }
+
+    It "GET /dragonfly/eval returns 3 and the Kong digest" {
+        $response = Invoke-SimpleRedisCase -Engine dragonfly -Case eval
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        $response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+        $response.Headers["X-SimpleRedis-EvalDigest"] | Should -Be $script:KongEvalDigest
+    }
+
+    It "GET /redis/get-miss is redis:miss" {
+        Assert-SimpleRedisHeaderCase -Engine redis -Case "get-miss" -Header "X-SimpleRedis-GetMiss" -Expected "redis:miss"
+    }
+
+    It "GET /dragonfly/get-miss is redis:miss" {
+        Assert-SimpleRedisHeaderCase -Engine dragonfly -Case "get-miss" -Header "X-SimpleRedis-GetMiss" -Expected "redis:miss"
+    }
+
+    It "GET /redis/msetex lands a positive TTL" {
+        $response = Invoke-SimpleRedisCase -Engine redis -Case msetex
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        $response.Headers["X-SimpleRedis-MSetEX"] | Should -Be "ok"
+        [int](@($response.Headers["X-SimpleRedis-MSetEX-TTL"])[0]) | Should -BeGreaterThan 0
+    }
+
+    It "GET /dragonfly/msetex lands a positive TTL" {
+        $response = Invoke-SimpleRedisCase -Engine dragonfly -Case msetex
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        $response.Headers["X-SimpleRedis-MSetEX"] | Should -Be "ok"
+        [int](@($response.Headers["X-SimpleRedis-MSetEX-TTL"])[0]) | Should -BeGreaterThan 0
+    }
+
+    It "GET /redis/msetexat returns the written value" {
+        Assert-SimpleRedisHeaderCase -Engine redis -Case msetexat -Header "X-SimpleRedis-MSetEXAt" -Expected "ok"
+    }
+
+    It "GET /dragonfly/msetexat returns the written value" {
+        Assert-SimpleRedisHeaderCase -Engine dragonfly -Case msetexat -Header "X-SimpleRedis-MSetEXAt" -Expected "ok"
+    }
+
+    It "GET /redis/drop double-applies Incr and Eval" {
+        $response = Invoke-SimpleRedisCase -Engine redis -Case drop
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        $response.Headers["X-SimpleRedis-DropIncr"] | Should -Be "2"
+        $response.Headers["X-SimpleRedis-DropIncrStored"] | Should -Be "2"
+        $response.Headers["X-SimpleRedis-DropEval"] | Should -Be "6"
+        $response.Headers["X-SimpleRedis-DropEvalStored"] | Should -Be "6"
+    }
+
+    It "GET /dragonfly/drop double-applies Incr and Eval" {
+        $response = Invoke-SimpleRedisCase -Engine dragonfly -Case drop
+        $response.StatusCode | Should -Be 200 -Because $response.Content
+        $response.Headers["X-SimpleRedis-DropIncr"] | Should -Be "2"
+        $response.Headers["X-SimpleRedis-DropIncrStored"] | Should -Be "2"
+        $response.Headers["X-SimpleRedis-DropEval"] | Should -Be "6"
+        $response.Headers["X-SimpleRedis-DropEvalStored"] | Should -Be "6"
+    }
+
+    It "GET /redis/eval proves EVALSHA miss then hit without stopping whoami-a or whoami-b" {
+        Assert-EvalShaMissThenHit -Route "/redis/eval" -BackendHost "redis"
+    }
+
+    It "GET /dragonfly/eval proves EVALSHA miss then hit without stopping whoami-a or whoami-b" {
+        Assert-EvalShaMissThenHit -Route "/dragonfly/eval" -BackendHost "dragonfly"
     }
 
     It "GET /redis-wrong-password returns 502 redis:noauth" {
@@ -330,37 +455,37 @@ Describe "simpleredis Yaegi e2e" {
         $response.Content | Should -Match "ERR DB index is out of range"
     }
 
-    It "two GET /redis return distinct own-values" {
-        Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/redis"
+    It "two GET /redis/get return distinct own-values" {
+        Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/redis/get"
     }
 
-    It "two GET /dragonfly return distinct own-values" {
-        Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/dragonfly"
+    It "two GET /dragonfly/get return distinct own-values" {
+        Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/dragonfly/get"
     }
 
-    It "GET /redis recovers after CLIENT KILL of the Traefik client" {
+    It "GET /redis/recover recovers after CLIENT KILL of the Traefik client" {
         $warmup = Invoke-WebRequest -Uri "$script:BaseUrl/redis" -UseBasicParsing -TimeoutSec 10
         $warmup.StatusCode | Should -Be 200
         Stop-TraefikEngineClientForTest -Engine redis
-        $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis?recover=1" -UseBasicParsing -TimeoutSec 10
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis/recover" -UseBasicParsing -TimeoutSec 10
         $response.StatusCode | Should -Be 200
         $response.Headers["X-SimpleRedis-Recover"] | Should -Be "ok"
     }
 
-    It "GET /dragonfly recovers after CLIENT KILL of the Traefik client" {
+    It "GET /dragonfly/recover recovers after CLIENT KILL of the Traefik client" {
         $warmup = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly" -UseBasicParsing -TimeoutSec 10
         $warmup.StatusCode | Should -Be 200
         Stop-TraefikEngineClientForTest -Engine dragonfly
-        $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly?recover=1" -UseBasicParsing -TimeoutSec 10
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly/recover" -UseBasicParsing -TimeoutSec 10
         $response.StatusCode | Should -Be 200
         $response.Headers["X-SimpleRedis-Recover"] | Should -Be "ok"
     }
 
-    It "GET /redis concurrent holds stay within default poolSize" {
-        Assert-SimpleRedisLiveCap -Path "/redis" -BackendHost "redis"
+    It "GET /redis/hold concurrent holds stay within default poolSize" {
+        Assert-SimpleRedisLiveCap -Path "/redis/hold" -BackendHost "redis"
     }
 
-    It "GET /dragonfly concurrent holds stay within default poolSize" {
-        Assert-SimpleRedisLiveCap -Path "/dragonfly" -BackendHost "dragonfly"
+    It "GET /dragonfly/hold concurrent holds stay within default poolSize" {
+        Assert-SimpleRedisLiveCap -Path "/dragonfly/hold" -BackendHost "dragonfly"
     }
 }

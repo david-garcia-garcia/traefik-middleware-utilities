@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-// TestLive_MSetEX proves Lua MSetEX TTL and past EXAT miss on live Redis and Dragonfly.
+// TestLive_MSetEX proves Lua MSetEX TTL, future EXAT TTL, and past EXAT miss on live Redis and Dragonfly.
 func TestLive_MSetEX(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", runLiveMSetEXBackend)
 }
 
-// runLiveMSetEXBackend proves Lua MSetEX TTL landed and past EXAT is a miss on one engine.
+// runLiveMSetEXBackend proves Lua MSetEX TTL landed, future EXAT TTL, and past EXAT miss on one engine.
 func runLiveMSetEXBackend(t *testing.T, addr string) {
 	t.Helper()
 	client := waitLiveSimpleRedis(t, addr)
@@ -20,6 +20,20 @@ func runLiveMSetEXBackend(t *testing.T, addr string) {
 		key := t.Name()
 		if err := client.MSetEX([]string{key}, [][]byte{[]byte("ok")}, 60); err != nil {
 			t.Fatalf("MSetEX: %v", err)
+		}
+		got, err := client.Get(key)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if string(got) != "ok" {
+			t.Fatalf("Get = %q, want ok", got)
+		}
+		assertLiveTTLPositive(t, client, key)
+	})
+	t.Run("msetexAtTTLLanded", func(t *testing.T) {
+		key := t.Name()
+		if err := client.MSetEXAt([]string{key}, [][]byte{[]byte("ok")}, time.Now().Unix()+90); err != nil {
+			t.Fatalf("MSetEXAt: %v", err)
 		}
 		got, err := client.Get(key)
 		if err != nil {

@@ -1,5 +1,5 @@
 // Package simpleredisprobe is a Traefik local plugin that builds SimpleRedis
-// with simpleredis.New and runs every client verb on each request so Pester can prove the library loads under Yaegi.
+// with simpleredis.New and runs one client verb per path case so Pester can prove the library loads under Yaegi.
 package simpleredisprobe
 
 import (
@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
@@ -24,7 +25,7 @@ if exists == 0 then
 end
 return value`
 
-// timeWaitHoldScript busy-waits ARGV microseconds via TIME so ?hold= occupies a poolSize turn. Zero KEYS; Lua 5.1-safe (no table.maxn).
+// timeWaitHoldScript busy-waits ARGV microseconds via TIME so /hold occupies a poolSize turn. Zero KEYS; Lua 5.1-safe (no table.maxn).
 const timeWaitHoldScript = `local start = redis.call("TIME")
 local startSec = tonumber(start[1])
 local startUsec = tonumber(start[2])
@@ -45,6 +46,27 @@ const ttlScript = `return redis.call('TTL', KEYS[1])`
 func kongScriptDigest() string {
 	sum := sha1.Sum([]byte(kongIncrbyExpireatScript)) //nolint:gosec // Redis EVALSHA digest is SHA-1
 	return hex.EncodeToString(sum[:])
+}
+
+// requestPathCase is health when the path has one segment, the second segment when there are two, or empty when the remainder is unknown.
+func requestPathCase(path string) string {
+	trimmed := strings.Trim(path, "/")
+	if trimmed == "" {
+		return ""
+	}
+	parts := strings.Split(trimmed, "/")
+	if len(parts) == 1 {
+		return "health"
+	}
+	if len(parts) != 2 {
+		return ""
+	}
+	return parts[1]
+}
+
+// requestKeyPrefix is a unique key prefix for one probe request.
+func requestKeyPrefix() string {
+	return fmt.Sprintf("srp:%d", time.Now().UnixNano())
 }
 
 // Config is the dynamic plugin settings Traefik decodes.
@@ -90,32 +112,51 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return mw, nil
 }
 
-// ServeHTTP runs Set+Get only when recover=1; otherwise optionally holds via ?hold=, then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval twice, a missing-key Get, MSetEX, and MSetEXAt, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
+// ServeHTTP runs the path case (health Set+Get, one verb, recover, drop, or hold) and copies that case's result into headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	if req.URL.Query().Get("recover") == "1" {
-		m.serveRecover(rw, req)
+	pathCase := requestPathCase(req.URL.Path)
+	if pathCase == "" {
+		http.NotFound(rw, req)
 		return
 	}
-
-	// Hold occupies a live turn so Pester can contend for poolSize.
-	if hold := req.URL.Query().Get("hold"); hold != "" {
-		if _, err := m.client.Eval(timeWaitHoldScript, nil, []string{hold}); err != nil {
-			http.Error(rw, err.Error(), http.StatusBadGateway)
-			return
-		}
-		rw.Header().Set("X-SimpleRedis-Hold", "ok")
+	switch pathCase {
+	case "health", "get":
+		m.serveGet(rw, req)
+	case "mget":
+		m.serveMGet(rw, req)
+	case "del":
+		m.serveDel(rw, req)
+	case "incr":
+		m.serveIncr(rw, req)
+	case "incrby":
+		m.serveIncrBy(rw, req)
+	case "expire":
+		m.serveExpire(rw, req)
+	case "expireat":
+		m.serveExpireAt(rw, req)
+	case "eval":
+		m.serveEval(rw, req)
+	case "get-miss":
+		m.serveGetMiss(rw, req)
+	case "msetex":
+		m.serveMSetEX(rw, req)
+	case "msetexat":
+		m.serveMSetEXAt(rw, req)
+	case "recover":
+		m.serveRecover(rw, req)
+	case "drop":
+		m.serveDrop(rw, req)
+	case "hold":
+		m.serveHold(rw, req)
+	default:
+		http.NotFound(rw, req)
 	}
+}
 
-	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
+// serveGet Sets a unique token then Gets it into X-SimpleRedis-Value.
+func (m *middleware) serveGet(rw http.ResponseWriter, req *http.Request) {
+	prefix := requestKeyPrefix()
 	setKey := prefix + ":set"
-	incrKey := prefix + ":incr"
-	incrByKey := prefix + ":incrby"
-	expireKey := prefix + ":expire"
-	expireAtKey := prefix + ":expireat"
-	evalKey := prefix + ":eval"
-	evalAgainKey := prefix + ":eval2"
-	delKey := prefix + ":del"
-
 	if err := m.client.Set(setKey, []byte(prefix), 60); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -126,7 +167,17 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-Value", string(getValue))
+	m.next.ServeHTTP(rw, req)
+}
 
+// serveMGet Sets a key then MGets that key and a missing name into X-SimpleRedis-MGet.
+func (m *middleware) serveMGet(rw http.ResponseWriter, req *http.Request) {
+	prefix := requestKeyPrefix()
+	setKey := prefix + ":set"
+	if err := m.client.Set(setKey, []byte(prefix), 60); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
 	slots, err := m.client.MGet([]string{setKey, prefix + ":missing"})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
@@ -137,7 +188,13 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-MGet", string(slots[0]))
+	m.next.ServeHTTP(rw, req)
+}
 
+// serveDel Sets a key then Dels it.
+func (m *middleware) serveDel(rw http.ResponseWriter, req *http.Request) {
+	prefix := requestKeyPrefix()
+	delKey := prefix + ":del"
 	if err := m.client.Set(delKey, []byte("gone"), 60); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -147,21 +204,34 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-Del", "ok")
+	m.next.ServeHTTP(rw, req)
+}
 
-	incrValue, err := m.client.Incr(incrKey)
+// serveIncr Incrs a missing key into X-SimpleRedis-Incr.
+func (m *middleware) serveIncr(rw http.ResponseWriter, req *http.Request) {
+	incrValue, err := m.client.Incr(requestKeyPrefix() + ":incr")
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-Incr", strconv.FormatInt(incrValue, 10))
+	m.next.ServeHTTP(rw, req)
+}
 
-	incrByValue, err := m.client.IncrBy(incrByKey, 5)
+// serveIncrBy IncrBys a missing key by 5 into X-SimpleRedis-IncrBy.
+func (m *middleware) serveIncrBy(rw http.ResponseWriter, req *http.Request) {
+	incrByValue, err := m.client.IncrBy(requestKeyPrefix()+":incrby", 5)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-IncrBy", strconv.FormatInt(incrByValue, 10))
+	m.next.ServeHTTP(rw, req)
+}
 
+// serveExpire Sets a key then Expires it.
+func (m *middleware) serveExpire(rw http.ResponseWriter, req *http.Request) {
+	expireKey := requestKeyPrefix() + ":expire"
 	if err := m.client.Set(expireKey, []byte("1"), 60); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -171,7 +241,12 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-Expire", "ok")
+	m.next.ServeHTTP(rw, req)
+}
 
+// serveExpireAt Sets a key then ExpireAts it.
+func (m *middleware) serveExpireAt(rw http.ResponseWriter, req *http.Request) {
+	expireAtKey := requestKeyPrefix() + ":expireat"
 	if err := m.client.Set(expireAtKey, []byte("1"), 60); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -181,7 +256,12 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-ExpireAt", "ok")
+	m.next.ServeHTTP(rw, req)
+}
 
+// serveEval Evals the Kong KEYS snippet once and sets Eval plus digest headers.
+func (m *middleware) serveEval(rw http.ResponseWriter, req *http.Request) {
+	evalKey := requestKeyPrefix() + ":eval"
 	expireUnix := strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)
 	evalValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalKey}, []string{"3", expireUnix})
 	if err != nil {
@@ -193,28 +273,24 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-Eval", string(evalValues[0]))
-
-	evalAgainValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalAgainKey}, []string{"3", expireUnix})
-	if err != nil {
-		http.Error(rw, err.Error(), http.StatusBadGateway)
-		return
-	}
-	if len(evalAgainValues) != 1 {
-		http.Error(rw, "eval again slots", http.StatusBadGateway)
-		return
-	}
-	rw.Header().Set("X-SimpleRedis-EvalAgain", string(evalAgainValues[0]))
 	rw.Header().Set("X-SimpleRedis-EvalDigest", kongScriptDigest())
+	m.next.ServeHTTP(rw, req)
+}
 
-	_, missErr := m.client.Get(prefix + ":missing")
+// serveGetMiss Gets a missing key and sets X-SimpleRedis-GetMiss to redis:miss.
+func (m *middleware) serveGetMiss(rw http.ResponseWriter, req *http.Request) {
+	_, missErr := m.client.Get(requestKeyPrefix() + ":missing")
 	if missErr == nil || missErr.Error() != simpleredis.RedisMiss {
 		http.Error(rw, "get miss", http.StatusBadGateway)
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-GetMiss", simpleredis.RedisMiss)
+	m.next.ServeHTTP(rw, req)
+}
 
-	msetexKey := prefix + ":msetex"
-	msetexAtKey := prefix + ":msetexat"
+// serveMSetEX writes one pair then Evals TTL into X-SimpleRedis-MSetEX and X-SimpleRedis-MSetEX-TTL.
+func (m *middleware) serveMSetEX(rw http.ResponseWriter, req *http.Request) {
+	msetexKey := requestKeyPrefix() + ":msetex"
 	if err := m.client.MSetEX([]string{msetexKey}, [][]byte{[]byte("ok")}, 60); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -230,22 +306,28 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-MSetEX-TTL", string(ttlValues[0]))
+	m.next.ServeHTTP(rw, req)
+}
 
+// serveMSetEXAt writes one pair with a future Unix time then Gets it.
+func (m *middleware) serveMSetEXAt(rw http.ResponseWriter, req *http.Request) {
+	msetexAtKey := requestKeyPrefix() + ":msetexat"
 	if err := m.client.MSetEXAt([]string{msetexAtKey}, [][]byte{[]byte("ok")}, time.Now().Add(60*time.Second).Unix()); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
 	}
-
-	if m.dropClient != nil {
-		m.writeDropHeaders(rw, prefix)
+	got, err := m.client.Get(msetexAtKey)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
 	}
-
+	rw.Header().Set("X-SimpleRedis-MSetEXAt", string(got))
 	m.next.ServeHTTP(rw, req)
 }
 
 // serveRecover runs Set+Get only and sets X-SimpleRedis-Recover when those succeed. It does not Eval.
 func (m *middleware) serveRecover(rw http.ResponseWriter, req *http.Request) {
-	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
+	prefix := requestKeyPrefix()
 	setKey := prefix + ":set"
 	if err := m.client.Set(setKey, []byte("ok"), 60); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
@@ -256,6 +338,31 @@ func (m *middleware) serveRecover(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-Recover", "ok")
+	m.next.ServeHTTP(rw, req)
+}
+
+// serveDrop warms the drop-relay pool then Incr and Eval through it.
+func (m *middleware) serveDrop(rw http.ResponseWriter, req *http.Request) {
+	if m.dropClient == nil {
+		http.Error(rw, "dropHost unset", http.StatusBadGateway)
+		return
+	}
+	m.writeDropHeaders(rw, requestKeyPrefix())
+	m.next.ServeHTTP(rw, req)
+}
+
+// serveHold occupies a live turn for ?hold= microseconds so Pester can contend for poolSize.
+func (m *middleware) serveHold(rw http.ResponseWriter, req *http.Request) {
+	hold := req.URL.Query().Get("hold")
+	if hold == "" {
+		http.Error(rw, "hold query required", http.StatusBadRequest)
+		return
+	}
+	if _, err := m.client.Eval(timeWaitHoldScript, nil, []string{hold}); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-Hold", "ok")
 	m.next.ServeHTTP(rw, req)
 }
 

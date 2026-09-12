@@ -1,18 +1,37 @@
 package simpleredis
 
-import "testing"
+import (
+	"strconv"
+	"testing"
+	"time"
+)
 
-// TestLive_Eval proves Eval integer, EVALSHA, and NOSCRIPT after SCRIPT FLUSH on live Redis and Dragonfly.
+// TestLive_Eval proves Eval integer, KEYS argv, EVALSHA, and NOSCRIPT after SCRIPT FLUSH on live Redis and Dragonfly.
 func TestLive_Eval(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", runLiveEvalBackend)
 }
 
-// runLiveEvalBackend proves Eval integer, a second Eval after EVALSHA, and Eval after SCRIPT FLUSH.
+// runLiveEvalBackend proves Eval integer, KEYS incrby+expireat, a second Eval after EVALSHA, and Eval after SCRIPT FLUSH.
 func runLiveEvalBackend(t *testing.T, addr string) {
 	t.Helper()
 	client := waitLiveSimpleRedis(t, addr)
 	t.Cleanup(client.Close)
 
+	t.Run("evalKeysIncrbyExpireat", func(t *testing.T) {
+		key := t.Name()
+		expireUnix := strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)
+		values, err := client.Eval(kongIncrbyExpireatScript, []string{key}, []string{"3", expireUnix})
+		if err != nil {
+			t.Fatalf("Eval KEYS: %v", err)
+		}
+		n, err := parseIntegerReply(values, nil)
+		if err != nil {
+			t.Fatalf("Eval KEYS parse: %v", err)
+		}
+		if n != 3 {
+			t.Fatalf("Eval KEYS = %d, want 3", n)
+		}
+	})
 	t.Run("evalInteger", func(t *testing.T) {
 		script := "return 7 -- " + t.Name()
 		values, err := client.Eval(script, nil, nil)

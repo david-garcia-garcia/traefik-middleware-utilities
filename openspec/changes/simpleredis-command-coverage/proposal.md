@@ -18,6 +18,7 @@ None.
 
 - `std_go_simpleredis_live-e2e`: Compiled Eval KEYS case, future MSetEXAt TTL landing, and Yaegi live covering the full public verb set.
 - `std_go_simpleredis_resp-commands`: Traefik probe is path-dispatched; Pester asserts one case per request instead of every verb header on one GET.
+- `std_go_simpleredis_tcp-session`: Recover is `/redis/recover`; drop-relay is `/redis/drop`; health `/redis` is Set+Get only.
 
 ## Impact
 
