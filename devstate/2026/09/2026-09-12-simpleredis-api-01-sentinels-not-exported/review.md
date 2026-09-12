@@ -14,3 +14,10 @@ findings: P3 0
 fixed: none
 skipped: none
 assumed: Yaegi clientprobe errors.Is on exported vars; wrapped-miss windowcounter test via getCount helper not Get injection
+
+## propose (2026-09-12)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: simpleredis-export-error-sentinels
