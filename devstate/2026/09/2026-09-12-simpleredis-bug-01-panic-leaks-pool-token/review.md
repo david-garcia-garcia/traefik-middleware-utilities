@@ -21,3 +21,9 @@ phase: implement
 findings: none
 fixed: doAndRelease returns the in-use-turn on panic; TestPanicDuringDoReturnsInUseTurn
 skipped: handshake AUTH/SELECT panic still debt; parser cap (bug-02) not taken
+
+## codereview (2026-09-12)
+phase: codereview
+findings: P3 1 coverage hard (idle not pooled)
+fixed: pooledIdle==0 after recovered panics (9aa8aa1)
+skipped: none
