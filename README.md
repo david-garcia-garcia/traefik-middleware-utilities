@@ -82,7 +82,7 @@ if !allowed {
 _, _, err = counter.Take(req.Context(), "ip:"+ip, 100, time.Minute)
 ```
 
-`sync_rate` `0` talks to Redis on every Take or Peek. A positive duration batches locally and flushes on that interval. Pass `Sleep` / `Wake` / `Close` into reclaim when the counter is the stored value. Do not close the Redis client from the counter.
+`sync_rate` `0` talks to Redis on every Take or Peek and returns that call's Redis error. A positive duration batches locally and flushes on that interval; a failed flush is retained, and after one missed `sync_rate` Take/Peek return that error instead of a silent nil. Pass `Sleep` / `Wake` / `Close` into reclaim when the counter is the stored value. Do not close the Redis client from the counter.
 
 ## Token bucket
 
