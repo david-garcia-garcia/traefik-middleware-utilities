@@ -271,7 +271,7 @@ func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
 		if attempt > 0 {
 			time.Sleep(retryBackoff(attempt, minBackoff, maxBackoff))
 		}
-		conn, _, err := sr.borrow()
+		conn, err := sr.borrow()
 		if err != nil {
 			if sr.isClosed() || !shouldRetry(err) {
 				return nil, err
@@ -375,11 +375,11 @@ func isRetryableRedisReply(err error) bool {
 }
 
 // borrow waits for an in-use turn, then takes an idle socket younger than idleTimeout, or dials.
-func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
+func (sr *SimpleRedis) borrow() (*pooledConn, error) {
 	sr.mu.Lock()
 	if sr.closed {
 		sr.mu.Unlock()
-		return nil, false, errUnreachable
+		return nil, errUnreachable
 	}
 	sr.ensureSlots()
 	sr.mu.Unlock()
@@ -396,7 +396,7 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 				<-timer.C
 			}
 		case <-timer.C:
-			return nil, false, errPoolWait
+			return nil, errPoolWait
 		}
 	}
 
@@ -408,7 +408,7 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 	if sr.closed {
 		sr.mu.Unlock()
 		sr.freeSlot()
-		return nil, false, errUnreachable
+		return nil, errUnreachable
 	}
 	for len(sr.idle) > 0 {
 		conn := sr.idle[len(sr.idle)-1]
@@ -425,15 +425,15 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 		conn.close()
 	}
 	if reused != nil {
-		return reused, true, nil
+		return reused, nil
 	}
 	// Idle miss: dial while still holding the turn.
 	conn, err := sr.dial()
 	if err != nil {
 		sr.freeSlot()
-		return nil, false, err
+		return nil, err
 	}
-	return conn, false, nil
+	return conn, nil
 }
 
 // release returns a clean conn to the idle list and frees the in-use turn, or closes it when dirty, closed, or idle is full at the live cap.

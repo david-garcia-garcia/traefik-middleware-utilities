@@ -61,7 +61,7 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 
 #### Scenario: Overlapping callers above poolSize do not dial past the live cap
 - **WHEN** more concurrent commands than the default `poolSize` (8) overlap against a live fake Redis
-- **THEN** the fake observes at most eight TCP connections
+- **THEN** the fake observes at most the default `poolSize` (8) TCP connections
 - **AND** waiters reuse a released socket rather than dialing past `poolSize`
 
 #### Scenario: Lost-reply Incr is retried
@@ -113,12 +113,12 @@ The session SHALL keep at most `poolSize` live TCP connections (idle plus in use
 
 #### Scenario: Concurrent holds stay within poolSize on Redis
 - **WHEN** overlapping requests through the Traefik plugin hold sockets against compose Redis
-- **THEN** Redis has at most eight established TCP clients from that plugin
+- **THEN** Redis has at most the default `poolSize` (8) established TCP clients from that plugin
 - **AND** reclaim routes `/a` and `/b` still succeed
 
 #### Scenario: Concurrent holds stay within poolSize on Dragonfly
 - **WHEN** overlapping requests through the Traefik plugin hold sockets against compose Dragonfly
-- **THEN** Dragonfly has at most eight established TCP clients from that plugin
+- **THEN** Dragonfly has at most the default `poolSize` (8) established TCP clients from that plugin
 
 #### Scenario: Extra waiter is redis:unreachable on both engines
 - **WHEN** `poolSize` sockets (default 8) are held against Redis
