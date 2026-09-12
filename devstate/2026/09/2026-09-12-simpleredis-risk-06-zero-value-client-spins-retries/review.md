@@ -17,3 +17,9 @@ phase: propose
 findings: P3 0
 fixed: none
 skipped: none
+
+## implement (2026-09-12)
+phase: implement
+findings: P3 0
+fixed: errNotFromNew fail-fast
+skipped: none
