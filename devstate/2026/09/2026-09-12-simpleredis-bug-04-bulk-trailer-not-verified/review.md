@@ -23,3 +23,9 @@ phase: implement
 findings: dest skipped bulk trailer
 fixed: readBulk CRLF check; unit + desync tests; closeAfter false keep-alive
 skipped: length cap (bug-02)
+
+## codereview (2026-09-12)
+phase: codereview
+findings: none
+fixed: none
+skipped: none
