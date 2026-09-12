@@ -15,3 +15,11 @@ fixed: none
 skipped: none
 scope: minimum Eval contract + redis:unsupported-reply; keep *-1 as issue?; no nested Reply
 
+## propose (2026-09-12)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: simpleredis-unsupported-reply
+
+
