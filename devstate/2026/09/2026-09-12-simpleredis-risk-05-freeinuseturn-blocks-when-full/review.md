@@ -48,6 +48,15 @@ skipped: local -race (gcc not found)
 ci: 34695707951 success (Lint, Test, Go E2E, Integration Tests)
 verdict: ready for review
 
+## pullrequest (2026-09-12 master-sync)
+phase: pullrequest
+findings: none
+fixed: merge origin/master; keep OverFrees with idle sweep and context; hammerGets takes context
+skipped: none
+ci: 34710978673 success (Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests)
+verdict: ready for review
+
+
 
 
 
