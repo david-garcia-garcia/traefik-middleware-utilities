@@ -54,14 +54,29 @@ Defines the RESP commands a SimpleRedis client speaks after it holds a session: 
 - **THEN** Del returns no error
 
 ### Requirement: Exported error strings are stable
-Callers SHALL match errors by `Error()` text. The session SHALL export these exact strings: `redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`. AUTH-class Redis error prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text.
+Callers SHALL match errors by `errors.Is` against the exported sentinel values (`ErrUnreachable`, `ErrMiss`, `ErrTimeout`, `ErrNoAuth`, `ErrIssue`, `ErrPoolWait`, `ErrUnsupportedReply`) or the predicates `IsMiss`, `IsUnreachable`, and `IsPoolWait`. The session SHALL still export these exact strings for display and legacy text matching: `redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`, `redis:unsupported-reply`. AUTH-class Redis error prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text. `ErrPoolWait` SHALL wrap `ErrUnreachable` so `errors.Is` on the unreachable sentinel matches pool wait, while `IsPoolWait` still distinguishes pool saturation. A wrapped sentinel SHALL still match `errors.Is` and the corresponding predicate; `err.Error() ==` the token MUST NOT be the only supported match.
 
 #### Scenario: Rejected auth is redis:noauth
 - **WHEN** Redis replies `-NOAUTH`
 - **THEN** the command returns `redis:noauth`
 
+#### Scenario: Wrapped miss still matches the miss sentinel
+- **WHEN** a miss sentinel is wrapped with `%w`
+- **THEN** `errors.Is` and `IsMiss` still match
+- **AND** `err.Error()` is not equal to `redis:miss`
+
+#### Scenario: Pool wait matches unreachable and is distinct
+- **WHEN** the error is the pool-wait sentinel
+- **THEN** `errors.Is` matches the unreachable sentinel
+- **AND** `IsPoolWait` is true for pool wait and false for a plain unreachable sentinel
+
+#### Scenario: Unsupported reply is redis:unsupported-reply
+- **WHEN** the peer replies with a well-framed type this client does not decode
+- **THEN** the command returns `redis:unsupported-reply`
+- **AND** the error is not `redis:issue?`
+
 ### Requirement: Interpreter tests observe Init Get Set Del
-Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`.
+Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`. Interpreted `clientprobe` SHALL also observe `errors.Is` against an exported sentinel and one of `IsMiss`, `IsUnreachable`, or `IsPoolWait`.
 
 #### Scenario: Yaegi Init Get Set Del
 - **WHEN** interpreted code Inits a client to a compiled fake Redis listener
@@ -94,6 +109,10 @@ Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `
 - **AND** it calls MSetEX twice
 - **THEN** the first call returns no error
 - **AND** the second call does not send `MSETEX`
+
+#### Scenario: Yaegi matches an exported sentinel
+- **WHEN** interpreted code calls `errors.Is` on an exported SimpleRedis sentinel and one predicate
+- **THEN** both matches succeed
 
 ### Requirement: Traefik request SET plus GET sets a response header
 A request through the nested SimpleRedis Traefik plugin SHALL SET a key to that request’s unique token (not a shared constant such as `"ok"`) and GET it back, then set a response header from that GET so Pester can assert the round-trip. MGet of that same key SHALL return the same token as Get. The same request SHALL also call Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against that backend, and set one response header per verb. Eval SHALL run twice on that request: `X-SimpleRedis-Eval` from the first result, `X-SimpleRedis-EvalAgain` from the second. The probe SHALL set `X-SimpleRedis-EvalDigest` to the SHA-1 hex of the Kong KEYS snippet const. The same request SHALL Get a missing key and set a response header whose value is `redis:miss`. After MSetEX it SHALL Eval `TTL` on that key listed in KEYS and set `X-SimpleRedis-MSetEX-TTL` to the positive TTL decimal. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new) and MUST NOT use `table.maxn`. Pester SHALL prove EVALSHA + NOSCRIPT fallback live on both engines: `SCRIPT FLUSH` then `SCRIPT EXISTS` of that digest is `0`, GET succeeds (`Eval` `3` and `EvalAgain` `3`), `EXISTS` is `1`, GET again succeeds. Same sequence against Dragonfly via `redis-cli -h dragonfly`. Pester SHALL run Get/MGet own-value assertions on both `/redis` (Redis) and `/dragonfly` (Dragonfly). Existing verb headers stay. Reclaim `/a` `/b` stay up. After RESP decode uses `ReadSlice`, Get, MGet, Incr, Eval, and MSetEX headers MUST still show those commands succeeded on both `/redis` and `/dragonfly`. This change MUST NOT add Redis or Dragonfly compose services.
@@ -175,13 +194,13 @@ A request through the nested SimpleRedis Traefik plugin SHALL SET a key to that 
 - **AND** an integer `0` or `1` reply returns no error
 
 ### Requirement: Array replies accept bulk integer and status elements
-An RESP array (`*`) SHALL accept each element whose head is `$` (bulk, including null bulk as a nil slot), `:` (integer payload bytes), or `+` (status payload bytes). If an element head is `*` or `-`, the client SHALL return `redis:issue?`. Nested arrays are out of scope. MGET callers MUST still observe only bulk slots from Redis MGET. A `:` or `+` slot SHALL be an independent copy of those payload bytes so a later read on the same connection cannot overwrite it.
+An RESP array (`*`) SHALL accept each element whose head is `$` (bulk, including null bulk as a nil slot), `:` (integer payload bytes), or `+` (status payload bytes). If an element head is `*` or `-`, the client SHALL return `redis:unsupported-reply`. Nested arrays are out of scope. MGET callers MUST still observe only bulk slots from Redis MGET. A `:` or `+` slot SHALL be an independent copy of those payload bytes so a later read on the same connection cannot overwrite it.
 
 #### Scenario: Mixed array elements
 - **WHEN** Redis replies with an array that contains a bulk, an integer, and a status
 - **THEN** the result has three slots with those payloads
 - **WHEN** an array element is a nested array
-- **THEN** the client returns `redis:issue?`
+- **THEN** the client returns `redis:unsupported-reply`
 
 #### Scenario: Integer and status slots survive a later read
 - **WHEN** an array reply stores a `:` payload and a `+` payload
@@ -212,7 +231,7 @@ Compose SHALL add sibling Redis and Dragonfly services with requirepass. Compose
 - **AND** neither test stops `whoami-a` or `whoami-b`
 
 ### Requirement: Eval sends EVALSHA then EVAL on NOSCRIPT
-`Eval(script, keys, args)` SHALL keep the public signature `Eval(script string, keys []string, args []string) ([][]byte, error)`. Callers pass the script body; they MUST NOT pass a digest. `Eval` SHALL hash the script body on each call (SHA-1 lowercase hex; cheap; no map, no lock) and send Redis `EVALSHA`, that digest, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. When the error text from that command starts with `NOSCRIPT`, `Eval` SHALL send `EVAL` once with the same script body, `numkeys`, keys, and args. That EVAL is the only place the script body is sent to Redis/Dragonfly so the engine stores it. That `NOSCRIPT` MUST NOT be returned to the caller as the command result. The client MUST NOT send `SCRIPT LOAD` at `Init`. The client MUST NOT export `EvalSha` or `ScriptLoad`. The client MUST NOT keep a digest table or mutex for scripts. The return SHALL keep the same `[][]byte` shape: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or other server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). Scripts that touch keys MUST list those keys in `keys` and MUST NOT use `table.maxn`.
+`Eval(script, keys, args)` SHALL keep the public signature `Eval(script string, keys []string, args []string) ([][]byte, error)`. Callers pass the script body; they MUST NOT pass a digest. `Eval` SHALL hash the script body on each call (SHA-1 lowercase hex; cheap; no map, no lock) and send Redis `EVALSHA`, that digest, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. When the error text from that command starts with `NOSCRIPT`, `Eval` SHALL send `EVAL` once with the same script body, `numkeys`, keys, and args. That EVAL is the only place the script body is sent to Redis/Dragonfly so the engine stores it. That `NOSCRIPT` MUST NOT be returned to the caller as the command result. The client MUST NOT send `SCRIPT LOAD` at `Init`. The client MUST NOT export `EvalSha` or `ScriptLoad`. The client MUST NOT keep a digest table or mutex for scripts. The return SHALL keep the same `[][]byte` shape: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or other server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). A Lua indexed table SHALL decode only as a flat array whose elements are bulk strings or integers (or status). Nested tables and `{ err = "..." }` inside an array SHALL return `redis:unsupported-reply`. Scripts that return several values MUST wrap each slot with Lua `tostring` (or return numbers, which become integers). Scripts that touch keys MUST list those keys in `keys` and MUST NOT use `table.maxn`.
 
 #### Scenario: Later Eval sends EVALSHA not the body
 - **WHEN** Eval is called twice with the same script, one key, and two args against a fake that already has that digest
@@ -243,13 +262,18 @@ Compose SHALL add sibling Redis and Dragonfly services with requirepass. Compose
 - **WHEN** Eval is called with a script, no keys, and no args
 - **THEN** the command sent includes `numkeys` `0`
 
-### Requirement: Malformed RESP is a protocol issue and is not pooled
-A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-shaped first line), a line that does not end in CR before LF, an empty line, an unparseable `*` count, an `*` count less than 0, a truncated array element or bulk, or an array element whose type is not `$`, `:`, or `+` SHALL return an error whose `Error()` text is `redis:issue?`, or an I/O error (`redis:unreachable` on EOF, `redis:timeout` on deadline). That connection MUST NOT re-enter the idle pool.
+#### Scenario: Eval three bulk strings
+- **WHEN** Redis replies to Eval with a three-element array of bulk strings
+- **THEN** Eval returns those three payloads in order
 
-#### Scenario: Unknown type including HTTP-shaped
-- **WHEN** the peer replies with a line whose first byte is not `+`, `-`, `:`, `$`, or `*`
-- **THEN** the command returns `redis:issue?`
+#### Scenario: Eval nested array is unsupported
+- **WHEN** Redis replies to Eval with a nested array
+- **THEN** Eval returns `redis:unsupported-reply`
 - **AND** the idle pool is empty
+- **AND** the next command on that client dials a new socket
+
+### Requirement: Malformed RESP is a protocol issue and is not pooled
+A line that does not end in CR before LF, an empty line, an unparseable `*` count, an `*` count less than 0, a truncated array element or bulk, or a complete bulk payload whose two trailer bytes are not CR then LF SHALL return an error whose `Error()` text is `redis:issue?`, or an I/O error (`redis:unreachable` on EOF, `redis:timeout` on deadline). That connection MUST NOT re-enter the idle pool. A wrong bulk trailer MUST return `redis:issue?` and MUST NOT return `redis:unreachable`. Unknown type bytes, nested arrays, and array elements whose type is not `$`, `:`, or `+` are `redis:unsupported-reply` (requirement Unsupported RESP replies are distinguishable and are not pooled), not `redis:issue?`.
 
 #### Scenario: Missing CR before LF
 - **WHEN** a reply line ends in LF without a preceding CR
@@ -272,11 +296,6 @@ A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-sha
 - **AND** the error is not `redis:miss`
 - **AND** the idle pool is empty
 
-#### Scenario: Bad array element type
-- **WHEN** an array element’s type byte is not `$`, `:`, or `+`
-- **THEN** the command returns `redis:issue?`
-- **AND** the idle pool is empty
-
 #### Scenario: Truncated array or bulk is I/O
 - **WHEN** the peer writes a partial array or bulk and closes the socket
 - **THEN** the command returns `redis:unreachable`
@@ -290,15 +309,73 @@ A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-sha
 - **WHEN** a later Get receives a complete bulk of known bytes
 - **THEN** that Get returns those bytes
 
-#### Scenario: Nested array is not pooled
-- **WHEN** an array element is a nested array
-- **THEN** the command returns `redis:issue?`
-- **AND** the idle pool is empty
-
 #### Scenario: Retry after a dirty reused connection cannot dial
 - **WHEN** a reused idle connection is dirtied by a truncated reply
 - **AND** the retry dial fails
 - **THEN** the command returns `redis:unreachable`
+- **AND** the idle pool is empty
+
+#### Scenario: Wrong bulk trailer is issue and not pooled
+- **WHEN** a Get receives a complete `$` payload whose two trailer bytes are not CR then LF
+- **THEN** the command returns `redis:issue?`
+- **AND** the error is not `redis:unreachable`
+- **AND** the idle pool is empty
+
+#### Scenario: Second Get after a wrong bulk trailer returns its own value
+- **WHEN** `MaxRetries` is `-1`
+- **AND** `PoolSize` is `1`
+- **AND** a Get receives a complete bulk whose trailer is not CRLF and leftover bytes remain on that connection
+- **THEN** that Get returns `redis:issue?`
+- **AND** the idle pool is empty
+- **WHEN** a later Get receives a complete bulk of known bytes
+- **THEN** that Get returns those bytes
+- **AND** those bytes are not remnants of the first payload
+
+### Requirement: Over-cap bulk or array header is redis:issue?
+A `$` bulk length greater than `64 << 20` or a `*` array count greater than `1 << 20` SHALL return an error whose `Error()` text is `redis:issue?`. That connection MUST NOT re-enter the idle pool. The command MUST NOT retry that error. A truncated bulk or array whose announced size is at or under those ceilings SHALL still be I/O (`redis:unreachable` on EOF). An over-cap header with no payload MUST NOT take that truncated I/O path.
+
+#### Scenario: Over-cap bulk Get is redis:issue?
+- **WHEN** Get receives a `$` header whose length is greater than `64 << 20` and no payload
+- **THEN** Get returns `redis:issue?`
+- **AND** the idle pool is empty
+- **AND** the error is not `redis:unreachable`
+
+#### Scenario: Over-cap array is redis:issue?
+- **WHEN** the peer replies with a `*` header whose count is greater than `1 << 20`
+- **THEN** the command returns `redis:issue?`
+- **AND** the idle pool is empty
+
+#### Scenario: MGET-shaped over-cap bulk element is redis:issue?
+- **WHEN** MGet receives an array whose `$` element length is greater than `64 << 20`
+- **THEN** MGet returns `redis:issue?`
+- **AND** the idle pool is empty
+
+### Requirement: Unsupported RESP replies are distinguishable and are not pooled
+A well-framed reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-shaped first line and RESP3 type bytes `_`, `#`, `,`, `(`, `%`, `~`, `=`, `>`), or an array element whose type is not `$`, `:`, or `+` (including a nested array or a `-` error inside an array), SHALL return an error whose `Error()` text is `redis:unsupported-reply`. That error MUST NOT be `redis:issue?` and MUST NOT be `redis:unreachable` solely because the type was unsupported. That connection MUST NOT re-enter the idle pool. A following command on the same client SHALL dial a new socket.
+
+#### Scenario: Unknown type including HTTP-shaped
+- **WHEN** the peer replies with a line whose first byte is not `+`, `-`, `:`, `$`, or `*`
+- **THEN** the command returns `redis:unsupported-reply`
+- **AND** the idle pool is empty
+
+#### Scenario: RESP3 type byte
+- **WHEN** the peer replies with a RESP3 type byte `_`, `#`, `,`, `(`, `%`, `~`, `=`, or `>`
+- **THEN** the command returns `redis:unsupported-reply`
+- **AND** the idle pool is empty
+
+#### Scenario: Bad array element type
+- **WHEN** an array element’s type byte is not `$`, `:`, or `+`
+- **THEN** the command returns `redis:unsupported-reply`
+- **AND** the idle pool is empty
+
+#### Scenario: Nested array is not pooled
+- **WHEN** an array element is a nested array
+- **THEN** the command returns `redis:unsupported-reply`
+- **AND** the idle pool is empty
+
+#### Scenario: Error inside an array
+- **WHEN** an array element is a Redis error line
+- **THEN** the command returns `redis:unsupported-reply`
 - **AND** the idle pool is empty
 
 ### Requirement: Get and integer verbs reject wrong reply arity

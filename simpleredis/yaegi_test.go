@@ -65,6 +65,18 @@ func TestYaegi_MSetEXNative(t *testing.T) {
 	}
 }
 
+// TestYaegi_MatchSentinels proves interpreted errors.Is and IsMiss match a wrapped ErrMiss.
+func TestYaegi_MatchSentinels(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, `clientprobe.MatchSentinels()`)
+	if got != "ok" {
+		t.Fatalf("yaegi match sentinels: %q, want ok", got)
+	}
+}
+
 // TestYaegi_MSetEXLua proves interpreted MSetEX falls back to EVAL and a second call skips MSETEX.
 func TestYaegi_MSetEXLua(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
@@ -156,6 +168,7 @@ func writeGopathClientprobe(t testing.TB, goPath string) {
 const clientprobeSrc = `package clientprobe
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
@@ -292,6 +305,18 @@ func MSetEXLua(host string) string {
 	}
 	if string(got) != "ok" {
 		return "get:" + string(got)
+	}
+	return "ok"
+}
+
+// MatchSentinels proves interpreted errors.Is on an exported sentinel and IsMiss.
+func MatchSentinels() string {
+	wrapped := fmt.Errorf("context: %w", simpleredis.ErrMiss)
+	if !errors.Is(wrapped, simpleredis.ErrMiss) {
+		return "errors.Is"
+	}
+	if !simpleredis.IsMiss(wrapped) {
+		return "IsMiss"
 	}
 	return "ok"
 }

@@ -10,6 +10,10 @@ _Avoid_: returning it from `readReply`; storing it in an array slot; treating it
 A `+` or `:` payload that leaves `readReply` (returned to the caller or stored in an array slot). It is a copy of the header bytes, not a ReadSlice view. A `-` error MAY use `string(message)` (that already copies). `$` bulk stays owned by `readBulk`'s allocated buffer.
 _Avoid_: `line[1:]` or `head[1:]` without a copy; copying `$` / `*` headers after the length parse
 
+**Bulk trailer**:
+The two bytes after a RESP2 `$` payload, which must be CR then LF and are not counted in the announced length.
+_Avoid_: treating those two bytes as payload; pooling the socket when they are not CRLF
+
 ## Overview
 
 SimpleRedis reads each RESP line with `ReadSlice('\n')` so short headers do not allocate. Anything that must survive the next read on that connection is copied first. A line that fills the 4096-byte buffer without a newline is `redis:issue?`; the remainder is not grown.
@@ -19,7 +23,8 @@ SimpleRedis reads each RESP line with `ReadSlice('\n')` so short headers do not 
 - Read a line with `ReadSlice('\n')`. On `bufio.ErrBufferFull`, return `redis:issue?`. Do not `ReadBytes` the remainder. Do not loop `ReadSlice`. Stay on `bufio.NewReader` (4096).
 - Copy a `+` or `:` payload with `append([]byte(nil), payload...)` before the next read and before `release`.
 - Parse bulk and array lengths from the bytes after the type byte (`parseLen`). Accept optional leading minus (`$-1` miss). Empty or non-digits is `redis:issue?`. Do not use `unsafe` or `strconv.Atoi(string(...))`.
-- Leave `readBulk` as `make([]byte, length+2)` plus `io.ReadFull`. Do not keep a `$` or `*` header slice across a later read.
+- After the bulk miss check, reject a bulk length above `maxBulkLength` (`64 << 20`) and an array count above `maxArrayCount` (`1 << 20`) as `redis:issue?` before any `make`. Do not put those caps on `Config`.
+- For an accepted bulk length, leave `readBulk` as `make([]byte, length+2)` plus `io.ReadFull`. After a complete read, the last two bytes must be CRLF; otherwise return `redis:issue?` so the socket is not pooled. Do not keep a `$` or `*` header slice across a later read.
 
 ## Pattern snippet
 
@@ -37,7 +42,7 @@ return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 ## Key files
 
 - `simpleredis/resp.go` — `readLine`, `readReply`, `readBulk`, `parseLen`
-- `simpleredis/resp_test.go` — copy-on-escape and `ErrBufferFull` (`redis:issue?`, ≤4096 bytes from the peer)
+- `simpleredis/resp_test.go` — copy-on-escape, `ErrBufferFull` (`redis:issue?`, ≤4096 bytes from the peer), over-cap `$`/`*` headers
 - `simpleredis/fake_redis_test.go` — `startSequentialRedis` for distinct later-read payloads
 - `simpleredis/bench_test.go` — `BenchmarkDecodeBulk`, `BenchmarkDecodeArray10`, `BenchmarkDecodeInteger`
 - `openspec/specs/std_go_simpleredis_resp-decode/spec.md`
@@ -48,3 +53,5 @@ return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 - `ErrBufferFull` at 4096 (`bufio.NewReader` default) is `redis:issue?`. Do not `ReadBytes` the remainder. go-redis still grows at 32 KiB; this client diverges so a hostile peer cannot grow the header buffer.
 - Identical EVAL `:0` replies hide aliasing. Prove copy-on-escape with distinct payloads on one connection.
 - `parseLen` overflow is `false` (`redis:issue?`), not a wrap.
+- A `$` or `*` length that fits in `int` but is above the package cap is also `redis:issue?`. Do not `make` first: a later short `ReadFull` is EOF → `redis:unreachable` and retries.
+- A full bulk whose trailer is not CRLF is `redis:issue?`, not a clean payload. Short `ReadFull` stays `redis:unreachable`. Do not pool that socket.
