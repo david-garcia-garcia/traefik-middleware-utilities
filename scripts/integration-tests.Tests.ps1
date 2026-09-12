@@ -92,8 +92,10 @@ BeforeAll {
 
     function Assert-TwoDistinctOwnValues {
         param([string]$Url)
-        $first = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15
-        $second = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15
+        $first = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15 -SkipHttpErrorCheck
+        $second = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15 -SkipHttpErrorCheck
+        $first.StatusCode | Should -Be 200 -Because $first.Content
+        $second.StatusCode | Should -Be 200 -Because $second.Content
         Assert-SimpleRedisVerbHeaders -Response $first
         Assert-SimpleRedisVerbHeaders -Response $second
         $a = Get-SimpleRedisHeader -Response $first -Name "X-SimpleRedis-Value"
@@ -263,19 +265,19 @@ Describe "simpleredis Yaegi e2e" {
         Assert-EvalShaMissThenHit -Route "/dragonfly" -BackendHost "dragonfly"
     }
 
-    It "GET /redis concurrent holds stay within default poolSize" {
-        Assert-SimpleRedisLiveCap -Path "/redis" -BackendHost "redis"
-    }
-
-    It "GET /dragonfly concurrent holds stay within default poolSize" {
-        Assert-SimpleRedisLiveCap -Path "/dragonfly" -BackendHost "dragonfly"
-    }
-
     It "two GET /redis return distinct own-values" {
         Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/redis"
     }
 
     It "two GET /dragonfly return distinct own-values" {
         Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/dragonfly"
+    }
+
+    It "GET /redis concurrent holds stay within default poolSize" {
+        Assert-SimpleRedisLiveCap -Path "/redis" -BackendHost "redis"
+    }
+
+    It "GET /dragonfly concurrent holds stay within default poolSize" {
+        Assert-SimpleRedisLiveCap -Path "/dragonfly" -BackendHost "dragonfly"
     }
 }
