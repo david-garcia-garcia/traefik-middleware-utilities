@@ -10,3 +10,9 @@ findings: compiled live already calls every public verb; Yaegi live omits MGet/I
 fixed: none
 skipped: none
 taken: path-dispatched Traefik cases instead of one-request header dump
+
+## propose (2026-09-12)
+phase: propose
+findings: fold live-e2e and resp-commands
+fixed: none
+skipped: none
