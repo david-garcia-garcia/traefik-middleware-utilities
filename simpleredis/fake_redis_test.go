@@ -407,7 +407,7 @@ func (f *peerCloseFake) serveUntilReadError(conn net.Conn) {
 // writeGetReply writes a GET bulk reply for args, or a miss when the command is not GET.
 func (f *peerCloseFake) writeGetReply(conn net.Conn, args []string) {
 	name := ""
-	if len(args) >= 2 && args[0] == "GET" {
+	if len(args) >= 2 {
 		name = args[1]
 	}
 	f.mu.Lock()

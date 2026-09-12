@@ -180,14 +180,24 @@ BeforeAll {
         if (-not $traefikIp) {
             throw "traefik container IP is empty"
         }
+        $cli = @("compose", "-p", "reclaim-e2e", "exec", "-T", "redis", "redis-cli")
+        if ($Engine -eq "dragonfly") {
+            $cli += @("-h", "dragonfly")
+        }
         # CLIENT LIST on the engine (Dragonfly via redis-cli -h dragonfly).
-        $list = Invoke-RedisCli -BackendHost $Engine -CliArgs @("CLIENT", "LIST")
+        $list = docker @cli CLIENT LIST
+        if ($LASTEXITCODE -ne 0) {
+            throw "CLIENT LIST on $Engine failed"
+        }
         # CLIENT KILL ADDR for each Traefik client; Dragonfly has no TYPE/SKIPME.
         $killed = 0
         foreach ($line in ($list -split "`r?`n")) {
             if ($line -match "addr=$([regex]::Escape($traefikIp)):\d+") {
                 $addr = $Matches[0].Substring("addr=".Length)
-                Invoke-RedisCli -BackendHost $Engine -CliArgs @("CLIENT", "KILL", "ADDR", $addr) | Out-Null
+                docker @cli CLIENT KILL ADDR $addr | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    throw "CLIENT KILL ADDR $addr on $Engine failed"
+                }
                 $killed++
             }
         }
@@ -271,14 +281,6 @@ Describe "simpleredis Yaegi e2e" {
         Assert-EvalShaMissThenHit -Route "/dragonfly" -BackendHost "dragonfly"
     }
 
-    It "GET /redis concurrent holds stay within default poolSize" {
-        Assert-SimpleRedisLiveCap -Path "/redis" -BackendHost "redis"
-    }
-
-    It "GET /dragonfly concurrent holds stay within default poolSize" {
-        Assert-SimpleRedisLiveCap -Path "/dragonfly" -BackendHost "dragonfly"
-    }
-
     It "GET /redis recovers after CLIENT KILL of the Traefik client" {
         $warmup = Invoke-WebRequest -Uri "$script:BaseUrl/redis" -UseBasicParsing -TimeoutSec 10
         $warmup.StatusCode | Should -Be 200
@@ -295,5 +297,13 @@ Describe "simpleredis Yaegi e2e" {
         $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly?recover=1" -UseBasicParsing -TimeoutSec 10
         $response.StatusCode | Should -Be 200
         $response.Headers["X-SimpleRedis-Recover"] | Should -Be "ok"
+    }
+
+    It "GET /redis concurrent holds stay within default poolSize" {
+        Assert-SimpleRedisLiveCap -Path "/redis" -BackendHost "redis"
+    }
+
+    It "GET /dragonfly concurrent holds stay within default poolSize" {
+        Assert-SimpleRedisLiveCap -Path "/dragonfly" -BackendHost "dragonfly"
     }
 }
