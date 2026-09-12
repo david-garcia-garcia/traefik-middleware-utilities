@@ -4,7 +4,7 @@ JobName: 2026-09-12-simpleredis-bug-04-bulk-trailer-not-verified
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [ ] | [ ] | |
+| prepare | [x] | [x] | 2026-09-12T12:36:41Z |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
