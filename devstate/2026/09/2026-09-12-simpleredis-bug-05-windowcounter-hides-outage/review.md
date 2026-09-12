@@ -17,3 +17,9 @@ phase: propose
 findings: fold sliding-take and sync-flush; change windowcounter-buffered-flush-error
 fixed: proposal, design, tasks, two delta specs
 skipped: none
+
+## implement (2026-09-12)
+phase: implement
+findings: buffered Take/Peek return lastFlushErr after k=1; tests passed
+fixed: limiter.go, killable fake, four proofs, docs
+skipped: none
