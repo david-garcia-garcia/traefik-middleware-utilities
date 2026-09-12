@@ -23,6 +23,8 @@ func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
 			last = err
 			continue
 		}
+		// If do panics under Yaegi, the process does not crash and this in-use-turn is lost.
+		// Not deferred-release: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/29
 		values, reusable, err := sr.do(conn, args)
 		sr.release(conn, reusable)
 		if err == nil {
