@@ -15,3 +15,9 @@ phase: propose
 findings: none
 fixed: none
 skipped: product `readLine` still dest; change `simpleredis-readline-bound` proposed
+
+## implement (2026-09-12T12:50:10.475Z)
+phase: implement
+findings: none
+fixed: readLine ErrBufferFull is errIssue; long-line and counting-peer tests; usage packet
+skipped: none
