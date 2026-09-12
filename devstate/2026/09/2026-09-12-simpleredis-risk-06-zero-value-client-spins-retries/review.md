@@ -41,3 +41,9 @@ phase: archive
 findings: P3 0
 fixed: none
 skipped: none
+
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: P3 0
+fixed: gofmt alignment
+skipped: none
