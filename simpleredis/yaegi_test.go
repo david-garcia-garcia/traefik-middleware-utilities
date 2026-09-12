@@ -65,7 +65,7 @@ func TestYaegi_MSetEXNative(t *testing.T) {
 	}
 }
 
-// TestYaegi_MSetEXLua proves interpreted MSetEX falls back to EVAL and a second call skips MSETEX.
+// TestYaegi_MatchSentinels proves interpreted errors.Is and IsMiss match a wrapped ErrMiss.
 func TestYaegi_MatchSentinels(t *testing.T) {
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
