@@ -244,7 +244,7 @@ Compose SHALL add sibling Redis and Dragonfly services with requirepass. Compose
 - **THEN** the command sent includes `numkeys` `0`
 
 ### Requirement: Malformed RESP is a protocol issue and is not pooled
-A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-shaped first line), a line that does not end in CR before LF, an empty line, an unparseable `*` count, an `*` count less than 0, a truncated array element or bulk, or an array element whose type is not `$`, `:`, or `+` SHALL return an error whose `Error()` text is `redis:issue?`, or an I/O error (`redis:unreachable` on EOF, `redis:timeout` on deadline). That connection MUST NOT re-enter the idle pool.
+A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-shaped first line), a line that does not end in CR before LF, an empty line, an unparseable `*` count, an `*` count less than 0, a truncated array element or bulk, an array element whose type is not `$`, `:`, or `+`, or a complete bulk payload whose two trailer bytes are not CR then LF SHALL return an error whose `Error()` text is `redis:issue?`, or an I/O error (`redis:unreachable` on EOF, `redis:timeout` on deadline). That connection MUST NOT re-enter the idle pool. A wrong bulk trailer MUST return `redis:issue?` and MUST NOT return `redis:unreachable`.
 
 #### Scenario: Unknown type including HTTP-shaped
 - **WHEN** the peer replies with a line whose first byte is not `+`, `-`, `:`, `$`, or `*`
@@ -300,6 +300,22 @@ A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-sha
 - **AND** the retry dial fails
 - **THEN** the command returns `redis:unreachable`
 - **AND** the idle pool is empty
+
+#### Scenario: Wrong bulk trailer is issue and not pooled
+- **WHEN** a Get receives a complete `$` payload whose two trailer bytes are not CR then LF
+- **THEN** the command returns `redis:issue?`
+- **AND** the error is not `redis:unreachable`
+- **AND** the idle pool is empty
+
+#### Scenario: Second Get after a wrong bulk trailer returns its own value
+- **WHEN** `MaxRetries` is `-1`
+- **AND** `PoolSize` is `1`
+- **AND** a Get receives a complete bulk whose trailer is not CRLF and leftover bytes remain on that connection
+- **THEN** that Get returns `redis:issue?`
+- **AND** the idle pool is empty
+- **WHEN** a later Get receives a complete bulk of known bytes
+- **THEN** that Get returns those bytes
+- **AND** those bytes are not remnants of the first payload
 
 ### Requirement: Get and integer verbs reject wrong reply arity
 `Get` SHALL return `redis:issue?` when a well-formed reply has a value count other than 1. `Incr` and `IncrBy` SHALL return `redis:issue?` when a well-formed reply has a value count other than 1. Those commands MUST NOT destroy the connection solely because the count mismatched; a successful decode MAY re-enter the idle pool.
