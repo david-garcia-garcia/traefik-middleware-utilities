@@ -65,6 +65,18 @@ func TestYaegi_MSetEXNative(t *testing.T) {
 	}
 }
 
+// TestYaegi_MatchSentinels proves interpreted errors.Is and IsMiss match a wrapped ErrMiss.
+func TestYaegi_MatchSentinels(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, `clientprobe.MatchSentinels()`)
+	if got != "ok" {
+		t.Fatalf("yaegi match sentinels: %q, want ok", got)
+	}
+}
+
 // TestYaegi_MSetEXLua proves interpreted MSetEX falls back to EVAL and a second call skips MSETEX.
 func TestYaegi_MSetEXLua(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
@@ -156,7 +168,11 @@ func writeGopathClientprobe(t testing.TB, goPath string) {
 const clientprobeSrc = `package clientprobe
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"strconv"
+	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
@@ -164,14 +180,14 @@ import (
 // RoundTrip builds a client, Sets a key, Gets it, and Dels it.
 func RoundTrip(host string) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
-	if err := client.Set("k", []byte("ok"), 60); err != nil {
+	if err := client.Set(context.Background(), "k", []byte("ok"), 60); err != nil {
 		return "set:" + err.Error()
 	}
-	got, err := client.Get("k")
+	got, err := client.Get(context.Background(), "k")
 	if err != nil {
 		return "get:" + err.Error()
 	}
-	if err := client.Del("k"); err != nil {
+	if err := client.Del(context.Background(), "k"); err != nil {
 		return "del:" + err.Error()
 	}
 	return string(got)
@@ -187,14 +203,14 @@ return value` + "`" + `
 // IncrAndEval Incs a missing key then Evals the Kong incrby+expireat snippet.
 func IncrAndEval(host string) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
-	afterIncr, err := client.Incr("yaegi-incr")
+	afterIncr, err := client.Incr(context.Background(), "yaegi-incr")
 	if err != nil {
 		return "incr:" + err.Error()
 	}
 	if afterIncr != 1 {
 		return fmt.Sprintf("incr:%d", afterIncr)
 	}
-	values, err := client.Eval(kongIncrbyExpireatScript, []string{"yaegi-eval"}, []string{"3", "1700000000"})
+	values, err := client.Eval(context.Background(), kongIncrbyExpireatScript, simpleredis.ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"yaegi-eval"}, []string{"3", "1700000000"})
 	if err != nil {
 		return "eval:" + err.Error()
 	}
@@ -207,7 +223,7 @@ func IncrAndEval(host string) string {
 // EvalNoScript Evals once so the compiled fake's first EVALSHA miss must fall back.
 func EvalNoScript(host string) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
-	values, err := client.Eval(kongIncrbyExpireatScript, []string{"yaegi-noscript"}, []string{"3", "1700000000"})
+	values, err := client.Eval(context.Background(), kongIncrbyExpireatScript, simpleredis.ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"yaegi-noscript"}, []string{"3", "1700000000"})
 	if err != nil {
 		return "eval:" + err.Error()
 	}
@@ -220,10 +236,10 @@ func EvalNoScript(host string) string {
 // MSetEXNative writes one pair via MSetEX against a native MSETEX fake.
 func MSetEXNative(host string) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
-	if err := client.MSetEX([]string{"yaegi-msetex"}, [][]byte{[]byte("ok")}, 60); err != nil {
+	if err := client.MSetEX(context.Background(), []string{"yaegi-msetex"}, [][]byte{[]byte("ok")}, 60); err != nil {
 		return "msetex:" + err.Error()
 	}
-	got, err := client.Get("yaegi-msetex")
+	got, err := client.Get(context.Background(), "yaegi-msetex")
 	if err != nil {
 		return "get:" + err.Error()
 	}
@@ -233,30 +249,88 @@ func MSetEXNative(host string) string {
 	return "ok"
 }
 
-// LiveVerbs runs New plus Get, Set, Del, Incr, Eval, and MSetEX against a live engine.
+// LiveVerbs runs New plus Get, MGet, Set, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against a live engine.
 func LiveVerbs(host, key string) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
-	if err := client.Set(key, []byte("ok"), 60); err != nil {
+	if err := client.Set(context.Background(), key, []byte("ok"), 60); err != nil {
 		return "set:" + err.Error()
 	}
-	got, err := client.Get(key)
+	got, err := client.Get(context.Background(), key)
 	if err != nil {
 		return "get:" + err.Error()
 	}
 	if string(got) != "ok" {
 		return "get:" + string(got)
 	}
-	if err := client.Del(key); err != nil {
+	slots, err := client.MGet(context.Background(), []string{key, key + "-missing"})
+	if err != nil {
+		return "mget:" + err.Error()
+	}
+	if len(slots) != 2 || string(slots[0]) != "ok" || slots[1] != nil {
+		return fmt.Sprintf("mget:%q", slots)
+	}
+	if err := client.Del(context.Background(), key); err != nil {
 		return "del:" + err.Error()
 	}
-	n, err := client.Incr(key + "-n")
+	n, err := client.Incr(context.Background(), key+"-n")
 	if err != nil {
 		return "incr:" + err.Error()
 	}
 	if n != 1 {
 		return fmt.Sprintf("incr:%d", n)
 	}
-	values, err := client.Eval("return 1", nil, nil)
+	by, err := client.IncrBy(context.Background(), key+"-by", 5)
+	if err != nil {
+		return "incrby:" + err.Error()
+	}
+	if by != 5 {
+		return fmt.Sprintf("incrby:%d", by)
+	}
+	expireKey := key + "-ex"
+	if err := client.Set(context.Background(), expireKey, []byte("1"), 60); err != nil {
+		return "expire-set:" + err.Error()
+	}
+	if err := client.Expire(context.Background(), expireKey, 90); err != nil {
+		return "expire:" + err.Error()
+	}
+	ttlScript := "return redis.call('TTL', KEYS[1])"
+	ttlDigest := simpleredis.ScriptSHA1Hex(ttlScript)
+	expireTTLValues, err := client.Eval(context.Background(), ttlScript, ttlDigest, []string{expireKey}, nil)
+	if err != nil {
+		return "expire-ttl:" + err.Error()
+	}
+	if len(expireTTLValues) != 1 {
+		return fmt.Sprintf("expire-ttl:%q", expireTTLValues)
+	}
+	expireTTL, err := strconv.ParseInt(string(expireTTLValues[0]), 10, 64)
+	if err != nil {
+		return "expire-ttl-parse:" + err.Error()
+	}
+	if expireTTL <= 60 {
+		return fmt.Sprintf("expire-ttl:%d", expireTTL)
+	}
+	expireAtKey := key + "-exat"
+	if err := client.Set(context.Background(), expireAtKey, []byte("1"), 60); err != nil {
+		return "expireat-set:" + err.Error()
+	}
+	if err := client.ExpireAt(context.Background(), expireAtKey, time.Now().Unix()+90); err != nil {
+		return "expireat:" + err.Error()
+	}
+	expireAtTTLValues, err := client.Eval(context.Background(), ttlScript, ttlDigest, []string{expireAtKey}, nil)
+	if err != nil {
+		return "expireat-ttl:" + err.Error()
+	}
+	if len(expireAtTTLValues) != 1 {
+		return fmt.Sprintf("expireat-ttl:%q", expireAtTTLValues)
+	}
+	expireAtTTL, err := strconv.ParseInt(string(expireAtTTLValues[0]), 10, 64)
+	if err != nil {
+		return "expireat-ttl-parse:" + err.Error()
+	}
+	if expireAtTTL <= 60 {
+		return fmt.Sprintf("expireat-ttl:%d", expireAtTTL)
+	}
+	values, err := client.Eval(context.Background(), "return 1", simpleredis.ScriptSHA1Hex("return 1"), nil, nil)
 	if err != nil {
 		return "eval:" + err.Error()
 	}
@@ -264,15 +338,26 @@ func LiveVerbs(host, key string) string {
 		return fmt.Sprintf("eval:%q", values)
 	}
 	msetexKey := key + "-m"
-	if err := client.MSetEX([]string{msetexKey}, [][]byte{[]byte("ok")}, 60); err != nil {
+	if err := client.MSetEX(context.Background(), []string{msetexKey}, [][]byte{[]byte("ok")}, 60); err != nil {
 		return "msetex:" + err.Error()
 	}
-	got, err = client.Get(msetexKey)
+	got, err = client.Get(context.Background(), msetexKey)
 	if err != nil {
 		return "msetex-get:" + err.Error()
 	}
 	if string(got) != "ok" {
 		return "msetex-get:" + string(got)
+	}
+	msetexAtKey := key + "-ma"
+	if err := client.MSetEXAt(context.Background(), []string{msetexAtKey}, [][]byte{[]byte("ok")}, time.Now().Unix()+90); err != nil {
+		return "msetexat:" + err.Error()
+	}
+	got, err = client.Get(context.Background(), msetexAtKey)
+	if err != nil {
+		return "msetexat-get:" + err.Error()
+	}
+	if string(got) != "ok" {
+		return "msetexat-get:" + string(got)
 	}
 	return "ok"
 }
@@ -280,18 +365,30 @@ func LiveVerbs(host, key string) string {
 // MSetEXLua calls MSetEX twice so a reject-MSETEX fake can prove the cache.
 func MSetEXLua(host string) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
-	if err := client.MSetEX([]string{"yaegi-msetex-lua"}, [][]byte{[]byte("ok")}, 60); err != nil {
+	if err := client.MSetEX(context.Background(), []string{"yaegi-msetex-lua"}, [][]byte{[]byte("ok")}, 60); err != nil {
 		return "first:" + err.Error()
 	}
-	if err := client.MSetEX([]string{"yaegi-msetex-lua-2"}, [][]byte{[]byte("ok")}, 60); err != nil {
+	if err := client.MSetEX(context.Background(), []string{"yaegi-msetex-lua-2"}, [][]byte{[]byte("ok")}, 60); err != nil {
 		return "second:" + err.Error()
 	}
-	got, err := client.Get("yaegi-msetex-lua")
+	got, err := client.Get(context.Background(), "yaegi-msetex-lua")
 	if err != nil {
 		return "get:" + err.Error()
 	}
 	if string(got) != "ok" {
 		return "get:" + string(got)
+	}
+	return "ok"
+}
+
+// MatchSentinels proves interpreted errors.Is on an exported sentinel and IsMiss.
+func MatchSentinels() string {
+	wrapped := fmt.Errorf("context: %w", simpleredis.ErrMiss)
+	if !errors.Is(wrapped, simpleredis.ErrMiss) {
+		return "errors.Is"
+	}
+	if !simpleredis.IsMiss(wrapped) {
+		return "IsMiss"
 	}
 	return "ok"
 }

@@ -1,21 +1,41 @@
 package simpleredis
 
-import "testing"
+import (
+	"context"
+	"strconv"
+	"testing"
+	"time"
+)
 
-// TestLive_Eval proves Eval integer, EVALSHA, and NOSCRIPT after SCRIPT FLUSH on live Redis and Dragonfly.
+// TestLive_Eval proves Eval integer, KEYS argv, EVALSHA, and NOSCRIPT after SCRIPT FLUSH on live Redis and Dragonfly.
 func TestLive_Eval(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", runLiveEvalBackend)
 }
 
-// runLiveEvalBackend proves Eval integer, a second Eval after EVALSHA, and Eval after SCRIPT FLUSH.
+// runLiveEvalBackend proves Eval integer, KEYS incrby+expireat, a second Eval after EVALSHA, and Eval after SCRIPT FLUSH.
 func runLiveEvalBackend(t *testing.T, addr string) {
 	t.Helper()
 	client := waitLiveSimpleRedis(t, addr)
 	t.Cleanup(client.Close)
 
+	t.Run("evalKeysIncrbyExpireat", func(t *testing.T) {
+		key := t.Name()
+		expireUnix := strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)
+		values, err := client.Eval(context.Background(), kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{key}, []string{"3", expireUnix})
+		if err != nil {
+			t.Fatalf("Eval KEYS: %v", err)
+		}
+		n, err := parseIntegerReply(values, nil)
+		if err != nil {
+			t.Fatalf("Eval KEYS parse: %v", err)
+		}
+		if n != 3 {
+			t.Fatalf("Eval KEYS = %d, want 3", n)
+		}
+	})
 	t.Run("evalInteger", func(t *testing.T) {
 		script := "return 7 -- " + t.Name()
-		values, err := client.Eval(script, nil, nil)
+		values, err := client.Eval(context.Background(), script, ScriptSHA1Hex(script), nil, nil)
 		if err != nil {
 			t.Fatalf("Eval: %v", err)
 		}
@@ -29,10 +49,10 @@ func runLiveEvalBackend(t *testing.T, addr string) {
 	})
 	t.Run("secondEvalHitsEvalSha", func(t *testing.T) {
 		script := "return 8 -- " + t.Name()
-		if _, err := client.Eval(script, nil, nil); err != nil {
+		if _, err := client.Eval(context.Background(), script, ScriptSHA1Hex(script), nil, nil); err != nil {
 			t.Fatalf("first Eval: %v", err)
 		}
-		values, err := client.Eval(script, nil, nil)
+		values, err := client.Eval(context.Background(), script, ScriptSHA1Hex(script), nil, nil)
 		if err != nil {
 			t.Fatalf("second Eval: %v", err)
 		}
@@ -46,13 +66,13 @@ func runLiveEvalBackend(t *testing.T, addr string) {
 	})
 	t.Run("evalAfterScriptFlush", func(t *testing.T) {
 		script := "return 9 -- " + t.Name()
-		if _, err := client.Eval(script, nil, nil); err != nil {
+		if _, err := client.Eval(context.Background(), script, ScriptSHA1Hex(script), nil, nil); err != nil {
 			t.Fatalf("seed Eval: %v", err)
 		}
-		if _, err := client.exec([]byte("SCRIPT"), []byte("FLUSH")); err != nil {
+		if _, err := client.exec(context.Background(), []byte("SCRIPT"), []byte("FLUSH")); err != nil {
 			t.Fatalf("SCRIPT FLUSH: %v", err)
 		}
-		values, err := client.Eval(script, nil, nil)
+		values, err := client.Eval(context.Background(), script, ScriptSHA1Hex(script), nil, nil)
 		if err != nil {
 			t.Fatalf("Eval after FLUSH: %v", err)
 		}

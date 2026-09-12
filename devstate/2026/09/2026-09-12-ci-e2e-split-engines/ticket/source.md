@@ -1,0 +1,3 @@
+# Split Go E2E CI into Redis vs Dragonfly jobs
+
+Currently the CI Go E2E test includes both Dragonfly and Redis. Split these into individual CI items in GitHub Actions so that one job tests on top of Redis and the other tests on top of Dragonfly. Today there is a single `Go E2E` job (job id `e2e` in `.github/workflows/ci.yml`) that starts both engines. After the change, GitHub Checks must show two separate items: one live-Go suite against Redis, one against Dragonfly, so a Redis-only or Dragonfly-only failure is visible as its own check. Unit (`go test -short`), Unit race, Lint, and Pester Integration Tests stay as they are unless they must change so the two live jobs can skip the other engine.

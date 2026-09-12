@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-risk-05-freeinuseturn-blocks-when-full
+jobName: 2026-09-12-simpleredis-risk-05-freeinuseturn-blocks-when-full
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 215cd34fd909571c20b4df91c20e160a0311cfffa0380c9939212d2c15ce8469
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-over-free-nonblocking
+pr:
+  id: "31"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/31

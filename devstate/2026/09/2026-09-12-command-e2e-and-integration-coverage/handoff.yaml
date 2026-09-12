@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-command-e2e-and-integration-coverage
+jobName: 2026-09-12-command-e2e-and-integration-coverage
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: b4064cecce08614e0cc501e0e428fb5b3a853211c177260029f2b7bf6f64794f
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-command-coverage
+pr:
+  id: 43
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/43

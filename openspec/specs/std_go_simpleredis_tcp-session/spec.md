@@ -21,7 +21,7 @@ The session SHALL live in package `simpleredis` under folder `simpleredis/`. The
 ### Requirement: New records settings and does not dial
 `New(Config)` SHALL copy `Config` onto a new client (host, password, database, pool knobs, I/O knobs, retry sentinels) and SHALL create the in-use-turn channel sized to `PoolSize` (const default 8 when `PoolSize` is 0). `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, or retry fields.
 
-Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` two seconds, `IOTimeout` one second. Retry fields on `Config` follow go-redis Options sentinels: `0` means the default (3 extra retries, 8ms, 512ms); `-1` means off.
+Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` 200 milliseconds, `IOTimeout` 100 milliseconds. Retry fields on `Config`: `0` at `New` means 1 extra retry; `-1` means off (one send). An explicit `MaxRetries` of 3 means 3 extra retries. `MinRetryBackoff` / `MaxRetryBackoff` keep go-redis sentinels: `0` means 8ms / 512ms; `-1` means off.
 
 #### Scenario: New does not open a socket
 - **WHEN** `New` is called with a host that refuses connections
@@ -37,7 +37,7 @@ Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize`
 - **AND** the fake observes at most one TCP connection
 
 ### Requirement: First command dials TCP
-The first `Get`, `MGet` (with at least one name), `Set`, or `Del` after `New` SHALL dial `tcp` to the host stored by `New`. The session MUST NOT dial a Unix socket and MUST NOT use TLS. Dial timeout SHALL be two seconds.
+The first `Get`, `MGet` (with at least one name), `Set`, or `Del` after `New` SHALL dial `tcp` to the host stored by `New`. The session MUST NOT dial a Unix socket and MUST NOT use TLS. Zero-Config dial timeout SHALL be 200 milliseconds.
 
 #### Scenario: Unreachable host
 - **WHEN** a command is issued after `New` with host `127.0.0.1:1`
@@ -53,11 +53,11 @@ When `pass` is non-empty, each new dial SHALL send `AUTH` with that password bef
 - **AND** they are not sent again on those Gets
 
 ### Requirement: Idle connections are pooled
-The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdleConns` (const default 8). Live sockets (idle plus checked out) SHALL not exceed `PoolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `PoolSize`, a caller SHALL wait for a released socket instead of dialing. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `PoolSize` connections, including when more callers overlap than `PoolSize`. An idle connection older than `IdleTimeout` (const default thirty seconds) SHALL not be reused; the next command SHALL dial a new one if live sockets are under `PoolSize`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. When unused sockets already equal `MaxIdleConns`, `release` SHALL close a reusable socket instead of growing the idle pool, even while live sockets are under `PoolSize`. After a burst of returns, unused sockets SHALL equal `min(MaxIdleConns, PoolSize)` and the peer's still-open sockets SHALL equal that idle count.
+The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdleConns` (const default 8). Live sockets (idle plus checked out) SHALL not exceed `PoolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `PoolSize`, a caller SHALL wait for a released socket instead of dialing. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `PoolSize` connections, including when more callers overlap than `PoolSize`. An idle connection older than `IdleTimeout` (const default thirty seconds) SHALL not be reused. On the next command that borrows, every idle socket older than `IdleTimeout` SHALL be closed, including those behind a younger tail that is reused. If no younger idle socket remains, the next command SHALL dial a new one if live sockets are under `PoolSize`. `New` MUST NOT start a goroutine to close idle sockets. A client that issues no later command MAY keep idle sockets past `IdleTimeout` until `Close`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. When unused sockets already equal `MaxIdleConns`, `release` SHALL close a reusable socket instead of growing the idle pool, even while live sockets are under `PoolSize`. After a burst of returns, unused sockets SHALL equal `min(MaxIdleConns, PoolSize)` and the peer's still-open sockets SHALL equal that idle count.
 
-Every command (GET, MGET, SET, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL) SHALL use go-redis-shaped command retry. `MaxRetries`, `MinRetryBackoff`, and `MaxRetryBackoff` live on `Config` and are copied at `New`. The retry loop SHALL be `for attempt := 0; attempt <= maxRetries; attempt++` (default 3 means at most four sends). Backoff SHALL sleep only between retries (`attempt > 0`), using go-redis `RetryBackoff` (`math/rand` `Int63n` jitter). Construction is `New(Config)`.
+Every command (GET, MGET, SET, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL) SHALL use go-redis-shaped command retry. `MaxRetries`, `MinRetryBackoff`, and `MaxRetryBackoff` live on `Config` and are copied at `New`. The retry loop SHALL be `for attempt := 0; attempt <= maxRetries; attempt++` (zero Config means 1 extra retry, at most two sends). Backoff SHALL wait only between retries (`attempt > 0`), using go-redis `RetryBackoff` (`math/rand` `Int63n` jitter), and MUST return when the command context is done or the overall command deadline has passed. Construction is `New(Config)`.
 
-A command SHALL retry when the error is `redis:unreachable` (EOF, unexpected EOF, dial failure, and other IO as this client maps them), including a fresh dial, unless the client is `Close`d (`redis:unreachable` from a closed client MUST NOT spin `MaxRetries`). A command SHALL also retry Redis error replies whose text is `ERR max number of clients reached` or has prefix `LOADING `, `READONLY `, `MASTERDOWN `, `CLUSTERDOWN `, or `TRYAGAIN ` (space after the word). A command MUST NOT retry `redis:timeout` (documented deviation from go-redis: `ioTimeout` is one second; retrying would stall a Traefik request for several seconds), `redis:miss`, `redis:noauth`, `redis:issue?`, or other Redis `-ERR` replies. A pool-wait timeout SHALL return `redis:unreachable` and MUST NOT be retried, so `MaxRetries` does not multiply `poolTimeout`.
+A command SHALL retry when the error is `redis:unreachable` (EOF, unexpected EOF, dial failure, and other IO as this client maps them), including a fresh dial, unless the client is `Close`d (`redis:unreachable` from a closed client MUST NOT spin `MaxRetries`). A command SHALL also retry Redis error replies whose text is `ERR max number of clients reached` or has prefix `LOADING `, `READONLY `, `MASTERDOWN `, `CLUSTERDOWN `, or `TRYAGAIN ` (space after the word). A command MUST NOT retry `redis:timeout` (documented deviation from go-redis: `IOTimeout` default is 100 milliseconds), `redis:miss`, `redis:noauth`, `redis:issue?`, a cancelled or deadline-exceeded command context, or other Redis `-ERR` replies. A pool-wait timeout SHALL return `redis:unreachable` and MUST NOT be retried, so `MaxRetries` does not multiply `poolTimeout`.
 
 INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is retried. That is accepted. A timeout on a reused connection MUST NOT be retried for any verb.
 
@@ -99,6 +99,15 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **AND** after waiting for peer close, still-open sockets equal 8
 - **AND** a later Get reuses an idle socket and the fake's accept count does not increase
 
+#### Scenario: Stale idle head is closed while the tail stays hot
+- **WHEN** a client has two idle sockets
+- **AND** only the older socket is past `IdleTimeout`
+- **AND** a command is issued
+- **THEN** the fake observes that aged socket closed
+- **AND** the command reuses the younger socket
+- **AND** the fake does not accept a third TCP connection for that command
+- **AND** `New` did not start a goroutine
+
 #### Scenario: Lost-reply Incr is retried
 - **WHEN** a client has an idle pooled connection
 - **AND** the peer applies INCR then closes before writing the reply, once
@@ -134,7 +143,7 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **AND** the peer observes a second GET on a new connection
 
 ### Requirement: Full pool wait returns redis:unreachable
-When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried.
+When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried. The pool-wait sentinel SHALL wrap the unreachable sentinel so `errors.Is` matches unreachable, and the retry classifier MUST still treat pool wait as not retryable (`shouldRetry` false for pool wait, true for a plain unreachable sentinel). Identity compare, or a pool-wait check before unreachable, is required; rewriting the classifier to `errors.Is` against unreachable alone MUST NOT retry pool wait.
 
 #### Scenario: Pool wait times out
 - **WHEN** all live sockets at the default `poolSize` (8) are busy
@@ -143,8 +152,14 @@ When every live socket is checked out, a further command SHALL wait for an in-us
 - **THEN** that command returns `redis:unreachable`
 - **AND** the fake or server observes no additional TCP connection for that command
 
+#### Scenario: Pool wait is not retried after wrapping unreachable
+- **WHEN** the error is the pool-wait sentinel
+- **THEN** command retry does not retry that error
+- **WHEN** the error is the plain unreachable sentinel
+- **THEN** command retry does retry that error
+
 ### Requirement: Live cap is proven on Redis and Dragonfly
-The session SHALL keep at most `poolSize` live TCP connections (idle plus in use; const default 8) against a real Redis and a real Dragonfly. Fake-server tests MUST NOT be the only proof. Traefik local-plugin Pester on `/redis` and `/dragonfly` SHALL overlap requests long enough to contend for sockets, observe at most `poolSize` clients on that backend (default 8), and observe `redis:unreachable` when a waiter exceeds the pool wait. Compiled tests gated on live addresses SHALL prove pool-wait `redis:unreachable` on both engines; they MAY set `Config.PoolSize` so a shared CI Redis is not left in Lua BUSY. Those compiled tests MUST skip under `-short` or when both `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY` are unset, MUST fail when exactly one address is set, and MUST run on the CI `e2e` job. Any Lua used to hold a socket MUST be Lua 5.1-safe (no `table.maxn`) and MUST list touched keys in KEYS (zero keys when none are touched). Compose project `reclaim-e2e`, routes `/a` `/b`, and existing verb headers MUST keep their semantics.
+The session SHALL keep at most `poolSize` live TCP connections (idle plus in use; const default 8) against a real Redis and a real Dragonfly. Fake-server tests MUST NOT be the only proof. Traefik local-plugin Pester on `/redis` and `/dragonfly` SHALL overlap requests long enough to contend for sockets, observe at most `poolSize` clients on that backend (default 8), and observe `redis:unreachable` when a waiter exceeds the pool wait. Compiled tests gated on live addresses SHALL prove pool-wait `redis:unreachable` on both engines; they MAY set `Config.PoolSize` so a shared CI Redis is not left in Lua BUSY. Those compiled tests MUST skip under `-short` or when both `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY` are unset, MUST run the set engine when exactly one address is set, and MUST run on CI `e2e-redis` and `e2e-dragonfly`. Any Lua used to hold a socket MUST be Lua 5.1-safe (no `table.maxn`) and MUST list touched keys in KEYS (zero keys when none are touched). Compose project `reclaim-e2e`, routes `/a` `/b`, and existing verb headers MUST keep their semantics.
 
 #### Scenario: Concurrent holds stay within poolSize on Redis
 - **WHEN** overlapping requests through the Traefik plugin hold sockets against compose Redis
@@ -181,7 +196,7 @@ The session SHALL keep at most `poolSize` live TCP connections (idle plus in use
 - **AND** no new TCP connection is opened
 
 ### Requirement: I/O deadline is timeout, not a net.Error assert
-When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `IOTimeout` default is one second). A timeout on a reused connection MUST NOT open a second connection.
+When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `IOTimeout` default is 100 milliseconds). A timeout on a reused connection MUST NOT open a second connection.
 
 #### Scenario: I/O timeout is redis:timeout
 - **WHEN** the Redis peer does not complete a reply before the I/O deadline
@@ -265,7 +280,7 @@ When a command’s reply is a short bulk read (the peer announces more payload b
 ### Requirement: Peer-closed idle socket is retried
 When a pooled idle TCP connection is closed by the Redis or Dragonfly peer while it is still younger than thirty seconds, the next command SHALL treat that failure as a dead connection (not a timeout) and SHALL retry on a new dial under the go-redis-shaped `MaxRetries` policy. An I/O end-of-file on that reused socket MUST map to an error whose `Error()` text is `redis:unreachable`. A timeout MUST NOT be retried. Closing the client-side file descriptor of a pooled socket is a distinct failure and MUST remain a separate proof; that path MUST NOT stand in for peer close. If the retry cannot obtain a connection, the command SHALL return `redis:unreachable`. The dead socket MUST NOT be returned to the idle pool.
 
-Compiled tests MUST close the **accepted** socket from the server after the first reply and MUST NOT close the client. Live tests MUST close the pooled connection with `CLIENT KILL` by `ADDR` or `ID` (not `TYPE` or `SKIPME`) against both Redis and Dragonfly, then the next command SHALL succeed on a new dial. Those live tests MUST skip under `-short` or when both SimpleRedis live addresses are unset, MUST fail when exactly one address is set, and MUST run on the CI `e2e` job. The nested Traefik plugin SHALL keep `simpleredis.New` in Traefik `New`. A recover request (`recover=1`) SHALL run Set and Get only, SHALL set `X-SimpleRedis-Recover: ok` when those succeed after recovery, and MUST NOT Eval. Default `/redis` and `/dragonfly` verb headers MUST stay. Existing Eval on the default path SHALL remain Lua 5.1-safe and SHALL list its keys in `KEYS`. Compose idle `timeout` SHALL stay 0. The SimpleRedis Pester Describe MUST NOT stop `whoami-a` or `whoami-b`.
+Compiled tests MUST close the **accepted** socket from the server after the first reply and MUST NOT close the client. Live tests MUST close the pooled connection with `CLIENT KILL` by `ADDR` or `ID` (not `TYPE` or `SKIPME`) against both Redis and Dragonfly, then the next command SHALL succeed on a new dial. Those live tests MUST skip under `-short` or when both SimpleRedis live addresses are unset, MUST run the set engine when exactly one address is set, and MUST run on CI `e2e-redis` and `e2e-dragonfly`. The nested Traefik plugin SHALL keep `simpleredis.New` in Traefik `New`. Pester recover SHALL be health warmup, `CLIENT KILL`, then Set and Get only, and MUST NOT Eval. Exact `/redis` and `/dragonfly` SHALL remain health Set+Get. Verb paths live on `/redis/<verb>` and `/dragonfly/<verb>`. Eval on `/eval` SHALL remain Lua 5.1-safe and SHALL list its keys in `KEYS`. Compose idle `timeout` SHALL stay 0. The SimpleRedis Pester Describe MUST NOT stop `whoami-a` or `whoami-b`.
 
 #### Scenario: Peer-closed idle is retried
 - **WHEN** a compiled fake Redis accepts one connection, answers the first Get, and closes that accepted socket without reading further
@@ -301,39 +316,88 @@ Compiled tests MUST close the **accepted** socket from the server after the firs
 #### Scenario: Traefik Redis recover after kill
 - **WHEN** a request has already succeeded on `/redis`
 - **AND** the probe's pooled Redis connection is killed with `CLIENT KILL` by `ADDR` or `ID`
-- **AND** a later request is made on `/redis?recover=1`
-- **THEN** the response status is 200
-- **AND** the response includes `X-SimpleRedis-Recover: ok`
+- **AND** a later Set then Get is made on `/redis`
+- **THEN** the Get status is 200
+- **AND** the Get body is the value Set wrote
 - **AND** the SimpleRedis Pester Describe does not stop `whoami-a` or `whoami-b`
 
 #### Scenario: Traefik Dragonfly recover after kill
 - **WHEN** a request has already succeeded on `/dragonfly`
 - **AND** the probe's pooled Dragonfly connection is killed with `CLIENT KILL` by `ADDR` or `ID`
-- **AND** a later request is made on `/dragonfly?recover=1`
-- **THEN** the response status is 200
-- **AND** the response includes `X-SimpleRedis-Recover: ok`
+- **AND** a later Set then Get is made on `/dragonfly`
+- **THEN** the Get status is 200
+- **AND** the Get body is the value Set wrote
 - **AND** the SimpleRedis Pester Describe does not stop `whoami-a` or `whoami-b`
 
-#### Scenario: Default verb headers stay
-- **WHEN** a request is made on `/redis` or `/dragonfly` without `recover=1`
-- **THEN** the response still includes the existing verb headers
-- **AND** that request's Eval lists its key in `KEYS` and is Lua 5.1-safe
+#### Scenario: Default verb paths stay
+- **WHEN** Pester GETs `/redis/get` after Set
+- **THEN** the response body is the value Set wrote
+- **AND** POST `/redis/eval` lists its key in `KEYS` and is Lua 5.1-safe
+
 ### Requirement: Lost-reply Incr and Eval are proven on live Redis and Dragonfly
-A request through the nested SimpleRedis Traefik plugin SHALL, in addition to the happy-path verbs, send Incr and Eval through a compose RESP drop-relay in front of that request’s engine (`redis:6379` or `dragonfly:6379`). The drop-relay SHALL drop INCR, INCRBY, or EVAL only after that TCP session has already forwarded at least one command (the probe warms with GET). A retry on a new session whose first command is INCR or EVAL SHALL pass the reply through. Other verbs SHALL pass through. The plugin SHALL set `X-SimpleRedis-DropIncr` to the integer after two applies (`2`), `X-SimpleRedis-DropIncrStored` to the stored value `2` read from the engine (not the drop-relay), `X-SimpleRedis-DropEval` to the integer after two applies of the Kong script (`6` when ARGV INCRBY is `3`), and `X-SimpleRedis-DropEvalStored` to that stored script result. Eval SHALL use a Lua 5.1-safe script that lists its key in KEYS. Happy-path Host stays `redis:6379` / `dragonfly:6379`. The Redis and Dragonfly Pester Describes MUST NOT stop `whoami-a` or `whoami-b`.
+A request through the nested SimpleRedis Traefik plugin SHALL, with query `drop=1` on `/redis` and `/dragonfly` verb paths, send Incr and Eval through a compose RESP drop-relay in front of that request’s engine (`redis:6379` or `dragonfly:6379`). The drop-relay SHALL drop INCR, INCRBY, or EVAL only after that TCP session has already forwarded at least one command (Pester warms with GET). A retry on a new session whose first command is INCR or EVAL SHALL pass the reply through. Other verbs SHALL pass through. After drop Incr the body SHALL be the integer after two applies (`2`) and a Get without `drop=1` SHALL return stored `2`. After drop Eval of the Kong script (ARGV INCRBY `3`) the body SHALL be `6` and a Get without `drop=1` SHALL return stored `6`. Eval SHALL use a Lua 5.1-safe script that lists its key in KEYS. Happy-path Host stays `redis:6379` / `dragonfly:6379`. The Redis and Dragonfly Pester Describes MUST NOT stop `whoami-a` or `whoami-b`.
 
 #### Scenario: Pester asserts lost-reply Incr and Eval on Redis
-- **WHEN** a request is made on `/redis`
-- **THEN** `X-SimpleRedis-DropIncr` is `2`
-- **AND** `X-SimpleRedis-DropIncrStored` is `2`
-- **AND** `X-SimpleRedis-DropEval` is `6`
-- **AND** `X-SimpleRedis-DropEvalStored` is `6`
+- **WHEN** Pester Incrs and Evals `/redis` with `drop=1` after a Get warmup
+- **THEN** the Incr body is `2`
+- **AND** a Get without `drop=1` of that key is `2`
+- **AND** the Eval body is `6`
+- **AND** a Get without `drop=1` of that Eval key is `6`
 - **AND** the Redis Pester Describe does not stop `whoami-a` or `whoami-b`
 
 #### Scenario: Pester asserts lost-reply Incr and Eval on Dragonfly
-- **WHEN** a request is made on `/dragonfly`
-- **THEN** `X-SimpleRedis-DropIncr` is `2`
-- **AND** `X-SimpleRedis-DropIncrStored` is `2`
-- **AND** `X-SimpleRedis-DropEval` is `6`
-- **AND** `X-SimpleRedis-DropEvalStored` is `6`
+- **WHEN** Pester Incrs and Evals `/dragonfly` with `drop=1` after a Get warmup
+- **THEN** the Incr body is `2`
+- **AND** a Get without `drop=1` of that key is `2`
+- **AND** the Eval body is `6`
+- **AND** a Get without `drop=1` of that Eval key is `6`
 - **AND** the Dragonfly Pester Describe does not stop `whoami-a` or `whoami-b`
+
+### Requirement: Extra in-use turn return MUST NOT hang
+When a caller returns an in-use-turn token while the in-use-turn channel is already full (`len` equals `cap` after `New`), that return SHALL complete without waiting. The send that would block MUST be dropped. `OverFrees()` SHALL increment by one for that drop. `OverFrees()` SHALL be readable next to `PoolSize()` and `MaxIdleConns()`. Balanced borrow and release SHALL leave the in-use-turn channel full (`len` equals `cap`) and `OverFrees()` equal to 0. The client MUST NOT panic on an extra return.
+
+#### Scenario: Extra return on a fresh client returns promptly
+- **WHEN** a client is created with `New` so the in-use-turn channel is full
+- **AND** one extra in-use turn is returned without a matching take
+- **THEN** that return completes without waiting
+- **AND** `OverFrees()` is 1
+
+#### Scenario: Hammered borrow and release stay balanced
+- **WHEN** many goroutines hammer borrow and release through a healthy fake, a dead address, an AUTH-rejecting fake, and a starved pool with a short `PoolTimeout`
+- **THEN** those goroutines all finish
+- **AND** the in-use-turn channel `len` equals `cap`
+- **AND** `OverFrees()` is 0
+
+### Requirement: Whole command has an overall deadline
+Each command SHALL compute one overall deadline at entry equal to `(maxRetries+1)*(DialTimeout+IOTimeout)` unless the caller's context deadline is sooner. When the library instant is sooner, the command SHALL bind it onto the caller's context (`context.WithDeadline`, same shape as `net.Dialer` / `http.Client`). Dial, AUTH, SELECT, and the command SHALL share the remaining time. AUTH and SELECT MUST NOT each add a fresh full `IOTimeout` on top of a completed TCP connect. Per-command socket I/O SHALL still `SetDeadline` to the lesser of `IOTimeout` and time remaining. When that overall library deadline expires, the command SHALL return `redis:timeout` and MUST NOT start another attempt. A sooner caller deadline SHALL return that context's `Err()`.
+
+#### Scenario: Black-hole Get returns within the overall deadline
+- **WHEN** a zero-Config client Gets against `203.0.113.1:6379`
+- **THEN** the command returns within `(maxRetries+1)*(DialTimeout+IOTimeout)` plus 50 milliseconds of scheduling slack
+- **AND** the error `Error()` text is `redis:unreachable` or `redis:timeout`
+
+#### Scenario: Handshake stall is bounded by the overall deadline
+- **WHEN** `Pass` and `Database` are set
+- **AND** the peer completes the TCP handshake and never replies
+- **AND** a command is issued
+- **THEN** the command returns within the overall deadline
+- **AND** elapsed time is less than `DialTimeout + 2×IOTimeout` times the number of attempts that would fit if each step used a fresh `IOTimeout`
+
+### Requirement: Command context can cancel the session
+A command that takes a context SHALL return that context's `Err()` when the context is cancelled or its deadline is exceeded. The session SHALL close the in-use socket rather than return it to the idle pool, and SHALL free the in-use turn. Mapping MUST NOT type-assert `net.Error`. A cancelled wait for a pool turn SHALL NOT acquire a turn.
+
+#### Scenario: Cancel mid-command returns promptly and frees the turn
+- **WHEN** a command is in flight against a peer that does not reply
+- **AND** the caller cancels the context
+- **THEN** the command returns that context's `Err()`
+- **AND** a later command on the same client can obtain a pool turn
+- **AND** the cancelled command's socket is not in the idle pool
+
+### Requirement: Session source keeps copy conversions
+The SimpleRedis session source SHALL convert command names, scripts, and decimal arguments with `[]byte(...)` and integer-reply payloads with `string(...)`. It MUST NOT add `unsafe` zero-copy helpers in session source. It MUST NOT import `unsafe` or use cgo. Traefik local-plugin `useunsafe` MUST stay false.
+
+#### Scenario: Copy conversions stay in session source
+- **WHEN** the session source converts a string key, script, or decimal argument to bytes, or a bulk integer payload to a string
+- **THEN** that conversion is `[]byte(...)` or `string(...)`
+- **AND** session source has no unsafe pointer or header cast that aliases string and `[]byte`
 
