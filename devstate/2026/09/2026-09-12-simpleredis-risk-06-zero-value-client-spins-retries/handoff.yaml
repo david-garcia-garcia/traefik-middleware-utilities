@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-risk-06-zero-value-client-spins-retries
+jobName: 2026-09-12-simpleredis-risk-06-zero-value-client-spins-retries
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: cb901f7e04a66105c7ce1dc85fde855c5c0398e48d3c5f189cdbcc55032aee85
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: "32"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/32
