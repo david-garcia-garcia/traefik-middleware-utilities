@@ -29,3 +29,22 @@ phase: codereview
 findings: Expire/ExpireAt Pester and Yaegi LiveVerbs did not prove TTL; New omitted terminal handler; Pester locals `$a`/`$name`
 fixed: Expire TTL vs Set baseline; LiveVerbs TTL Eval; New comment; `$Engine`/`$firstToken`/`$redisKey`
 skipped: Standards 4 reusable workflow (judgement)
+
+## devdocsimpact (2026-09-12)
+phase: devdocsimpact
+findings: probe How-to omitted terminal handler and 1s IOTimeout
+fixed: Gotcha on std_go_simpleredis.md
+skipped: none
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: fold four deltas into live catalog; moved change to archive/2026-09-12-simpleredis-command-coverage
+skipped: none
+
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: none
+fixed: title ✅ test(simpleredis): HTTP verb probe and live command coverage; PR 43 merged
+skipped: none
+
