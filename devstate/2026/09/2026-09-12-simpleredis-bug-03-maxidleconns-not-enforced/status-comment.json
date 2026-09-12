@@ -1,0 +1,8 @@
+{
+  "commentId": "none",
+  "issueKey": "2026-09-12-simpleredis-bug-03-maxidleconns-not-enforced",
+  "markerValue": "[sgsi-dev-ticket-status:2026-09-12-simpleredis-bug-03-maxidleconns-not-enforced]",
+  "issueHost": "local",
+  "startedAt": "2026-09-12T12:31:37Z",
+  "startedBody": "Developer agent: started — 2026-09-12T12:31:37Z\n\nIssueKey: 2026-09-12-simpleredis-bug-03-maxidleconns-not-enforced\nJobName: 2026-09-12-simpleredis-bug-03-maxidleconns-not-enforced\nDumping ticket next.\n\nDelivery status\n- Branch: 2026-09-12-simpleredis-bug-03-maxidleconns-not-enforced (unknown)\n- OpenSpec: none\n- Pull request: none\n- CI: not seen\n"
+}
