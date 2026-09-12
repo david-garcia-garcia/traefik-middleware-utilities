@@ -11,6 +11,12 @@ import (
 const testTTL = 2 * time.Second
 const agreeMaxDelay = time.Millisecond
 
+// newSimpleRedisForTest returns a New client for tests.
+func newSimpleRedisForTest(t testing.TB, host string) *simpleredis.SimpleRedis {
+	t.Helper()
+	return simpleredis.New(simpleredis.Config{Host: host})
+}
+
 func TestNewRedis_RejectsNil(t *testing.T) {
 	limiter, err := NewRedis(nil, 1, 1, time.Second, testTTL)
 	if limiter != nil || !errors.Is(err, errRedis) {
@@ -44,8 +50,7 @@ func TestMemory_IdlePastTTLStartsFull(t *testing.T) {
 func TestRedis_EvalBadReply(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
 	fake.setEvalReply("*1\r\n$4\r\ntrue\r\n")
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := NewRedis(client, 1, 1, time.Second, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -141,8 +146,7 @@ func TestMemory_RefundWhenWaitExceedsMaxDelay(t *testing.T) {
 
 func TestRedis_EvalEncoding(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := NewRedis(client, 1, 3, time.Hour, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -160,10 +164,8 @@ func TestRedis_EvalEncoding(t *testing.T) {
 
 func TestRedis_TwoInstancesShareBurst(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	aClient := &simpleredis.SimpleRedis{}
-	aClient.Init(addr, "", "")
-	bClient := &simpleredis.SimpleRedis{}
-	bClient.Init(addr, "", "")
+	aClient := newSimpleRedisForTest(t, addr)
+	bClient := newSimpleRedisForTest(t, addr)
 	a, err := NewRedis(aClient, 1, 3, time.Microsecond, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -195,8 +197,7 @@ func TestRedis_TwoInstancesShareBurst(t *testing.T) {
 
 func TestMemoryAndRedis_Agree(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	mem, err := NewMemory(2, 2, agreeMaxDelay, testTTL)
 	if err != nil {
 		t.Fatal(err)
@@ -227,8 +228,7 @@ func TestMemoryAndRedis_Agree(t *testing.T) {
 }
 
 func TestRedis_Unreachable(t *testing.T) {
-	client := &simpleredis.SimpleRedis{}
-	client.Init("127.0.0.1:1", "", "")
+	client := newSimpleRedisForTest(t, "127.0.0.1:1")
 	limiter, err := NewRedis(client, 1, 1, time.Second, testTTL)
 	if err != nil {
 		t.Fatal(err)

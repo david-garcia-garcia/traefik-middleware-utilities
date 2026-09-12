@@ -61,7 +61,7 @@ Callers SHALL match errors by `Error()` text. The session SHALL export these exa
 - **THEN** the command returns `redis:noauth`
 
 ### Requirement: Interpreter tests observe Init Get Set Del
-Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `Init`, `Get`, `Set`, `Del`, `Incr`, and `Eval` against a compiled fake TCP Redis. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik.
+Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `Init`, `Get`, `Set`, `Del`, `Incr`, and `Eval` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik.
 
 #### Scenario: Yaegi Init Get Set Del
 - **WHEN** interpreted code Inits a client to a compiled fake Redis listener
@@ -77,8 +77,14 @@ Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `Init`, `Get`, 
 - **THEN** Incr returns `1`
 - **AND** Eval returns one element whose bytes are that integer
 
+#### Scenario: Yaegi Eval NOSCRIPT fallback
+- **WHEN** interpreted code Inits a client to a compiled fake Redis listener whose first EVALSHA for that script is a miss
+- **AND** it calls Eval
+- **THEN** Eval returns the script result
+- **AND** the caller does not see NOSCRIPT
+
 ### Requirement: Traefik request SET plus GET sets a response header
-A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET it back, then set a response header from that GET so Pester can assert the round-trip. The same request SHALL also call MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval against that backend, and set one response header per verb. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new).
+A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET it back, then set a response header from that GET so Pester can assert the round-trip. The same request SHALL also call MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval against that backend, and set one response header per verb. Eval SHALL run twice on that request: `X-SimpleRedis-Eval` from the first result, `X-SimpleRedis-EvalAgain` from the second. The probe SHALL set `X-SimpleRedis-EvalDigest` to the SHA-1 hex of the Kong KEYS snippet const. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new) and MUST NOT use `table.maxn`. Pester SHALL prove EVALSHA + NOSCRIPT fallback live on both engines: `SCRIPT FLUSH` then `SCRIPT EXISTS` of that digest is `0`, GET succeeds (`Eval` `3` and `EvalAgain` `3`), `EXISTS` is `1`, GET again succeeds. Same sequence against Dragonfly via `redis-cli -h dragonfly`. Existing verb headers stay. Reclaim `/a` `/b` stay up.
 
 #### Scenario: Pester asserts the GET header
 - **WHEN** a request is made on the plugin’s whoami route `/redis`
@@ -89,6 +95,20 @@ A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET 
 - **WHEN** a request is made on `/redis` (Redis) and on `/dragonfly` (Dragonfly)
 - **THEN** each response includes headers for Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval that show those commands succeeded
 - **AND** neither route’s tests stop `whoami-a` or `whoami-b`
+
+#### Scenario: Pester proves EVALSHA miss then hit on Redis and Dragonfly
+- **WHEN** Pester runs `SCRIPT FLUSH` then `SCRIPT EXISTS` of the probe digest on Redis
+- **THEN** EXISTS is `0`
+- **WHEN** GET `/redis` is made
+- **THEN** `X-SimpleRedis-Eval` is `3`
+- **AND** `X-SimpleRedis-EvalAgain` is `3`
+- **AND** `X-SimpleRedis-EvalDigest` is that SHA-1 hex
+- **AND** `SCRIPT EXISTS` of that digest is `1`
+- **WHEN** GET `/redis` is made again
+- **THEN** `X-SimpleRedis-Eval` is `3`
+- **WHEN** the same flush, EXISTS, GET, EXISTS, GET sequence runs against Dragonfly via `redis-cli -h dragonfly` and `/dragonfly`
+- **THEN** the same miss (`0`), GET success, hit (`1`), GET success holds
+- **AND** neither Describe stops `whoami-a` or `whoami-b`
 
 ### Requirement: Incr and IncrBy return the integer after increment
 `Incr(name)` SHALL send Redis `INCR` for that key. `IncrBy(name, delta)` SHALL send Redis `INCRBY` with that key and the decimal delta, including when `delta` is `0`. Both SHALL return the integer value after the increment. A missing key SHALL NOT return `redis:miss`; the first increment SHALL behave as if the key started at `0`. A non-integer stored value SHALL return the server `-` error text (AUTH-class prefixes still map to `redis:noauth`). A `:` payload that is not a signed integer SHALL return `redis:issue?`.
@@ -122,21 +142,6 @@ A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET 
 - **THEN** the command sent is `EXPIREAT`, that key, and that timestamp as decimal digits
 - **AND** an integer `0` or `1` reply returns no error
 
-### Requirement: Eval sends EVAL with numkeys equal to the key count
-`Eval(script, keys, args)` SHALL send Redis `EVAL`, the script body, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. The return SHALL be the same `[][]byte` shape as other commands: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). EVALSHA and SCRIPT LOAD MUST NOT be added.
-
-#### Scenario: Eval argv for one key
-- **WHEN** Eval is called with a script, one key, and two args
-- **THEN** the command sent is `EVAL`, that script, `1`, that key, then those args
-
-#### Scenario: Eval integer reply
-- **WHEN** Redis replies to EVAL with a `:` integer
-- **THEN** Eval returns one `[][]byte` element whose bytes are that decimal payload
-
-#### Scenario: Eval empty keys
-- **WHEN** Eval is called with a script, no keys, and no args
-- **THEN** the command sent includes `numkeys` `0`
-
 ### Requirement: Array replies accept bulk integer and status elements
 An RESP array (`*`) SHALL accept each element whose head is `$` (bulk, including null bulk as a nil slot), `:` (integer payload bytes), or `+` (status payload bytes). If an element head is `*` or `-`, the client SHALL return `redis:issue?`. Nested arrays are out of scope. MGET callers MUST still observe only bulk slots from Redis MGET.
 
@@ -145,3 +150,35 @@ An RESP array (`*`) SHALL accept each element whose head is `$` (bulk, including
 - **THEN** the result has three slots with those payloads
 - **WHEN** an array element is a nested array
 - **THEN** the client returns `redis:issue?`
+
+### Requirement: Eval sends EVALSHA then EVAL on NOSCRIPT
+`Eval(script, keys, args)` SHALL keep the public signature `Eval(script string, keys []string, args []string) ([][]byte, error)`. Callers pass the script body; they MUST NOT pass a digest. `Eval` SHALL hash the script body on each call (SHA-1 lowercase hex; cheap; no map, no lock) and send Redis `EVALSHA`, that digest, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. When the error text from that command starts with `NOSCRIPT`, `Eval` SHALL send `EVAL` once with the same script body, `numkeys`, keys, and args. That EVAL is the only place the script body is sent to Redis/Dragonfly so the engine stores it. That `NOSCRIPT` MUST NOT be returned to the caller as the command result. The client MUST NOT send `SCRIPT LOAD` at `Init`. The client MUST NOT export `EvalSha` or `ScriptLoad`. The client MUST NOT keep a digest table or mutex for scripts. The return SHALL keep the same `[][]byte` shape: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or other server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). Scripts that touch keys MUST list those keys in `keys` and MUST NOT use `table.maxn`.
+
+#### Scenario: Later Eval sends EVALSHA not the body
+- **WHEN** Eval is called twice with the same script, one key, and two args against a fake that already has that digest
+- **THEN** the second command sent is `EVALSHA`, the SHA-1 hex of that script, `1`, that key, then those args
+- **AND** the second argv MUST NOT include the script body
+
+#### Scenario: First EVALSHA miss falls back to EVAL
+- **WHEN** the first `EVALSHA` for a script receives `-NOSCRIPT No matching script. Please use EVAL.`
+- **THEN** Eval sends `EVAL`, that script body, the same `numkeys`, keys, and args
+- **AND** Eval returns the EVAL result
+- **AND** the caller error is not `NOSCRIPT`
+
+#### Scenario: After EVAL the digest hits
+- **WHEN** EVAL has loaded that digest on the fake
+- **AND** Eval is called again with the same script
+- **THEN** the command sent is `EVALSHA` with that digest
+- **AND** Eval succeeds without a second EVAL
+
+#### Scenario: Two scripts two digests
+- **WHEN** Eval is called with script A then with a different script B
+- **THEN** the `EVALSHA` argv digests differ
+
+#### Scenario: Eval integer reply
+- **WHEN** Redis replies to EVALSHA or EVAL with a `:` integer
+- **THEN** Eval returns one `[][]byte` element whose bytes are that decimal payload
+
+#### Scenario: Eval empty keys
+- **WHEN** Eval is called with a script, no keys, and no args
+- **THEN** the command sent includes `numkeys` `0`

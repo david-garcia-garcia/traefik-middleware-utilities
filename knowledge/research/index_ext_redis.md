@@ -14,3 +14,8 @@ description: Redis EXPIRE/EXPIREAT integer :0/:1 replies, missing keys, and dele
 priority: normal
 local: ext_redis_eval/
 description: Redis EVAL argument shape, zero keys, Lua-to-RESP reply mapping, and script error format.
+
+## EVALSHA
+priority: normal
+local: ext_redis_evalsha/
+description: Redis EVALSHA SHA-1 digest, volatile script cache, and NOSCRIPT miss wire text.
