@@ -10,5 +10,5 @@ JobName: 2026-09-12-simpleredis-bug-05-windowcounter-hides-outage
 | implement | [x] | [x] | 2026-09-12T12:56:30.778Z |
 | codereview | [x] | [x] | 2026-09-12T13:08:27.237Z |
 | devdocsimpact | [x] | [x] | 2026-09-12T13:10:24.399Z |
-| archive | [ ] | [ ] | |
+| archive | [x] | [x] | 2026-09-12T13:12:48.837Z |
 | pullrequest | [ ] | [ ] | |

@@ -35,3 +35,9 @@ phase: devdocsimpact
 findings: stale-usage Window counter — packet already names buffered flush-error
 fixed: impact report; no further produce
 skipped: none
+
+## archive (2026-09-12)
+phase: archive
+findings: folded sliding-take and sync-flush; moved to archive/2026-09-12-windowcounter-buffered-flush-error
+fixed: live specs + folder move
+skipped: FindSpecHost Task reused recorded high-confidence verdicts

@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-12T13:10:24.399Z
+Developer review: in progress — 2026-09-12T13:12:48.837Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** Buffered `windowcounter` Take/Peek return a retained flush error (or a probe after one missed `sync_rate`) instead of a silent nil. Exact mode is unchanged. `parseEvalInt` wraps the conversion cause. The Window counter usage packet names that exact vs buffered failure contract.
+**Developers.** Buffered `windowcounter` Take/Peek return a retained flush error (or a probe after one missed `sync_rate`) instead of a silent nil. Exact mode is unchanged. `parseEvalInt` wraps the conversion cause. Live specs `std_go_windowcounter_sliding-take` and `std_go_windowcounter_sync-flush` now require that contract.
 
 **End users.** None.
 
@@ -29,18 +29,18 @@ flowchart TD
 ```
 
 ## Merge readiness
-Usage packet `std_go_windowcounter` already names the buffered flush-error contract. CI on this head is still queued. 1 item remains.
+OpenSpec change archived into the live catalog. CI on this head is still in progress. 1 item remains.
 
 Priority: P1 — production is serving a wrong public contract today: buffered Take admits without an error while Redis is down, so the shared limit does not hold.
 
-Reviewed head: 4abdc19
+Reviewed head: 6b8f45f
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI queued after the code-review card commit |
-| CI proof | 3/6 | run 34695665222 queued |
+| Overall readiness | 3/6 | CI in progress on the archive commit |
+| CI proof | 3/6 | run 34695793389 in progress |
 | Local tests proof | N/A | prHost remote; CI covers remote |
 | Review resolution | 6/6 | OPEN PR, no comments |
 
@@ -48,15 +48,15 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-12-simpleredis-bug-05-windowcounter-hides-outage pushed | `git` / origin |
-| OpenSpec | windowcounter-buffered-flush-error | `openspec/changes/windowcounter-buffered-flush-error/` |
+| OpenSpec | windowcounter-buffered-flush-error | `openspec/changes/archive/2026-09-12-windowcounter-buffered-flush-error/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/30 | pr-host List/Create |
-| CI | build 34695665222 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695665222 | Lint queued, Test queued, Go E2E queued, Integration Tests queued |
+| CI | build 34695793389 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695793389 | Lint in_progress, Test in_progress, Go E2E in_progress, Integration Tests in_progress |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | none |
 
 ## Specs
-- [std_go_windowcounter_sliding-take](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/openspec/changes/windowcounter-buffered-flush-error/proposal.md) — modified
-- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/openspec/changes/windowcounter-buffered-flush-error/proposal.md) — modified
+- [std_go_windowcounter_sliding-take](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/openspec/changes/archive/2026-09-12-windowcounter-buffered-flush-error/proposal.md) — modified
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/openspec/changes/archive/2026-09-12-windowcounter-buffered-flush-error/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -65,7 +65,7 @@ None.
 None.
 
 ## How this fits together
-Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, PR #30, OpenSpec change still live as `windowcounter-buffered-flush-error`, usage packet caught up, CI run 34695665222 queued.
+Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, PR #30, change archived at `openspec/changes/archive/2026-09-12-windowcounter-buffered-flush-error/`, CI run 34695793389 in progress.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -80,6 +80,7 @@ Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, PR #30, OpenS
 - [x] [P1] Land staleness k=1 so buffered Take/Peek return lastFlushErr on Redis outage
 - [x] Seven-axis review (nitpicks done, coverage tests landed, unused flushFailedAt skipped)
 - [x] Window counter usage packet names buffered flush-error
+- [x] Archive change into live sliding-take and sync-flush specs
 - [ ] Wait for CI success on PR #30
 
 ## Findings
@@ -101,7 +102,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 4abdc190f62271c27643c0ad9d362499c40d1503 | Card must match the branch you measured |
+| Reviewed head | 6b8f45f895cae109eeb41de33c5ea72601978741 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -115,9 +116,9 @@ Is this the best way to solve the issue? Yes versus `master`: it matches sliding
 
 ### Evidence
 What I checked:
-- `knowledge/devdocs/std_go_windowcounter.md` Language `sync_rate`, How-to, and Gotcha name buffered flush-error
-- `devdocs-impact.md` stale-usage produced
-- PR #30 OPEN; CI run 34695665222 queued
+- Live specs synced; change moved to `openspec/changes/archive/2026-09-12-windowcounter-buffered-flush-error/`
+- validate_spec_map OK; validate_artifact_names OK
+- PR #30 OPEN; CI run 34695793389 in progress
 
 ### Rank-up moves
 None.
