@@ -9,3 +9,9 @@ phase: explore
 findings: none
 fixed: none
 skipped: Traefik per-request panic recovery assumed not researched; Yaegi defer assumed from existing takeIdleConn; AUTH/SELECT handshake panic noted as debt; bug-02 parser cap not taken
+
+## propose (2026-09-12)
+phase: propose
+findings: none
+fixed: none
+skipped: none; FindSpecHost folded into std_go_simpleredis_tcp-session
