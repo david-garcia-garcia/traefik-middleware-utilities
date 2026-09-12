@@ -4,7 +4,7 @@ JobName: 2026-09-12-simpleredis-ci-01-no-race-detector-in-ci
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [ ] | [ ] | |
+| prepare | [x] | [x] | 2026-09-12T12:36:20Z |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |

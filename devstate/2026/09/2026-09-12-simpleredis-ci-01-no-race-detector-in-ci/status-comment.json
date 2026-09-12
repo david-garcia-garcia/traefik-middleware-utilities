@@ -1,5 +1,5 @@
 {
-  "commentId": "local",
+  "commentId": "pr-body",
   "issueKey": "2026-09-12-simpleredis-ci-01-no-race-detector-in-ci",
   "markerValue": "2026-09-12-simpleredis-ci-01-no-race-detector-in-ci",
   "issueHost": "local"
