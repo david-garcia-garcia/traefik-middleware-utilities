@@ -40,3 +40,11 @@ fixed: live-e2e SHALL AUTH/SELECT; lookupLiveEngineAddrs + TestLookupLiveEngineA
 skipped: shared internal/livee2e helper
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
 ci: 34692650670 in progress
+
+## devdocsimpact (2026-09-12)
+phase: devdocsimpact
+findings: 2 stale-usage produced
+fixed: AUTH env How-to; SimpleRedis Key files drop live_test.go
+skipped: none
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
+ci: 34692825310 in progress
