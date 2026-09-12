@@ -1,0 +1,7 @@
+host: local
+ref: none
+title: test-02 — Pool cap and release-after-Close never execute
+url: none
+number: none
+source: simpleredisfixes/test-02-idle-cap-and-release-after-close.md
+index: simpleredisfixes/README.md
