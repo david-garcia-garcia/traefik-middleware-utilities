@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-risk-03-readline-unbounded
+jobName: 2026-09-12-simpleredis-risk-03-readline-unbounded
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 3af830942b77370e5faf53ec50abcf4dec5e33c0e4682f8aee4c29f491854b8b
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: "39"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/39
