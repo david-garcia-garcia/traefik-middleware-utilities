@@ -25,4 +25,13 @@ skipped: none
 change: simpleredis-over-free-nonblocking
 ci: 34694359738 in progress
 
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: freeInUseTurn select/default + OverFrees(); guard+invariant tests
+skipped: local -race (gcc not found)
+localTests: passed
+ci: 34694629226 queued
+
+
 
