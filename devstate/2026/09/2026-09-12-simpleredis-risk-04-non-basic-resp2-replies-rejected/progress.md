@@ -4,7 +4,7 @@ JobName: 2026-09-12-simpleredis-risk-04-non-basic-resp2-replies-rejected
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [x] | [ ] | |
+| prepare | [x] | [x] | 2026-09-12T12:37:08Z |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
