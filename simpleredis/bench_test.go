@@ -32,8 +32,7 @@ const largeBulkBytes = 100 * 1024
 // BenchmarkGet measures end-to-end Get against the in-process fake server.
 func BenchmarkGet(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{"hit": "some-cached-value"})
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
+	redis := New(Config{Host: addr})
 	if _, err := redis.Get("hit"); err != nil {
 		b.Fatal(err)
 	}
@@ -56,8 +55,7 @@ func BenchmarkMGet10(b *testing.B) {
 		store[names[i]] = "value-" + strconv.Itoa(i)
 	}
 	_, addr := startFakeRedis(b, store)
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
+	redis := New(Config{Host: addr})
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -71,8 +69,7 @@ func BenchmarkMGet10(b *testing.B) {
 // BenchmarkIncr measures end-to-end Incr against the fake server.
 func BenchmarkIncr(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{})
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
+	redis := New(Config{Host: addr})
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -86,8 +83,7 @@ func BenchmarkIncr(b *testing.B) {
 // BenchmarkEval measures end-to-end Eval of tokenBucketScript against the fake server.
 func BenchmarkEval(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{})
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
+	redis := New(Config{Host: addr})
 	keys := []string{"bucket:1.2.3.4"}
 	args := []string{"10", "10", "1", "1700000000"}
 
@@ -253,11 +249,10 @@ func BenchmarkDecodeBulk100KB(b *testing.B) { decodeBulk100KB(b) }
 
 func BenchmarkEncodeSet100KB(b *testing.B) { encodeSet100KB(b) }
 
-// BenchmarkGetParallel shows how many TCP sessions the pool burns above maxIdleConns.
+// BenchmarkGetParallel shows how many TCP sessions the pool burns above MaxIdleConns.
 func BenchmarkGetParallel(b *testing.B) {
 	fake, addr := startFakeRedis(b, map[string]string{"hit": "some-cached-value"})
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
+	redis := New(Config{Host: addr, PoolSize: 64})
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -311,13 +306,13 @@ func startSlowRedis(t testing.TB, latency time.Duration) (*fakeRedis, string) {
 }
 
 // TestConnectionChurnUnderLatency measures dials when in-flight callers exceed
-// maxIdleConns against a server with realistic per-command latency.
+// MaxIdleConns against a server with realistic per-command latency. PoolSize is
+// the burst width so the live cap does not turn waiters into redis:unreachable.
 func TestConnectionChurnUnderLatency(t *testing.T) {
 	const goroutines = 64
 	const perGoroutine = 20
 	fake, addr := startSlowRedis(t, 500*time.Microsecond)
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
+	redis := New(Config{Host: addr, PoolSize: goroutines})
 
 	var wg sync.WaitGroup
 	for i := 0; i < goroutines; i++ {
@@ -336,18 +331,18 @@ func TestConnectionChurnUnderLatency(t *testing.T) {
 
 	total := goroutines * perGoroutine
 	t.Logf("%d concurrent callers, %d commands: %d dials (idle cap %d) = %.1f%% of commands paid a TCP handshake",
-		goroutines, total, fake.connections(), maxIdleConns, 100*float64(fake.connections())/float64(total))
+		goroutines, total, fake.connections(), redis.MaxIdleConns(), 100*float64(fake.connections())/float64(total))
 }
 
 // TestConnectionChurnAcrossBursts measures dials when traffic arrives in bursts
-// wider than maxIdleConns: everything above the idle cap is closed on release
+// wider than MaxIdleConns: everything above the idle cap is closed on release
 // and redialed (TCP handshake, plus AUTH and SELECT when configured) next burst.
+// PoolSize is the burst width so the live cap does not turn waiters into redis:unreachable.
 func TestConnectionChurnAcrossBursts(t *testing.T) {
 	const bursts = 5
 	const width = 64
 	fake, addr := startSlowRedis(t, 500*time.Microsecond)
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
+	redis := New(Config{Host: addr, PoolSize: width})
 
 	for burst := 0; burst < bursts; burst++ {
 		var wg sync.WaitGroup
@@ -365,7 +360,7 @@ func TestConnectionChurnAcrossBursts(t *testing.T) {
 
 	total := bursts * width
 	t.Logf("%d bursts of %d concurrent Get (%d commands): %d dials, ideal %d (idle cap %d)",
-		bursts, width, total, fake.connections(), width, maxIdleConns)
+		bursts, width, total, fake.connections(), width, redis.MaxIdleConns())
 }
 
 // Go 1.21 linux/amd64 measured allocs/op and B/op (CI toolchain). Slack: +1

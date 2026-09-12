@@ -91,6 +91,8 @@ try {
             (Test-ServiceHealth -Url "http://localhost:8080/api/rawdata" -ServiceName "Traefik API"),
             (Test-RedisHealth -BackendHost "redis" -ServiceName "redis"),
             (Test-RedisHealth -BackendHost "dragonfly" -ServiceName "dragonfly"),
+            (Test-RedisHealth -BackendHost "redis-drop" -ServiceName "redis-drop"),
+            (Test-RedisHealth -BackendHost "dragonfly-drop" -ServiceName "dragonfly-drop"),
             (Test-ServiceHealth -Url "http://localhost:8000/a" -ServiceName "whoami /a"),
             (Test-ServiceHealth -Url "http://localhost:8000/b" -ServiceName "whoami /b"),
             (Test-ServiceHealth -Url "http://localhost:8000/redis" -ServiceName "whoami /redis"),

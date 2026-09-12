@@ -407,10 +407,9 @@ import (
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
-// GetLoop Inits one client and runs count Get calls.
+// GetLoop builds one client with New and runs count Get calls.
 func GetLoop(host string, count int) string {
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	for i := 0; i < count; i++ {
 		if _, err := client.Get("hit"); err != nil {
 			return "get:" + err.Error()
