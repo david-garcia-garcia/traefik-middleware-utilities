@@ -4,3 +4,4 @@ import: github.com/david-garcia-garcia/simpleredisprobe
 summary: Fake Traefik middleware that runs every SimpleRedis verb for Yaegi e2e.
 testData:
   host: redis:6379
+  dropHost: redis-drop:6379

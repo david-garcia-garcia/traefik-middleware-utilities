@@ -12,7 +12,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 
 ## How to use
 
-- Allocate `&simpleredis.SimpleRedis{}` and `Init(host, pass, database)` once before concurrent use.
+- Allocate `&simpleredis.SimpleRedis{}` and `Init(host, pass, database)` once before concurrent use. Set `MaxRetries` / `MinRetryBackoff` / `MaxRetryBackoff` on the struct when the zero-value defaults are wrong (`-1` turns extra retries or backoff off).
 - Do not dial in Traefik `New`. Call `Init` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, or `Eval`).
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
 - Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
@@ -45,8 +45,9 @@ if err != nil {
 ## Gotchas
 
 - `Init` does not dial. A refusing host is fine until the first command.
-- After `Close`, commands return `redis:unreachable` and do not redial.
+- After `Close`, commands return `redis:unreachable` and do not redial. Closed-client unreachable is not retried.
 - Idle pool cap is eight after release; concurrent in-flight dials are not capped (copied client).
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
+- Every verb uses go-redis-shaped command retry (`MaxRetries` / `MinRetryBackoff` / `MaxRetryBackoff` on the struct; `0` is default 3 extra retries / 8ms / 512ms; `-1` is off). Retry `redis:unreachable` (including a fresh dial) and LOADING/READONLY/MASTERDOWN/CLUSTERDOWN/TRYAGAIN / max-clients replies. Do not retry `redis:timeout`. INCR/INCRBY/EVAL can double-apply after a lost reply; that is accepted. There is no pool wait.
