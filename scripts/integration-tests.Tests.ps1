@@ -59,6 +59,10 @@ BeforeAll {
         $Response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
         $Response.Headers["X-SimpleRedis-EvalAgain"] | Should -Be "3"
         $Response.Headers["X-SimpleRedis-EvalDigest"] | Should -Be $script:KongEvalDigest
+        $Response.Headers["X-SimpleRedis-DropIncr"] | Should -Be "2"
+        $Response.Headers["X-SimpleRedis-DropIncrStored"] | Should -Be "2"
+        $Response.Headers["X-SimpleRedis-DropEval"] | Should -Be "6"
+        $Response.Headers["X-SimpleRedis-DropEvalStored"] | Should -Be "6"
     }
 
     function Assert-EvalShaMissThenHit {
