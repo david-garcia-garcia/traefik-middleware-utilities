@@ -82,7 +82,8 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 		host = defaultHost
 	}
 
-	client := simpleredis.New(simpleredis.Config{Host: host, Pass: cfg.Password, Database: cfg.Database})
+	// ?hold=500000 busy-waits 500ms; zero-Config IOTimeout is 100ms and would abort the hold.
+	client := simpleredis.New(simpleredis.Config{Host: host, Pass: cfg.Password, Database: cfg.Database, IOTimeout: time.Second})
 	mw := &middleware{next: next, client: client}
 	if cfg.DropHost != "" {
 		mw.dropClient = simpleredis.New(simpleredis.Config{Host: cfg.DropHost})
