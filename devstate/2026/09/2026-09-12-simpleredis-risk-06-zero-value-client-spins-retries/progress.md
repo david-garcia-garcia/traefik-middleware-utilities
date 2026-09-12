@@ -8,7 +8,7 @@ JobName: 2026-09-12-simpleredis-risk-06-zero-value-client-spins-retries
 | explore | [x] | [x] | 2026-09-12T12:41:30Z |
 | propose | [x] | [x] | 2026-09-12T12:45:08Z |
 | implement | [x] | [x] | 2026-09-12T12:48:08Z |
-| codereview | [x] | [ ] | |
+| codereview | [x] | [x] | 2026-09-12T12:53:47Z |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |

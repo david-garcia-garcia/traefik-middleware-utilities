@@ -23,3 +23,9 @@ phase: implement
 findings: P3 0
 fixed: errNotFromNew fail-fast
 skipped: none
+
+## codereview (2026-09-12)
+phase: codereview
+findings: P3 0
+fixed: none
+skipped: none
