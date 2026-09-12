@@ -51,6 +51,8 @@ type SimpleRedis struct {
 	closed      atomic.Bool
 	// inUseTurns is a PoolSize-buffered semaphore of concurrent in-use sockets. Idle sockets do not hold a turn.
 	inUseTurns chan struct{}
+	// overFrees counts in-use-turn returns that were dropped because the semaphore was already full.
+	overFrees atomic.Int64
 
 	// groupWriteMu guards groupWrite (native MSETEX vs Lua fallback). Not idleConnsMu: that lock is the unused-socket list.
 	groupWriteMu sync.Mutex
@@ -105,6 +107,11 @@ func (sr *SimpleRedis) PoolSize() int {
 // MaxIdleConns is the idle-list trim New froze.
 func (sr *SimpleRedis) MaxIdleConns() int {
 	return sr.maxIdleConns
+}
+
+// OverFrees is how many extra in-use-turn returns were dropped because the semaphore was already full.
+func (sr *SimpleRedis) OverFrees() int64 {
+	return sr.overFrees.Load()
 }
 
 // PoolTimeout is how long a waiter past PoolSize blocks.
