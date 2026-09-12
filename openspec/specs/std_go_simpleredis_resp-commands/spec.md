@@ -96,17 +96,25 @@ Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `
 - **AND** the second call does not send `MSETEX`
 
 ### Requirement: Traefik request SET plus GET sets a response header
-A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET it back, then set a response header from that GET so Pester can assert the round-trip. The same request SHALL also call MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against that backend, and set one response header per verb. Eval SHALL run twice on that request: `X-SimpleRedis-Eval` from the first result, `X-SimpleRedis-EvalAgain` from the second. The probe SHALL set `X-SimpleRedis-EvalDigest` to the SHA-1 hex of the Kong KEYS snippet const. The same request SHALL Get a missing key and set a response header whose value is `redis:miss`. After MSetEX it SHALL Eval `TTL` on that key listed in KEYS and set `X-SimpleRedis-MSetEX-TTL` to the positive TTL decimal. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new) and MUST NOT use `table.maxn`. Pester SHALL prove EVALSHA + NOSCRIPT fallback live on both engines: `SCRIPT FLUSH` then `SCRIPT EXISTS` of that digest is `0`, GET succeeds (`Eval` `3` and `EvalAgain` `3`), `EXISTS` is `1`, GET again succeeds. Same sequence against Dragonfly via `redis-cli -h dragonfly`. Existing verb headers stay. Reclaim `/a` `/b` stay up. After RESP decode uses `ReadSlice`, Get, MGet, Incr, Eval, and MSetEX headers MUST still show those commands succeeded on both `/redis` and `/dragonfly`. This change MUST NOT add Redis or Dragonfly compose services.
+A request through the nested SimpleRedis Traefik plugin SHALL SET a key to that request’s unique token (not a shared constant such as `"ok"`) and GET it back, then set a response header from that GET so Pester can assert the round-trip. MGet of that same key SHALL return the same token as Get. The same request SHALL also call Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against that backend, and set one response header per verb. Eval SHALL run twice on that request: `X-SimpleRedis-Eval` from the first result, `X-SimpleRedis-EvalAgain` from the second. The probe SHALL set `X-SimpleRedis-EvalDigest` to the SHA-1 hex of the Kong KEYS snippet const. The same request SHALL Get a missing key and set a response header whose value is `redis:miss`. After MSetEX it SHALL Eval `TTL` on that key listed in KEYS and set `X-SimpleRedis-MSetEX-TTL` to the positive TTL decimal. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new) and MUST NOT use `table.maxn`. Pester SHALL prove EVALSHA + NOSCRIPT fallback live on both engines: `SCRIPT FLUSH` then `SCRIPT EXISTS` of that digest is `0`, GET succeeds (`Eval` `3` and `EvalAgain` `3`), `EXISTS` is `1`, GET again succeeds. Same sequence against Dragonfly via `redis-cli -h dragonfly`. Pester SHALL run Get/MGet own-value assertions on both `/redis` (Redis) and `/dragonfly` (Dragonfly). Existing verb headers stay. Reclaim `/a` `/b` stay up. After RESP decode uses `ReadSlice`, Get, MGet, Incr, Eval, and MSetEX headers MUST still show those commands succeeded on both `/redis` and `/dragonfly`. This change MUST NOT add Redis or Dragonfly compose services.
 
 #### Scenario: Pester asserts the GET header
 - **WHEN** a request is made on the plugin’s whoami route `/redis`
-- **THEN** the response includes a header whose value is the bytes GET returned after SET
+- **THEN** the response includes a header whose value is the unique token GET returned after SET
 - **AND** the Redis Pester Describe does not stop `whoami-a` or `whoami-b`
 
 #### Scenario: Pester asserts every verb on Redis and Dragonfly
 - **WHEN** a request is made on `/redis` (Redis) and on `/dragonfly` (Dragonfly)
 - **THEN** each response includes headers for Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEX-TTL that show those commands succeeded
 - **AND** the MSetEX-TTL header is a positive decimal
+- **AND** neither route’s tests stop `whoami-a` or `whoami-b`
+
+#### Scenario: Pester asserts Get and MGet own-value on Redis and Dragonfly
+- **WHEN** two requests are made on `/redis`
+- **AND** two requests are made on `/dragonfly`
+- **THEN** each response’s Get header equals the unique token that request Set
+- **AND** that response’s MGet header equals its Get header
+- **AND** the two requests on the same route have distinct Get header values
 - **AND** neither route’s tests stop `whoami-a` or `whoami-b`
 
 #### Scenario: Pester asserts Get-miss on Redis and Dragonfly
@@ -250,6 +258,14 @@ A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-sha
 - **WHEN** the peer writes a partial array or bulk and closes the socket
 - **THEN** the command returns `redis:unreachable`
 - **AND** the idle pool is empty
+
+#### Scenario: Truncated bulk after a complete ReadSlice head returns own-value on the next Get
+- **WHEN** `MaxRetries` is `-1`
+- **AND** a Get receives `$100\r\n`, then 40 bytes, then a close
+- **THEN** that Get returns `redis:unreachable`
+- **AND** the idle pool is empty
+- **WHEN** a later Get receives a complete bulk of known bytes
+- **THEN** that Get returns those bytes
 
 #### Scenario: Nested array is not pooled
 - **WHEN** an array element is a nested array
