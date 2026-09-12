@@ -27,6 +27,7 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 		t.Run(backend.name, func(t *testing.T) {
 			runLivePoolBackend(t, backend.addr)
 			runLiveIdleHead(t, backend.addr)
+			runLiveMSetEXBackend(t, backend.addr)
 		})
 	}
 	if !anyAddr {
@@ -50,6 +51,50 @@ func runLivePoolBackend(t *testing.T, addr string) {
 		err = client.Set("simpleredis-live-waiter", []byte("1"), 60)
 		if err == nil || err.Error() != RedisUnreachable {
 			t.Fatalf("waiter Set = %v, want %s", err, RedisUnreachable)
+		}
+	})
+}
+
+// ttlScript returns TTL for KEYS[1] so live tests can assert MSetEX expiry landed.
+const ttlScript = `return redis.call('TTL', KEYS[1])`
+
+// runLiveMSetEXBackend proves Lua MSetEX TTL landed and past EXAT is a miss on one engine.
+func runLiveMSetEXBackend(t *testing.T, addr string) {
+	t.Helper()
+	client := waitLiveSimpleRedis(t, addr)
+	t.Cleanup(client.Close)
+
+	t.Run("msetexTTLLanded", func(t *testing.T) {
+		key := t.Name()
+		if err := client.MSetEX([]string{key}, [][]byte{[]byte("ok")}, 60); err != nil {
+			t.Fatalf("MSetEX: %v", err)
+		}
+		got, err := client.Get(key)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if string(got) != "ok" {
+			t.Fatalf("Get = %q, want ok", got)
+		}
+		values, err := client.Eval(ttlScript, []string{key}, nil)
+		if err != nil {
+			t.Fatalf("TTL Eval: %v", err)
+		}
+		ttl, err := parseIntegerReply(values, nil)
+		if err != nil {
+			t.Fatalf("TTL parse: %v", err)
+		}
+		if ttl <= 0 {
+			t.Fatalf("TTL = %d, want > 0", ttl)
+		}
+	})
+	t.Run("pastExatMiss", func(t *testing.T) {
+		key := t.Name()
+		if err := client.MSetEXAt([]string{key}, [][]byte{[]byte("v")}, time.Now().Unix()-10); err != nil {
+			t.Fatalf("MSetEXAt: %v", err)
+		}
+		if _, err := client.Get(key); err == nil || err.Error() != RedisMiss {
+			t.Fatalf("Get after past EXAT = %v, want %s", err, RedisMiss)
 		}
 	})
 }

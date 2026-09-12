@@ -11,7 +11,7 @@ Each package is one job. Import the one that matches the middleware; do not mix 
 | Library | Status | Package | Role |
 | --- | --- | --- | --- |
 | Reclaim table | Current | `reclaim/` | In-process table: one value per key, with create / sleep / wake / close when Traefik reloads config. |
-| SimpleRedis | Current | `simpleredis/` | Stdlib RESP client (GET/MGET/SET/DEL/INCR/EXPIRE/EVAL). Middlewares construct this with `New(Config)` instead of inventing a Redis client. Apache-2.0 (copied from crowdsec-bouncer). |
+| SimpleRedis | Current | `simpleredis/` | Stdlib RESP client (GET/MGET/SET/DEL/INCR/EXPIRE/EVAL/MSetEX). Middlewares construct this with `New(Config)` instead of inventing a Redis client. Apache-2.0 (copied from crowdsec-bouncer). |
 | Window counter | Current | `windowcounter/` | Kong-style **sliding-window hit counter** on Redis or Dragonfly. Counts hits in a time window and returns allow/deny plus a sliding estimate. Local memory is only the `sync_rate` flush buffer. |
 | Token bucket | Current | `tokenbucket/` | Traefik **token bucket** (refill + burst). Same math in-process and on Redis/Dragonfly via `Eval`. |
 
@@ -19,7 +19,7 @@ Each package is one job. Import the one that matches the middleware; do not mix 
 
 **Reclaim table** (`reclaim/`) stores one Go value per key for the life of a Traefik plugin instance. Use it when the middleware must keep a client, a counter, or a limiter across requests and tear it down on reload (`Sleep` / `Wake` / `Close`). It does not talk to Redis and it does not decide admit/deny.
 
-**SimpleRedis** (`simpleredis/`) is the shared Redis/Dragonfly session. `New(Config)` stores host, password, and database; the first command dials. Use it for GET/SET/INCR/EVAL. It does not implement a rate-limit algorithm.
+**SimpleRedis** (`simpleredis/`) is the shared Redis/Dragonfly session. `New(Config)` stores host, password, and database; the first command dials. Use it for GET/SET/INCR/EVAL/MSetEX. It does not implement a rate-limit algorithm.
 
 **Window counter** (`windowcounter/`) is a distributed **hit counter**: `Take(key, limit, window)` increments the current window and admits while `current + previous × (1 − elapsed/window)` is still at or under `limit`. Redis (or Dragonfly) holds the integers. `sync_rate=0` talks to Redis on every Take; `sync_rate>0` buffers locally and flushes with EVAL. Pass its `Sleep`/`Wake`/`Close` into reclaim when the counter is the stored value.
 
