@@ -249,13 +249,18 @@ func retryBackoff(retry int, minBackoff, maxBackoff time.Duration) time.Duration
 	if minBackoff == 0 {
 		return 0
 	}
-	backoff := minBackoff << uint(retry)
+	if retry < 0 {
+		return maxBackoff
+	}
+	// retry is the attempt index (1..MaxRetries), not a user-controlled width.
+	backoff := minBackoff << uint(retry) //nolint:gosec // G115
 	if backoff < minBackoff {
 		return maxBackoff
 	}
 	span := int64(backoff)
 	if span > 0 {
-		backoff = minBackoff + time.Duration(rand.Int63n(span))
+		// math/rand: tcp-session jitter MUST be stdlib math/rand (Yaegi; not crypto/rand, not rand/v2).
+		backoff = minBackoff + time.Duration(rand.Int63n(span)) //nolint:gosec // G404
 	}
 	if backoff > maxBackoff || backoff < minBackoff {
 		backoff = maxBackoff
