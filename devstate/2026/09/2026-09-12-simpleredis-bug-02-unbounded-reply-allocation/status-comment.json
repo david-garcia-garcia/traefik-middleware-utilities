@@ -1,0 +1,6 @@
+{
+  "commentId": "pr-body",
+  "issueKey": "2026-09-12-simpleredis-bug-02-unbounded-reply-allocation",
+  "markerValue": "2026-09-12-simpleredis-bug-02-unbounded-reply-allocation",
+  "issueHost": "local"
+}

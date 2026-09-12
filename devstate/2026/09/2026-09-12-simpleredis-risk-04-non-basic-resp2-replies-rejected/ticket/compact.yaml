@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: "risk-04 — Any reply outside basic RESP2 fails the command and discards the socket"
+url: none
+number: none

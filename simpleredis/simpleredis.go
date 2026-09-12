@@ -11,32 +11,35 @@ import (
 
 // Error strings for redis. Keep for display and legacy text matching.
 const (
-	RedisUnreachable = "redis:unreachable"
-	RedisMiss        = "redis:miss"
-	RedisTimeout     = "redis:timeout"
-	RedisNoAuth      = "redis:noauth"
-	RedisIssue       = "redis:issue?"
+	RedisUnreachable      = "redis:unreachable"
+	RedisMiss             = "redis:miss"
+	RedisTimeout          = "redis:timeout"
+	RedisNoAuth           = "redis:noauth"
+	RedisIssue            = "redis:issue?"
+	RedisUnsupportedReply = "redis:unsupported-reply"
 )
 
 // Exported sentinels. Match with errors.Is or IsMiss / IsUnreachable / IsPoolWait, not string equality.
 var (
-	ErrUnreachable = errors.New(RedisUnreachable)
-	ErrMiss        = errors.New(RedisMiss)
-	ErrTimeout     = errors.New(RedisTimeout)
-	ErrNoAuth      = errors.New(RedisNoAuth)
-	ErrIssue       = errors.New(RedisIssue)
+	ErrUnreachable      = errors.New(RedisUnreachable)
+	ErrMiss             = errors.New(RedisMiss)
+	ErrTimeout          = errors.New(RedisTimeout)
+	ErrNoAuth           = errors.New(RedisNoAuth)
+	ErrIssue            = errors.New(RedisIssue)
+	ErrUnsupportedReply = errors.New(RedisUnsupportedReply)
 )
 
 // ErrPoolWait is pool saturation. It wraps ErrUnreachable so callers matching the broad condition keep working.
 var ErrPoolWait = fmt.Errorf("%w", ErrUnreachable)
 
 var (
-	errUnreachable = ErrUnreachable
-	errPoolWait    = ErrPoolWait
-	errMiss        = ErrMiss
-	errTimeout     = ErrTimeout
-	errNoAuth      = ErrNoAuth
-	errIssue       = ErrIssue
+	errUnreachable      = ErrUnreachable
+	errPoolWait         = ErrPoolWait
+	errMiss             = ErrMiss
+	errTimeout          = ErrTimeout
+	errNoAuth           = ErrNoAuth
+	errIssue            = ErrIssue
+	errUnsupportedReply = ErrUnsupportedReply
 )
 
 // IsMiss reports whether err is a Redis miss, including wrapping.

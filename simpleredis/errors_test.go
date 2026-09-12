@@ -19,6 +19,7 @@ func TestSentinelsMatchThroughWrap(t *testing.T) {
 		{"timeout", ErrTimeout, RedisTimeout, nil},
 		{"noauth", ErrNoAuth, RedisNoAuth, nil},
 		{"issue", ErrIssue, RedisIssue, nil},
+		{"unsupported-reply", ErrUnsupportedReply, RedisUnsupportedReply, nil},
 		{"poolwait", ErrPoolWait, RedisUnreachable, IsPoolWait},
 	}
 	for _, row := range rows {
