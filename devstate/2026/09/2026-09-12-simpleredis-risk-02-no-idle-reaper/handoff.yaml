@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-risk-02-no-idle-reaper
+jobName: 2026-09-12-simpleredis-risk-02-no-idle-reaper
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 82d0289de3a0169a2584e65d4e1fc93aacaec70714a4ee203451eafb5d0e10a1
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-idle-borrow-sweep
+pr:
+  id: "33"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
