@@ -20,6 +20,11 @@ priority: normal
 local: ext_redis_evalsha/
 description: Redis EVALSHA SHA-1 digest, volatile script cache, and NOSCRIPT miss wire text.
 
+## RESP2 null array
+priority: normal
+local: ext_redis_resp_null-array/
+description: Official RESP2 encoding of a null array (*-1) versus null bulk and empty array.
+
 ## Idle client close
 priority: normal
 local: ext_redis_clients_idle-close/
