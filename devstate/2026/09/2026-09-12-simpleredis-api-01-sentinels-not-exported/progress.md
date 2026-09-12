@@ -7,7 +7,7 @@ JobName: 2026-09-12-simpleredis-api-01-sentinels-not-exported
 | prepare | [x] | [x] | 2026-09-12T12:36:28Z |
 | explore | [x] | [x] | 2026-09-12T12:41:13Z |
 | propose | [x] | [x] | 2026-09-12T12:45:04Z |
-| implement | [ ] | [ ] | |
+| implement | [x] | [x] | 2026-09-12T12:50:11Z |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |

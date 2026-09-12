@@ -21,3 +21,10 @@ findings: none
 fixed: none
 skipped: none
 change: simpleredis-export-error-sentinels
+
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: export sentinels, IsMiss, wrapping tests, Yaegi clientprobe
+skipped: none
+localTests: passed
