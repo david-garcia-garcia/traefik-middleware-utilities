@@ -9,7 +9,7 @@ import (
 )
 
 // exec borrows a connection, runs one RESP command, and retries retryable failures up to MaxRetries.
-// INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
+// One overall deadline covers the ladder (cancel vs redis:timeout). INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
 func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, error) {
 	if ctx == nil {
 		ctx = context.Background()

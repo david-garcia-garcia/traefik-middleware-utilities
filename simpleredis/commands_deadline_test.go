@@ -23,9 +23,9 @@ func startStallRedis(t *testing.T) string {
 			if err != nil {
 				return
 			}
-			go func(c net.Conn) {
-				defer c.Close()
-				_, _ = io.Copy(io.Discard, c)
+			go func(conn net.Conn) {
+				defer conn.Close()
+				_, _ = io.Copy(io.Discard, conn)
 			}(conn)
 		}
 	}()
@@ -114,6 +114,52 @@ func TestGetContextCancelFreesTurnAndDoesNotPool(t *testing.T) {
 	fake.mu.Unlock()
 	if _, err := client.Get("hit"); err != nil {
 		t.Fatalf("Get after cancel: %v", err)
+	}
+}
+
+func TestGetContextCancelWhileWaitingForTurn(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	hold := make(chan struct{})
+	fake.mu.Lock()
+	fake.holdCh = hold
+	fake.mu.Unlock()
+	t.Cleanup(func() { close(hold) })
+
+	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	go func() {
+		_, _ = client.Get("hit")
+	}()
+	deadline := time.Now().Add(time.Second)
+	for {
+		fake.mu.Lock()
+		held := fake.heldGets
+		fake.mu.Unlock()
+		if held > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("holder never held")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	waitErr := make(chan error, 1)
+	go func() {
+		_, err := client.GetContext(ctx, "hit")
+		waitErr <- err
+	}()
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	err := <-waitErr
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("waiter GetContext = %v, want context.Canceled", err)
+	}
+	if fake.connections() != 1 {
+		t.Fatalf("connections = %d, want 1 (waiter must not dial)", fake.connections())
+	}
+	if n := len(client.inUseTurns); n != 0 {
+		t.Fatalf("inUseTurns = %d, want 0 (holder still holds the only turn)", n)
 	}
 }
 

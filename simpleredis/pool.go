@@ -79,6 +79,7 @@ func (sr *SimpleRedis) borrow(ctx context.Context, deadline time.Time) (*pooledC
 	select {
 	case <-sr.inUseTurns:
 	default:
+		// Waiter past poolSize: clamp the stoppable timer to remaining budget; expiry is overall timeout when the budget was shorter.
 		wait := sr.inUseTurnWait()
 		remaining := time.Until(deadline)
 		budgetExpired := false
