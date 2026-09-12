@@ -1,7 +1,7 @@
 ## 1. CI job split
 
-- [ ] 1.1 Move Redis and Dragonfly services plus all `*_LIVE_*` env from `test` to a new job `e2e` named `Go E2E` in `.github/workflows/ci.yml`. Unit `test` has no services and runs `go test -short -timeout 2m -count=1 -v ./...`. E2e runs `go test -timeout 5m -count=1 -v ./...` without `-short`
-- [ ] 1.2 Keep `lint` and `integration` (Pester) unchanged. Do not add engine images
+- [x] 1.1 Move Redis and Dragonfly services plus all `*_LIVE_*` env from `test` to a new job `e2e` named `Go E2E` in `.github/workflows/ci.yml`. Unit `test` has no services and runs `go test -short -timeout 2m -count=1 -v ./...`. E2e runs `go test -timeout 5m -count=1 -v ./...` without `-short`
+- [x] 1.2 Keep `lint` and `integration` (Pester) unchanged. Do not add engine images
 
 ## 2. Shared live skip/fail
 
