@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-12T12:42:10.040Z
+Developer review: in progress — 2026-09-12T12:49:33.514Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** OpenSpec change `windowcounter-buffered-flush-error` folds buffered outage error into `std_go_windowcounter_sliding-take` and `std_go_windowcounter_sync-flush`. Limiter code is still DestBranch until implement.
 
 **End users.** None.
 
@@ -29,18 +29,18 @@ flowchart TD
 ```
 
 ## Merge readiness
-Explore recorded the error surface; product code has not landed. 1 item remains.
+Propose recorded the OpenSpec change; product limiter has not landed. 1 item remains.
 
 Priority: P1 — production is serving a wrong public contract today: buffered Take admits without an error while Redis is down, so the shared limit does not hold.
 
-Reviewed head: dec3194
+Reviewed head: 7b40da2
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI queued on the explore commit; no product fix yet |
-| CI proof | 3/6 | run 34694345401 in progress |
+| Overall readiness | 3/6 | CI queued on the propose commit; limiter still DestBranch |
+| CI proof | 3/6 | run 34694733597 in progress |
 | Local tests proof | N/A | before implement |
 | Review resolution | 6/6 | OPEN PR, no comments |
 
@@ -48,14 +48,15 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-12-simpleredis-bug-05-windowcounter-hides-outage pushed | `git` / origin |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | windowcounter-buffered-flush-error | `openspec/changes/windowcounter-buffered-flush-error/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/30 | pr-host List/Create |
-| CI | build 34694345401 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34694345401 | Lint queued, Test queued, Go E2E queued, Integration Tests queued |
+| CI | build 34694733597 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34694733597 | Lint queued, Test queued, Go E2E queued, Integration Tests queued |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | none |
 
 ## Specs
-None.
+- [std_go_windowcounter_sliding-take](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/openspec/changes/windowcounter-buffered-flush-error/proposal.md) — modified
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/openspec/changes/windowcounter-buffered-flush-error/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -64,7 +65,7 @@ None.
 None.
 
 ## How this fits together
-Local dump of this window-counter outage finding, branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, stub PR #30, explore recorded staleness k=1, CI run 34694345401 still queued.
+Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, stub PR #30, OpenSpec change `windowcounter-buffered-flush-error`, CI run 34694733597 queued.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -77,6 +78,7 @@ Local dump of this window-counter outage finding, branch `2026-09-12-simpleredis
 
 ## Before merge
 - [ ] [P1] Land staleness k=1 so buffered Take/Peek return lastFlushErr on Redis outage
+- [x] OpenSpec change `windowcounter-buffered-flush-error` proposed
 - [x] Explore recorded the surface (staleness k=1, existing error slot, Peek same as Take)
 - [x] Stub PR #30 opened
 - [x] Requirement written and qualified-with-gaps
@@ -92,9 +94,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | dec319425ca07f739430ce6823d0a2ab8911a27e | Card must match the branch you measured |
+| Reviewed head | 7b40da2340a8a59a9fbeefb220b47125b66ae7a7 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -102,17 +104,15 @@ None.
 ### Technical review
 Best possible solution: versus `master`, return the retained flush error from Take and Peek after one missed sync_rate, instead of discarding it and admitting locally.
 
-Do we have a high-confidence way to reproduce? Yes, the ticket measured it: after one buffered hit with Redis killed, 11/11 Takes returned a nil error. DestBranch tests only cover exact-mode unreachable (`TestTake_Unreachable`).
+Do we have a high-confidence way to reproduce? Yes, the ticket measured it: after one buffered hit with Redis killed, 11/11 Takes returned a nil error.
 
-Is this the best way to solve the issue? Yes versus `master`: it matches sliding-take error propagation without GET-on-every-Take or a new poll API the middleware can ignore.
+Is this the best way to solve the issue? Yes versus `master`: the OpenSpec change folds that contract into the two existing windowcounter leaves.
 
 ### Evidence
 What I checked:
-- `windowcounter/limiter.go` flushLoop/Sleep/Close discard `flushPending`; `windowLocked` GETs only when `localDelta == 0` (path, 0159cfc)
-- Take already returns three values; callers are Allow plus tests in `windowcounter/` (path, 0159cfc)
-- `std_go_windowcounter_sliding-take` requires Peek unreachable as well as Take (path, 0159cfc)
-- Kong research notes do not state flush-fail behaviour (`knowledge/research/ext_kong_rate-limiting_sliding-sync/notes.md`)
-- PR #30 OPEN; CI run 34694345401 Lint, Test, Go E2E, Integration Tests queued
+- FindSpecHost fold into `std_go_windowcounter_sliding-take` and `std_go_windowcounter_sync-flush` (high, existing leaves)
+- `openspec validate windowcounter-buffered-flush-error --type change --strict` valid
+- PR #30 OPEN; CI run 34694733597 Lint, Test, Go E2E, Integration Tests queued
 
 ### Rank-up moves
 None.
