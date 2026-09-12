@@ -86,4 +86,15 @@ pr: 18
 verdict: ready for review
 merge: origin/master already contained (332ee737); no new conflicts
 
+## pullrequest (2026-09-12T08:37:20Z)
+phase: pullrequest
+findings: none
+fixed: New(Config) freeze, session/pool/commands/RESP split, LICENSE to repo root
+skipped: local windowcounter/tokenbucket live on shared :6379/:6380 (timeout / last-write-wins); CI engines are dedicated
+localTests: passed (`go test -count=1 -short` product packages; `go test -count=1 ./simpleredis/` including live Redis)
+head: b9986186d512b6c3e389815d73aa196dbc14ea58
+ci: success run 34683648616 (Lint, Test, Integration Tests)
+pr: 18
+verdict: ready for review
+
 
