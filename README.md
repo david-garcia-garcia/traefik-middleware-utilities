@@ -60,14 +60,14 @@ Four suites (see `knowledge/devdocs/std_go_test-suites.md`):
 ```text
 go test -short ./...          # unit Go — fake TCP, no Redis (CI job Unit; TestAlloc* run)
 go test -race -short ./...   # same suite under the detector (CI job race; needs gcc)
-go test ./...                # also Go E2E when *_LIVE_REDIS and *_LIVE_DRAGONFLY are set
+go test ./...                # also Go E2E for each *_LIVE_REDIS / *_LIVE_DRAGONFLY addr that is set
 ./Test-Integration.ps1      # Pester — Traefik local plugins
 ```
 
 `Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. The copied SimpleRedis client is Apache-2.0 (`LICENSE`).
 
-Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset, and fail if exactly one addr is set. Set both `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`).
+Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`).
 
-CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines, 2m timeout, `TestAlloc*` run), unit `go test -race -short` (no engines, 10m timeout), Go E2E (`go test` with Redis 7 and Dragonfly, no `-race`), and that same Pester harness on every pull request and on pushes to `master`.
+CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines, 2m timeout, `TestAlloc*` run), unit `go test -race -short` (no engines, 10m timeout), Go E2E Redis (`go test` with Redis 7, no `-race`), Go E2E Dragonfly (`go test` with Dragonfly, no `-race`), and that same Pester harness on every pull request and on pushes to `master`.
 
 Tag a version (`v1.0.0`) to cut a GitHub release via GoReleaser (source archive + SBOM; no plugin binary).
