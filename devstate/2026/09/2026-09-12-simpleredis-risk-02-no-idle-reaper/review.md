@@ -45,3 +45,11 @@ findings: none
 fixed: none
 skipped: none
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: none
+skipped: none
+archived: openspec/changes/archive/2026-09-12-simpleredis-idle-borrow-sweep
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
