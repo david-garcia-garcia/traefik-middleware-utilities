@@ -304,6 +304,63 @@ func TestReadBulkNonDollarHeadIsIssue(t *testing.T) {
 	}
 }
 
+// TestReadBulkWrongTrailerIsIssue covers swapped CRLF, payload bytes as trailer, and empty bulk `$0`.
+func TestReadBulkWrongTrailerIsIssue(t *testing.T) {
+	cases := []struct {
+		name   string
+		head   []byte
+		body   string
+		want   string
+		errTxt string
+	}{
+		{name: "swapped-crlf", head: []byte("$5"), body: "hello\n\r", errTxt: RedisIssue},
+		{name: "payload-as-trailer", head: []byte("$5"), body: "helloXY", errTxt: RedisIssue},
+		{name: "empty-ok", head: []byte("$0"), body: "\r\n", want: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := readBulk(bufio.NewReader(strings.NewReader(tc.body)), tc.head)
+			if tc.errTxt != "" {
+				if err == nil || err.Error() != tc.errTxt {
+					t.Fatalf("readBulk = %q %v, want %s", data, err, tc.errTxt)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("readBulk = %v", err)
+			}
+			if string(data) != tc.want {
+				t.Fatalf("readBulk = %q, want %q", data, tc.want)
+			}
+		})
+	}
+}
+
+// TestWrongBulkTrailerIsIssueAndNotPooled discards a mis-framed bulk so the next Get is a new Accept’s own value.
+func TestWrongBulkTrailerIsIssueAndNotPooled(t *testing.T) {
+	addr := startRawReplyRedis(t, []rawReply{
+		{payload: []byte("$5\r\nhello+OK\r\n"), closeAfter: false},
+		{payload: []byte("$5\r\nworld\r\n"), closeAfter: true},
+	})
+	redis := New(Config{Host: addr, PoolSize: 1, MaxRetries: -1})
+
+	_, err := redis.Get("k")
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("first Get = %v, want %s", err, RedisIssue)
+	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after first Get = %d, want 0", got)
+	}
+
+	got, err := redis.Get("k")
+	if err != nil {
+		t.Fatalf("second Get: %v", err)
+	}
+	if string(got) != "world" {
+		t.Fatalf("second Get = %q, want world", got)
+	}
+}
+
 func TestHeldIntegerSliceSurvivesLaterRead(t *testing.T) {
 	addr := startSequentialRedis(t, []string{":111\r\n", ":222\r\n"})
 	redis := New(Config{Host: addr})

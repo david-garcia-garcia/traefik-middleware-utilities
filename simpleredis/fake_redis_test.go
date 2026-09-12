@@ -848,7 +848,7 @@ func startRawReplyRedis(t *testing.T, replies []rawReply) string {
 	return listener.Addr().String()
 }
 
-// serveRawReply reads one command on conn, writes replies[index], and closes when closeAfter is set.
+// serveRawReply reads one command on conn, writes replies[index], and keeps the socket until the client disconnects unless closeAfter is set.
 func serveRawReply(conn net.Conn, replies []rawReply, index int) {
 	defer conn.Close()
 	if index < 0 || index >= len(replies) {
@@ -863,6 +863,7 @@ func serveRawReply(conn net.Conn, replies []rawReply, index int) {
 	if reply.closeAfter {
 		return
 	}
+	_, _ = io.Copy(io.Discard, conn)
 }
 
 // pooledIdle is the idle-list length under the client mutex.

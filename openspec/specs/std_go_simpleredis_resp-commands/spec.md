@@ -259,7 +259,7 @@ Compose SHALL add sibling Redis and Dragonfly services with requirepass. Compose
 - **AND** the next command on that client dials a new socket
 
 ### Requirement: Malformed RESP is a protocol issue and is not pooled
-A line that does not end in CR before LF, an empty line, an unparseable `*` count, an `*` count less than 0, or a truncated array element or bulk SHALL return an error whose `Error()` text is `redis:issue?`, or an I/O error (`redis:unreachable` on EOF, `redis:timeout` on deadline). That connection MUST NOT re-enter the idle pool. Unknown type bytes, nested arrays, and array elements whose type is not `$`, `:`, or `+` are `redis:unsupported-reply` (requirement Unsupported RESP replies are distinguishable and are not pooled), not `redis:issue?`.
+A line that does not end in CR before LF, an empty line, an unparseable `*` count, an `*` count less than 0, a truncated array element or bulk, or a complete bulk payload whose two trailer bytes are not CR then LF SHALL return an error whose `Error()` text is `redis:issue?`, or an I/O error (`redis:unreachable` on EOF, `redis:timeout` on deadline). That connection MUST NOT re-enter the idle pool. A wrong bulk trailer MUST return `redis:issue?` and MUST NOT return `redis:unreachable`. Unknown type bytes, nested arrays, and array elements whose type is not `$`, `:`, or `+` are `redis:unsupported-reply` (requirement Unsupported RESP replies are distinguishable and are not pooled), not `redis:issue?`.
 
 #### Scenario: Missing CR before LF
 - **WHEN** a reply line ends in LF without a preceding CR
@@ -300,6 +300,22 @@ A line that does not end in CR before LF, an empty line, an unparseable `*` coun
 - **AND** the retry dial fails
 - **THEN** the command returns `redis:unreachable`
 - **AND** the idle pool is empty
+
+#### Scenario: Wrong bulk trailer is issue and not pooled
+- **WHEN** a Get receives a complete `$` payload whose two trailer bytes are not CR then LF
+- **THEN** the command returns `redis:issue?`
+- **AND** the error is not `redis:unreachable`
+- **AND** the idle pool is empty
+
+#### Scenario: Second Get after a wrong bulk trailer returns its own value
+- **WHEN** `MaxRetries` is `-1`
+- **AND** `PoolSize` is `1`
+- **AND** a Get receives a complete bulk whose trailer is not CRLF and leftover bytes remain on that connection
+- **THEN** that Get returns `redis:issue?`
+- **AND** the idle pool is empty
+- **WHEN** a later Get receives a complete bulk of known bytes
+- **THEN** that Get returns those bytes
+- **AND** those bytes are not remnants of the first payload
 
 ### Requirement: Over-cap bulk or array header is redis:issue?
 A `$` bulk length greater than `64 << 20` or a `*` array count greater than `1 << 20` SHALL return an error whose `Error()` text is `redis:issue?`. That connection MUST NOT re-enter the idle pool. The command MUST NOT retry that error. A truncated bulk or array whose announced size is at or under those ceilings SHALL still be I/O (`redis:unreachable` on EOF). An over-cap header with no payload MUST NOT take that truncated I/O path.

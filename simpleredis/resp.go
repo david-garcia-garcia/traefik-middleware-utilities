@@ -121,7 +121,7 @@ func isDirtyProtocolError(err error) bool {
 	return err == errIssue || err == errUnsupportedReply
 }
 
-// readBulk reads a $ payload (or a miss when length is negative).
+// readBulk reads a $ payload (or a miss when length is negative) and requires a CRLF trailer.
 func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if len(head) == 0 || head[0] != '$' {
 		return nil, errIssue
@@ -140,6 +140,10 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	data := make([]byte, length+2)
 	if _, err := io.ReadFull(reader, data); err != nil {
 		return nil, err
+	}
+	// Trailer must be CRLF; otherwise the stream is off a reply boundary.
+	if data[length] != '\r' || data[length+1] != '\n' {
+		return nil, errIssue
 	}
 	return data[:length], nil
 }
