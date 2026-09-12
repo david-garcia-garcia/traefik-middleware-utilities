@@ -33,24 +33,24 @@ Do not extract the three helper copies into a shared package this run (dest alre
 - Q: What GitHub Check `name:` / job ids should the two live items use?
   Rank: additive asked — Desired line 1 names two visible Checks, Redis vs Dragonfly, and does not quote the strings
   Decision: assumed — job ids `e2e-redis` and `e2e-dragonfly`; names `Go E2E Redis` and `Go E2E Dragonfly`. Remove job id `e2e`.
-  By: explore
+  By: implement
 
 - Q: Do passworded AUTH containers (`:6381` / `:6382`) split with the same jobs?
   Rank: bounded asked — Desired line 1 splits the live-Go suite; AUTH is that suite’s WRONGPASS pair; 1 call site `TestLive_WrongPassword` plus the three `lookupLiveEngineAddrs` copies (roots: `*_e2e_test.go`)
   Decision: assumed — Redis job starts only `simpleredis-redis-auth` on `:6381` and sets `SIMPLEREDIS_LIVE_REDIS_AUTH`; Dragonfly job starts only `:6382` and sets `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH`. Leave the other AUTH env unset.
-  By: explore
+  By: implement
 
 - Q: May a Redis job publish Redis on `:6379` only (no Dragonfly `:6380` on that runner)?
   Rank: additive asked — requirement Unknowns names this port choice
   Decision: assumed — yes. Redis job: Redis `:6379` + AUTH `:6381` only. Dragonfly job: Dragonfly `:6380` + AUTH `:6382` only. Keep dest port numbers.
-  By: explore
+  By: implement
 
 - Q: When CI sets only one of Redis/Dragonfly, skip the other engine or fail?
   Rank: bounded asked — Desired line 2 says each live job may skip the other engine; DestBranch `lookupLiveEngineAddrs` fatals; three helper copies plus `TestLookupLiveEngineAddrs` in simpleredis, windowcounter, tokenbucket (roots: those three `*_e2e_test.go` files)
   Decision: assumed — return the set engines; skip only when `-short` or both unset; one addr set is a one-engine run, not a fail. Both addrs still run both (local). Rewrite the three `onlyRedis` / `onlyDragonfly` unit cases to expect one engine and nil error.
-  By: explore
+  By: implement
 
 - Q: Two explicit jobs versus a GitHub Actions matrix?
   Rank: additive incidental — means to Desired line 1; matrix cannot express different `services:` / AUTH `docker run` without the same duplication
   Decision: assumed — two explicit jobs. Copy checkout/setup-go/`go test` steps. Do not add a reusable workflow this run.
-  By: explore
+  By: implement
