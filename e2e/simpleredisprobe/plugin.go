@@ -38,6 +38,9 @@ while true do
 end
 return 1`
 
+// ttlScript returns TTL for KEYS[1] so Pester can assert MSetEX expiry landed.
+const ttlScript = `return redis.call('TTL', KEYS[1])`
+
 // kongScriptDigest is SHA-1 hex of kongIncrbyExpireatScript (Redis sha1hex).
 func kongScriptDigest() string {
 	sum := sha1.Sum([]byte(kongIncrbyExpireatScript)) //nolint:gosec // Redis EVALSHA digest is SHA-1
@@ -85,7 +88,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return mw, nil
 }
 
-// ServeHTTP runs Set+Get only when recover=1; otherwise optionally holds via ?hold=, then runs every client verb and DropIncr/DropEval when dropClient is set.
+// ServeHTTP runs Set+Get only when recover=1; otherwise optionally holds via ?hold=, then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval twice, MSetEX, and MSetEXAt, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if req.URL.Query().Get("recover") == "1" {
 		m.serveRecover(rw, req)
@@ -200,6 +203,29 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("X-SimpleRedis-EvalAgain", string(evalAgainValues[0]))
 	rw.Header().Set("X-SimpleRedis-EvalDigest", kongScriptDigest())
+
+	msetexKey := prefix + ":msetex"
+	msetexAtKey := prefix + ":msetexat"
+	if err := m.client.MSetEX([]string{msetexKey}, [][]byte{[]byte("ok")}, 60); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-MSetEX", "ok")
+	ttlValues, err := m.client.Eval(ttlScript, []string{msetexKey}, nil)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if len(ttlValues) != 1 {
+		http.Error(rw, "msetex ttl slots", http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-MSetEX-TTL", string(ttlValues[0]))
+
+	if err := m.client.MSetEXAt([]string{msetexAtKey}, [][]byte{[]byte("ok")}, time.Now().Add(60*time.Second).Unix()); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
 
 	if m.dropClient != nil {
 		m.writeDropHeaders(rw, prefix)

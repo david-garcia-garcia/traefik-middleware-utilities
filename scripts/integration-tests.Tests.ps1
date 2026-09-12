@@ -59,6 +59,8 @@ BeforeAll {
         $Response.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
         $Response.Headers["X-SimpleRedis-EvalAgain"] | Should -Be "3"
         $Response.Headers["X-SimpleRedis-EvalDigest"] | Should -Be $script:KongEvalDigest
+        $Response.Headers["X-SimpleRedis-MSetEX"] | Should -Be "ok"
+        [int](@($Response.Headers["X-SimpleRedis-MSetEX-TTL"])[0]) | Should -BeGreaterThan 0
         $Response.Headers["X-SimpleRedis-DropIncr"] | Should -Be "2"
         $Response.Headers["X-SimpleRedis-DropIncrStored"] | Should -Be "2"
         $Response.Headers["X-SimpleRedis-DropEval"] | Should -Be "6"
