@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-risk-04-non-basic-resp2-replies-rejected
+jobName: 2026-09-12-simpleredis-risk-04-non-basic-resp2-replies-rejected
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: bb0f5293625b50c7dc1dcd53ff391c42bbbc20ff4a647453990fb003e1ebdb41
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: "40"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/40
