@@ -4,7 +4,7 @@ JobName: 2026-09-12-simpleredis-risk-03-readline-unbounded
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [x] | [ ] | |
+| prepare | [x] | [x] | 2026-09-12T12:36:54.064Z |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
