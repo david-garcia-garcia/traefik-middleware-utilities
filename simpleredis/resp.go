@@ -87,6 +87,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		return [][]byte{data}, true, nil
 	case '*':
 		count, ok := parseLen(line[1:])
+		// *-1 is a legal RESP2 nil array (BLPOP timeout, EXEC abort); this client has no verb that receives it, so it is redis:issue? not redis:miss.
 		if !ok || count < 0 {
 			return nil, false, errIssue
 		}

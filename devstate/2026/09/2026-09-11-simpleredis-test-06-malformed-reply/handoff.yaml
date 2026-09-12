@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis-test-06-malformed-reply
+jobName: 2026-09-11-simpleredis-test-06-malformed-reply
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 358c7010e0babb6aa8673a58961bda7c551834c78e6433237c44b08b767d779a
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-malformed-reply
+pr:
+  id: 24
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/24
