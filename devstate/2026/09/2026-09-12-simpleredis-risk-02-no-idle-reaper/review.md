@@ -38,3 +38,10 @@ findings: none
 fixed: none
 skipped: none
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
+
+## devdocsimpact (2026-09-12)
+phase: devdocsimpact
+findings: none
+fixed: none
+skipped: none
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
