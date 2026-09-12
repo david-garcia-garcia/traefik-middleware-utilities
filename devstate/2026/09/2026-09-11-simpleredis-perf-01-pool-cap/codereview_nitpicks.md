@@ -1,18 +1,6 @@
 # Nitpicks
 
-1. [hard] Name for the scope — `simpleredis/simpleredis.go:114` — `giveSlot` names a vague `give`; the body puts a token back on `sr.slots` (the inverse of borrow’s `<-sr.slots`), so the identifier reads as allocate
-   → `freeSlot` / `returnSlot` (direction this body implements)
+1. [hard] Name for the scope — `scripts/integration-tests.Tests.ps1:145` — `$live` is the `/proc` ESTABLISHED count from `Count-Established6379`, but the same block comment names the bound `liveCap` / `poolSize`, so `$live` reads as the cap quantity rather than the measured socket count
+   → `$established` (or `$establishedCount`) for the regex count; keep `liveCap` language for the pool bound only
    Status: done
-   Argument: renamed giveSlot to freeSlot.
-2. [hard] Name for the scope — `simpleredis/simpleredis.go:94` — `waitLimit` drops that the duration is the pool-slot wait; sibling `liveCap` names its quantity
-   → `slotWait` / `poolWait`
-   Status: done
-   Argument: renamed waitLimit to slotWait.
-3. [hard] Name for the scope — `simpleredis/simpleredis.go:106` — `capSize := sr.liveCap()` renames the live cap to a second stem; the next lines still use that bound as channel capacity and fill count
-   → Keep the stem (`liveCap := sr.liveCap()`)
-   Status: done
-   Argument: capSize restemmed to liveCap.
-4. [hard] Name for the scope — `simpleredis/live_test.go:172` — local `n` is a letter placeholder for the ESTABLISHED count
-   → `established` / `count`
-   Status: done
-   Argument: local n renamed to established.
+   Argument: `$established` is the /proc ESTABLISHED count; pool bound stays poolSize/liveCap.
