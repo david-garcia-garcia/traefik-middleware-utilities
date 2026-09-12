@@ -189,3 +189,51 @@ func TestZeroConfigMaxRetriesIsOneExtra(t *testing.T) {
 		t.Fatalf("IOTimeout() = %v, want 100ms", client.IOTimeout())
 	}
 }
+
+func TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout(t *testing.T) {
+	addr := startStallRedis(t)
+	client := New(Config{Host: addr, MaxRetries: -1, DialTimeout: time.Second, IOTimeout: time.Second})
+	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
+	defer cancel()
+	_, err := client.Get(ctx, "k")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Get = %v, want context.DeadlineExceeded (caller deadline, not %s)", err, RedisTimeout)
+	}
+}
+
+func TestGetCallerDeadlineWhileWaitingForTurn(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	hold := make(chan struct{})
+	fake.mu.Lock()
+	fake.holdCh = hold
+	fake.mu.Unlock()
+	t.Cleanup(func() { close(hold) })
+
+	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	go func() {
+		_, _ = client.Get(context.Background(), "hit")
+	}()
+	deadline := time.Now().Add(time.Second)
+	for {
+		fake.mu.Lock()
+		held := fake.heldGets
+		fake.mu.Unlock()
+		if held > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("holder never held")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+	_, err := client.Get(ctx, "hit")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("waiter Get = %v, want context.DeadlineExceeded", err)
+	}
+	if fake.connections() != 1 {
+		t.Fatalf("connections = %d, want 1 (waiter must not dial)", fake.connections())
+	}
+}

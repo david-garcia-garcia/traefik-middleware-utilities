@@ -14,17 +14,16 @@ import (
 
 // do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty.
 // Any panic here loses the in-use-turn when this client runs in a Traefik middleware: Traefik recovers the request and release never runs.
-func (sr *SimpleRedis) do(ctx context.Context, deadline time.Time, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
-	if err := ctx.Err(); err != nil {
+func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
+	if err := contextStop(ctx); err != nil {
 		return nil, false, err
 	}
-	remaining := time.Until(deadline)
-	if remaining <= 0 {
+	ioBound := clampTimeout(ctx, sr.IOTimeout())
+	if ioBound <= 0 {
+		if err := contextStop(ctx); err != nil {
+			return nil, false, err
+		}
 		return nil, false, errTimeout
-	}
-	ioBound := sr.IOTimeout()
-	if remaining < ioBound {
-		ioBound = remaining
 	}
 	if err := conn.netConn.SetDeadline(time.Now().Add(ioBound)); err != nil {
 		return nil, false, errUnreachable

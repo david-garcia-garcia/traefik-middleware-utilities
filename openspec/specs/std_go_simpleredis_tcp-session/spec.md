@@ -319,7 +319,7 @@ A request through the nested SimpleRedis Traefik plugin SHALL, in addition to th
 - **AND** the Dragonfly Pester Describe does not stop `whoami-a` or `whoami-b`
 
 ### Requirement: Whole command has an overall deadline
-Each command SHALL compute one overall deadline at entry equal to `(maxRetries+1)*(DialTimeout+IOTimeout)` unless the caller's context deadline is sooner. Dial, AUTH, SELECT, and the command SHALL share the remaining time. AUTH and SELECT MUST NOT each add a fresh full `IOTimeout` on top of a completed TCP connect. When that overall deadline expires, the command SHALL return `redis:timeout` and MUST NOT start another attempt.
+Each command SHALL compute one overall deadline at entry equal to `(maxRetries+1)*(DialTimeout+IOTimeout)` unless the caller's context deadline is sooner. When the library instant is sooner, the command SHALL bind it onto the caller's context (`context.WithDeadline`, same shape as `net.Dialer` / `http.Client`). Dial, AUTH, SELECT, and the command SHALL share the remaining time. AUTH and SELECT MUST NOT each add a fresh full `IOTimeout` on top of a completed TCP connect. Per-command socket I/O SHALL still `SetDeadline` to the lesser of `IOTimeout` and time remaining. When that overall library deadline expires, the command SHALL return `redis:timeout` and MUST NOT start another attempt. A sooner caller deadline SHALL return that context's `Err()`.
 
 #### Scenario: Black-hole Get returns within the overall deadline
 - **WHEN** a zero-Config client Gets against `203.0.113.1:6379`

@@ -3,7 +3,6 @@ package simpleredis
 import (
 	"context"
 	"testing"
-	"time"
 )
 
 // TestLive_PoolWait proves a waiter is redis:unreachable when the only in-use turn is held.
@@ -54,7 +53,7 @@ func runLivePoolBackend(t *testing.T, addr string) {
 	t.Cleanup(client.Close)
 
 	t.Run("waiterIsUnreachable", func(t *testing.T) {
-		conn, err := client.borrow(context.Background(), time.Now().Add(time.Second))
+		conn, err := client.borrow(context.Background())
 		if err != nil {
 			t.Fatalf("borrow: %v", err)
 		}

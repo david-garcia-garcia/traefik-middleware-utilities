@@ -8,8 +8,11 @@ import (
 	"time"
 )
 
+// nopCancel is bindCommandDeadline's cancel when the parent already expires first.
+var nopCancel context.CancelFunc = func() {}
+
 // exec borrows a connection, runs one RESP command, and retries retryable failures up to MaxRetries.
-// One overall deadline covers the ladder (cancel vs redis:timeout). INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
+// The library overall deadline is bound onto ctx (stdlib Dialer/Client shape). Caller cancel stays ctx.Err(); library expiry is redis:timeout. INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
 func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -18,71 +21,100 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		return nil, err
 	}
 	maxRetries, minBackoff, maxBackoff := retryLimits(sr.maxRetries, sr.minRetryBackoff, sr.maxRetryBackoff)
-	deadline := sr.commandDeadline(ctx, maxRetries)
+	ctx, cancel, libraryOwnsDeadline := sr.bindCommandDeadline(ctx, maxRetries)
+	defer cancel()
+
 	var last error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if time.Now().After(deadline) {
-			return nil, errTimeout
+		if err := contextStop(ctx); err != nil {
+			return nil, libraryTimeout(err, libraryOwnsDeadline)
 		}
 		if attempt > 0 {
-			if err := waitUntil(ctx, deadline, retryBackoff(attempt, minBackoff, maxBackoff)); err != nil {
-				return nil, err
+			if err := waitUntil(ctx, retryBackoff(attempt, minBackoff, maxBackoff)); err != nil {
+				return nil, libraryTimeout(err, libraryOwnsDeadline)
 			}
 		}
-		conn, err := sr.borrow(ctx, deadline)
+		conn, err := sr.borrow(ctx)
 		if err != nil {
 			if sr.isClosed() || !shouldRetry(err) {
-				return nil, err
+				return nil, libraryTimeout(err, libraryOwnsDeadline)
 			}
 			last = err
 			continue
 		}
 		// If do panics under Yaegi, the process does not crash and this in-use-turn is lost.
 		// Not deferred-release: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/29
-		values, reusable, err := sr.do(ctx, deadline, conn, args)
-		if ctx.Err() != nil {
+		values, reusable, err := sr.do(ctx, conn, args)
+		if stop := ctx.Err(); stop != nil {
 			sr.release(conn, false)
-			return nil, ctx.Err()
+			return nil, libraryTimeout(stop, libraryOwnsDeadline)
 		}
 		sr.release(conn, reusable)
 		if err == nil {
 			return values, nil
 		}
 		if !shouldRetry(err) {
-			return values, err
+			return values, libraryTimeout(err, libraryOwnsDeadline)
 		}
 		last = err
 	}
 	if last != nil {
-		return nil, last
+		return nil, libraryTimeout(last, libraryOwnsDeadline)
 	}
 	return nil, errTimeout
 }
 
-// commandDeadline is now plus (maxRetries+1)*(DialTimeout+IOTimeout), tightened by ctx if ctx has a sooner deadline.
-func (sr *SimpleRedis) commandDeadline(ctx context.Context, maxRetries int) time.Time {
-	budget := time.Duration(maxRetries+1) * (sr.DialTimeout() + sr.IOTimeout())
-	deadline := time.Now().Add(budget)
-	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
-		return ctxDeadline
+// bindCommandDeadline wraps ctx with (maxRetries+1)*(DialTimeout+IOTimeout) when that instant is sooner than the parent.
+// libraryOwnsDeadline is true when DeadlineExceeded on the returned ctx is the library budget.
+func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context, maxRetries int) (context.Context, context.CancelFunc, bool) {
+	libraryDeadline := time.Now().Add(time.Duration(maxRetries+1) * (sr.DialTimeout() + sr.IOTimeout()))
+	if parent, ok := ctx.Deadline(); ok && !parent.After(libraryDeadline) {
+		return ctx, nopCancel, false
 	}
-	return deadline
+	ctx, cancel := context.WithDeadline(ctx, libraryDeadline)
+	return ctx, cancel, true
 }
 
-// waitUntil waits delay or until ctx/deadline fires. Deadline expiry is redis:timeout.
-func waitUntil(ctx context.Context, deadline time.Time, delay time.Duration) error {
-	if delay <= 0 {
-		return nil
-	}
-	remaining := time.Until(deadline)
-	if remaining <= 0 {
+// libraryTimeout maps a library-owned context deadline to redis:timeout. Caller cancel and a sooner caller deadline stay ctx.Err().
+func libraryTimeout(err error, libraryOwnsDeadline bool) error {
+	if libraryOwnsDeadline && errors.Is(err, context.DeadlineExceeded) {
 		return errTimeout
 	}
-	if delay > remaining {
-		delay = remaining
+	return err
+}
+
+// contextStop is ctx.Err(), or DeadlineExceeded when the deadline time has passed but Done has not closed yet.
+func contextStop(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	deadline, ok := ctx.Deadline()
+	if ok && !time.Now().Before(deadline) {
+		return context.DeadlineExceeded
+	}
+	return nil
+}
+
+// clampTimeout is limit, or time left on ctx when that is shorter.
+func clampTimeout(ctx context.Context, limit time.Duration) time.Duration {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return limit
+	}
+	remaining := time.Until(deadline)
+	if remaining < limit {
+		if remaining < 0 {
+			return 0
+		}
+		return remaining
+	}
+	return limit
+}
+
+// waitUntil waits delay or until ctx fires. Library expiry is mapped at exec.
+func waitUntil(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return contextStop(ctx)
 	}
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
@@ -90,10 +122,7 @@ func waitUntil(ctx context.Context, deadline time.Time, delay time.Duration) err
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-timer.C:
-		if time.Now().After(deadline) {
-			return errTimeout
-		}
-		return nil
+		return contextStop(ctx)
 	}
 }
 
