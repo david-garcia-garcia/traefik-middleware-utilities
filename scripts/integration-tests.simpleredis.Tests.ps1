@@ -55,21 +55,28 @@ Describe "simpleredis Yaegi e2e ($env:INTEGRATION_ENGINE)" {
         $response.Content.Trim() | Should -Be "5"
     }
 
-    It "POST /$env:INTEGRATION_ENGINE/expire succeeds" {
+    It "POST /$env:INTEGRATION_ENGINE/expire sets a TTL of at most 30s" {
         $key = New-SimpleRedisKey
         $set = Invoke-SimpleRedis -Engine $script:Engine -Verb set -Key $key -Ex 60 -Body "1"
         $set.StatusCode | Should -Be 200 -Because $set.Content
         $expire = Invoke-SimpleRedis -Engine $script:Engine -Verb expire -Key $key -Ex 30
         $expire.StatusCode | Should -Be 200 -Because $expire.Content
+        $ttl = Invoke-SimpleRedis -Engine $script:Engine -Verb eval -Key $key -Digest (Get-Sha1Hex (Get-TtlScript)) -Body (Get-TtlScript)
+        $ttl.StatusCode | Should -Be 200 -Because $ttl.Content
+        [int]$ttl.Content.Trim() | Should -BeGreaterThan 0
+        [int]$ttl.Content.Trim() | Should -BeLessOrEqual 30
     }
 
-    It "POST /$env:INTEGRATION_ENGINE/expireat succeeds" {
+    It "POST /$env:INTEGRATION_ENGINE/expireat lands a TTL beyond the Set 60s" {
         $key = New-SimpleRedisKey
         $set = Invoke-SimpleRedis -Engine $script:Engine -Verb set -Key $key -Ex 60 -Body "1"
         $set.StatusCode | Should -Be 200 -Because $set.Content
-        $at = [DateTimeOffset]::UtcNow.AddSeconds(60).ToUnixTimeSeconds().ToString()
+        $at = [DateTimeOffset]::UtcNow.AddSeconds(90).ToUnixTimeSeconds().ToString()
         $expire = Invoke-SimpleRedis -Engine $script:Engine -Verb expireat -Key $key -At $at
         $expire.StatusCode | Should -Be 200 -Because $expire.Content
+        $ttl = Invoke-SimpleRedis -Engine $script:Engine -Verb eval -Key $key -Digest (Get-Sha1Hex (Get-TtlScript)) -Body (Get-TtlScript)
+        $ttl.StatusCode | Should -Be 200 -Because $ttl.Content
+        [int]$ttl.Content.Trim() | Should -BeGreaterThan 60
     }
 
     It "POST /$env:INTEGRATION_ENGINE/eval returns 3" {

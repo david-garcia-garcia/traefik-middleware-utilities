@@ -86,6 +86,7 @@ function Test-ServiceHealth {
     return $false
 }
 
+# Test-EngineStackHealth waits until one engine's Redis, drop, auth, and Traefik /<engine> health respond.
 function Test-EngineStackHealth {
     param([string]$Engine)
     $ready = @(
@@ -97,6 +98,7 @@ function Test-EngineStackHealth {
     return ($ready -notcontains $false)
 }
 
+# Invoke-IntegrationPester runs the given Tests.ps1 files and throws if any It failed.
 function Invoke-IntegrationPester {
     param([string[]]$Path)
     $pesterConfig = New-PesterConfiguration
@@ -171,8 +173,8 @@ try {
             if (-not $Engine) {
                 $engines = @("redis", "dragonfly")
             }
-            foreach ($name in $engines) {
-                $env:INTEGRATION_ENGINE = $name
+            foreach ($Engine in $engines) {
+                $env:INTEGRATION_ENGINE = $Engine
                 Invoke-IntegrationPester -Path "./scripts/integration-tests.simpleredis.Tests.ps1"
             }
         }

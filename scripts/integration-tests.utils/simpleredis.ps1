@@ -67,9 +67,9 @@ function Invoke-SimpleRedis {
         [int]$TimeoutSec = 10
     )
     $parts = @()
-    foreach ($name in @($Key)) {
-        if ($null -ne $name -and $name -ne "") {
-            $parts += "key=$([uri]::EscapeDataString($name))"
+    foreach ($redisKey in @($Key)) {
+        if ($null -ne $redisKey -and $redisKey -ne "") {
+            $parts += "key=$([uri]::EscapeDataString($redisKey))"
         }
     }
     foreach ($value in @($Arg)) {
@@ -155,11 +155,11 @@ function Assert-TwoDistinctHealthValues {
     $second = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15 -SkipHttpErrorCheck
     $first.StatusCode | Should -Be 200 -Because $first.Content
     $second.StatusCode | Should -Be 200 -Because $second.Content
-    $a = $first.Content.Trim()
-    $b = $second.Content.Trim()
-    $a | Should -Match '^srp:\d+$'
-    $b | Should -Match '^srp:\d+$'
-    $a | Should -Not -Be $b
+    $firstToken = $first.Content.Trim()
+    $secondToken = $second.Content.Trim()
+    $firstToken | Should -Match '^srp:\d+$'
+    $secondToken | Should -Match '^srp:\d+$'
+    $firstToken | Should -Not -Be $secondToken
 }
 
 # Wait-BackendPing starts redis and BackendHost and waits for PONG.

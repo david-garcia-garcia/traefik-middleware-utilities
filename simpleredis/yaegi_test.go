@@ -171,6 +171,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
@@ -292,12 +293,42 @@ func LiveVerbs(host, key string) string {
 	if err := client.Expire(context.Background(), expireKey, 90); err != nil {
 		return "expire:" + err.Error()
 	}
+	ttlScript := "return redis.call('TTL', KEYS[1])"
+	ttlDigest := simpleredis.ScriptSHA1Hex(ttlScript)
+	expireTTLValues, err := client.Eval(context.Background(), ttlScript, ttlDigest, []string{expireKey}, nil)
+	if err != nil {
+		return "expire-ttl:" + err.Error()
+	}
+	if len(expireTTLValues) != 1 {
+		return fmt.Sprintf("expire-ttl:%q", expireTTLValues)
+	}
+	expireTTL, err := strconv.ParseInt(string(expireTTLValues[0]), 10, 64)
+	if err != nil {
+		return "expire-ttl-parse:" + err.Error()
+	}
+	if expireTTL <= 60 {
+		return fmt.Sprintf("expire-ttl:%d", expireTTL)
+	}
 	expireAtKey := key + "-exat"
 	if err := client.Set(context.Background(), expireAtKey, []byte("1"), 60); err != nil {
 		return "expireat-set:" + err.Error()
 	}
 	if err := client.ExpireAt(context.Background(), expireAtKey, time.Now().Unix()+90); err != nil {
 		return "expireat:" + err.Error()
+	}
+	expireAtTTLValues, err := client.Eval(context.Background(), ttlScript, ttlDigest, []string{expireAtKey}, nil)
+	if err != nil {
+		return "expireat-ttl:" + err.Error()
+	}
+	if len(expireAtTTLValues) != 1 {
+		return fmt.Sprintf("expireat-ttl:%q", expireAtTTLValues)
+	}
+	expireAtTTL, err := strconv.ParseInt(string(expireAtTTLValues[0]), 10, 64)
+	if err != nil {
+		return "expireat-ttl-parse:" + err.Error()
+	}
+	if expireAtTTL <= 60 {
+		return fmt.Sprintf("expireat-ttl:%d", expireAtTTL)
 	}
 	values, err := client.Eval(context.Background(), "return 1", simpleredis.ScriptSHA1Hex("return 1"), nil, nil)
 	if err != nil {

@@ -59,12 +59,13 @@ type middleware struct {
 	dropClient *simpleredis.SimpleRedis
 }
 
-// New constructs SimpleRedis from Config and returns a handler. It does not dial.
+// New constructs SimpleRedis from Config and returns a terminal handler. It does not dial.
+// Traefik still passes next; ServeHTTP never forwards it.
 func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http.Handler, error) {
 	_ = ctx
 	_ = name
 	if next == nil {
-		return nil, fmt.Errorf("simpleredisprobe: missing next handler")
+		return nil, fmt.Errorf("simpleredisprobe: Traefik next handler is required (probe responses are terminal)")
 	}
 	if cfg == nil {
 		cfg = CreateConfig()
