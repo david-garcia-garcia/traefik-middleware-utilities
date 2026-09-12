@@ -104,3 +104,11 @@ func TestAppendRESPGetMatchesDestFraming(t *testing.T) {
 		t.Fatalf("appendRESP GET = %q, want %q", got, want)
 	}
 }
+
+func TestAppendRESPMSetEXMatchesDestFraming(t *testing.T) {
+	got := appendRESP(nil, msetexArgs([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, "EX", 60))
+	want := "*8\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\n1\r\n$1\r\nb\r\n$1\r\n2\r\n$2\r\nEX\r\n$2\r\n60\r\n"
+	if string(got) != want {
+		t.Fatalf("appendRESP MSETEX = %q, want %q", got, want)
+	}
+}

@@ -44,3 +44,18 @@ func BenchmarkEncodeEval(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkEncodeMSetEX is the client-side encode cost of native MSETEX argv: appendRESP plus one Write.
+func BenchmarkEncodeMSetEX(b *testing.B) {
+	args := msetexArgs([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, "EX", 60)
+	buf := make([]byte, 0, 128)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		buf = appendRESP(buf[:0], args)
+		if _, err := io.Discard.Write(buf); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
