@@ -2,7 +2,10 @@ package simpleredis
 
 import (
 	"bufio"
+	"math"
 	"net"
+	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -291,5 +294,71 @@ func TestParseLen(t *testing.T) {
 		if ok != test.wantOK || (ok && got != test.want) {
 			t.Fatalf("parseLen(%q) = %d, %v, want %d, %v", test.in, got, ok, test.want, test.wantOK)
 		}
+	}
+}
+
+// TestReadReplyOverCapIsIssue proves over-cap $/* headers and MaxInt64 digits are redis:issue? without a payload read.
+func TestReadReplyOverCapIsIssue(t *testing.T) {
+	maxIntDigits := strconv.FormatInt(math.MaxInt64, 10)
+	tests := []struct {
+		name string
+		wire string
+	}{
+		{name: "bulk just over", wire: "$" + strconv.Itoa(maxBulkLength+1) + "\r\n"},
+		{name: "array just over", wire: "*" + strconv.Itoa(maxArrayCount+1) + "\r\n"},
+		{name: "bulk MaxInt64", wire: "$" + maxIntDigits + "\r\n"},
+		{name: "array MaxInt64", wire: "*" + maxIntDigits + "\r\n"},
+		{name: "array bulk element over", wire: "*1\r\n$" + strconv.Itoa(maxBulkLength+1) + "\r\n"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			values, clean, err := readReply(bufio.NewReader(strings.NewReader(test.wire)))
+			if err != errIssue || clean || values != nil {
+				t.Fatalf("%s: values=%q clean=%v err=%v, want errIssue dirty", test.name, values, clean, err)
+			}
+		})
+	}
+}
+
+// TestReadReply256MiBHeaderDoesNotAllocatePayload fails if make still ran for $268435456.
+func TestReadReply256MiBHeaderDoesNotAllocatePayload(t *testing.T) {
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
+	values, clean, err := readReply(bufio.NewReader(strings.NewReader("$268435456\r\n")))
+	var after runtime.MemStats
+	runtime.ReadMemStats(&after)
+	if err != errIssue || clean || values != nil {
+		t.Fatalf("256MiB header: values=%q clean=%v err=%v, want errIssue dirty", values, clean, err)
+	}
+	grew := after.TotalAlloc - before.TotalAlloc
+	if grew >= 268435456 {
+		t.Fatalf("TotalAlloc grew by %d, payload make still ran", grew)
+	}
+}
+
+// TestGetOverCapBulkIsIssue proves Get maps an over-cap $ header to redis:issue? and does not pool.
+func TestGetOverCapBulkIsIssue(t *testing.T) {
+	addr := startStaticRedis(t, "$"+strconv.Itoa(maxBulkLength+1)+"\r\n")
+	redis := New(Config{Host: addr})
+	_, err := redis.Get("k")
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("over-cap Get = %v, want %s", err, RedisIssue)
+	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after over-cap Get = %d, want 0", got)
+	}
+}
+
+// TestMGetOverCapBulkElementIsIssue proves an array $ element over the bulk cap is redis:issue? and not pooled.
+func TestMGetOverCapBulkElementIsIssue(t *testing.T) {
+	addr := startStaticRedis(t, "*1\r\n$"+strconv.Itoa(maxBulkLength+1)+"\r\n")
+	redis := New(Config{Host: addr})
+	_, err := redis.MGet([]string{"k"})
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("over-cap MGet = %v, want %s", err, RedisIssue)
+	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after over-cap MGet = %d, want 0", got)
 	}
 }

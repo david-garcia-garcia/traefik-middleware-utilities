@@ -78,6 +78,9 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		if !ok || count < 0 {
 			return nil, false, errIssue
 		}
+		if count > maxArrayCount {
+			return nil, false, errIssue
+		}
 		values := make([][]byte, count)
 		for i := 0; i < count; i++ {
 			head, headErr := readLine(reader)
@@ -121,6 +124,10 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if length < 0 {
 		return nil, errMiss
 	}
+	// Over-cap headers must not allocate; truncated ReadFull would retry as unreachable.
+	if length > maxBulkLength {
+		return nil, errIssue
+	}
 	data := make([]byte, length+2)
 	if _, err := io.ReadFull(reader, data); err != nil {
 		return nil, err
@@ -150,7 +157,11 @@ func readLine(reader *bufio.Reader) ([]byte, error) {
 	return line[:len(line)-2], nil
 }
 
-const maxParseLen = int(^uint(0) >> 1)
+const (
+	maxBulkLength = 64 << 20 // largest $ payload this decoder will allocate
+	maxArrayCount = 1 << 20  // largest * count this decoder will allocate
+	maxParseLen   = int(^uint(0) >> 1)
+)
 
 // parseLen parses a RESP length from the bytes after the type byte.
 // An optional leading minus is accepted so $-1 stays a miss. Empty or non-digit input is false.
