@@ -53,3 +53,11 @@ fixed: none
 skipped: none
 archived: openspec/changes/archive/2026-09-12-simpleredis-idle-borrow-sweep
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
+
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+ci: Lint success, Test success, Go E2E success, Integration Tests success (34695029031)
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
