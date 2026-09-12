@@ -1,0 +1,7 @@
+host: local
+ref: none
+title: "perf-01 — No cap on total connections; bursty traffic redials constantly"
+url: none
+number: none
+source: simpleredisfixes/perf-01-connection-pool-cap.md
+index: simpleredisfixes/README.md

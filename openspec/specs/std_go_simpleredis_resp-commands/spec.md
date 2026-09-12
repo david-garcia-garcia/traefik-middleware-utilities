@@ -1,6 +1,6 @@
 ## Purpose
 
-Defines the RESP commands a SimpleRedis client speaks after it holds a session: GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL, MSetEX, and MSetEXAt, plus the exported error strings callers match. Keys and values are opaque bytes. Interpreter tests prove Init/Get/Set/Del/Incr/Eval/MSetEX under Yaegi without starting Traefik.
+Defines the RESP commands a SimpleRedis client speaks after it holds a session: GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL, MSetEX, and MSetEXAt, plus the exported error strings callers match. Keys and values are opaque bytes. Interpreter tests prove New/Get/Set/Del/Incr/Eval/MSetEX under Yaegi without starting Traefik.
 
 ## Requirements
 
@@ -61,7 +61,7 @@ Callers SHALL match errors by `Error()` text. The session SHALL export these exa
 - **THEN** the command returns `redis:noauth`
 
 ### Requirement: Interpreter tests observe Init Get Set Del
-Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `Init`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`.
+Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`.
 
 #### Scenario: Yaegi Init Get Set Del
 - **WHEN** interpreted code Inits a client to a compiled fake Redis listener
@@ -77,20 +77,26 @@ Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `Init`, `Get`, 
 - **THEN** Incr returns `1`
 - **AND** Eval returns one element whose bytes are that integer
 
+#### Scenario: Yaegi Eval NOSCRIPT fallback
+- **WHEN** interpreted code Inits a client to a compiled fake Redis listener whose first EVALSHA for that script is a miss
+- **AND** it calls Eval
+- **THEN** Eval returns the script result
+- **AND** the caller does not see NOSCRIPT
+
 #### Scenario: Yaegi MSetEX native
-- **WHEN** interpreted code Inits a client to a compiled fake that implements MSETEX
+- **WHEN** interpreted code constructs a client with New to a compiled fake that implements MSETEX
 - **AND** it calls MSetEX with one name and value
 - **THEN** MSetEX returns no error
 - **AND** Get of that name returns the written bytes
 
 #### Scenario: Yaegi MSetEX Lua fallback
-- **WHEN** interpreted code Inits a client to a compiled fake that replies unknown-command to MSETEX
+- **WHEN** interpreted code constructs a client with New to a compiled fake that replies unknown-command to MSETEX
 - **AND** it calls MSetEX twice
 - **THEN** the first call returns no error
 - **AND** the second call does not send `MSETEX`
 
 ### Requirement: Traefik request SET plus GET sets a response header
-A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET it back, then set a response header from that GET so Pester can assert the round-trip. The same request SHALL also call MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against that backend, and set one response header per verb. After MSetEX it SHALL Eval `TTL` on that key listed in KEYS and set a header to the positive TTL decimal. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new). Compose MUST keep the existing `/redis` and `/dragonfly` probe routes; this change MUST NOT add a Valkey or Redis 8 service.
+A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET it back, then set a response header from that GET so Pester can assert the round-trip. The same request SHALL also call MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against that backend, and set one response header per verb. Eval SHALL run twice on that request: `X-SimpleRedis-Eval` from the first result, `X-SimpleRedis-EvalAgain` from the second. The probe SHALL set `X-SimpleRedis-EvalDigest` to the SHA-1 hex of the Kong KEYS snippet const. After MSetEX it SHALL Eval `TTL` on that key listed in KEYS and set `X-SimpleRedis-MSetEX-TTL` to the positive TTL decimal. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new) and MUST NOT use `table.maxn`. Pester SHALL prove EVALSHA + NOSCRIPT fallback live on both engines: `SCRIPT FLUSH` then `SCRIPT EXISTS` of that digest is `0`, GET succeeds (`Eval` `3` and `EvalAgain` `3`), `EXISTS` is `1`, GET again succeeds. Same sequence against Dragonfly via `redis-cli -h dragonfly`. Existing verb headers stay. Reclaim `/a` `/b` stay up.
 
 #### Scenario: Pester asserts the GET header
 - **WHEN** a request is made on the plugin’s whoami route `/redis`
@@ -102,6 +108,20 @@ A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET 
 - **THEN** each response includes headers for Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEX-TTL that show those commands succeeded
 - **AND** the MSetEX-TTL header is a positive decimal
 - **AND** neither route’s tests stop `whoami-a` or `whoami-b`
+
+#### Scenario: Pester proves EVALSHA miss then hit on Redis and Dragonfly
+- **WHEN** Pester runs `SCRIPT FLUSH` then `SCRIPT EXISTS` of the probe digest on Redis
+- **THEN** EXISTS is `0`
+- **WHEN** GET `/redis` is made
+- **THEN** `X-SimpleRedis-Eval` is `3`
+- **AND** `X-SimpleRedis-EvalAgain` is `3`
+- **AND** `X-SimpleRedis-EvalDigest` is that SHA-1 hex
+- **AND** `SCRIPT EXISTS` of that digest is `1`
+- **WHEN** GET `/redis` is made again
+- **THEN** `X-SimpleRedis-Eval` is `3`
+- **WHEN** the same flush, EXISTS, GET, EXISTS, GET sequence runs against Dragonfly via `redis-cli -h dragonfly` and `/dragonfly`
+- **THEN** the same miss (`0`), GET success, hit (`1`), GET success holds
+- **AND** neither Describe stops `whoami-a` or `whoami-b`
 
 ### Requirement: Incr and IncrBy return the integer after increment
 `Incr(name)` SHALL send Redis `INCR` for that key. `IncrBy(name, delta)` SHALL send Redis `INCRBY` with that key and the decimal delta, including when `delta` is `0`. Both SHALL return the integer value after the increment. A missing key SHALL NOT return `redis:miss`; the first increment SHALL behave as if the key started at `0`. A non-integer stored value SHALL return the server `-` error text (AUTH-class prefixes still map to `redis:noauth`). A `:` payload that is not a signed integer SHALL return `redis:issue?`.
@@ -135,21 +155,6 @@ A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET 
 - **THEN** the command sent is `EXPIREAT`, that key, and that timestamp as decimal digits
 - **AND** an integer `0` or `1` reply returns no error
 
-### Requirement: Eval sends EVAL with numkeys equal to the key count
-`Eval(script, keys, args)` SHALL send Redis `EVAL`, the script body, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. The return SHALL be the same `[][]byte` shape as other commands: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). EVALSHA and SCRIPT LOAD MUST NOT be added.
-
-#### Scenario: Eval argv for one key
-- **WHEN** Eval is called with a script, one key, and two args
-- **THEN** the command sent is `EVAL`, that script, `1`, that key, then those args
-
-#### Scenario: Eval integer reply
-- **WHEN** Redis replies to EVAL with a `:` integer
-- **THEN** Eval returns one `[][]byte` element whose bytes are that decimal payload
-
-#### Scenario: Eval empty keys
-- **WHEN** Eval is called with a script, no keys, and no args
-- **THEN** the command sent includes `numkeys` `0`
-
 ### Requirement: Array replies accept bulk integer and status elements
 An RESP array (`*`) SHALL accept each element whose head is `$` (bulk, including null bulk as a nil slot), `:` (integer payload bytes), or `+` (status payload bytes). If an element head is `*` or `-`, the client SHALL return `redis:issue?`. Nested arrays are out of scope. MGET callers MUST still observe only bulk slots from Redis MGET.
 
@@ -159,12 +164,44 @@ An RESP array (`*`) SHALL accept each element whose head is `$` (bulk, including
 - **WHEN** an array element is a nested array
 - **THEN** the client returns `redis:issue?`
 
+### Requirement: Eval sends EVALSHA then EVAL on NOSCRIPT
+`Eval(script, keys, args)` SHALL keep the public signature `Eval(script string, keys []string, args []string) ([][]byte, error)`. Callers pass the script body; they MUST NOT pass a digest. `Eval` SHALL hash the script body on each call (SHA-1 lowercase hex; cheap; no map, no lock) and send Redis `EVALSHA`, that digest, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. When the error text from that command starts with `NOSCRIPT`, `Eval` SHALL send `EVAL` once with the same script body, `numkeys`, keys, and args. That EVAL is the only place the script body is sent to Redis/Dragonfly so the engine stores it. That `NOSCRIPT` MUST NOT be returned to the caller as the command result. The client MUST NOT send `SCRIPT LOAD` at `Init`. The client MUST NOT export `EvalSha` or `ScriptLoad`. The client MUST NOT keep a digest table or mutex for scripts. The return SHALL keep the same `[][]byte` shape: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or other server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). Scripts that touch keys MUST list those keys in `keys` and MUST NOT use `table.maxn`.
+
+#### Scenario: Later Eval sends EVALSHA not the body
+- **WHEN** Eval is called twice with the same script, one key, and two args against a fake that already has that digest
+- **THEN** the second command sent is `EVALSHA`, the SHA-1 hex of that script, `1`, that key, then those args
+- **AND** the second argv MUST NOT include the script body
+
+#### Scenario: First EVALSHA miss falls back to EVAL
+- **WHEN** the first `EVALSHA` for a script receives `-NOSCRIPT No matching script. Please use EVAL.`
+- **THEN** Eval sends `EVAL`, that script body, the same `numkeys`, keys, and args
+- **AND** Eval returns the EVAL result
+- **AND** the caller error is not `NOSCRIPT`
+
+#### Scenario: After EVAL the digest hits
+- **WHEN** EVAL has loaded that digest on the fake
+- **AND** Eval is called again with the same script
+- **THEN** the command sent is `EVALSHA` with that digest
+- **AND** Eval succeeds without a second EVAL
+
+#### Scenario: Two scripts two digests
+- **WHEN** Eval is called with script A then with a different script B
+- **THEN** the `EVALSHA` argv digests differ
+
+#### Scenario: Eval integer reply
+- **WHEN** Redis replies to EVALSHA or EVAL with a `:` integer
+- **THEN** Eval returns one `[][]byte` element whose bytes are that decimal payload
+
+#### Scenario: Eval empty keys
+- **WHEN** Eval is called with a script, no keys, and no args
+- **THEN** the command sent includes `numkeys` `0`
+
 ### Requirement: MSetEX and MSetEXAt write many keys with one shared TTL
 `MSetEX(names, values, seconds)` SHALL send native Redis `MSETEX` with decimal `numkeys` equal to `len(names)`, then each name/value pair in order, then `EX` and that duration as decimal seconds. `MSetEXAt(names, values, unixSeconds)` SHALL send the same argv with `EXAT` and that Unix timestamp. Both SHALL require `len(names) == len(values)`, reject empty or nil `names`, and reject more than 1024 pairs, each with `redis:issue?` and MUST NOT dial. The client MUST send `EX` or `EXAT`; it MUST NOT omit expiration and MUST NOT send NX, XX, PX, PXAT, or KEEPTTL. Integer reply `1` SHALL return no error. Integer reply `0` SHALL return `redis:issue?`. A `:` payload that is not a signed integer, or any integer other than `1` or `0`, SHALL return `redis:issue?`. AUTH-class prefixes still map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text unless they are unknown-command (fallback below). Clustered engines need all keys in one hash slot (hash tags); the client MUST NOT hash-tag, split, or retry cross-slot. Zero or negative TTL values SHALL be passed through, same as `Set`.
 
-On first `MSetEX`/`MSetEXAt` per client, the session SHALL send native `MSETEX`. If the error text has prefix `ERR unknown command`, the session SHALL cache Lua for that client, then run the fallback `EVAL` for that call. A cached Lua miss MUST NOT send `MSETEX` again. A cached native hit that later sees `ERR unknown command` SHALL recache Lua and `EVAL` that call. The cache SHALL live on the client under the existing mutex, not on a pooled connection. A new `Init`/value is a new cache.
+On first `MSetEX`/`MSetEXAt` per client, the session SHALL send native `MSETEX`. If the error text has prefix `ERR unknown command`, the session SHALL cache Lua for that client, then run the fallback via `Eval` for that call. A cached Lua miss MUST NOT send `MSETEX` again. A cached native hit that later sees `ERR unknown command` SHALL recache Lua and `Eval` that call. The cache SHALL live on the client under a dedicated mutex, not on a pooled connection and not on `idleConnsMu`. A new `New`/value is a new cache.
 
-The fallback SHALL be one `Eval` of a Lua 5.1-safe script: `numkeys` equal to `len(names)`, values then the token (`EX` or `EXAT`) then the TTL decimal in ARGV, loop `for i = 1, #KEYS do redis.call('SET', KEYS[i], ARGV[i], token, ttl) end`. The script MUST NOT call `unpack`, `table.unpack`, or `table.maxn`. Values and the TTL token MUST NOT be placed in KEYS. Integer `1` from that EVAL SHALL return no error. Past `EXAT` MAY delete keys and still succeed with `1`; the client MUST NOT hide that `1`. EVALSHA and SCRIPT LOAD MUST NOT be added.
+The fallback SHALL be one `Eval` of a Lua 5.1-safe script: `numkeys` equal to `len(names)`, values then the token (`EX` or `EXAT`) then the TTL decimal in ARGV, loop `for i = 1, #KEYS do redis.call('SET', KEYS[i], ARGV[i], token, ttl) end`. The script MUST NOT call `unpack`, `table.unpack`, or `table.maxn`. Values and the TTL token MUST NOT be placed in KEYS. Integer `1` from that EVAL SHALL return no error. Past `EXAT` MAY delete keys and still succeed with `1`; the client MUST NOT hide that `1`. The fallback MUST call `Eval` (EVALSHA then EVAL on NOSCRIPT); it MUST NOT add a second script-load path.
 
 Native argv tests SHALL run against the in-process fake only. Those tests MUST NOT require a Valkey or Redis 8 process.
 

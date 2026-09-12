@@ -6,9 +6,6 @@ import (
 	"time"
 )
 
-// ttlScript returns TTL for KEYS[1] so live tests can assert MSetEX expiry landed.
-const ttlScript = `return redis.call('TTL', KEYS[1])`
-
 func TestLive_RedisAndDragonfly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("live engines skipped under -short")
@@ -28,7 +25,8 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 		anyAddr = true
 		backend := backend
 		t.Run(backend.name, func(t *testing.T) {
-			runLiveBackend(t, backend.addr)
+			runLivePoolBackend(t, backend.addr)
+			runLiveMSetEXBackend(t, backend.addr)
 		})
 	}
 	if !anyAddr {
@@ -36,10 +34,35 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 	}
 }
 
-// runLiveBackend proves Lua MSetEX TTL landed and past EXAT is a miss on one engine.
-func runLiveBackend(t *testing.T, addr string) {
+// runLivePoolBackend builds a live client then holds the only in-use turn
+// so a waiter is redis:unreachable without a Lua BUSY on the shared CI Redis.
+func runLivePoolBackend(t *testing.T, addr string) {
 	t.Helper()
-	client := waitLiveClient(t, addr)
+	client := waitLiveSimpleRedis(t, addr)
+	t.Cleanup(client.Close)
+
+	t.Run("waiterIsUnreachable", func(t *testing.T) {
+		conn, err := client.borrow()
+		if err != nil {
+			t.Fatalf("borrow: %v", err)
+		}
+		defer client.release(conn, true)
+		err = client.Set("simpleredis-live-waiter", []byte("1"), 60)
+		if err == nil || err.Error() != RedisUnreachable {
+			t.Fatalf("waiter Set = %v, want %s", err, RedisUnreachable)
+		}
+	})
+}
+
+// ttlScript returns TTL for KEYS[1] so live tests can assert MSetEX expiry landed.
+const ttlScript = `return redis.call('TTL', KEYS[1])`
+
+// runLiveMSetEXBackend proves Lua MSetEX TTL landed and past EXAT is a miss on one engine.
+func runLiveMSetEXBackend(t *testing.T, addr string) {
+	t.Helper()
+	client := waitLiveSimpleRedis(t, addr)
+	t.Cleanup(client.Close)
+
 	t.Run("msetexTTLLanded", func(t *testing.T) {
 		key := t.Name()
 		if err := client.MSetEX([]string{key}, [][]byte{[]byte("ok")}, 60); err != nil {
@@ -75,21 +98,15 @@ func runLiveBackend(t *testing.T, addr string) {
 	})
 }
 
-// waitLiveClient retries Set then Get until the engine accepts connections or the wait expires.
-func waitLiveClient(t *testing.T, addr string) *SimpleRedis {
+// waitLiveSimpleRedis builds a one-slot client and waits until Set against addr succeeds.
+func waitLiveSimpleRedis(t *testing.T, addr string) *SimpleRedis {
 	t.Helper()
-	client := &SimpleRedis{}
-	client.Init(addr, "", "")
+	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: 80 * time.Millisecond})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		err := client.Set("simpleredis-live-probe", []byte("ok"), 30)
-		if err == nil {
-			_, err = client.Get("simpleredis-live-probe")
-		}
-		if err == nil {
+		if err := client.Set("simpleredis-live-probe", []byte("1"), 60); err == nil {
 			return client
-		}
-		if time.Now().After(deadline) {
+		} else if time.Now().After(deadline) {
 			t.Fatalf("live %s: %v", addr, err)
 		}
 		time.Sleep(100 * time.Millisecond)

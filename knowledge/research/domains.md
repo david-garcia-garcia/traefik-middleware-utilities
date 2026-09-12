@@ -8,3 +8,4 @@
 - dragonfly
 - valkey
 - kong
+- go-redis

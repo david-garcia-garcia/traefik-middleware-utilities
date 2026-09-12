@@ -97,8 +97,8 @@ IssueKey: 2026-09-11-simpleredis-feat-01-msetex
 
 - Q: Build EVALSHA / SCRIPT LOAD with this fallback (finding + perf-05)?
   Rank: additive incidental — finding suggested building them together; Out of scope names EVALSHA / SCRIPT LOAD / NOSCRIPT; dest spec forbids EVALSHA
-  Decision: resolved — do not. Fallback calls existing `Eval` (script body every time). perf-05 stays a sibling.
-  By: explore
+  Decision: resolved — do not add a second script-load path. Fallback calls existing `Eval`. DestBranch now sends EVALSHA then EVAL on NOSCRIPT; MSetEX reuses that.
+  By: implement
 
 - Q: How is `ERR unknown command` matched?
   Rank: additive asked — Desired: treat ERR unknown command as not supported
@@ -142,5 +142,5 @@ IssueKey: 2026-09-11-simpleredis-feat-01-msetex
 
 - Q: Where does the native-support flag live?
   Rank: additive asked — Desired: cache under the existing mutex; Current: mu guards pool/closed only
-  Decision: assumed — one field on `SimpleRedis` (tri-state unknown / native / lua), read and written only while holding `mu`. Do not put it on `pooledConn`. Existing borrow/release stay as they are.
-  By: propose
+  Decision: resolved — one field on `SimpleRedis` (tri-state unknown / native / lua), read and written only while holding `groupWriteMu`. DestBranch has no generic `mu`; `idleConnsMu` is the unused-socket list. Do not put it on `pooledConn`. Existing borrow/release stay as they are.
+  By: implement

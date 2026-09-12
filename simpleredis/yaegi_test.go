@@ -12,13 +12,13 @@ import (
 	"github.com/traefik/yaegi/stdlib"
 )
 
-// TestYaegi_InitGetSetDel proves interpreted code can Init, Set, Get, and Del
+// TestYaegi_NewGetSetDel proves interpreted code can New, Set, Get, and Del
 // against a compiled fake TCP Redis. Traefik is not started.
-func TestYaegi_InitGetSetDel(t *testing.T) {
+func TestYaegi_NewGetSetDel(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathClientprobe(t, goPath)
+	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.RoundTrip(%q)`, addr))
 	if got != "ok" {
@@ -31,11 +31,24 @@ func TestYaegi_IncrAndEval(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathClientprobe(t, goPath)
+	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.IncrAndEval(%q)`, addr))
 	if got != "ok" {
 		t.Fatalf("yaegi incr+eval: %q, want ok", got)
+	}
+}
+
+// TestYaegi_EvalNoScriptFallback proves interpreted Eval recovers from a NOSCRIPT miss. Traefik is not started.
+func TestYaegi_EvalNoScriptFallback(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{})
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.EvalNoScript(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi eval noscript fallback: %q, want ok", got)
 	}
 }
 
@@ -44,7 +57,7 @@ func TestYaegi_MSetEXNative(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathClientprobe(t, goPath)
+	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.MSetEXNative(%q)`, addr))
 	if got != "ok" {
@@ -58,7 +71,7 @@ func TestYaegi_MSetEXLua(t *testing.T) {
 	fake.setRejectMSetEX()
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathClientprobe(t, goPath)
+	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.MSetEXLua(%q)`, addr))
 	if got != "ok" {
@@ -87,7 +100,7 @@ func evalClientprobe(t *testing.T, goPath, expr string) string {
 }
 
 // writeGopathSimpleredis copies non-test simpleredis sources into a GOPATH module tree.
-func writeGopathSimpleredis(t *testing.T, goPath string) {
+func writeGopathSimpleredis(t testing.TB, goPath string) {
 	t.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
@@ -122,14 +135,14 @@ func writeGopathSimpleredis(t *testing.T, goPath string) {
 	}
 }
 
-// writeGopathClientprobe writes the interpreted probe package under GOPATH/src/clientprobe.
-func writeGopathClientprobe(t *testing.T, goPath string) {
+// writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
+func writeGopathFile(t testing.TB, goPath, pkg, name, src string) {
 	t.Helper()
-	dir := filepath.Join(goPath, "src", "clientprobe")
+	dir := filepath.Join(goPath, "src", pkg)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "roundtrip.go"), []byte(clientprobeSrc), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -142,10 +155,9 @@ import (
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
-// RoundTrip Inits a client, Sets a key, Gets it, and Dels it.
+// RoundTrip builds a client, Sets a key, Gets it, and Dels it.
 func RoundTrip(host string) string {
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	if err := client.Set("k", []byte("ok"), 60); err != nil {
 		return "set:" + err.Error()
 	}
@@ -168,8 +180,7 @@ return value` + "`" + `
 
 // IncrAndEval Incs a missing key then Evals the Kong incrby+expireat snippet.
 func IncrAndEval(host string) string {
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	afterIncr, err := client.Incr("yaegi-incr")
 	if err != nil {
 		return "incr:" + err.Error()
@@ -187,10 +198,22 @@ func IncrAndEval(host string) string {
 	return "ok"
 }
 
-// MSetEXNative Inits a client and writes one pair via MSetEX against a native MSETEX fake.
+// EvalNoScript Evals once so the compiled fake's first EVALSHA miss must fall back.
+func EvalNoScript(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host})
+	values, err := client.Eval(kongIncrbyExpireatScript, []string{"yaegi-noscript"}, []string{"3", "1700000000"})
+	if err != nil {
+		return "eval:" + err.Error()
+	}
+	if len(values) != 1 || string(values[0]) != "3" {
+		return fmt.Sprintf("eval:%q", values)
+	}
+	return "ok"
+}
+
+// MSetEXNative writes one pair via MSetEX against a native MSETEX fake.
 func MSetEXNative(host string) string {
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	if err := client.MSetEX([]string{"yaegi-msetex"}, [][]byte{[]byte("ok")}, 60); err != nil {
 		return "msetex:" + err.Error()
 	}
@@ -204,10 +227,9 @@ func MSetEXNative(host string) string {
 	return "ok"
 }
 
-// MSetEXLua Inits a client and calls MSetEX twice so a reject-MSETEX fake can prove the cache.
+// MSetEXLua calls MSetEX twice so a reject-MSETEX fake can prove the cache.
 func MSetEXLua(host string) string {
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	if err := client.MSetEX([]string{"yaegi-msetex-lua"}, [][]byte{[]byte("ok")}, 60); err != nil {
 		return "first:" + err.Error()
 	}

@@ -34,3 +34,8 @@ description: Official Valkey command wire behavior for MSETEX (native group writ
 priority: normal
 local: index_ext_kong.md
 description: Kong Gateway rate-limiting window types and Redis sync_rate behavior for window counters.
+
+## go-redis
+priority: normal
+local: index_ext_go-redis.md
+description: Official go-redis client pool and option behavior this product copies the shape of, without importing the library.
