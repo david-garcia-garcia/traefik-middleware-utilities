@@ -40,6 +40,15 @@ fixed: none
 skipped: none
 ci: 34694670942 queued
 
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: none
+fixed: unparam/gofmt on hammerGets
+skipped: local -race (gcc not found)
+ci: 34695707951 success (Lint, Test, Go E2E, Integration Tests)
+verdict: ready for review
+
+
 
 
 
