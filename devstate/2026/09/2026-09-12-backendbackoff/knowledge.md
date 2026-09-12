@@ -4,3 +4,4 @@
 - updated knowledge/devdocs/index_std_go.md
 - created knowledge/research/ext_traefik_circuitbreaker/
 - updated knowledge/devdocs/std_go_test-suites.md
+- updated knowledge/devdocs/std_go_backendbackoff.md
