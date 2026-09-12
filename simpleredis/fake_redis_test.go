@@ -29,6 +29,10 @@ type fakeRedis struct {
 	closeBeforeReplyOnce bool
 	errorReplyOnce       string
 	getDelay             time.Duration
+	open                 int
+	heldGets             int
+	holdCh               chan struct{}
+	releaseHoldOnce      sync.Once
 	lastSet              []string
 	lastExpire           []string
 	lastEval             []string
@@ -53,6 +57,7 @@ func startFakeRedis(t testing.TB, store map[string]string) (*fakeRedis, string) 
 			}
 			fake.mu.Lock()
 			fake.conns++
+			fake.open++
 			fake.mu.Unlock()
 			go fake.serve(conn)
 		}
@@ -62,7 +67,12 @@ func startFakeRedis(t testing.TB, store map[string]string) (*fakeRedis, string) 
 
 // serve answers AUTH/SELECT/GET/MGET/SET/INCR/MSETEX/EVALSHA/EVAL on one accepted socket.
 func (f *fakeRedis) serve(conn net.Conn) {
-	defer conn.Close()
+	defer func() {
+		_ = conn.Close()
+		f.mu.Lock()
+		f.open--
+		f.mu.Unlock()
+	}()
 	reader := bufio.NewReader(conn)
 	for {
 		args, err := readCommand(reader)
@@ -77,11 +87,20 @@ func (f *fakeRedis) serve(conn net.Conn) {
 			_, _ = io.WriteString(conn, reply)
 			continue
 		}
-		if args[0] == "GET" && f.getDelay > 0 {
-			delay := f.getDelay
-			f.mu.Unlock()
-			time.Sleep(delay)
-			f.mu.Lock()
+		if args[0] == "GET" {
+			if f.holdCh != nil {
+				ch := f.holdCh
+				f.heldGets++
+				f.mu.Unlock()
+				<-ch
+				f.mu.Lock()
+				f.heldGets--
+			} else if f.getDelay > 0 {
+				delay := f.getDelay
+				f.mu.Unlock()
+				time.Sleep(delay)
+				f.mu.Lock()
+			}
 		}
 		reply := f.commandReply(args)
 		if f.closeBeforeReplyOnce {
@@ -170,6 +189,70 @@ func (f *fakeRedis) connections() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.conns
+}
+
+// openSockets is how many accepted sockets are still open.
+func (f *fakeRedis) openSockets() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.open
+}
+
+// holdGetsForTest blocks each GET until releaseHeldGetsForTest. Cleanup releases the hold.
+func (f *fakeRedis) holdGetsForTest(t *testing.T) {
+	t.Helper()
+	f.mu.Lock()
+	f.holdCh = make(chan struct{})
+	f.mu.Unlock()
+	t.Cleanup(f.releaseHeldGetsForTest)
+}
+
+// releaseHeldGetsForTest lets every held GET write its reply. Safe to call more than once.
+func (f *fakeRedis) releaseHeldGetsForTest() {
+	f.releaseHoldOnce.Do(func() {
+		f.mu.Lock()
+		ch := f.holdCh
+		f.holdCh = nil
+		f.mu.Unlock()
+		if ch != nil {
+			close(ch)
+		}
+	})
+}
+
+// waitHeldGets waits until at least want GET commands are blocked on the hold.
+func (f *fakeRedis) waitHeldGets(t *testing.T, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		f.mu.Lock()
+		got := f.heldGets
+		f.mu.Unlock()
+		if got >= want {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	f.mu.Lock()
+	got := f.heldGets
+	f.mu.Unlock()
+	t.Fatalf("held Gets = %d, want >= %d", got, want)
+}
+
+// waitOpenSocketsEqual waits until still-open sockets equal want (excess closed, not leaked).
+func (f *fakeRedis) waitOpenSocketsEqual(t *testing.T, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		open := f.openSockets()
+		if open == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("open sockets = %d, want %d (excess leaked)", open, want)
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 // lastSetCommand returns the last SET argv (including EX and duration).

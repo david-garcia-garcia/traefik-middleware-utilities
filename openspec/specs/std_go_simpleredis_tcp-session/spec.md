@@ -147,6 +147,15 @@ The session SHALL keep at most `poolSize` live TCP connections (idle plus in use
 - **THEN** that Get returns `redis:unreachable`
 - **AND** no new TCP connection is opened
 
+#### Scenario: Close during an in-flight command closes the socket on release
+- **WHEN** a command is in flight
+- **AND** `Close` is called
+- **AND** that command then finishes
+- **THEN** idle is empty
+- **AND** that command's socket is closed
+- **AND** a later Get returns `redis:unreachable`
+- **AND** no new TCP connection is opened
+
 ### Requirement: I/O deadline is timeout, not a net.Error assert
 When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `IOTimeout` default is one second). A timeout on a reused connection MUST NOT open a second connection.
 
