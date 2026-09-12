@@ -5,7 +5,7 @@ JobName: 2026-09-12-simpleredis-bug-03-maxidleconns-not-enforced
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-12T12:35:49Z |
-| explore | [ ] | [ ] | |
+| explore | [x] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
