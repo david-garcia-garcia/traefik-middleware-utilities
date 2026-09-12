@@ -25,6 +25,11 @@ priority: normal
 local: ext_dragonfly_select/
 description: Dragonfly SELECT --dbnum default and the DB-index-out-of-range error.
 
+## Idle client close
+priority: normal
+local: ext_dragonfly_clients_idle-close/
+description: How Dragonfly closes a client TCP socket from the server (idle --timeout vs CLIENT KILL ADDR/ID).
+
 ## MSETEX
 priority: normal
 local: ext_dragonfly_msetex/

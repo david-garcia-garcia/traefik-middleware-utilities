@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis-perf-07-readslice
+jobName: 2026-09-11-simpleredis-perf-07-readslice
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 06b07323eafdbec9cc05bc8d3ba1860070c855ce48d08890caedf4258a68df36
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-readslice-decode
+pr:
+  id: 20
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/20

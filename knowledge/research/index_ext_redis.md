@@ -30,6 +30,11 @@ priority: normal
 local: ext_redis_select/
 description: Redis SELECT logical-DB indexes and the DB-index-out-of-range error.
 
+## Idle client close
+priority: normal
+local: ext_redis_clients_idle-close/
+description: How Redis closes a client TCP socket from the server (idle timeout vs CLIENT KILL).
+
 ## MSETEX
 priority: normal
 local: ext_redis_msetex/
