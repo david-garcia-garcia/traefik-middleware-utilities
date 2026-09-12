@@ -32,6 +32,8 @@ See proposal.md Why. Dest already table-drives `live_test.go` on env addrs and s
 
 6. **Usage packet `std_go_test-suites.md` under existing `std`/`go`.** Alternative: `build` root would add an allowlist domain this run did not need.
 
+7. **Domain-adjacent test files, Go suffix.** `{domain}_test.go` unit, `{domain}_e2e_test.go` live, `{domain}_yaegi_test.go` interp, `{domain}_yaegi_e2e_test.go` Yaegi live. Shared e2e helpers that are not one domain live in `{package}_e2e_test.go`. Alternative: one `live_test.go` dump — rejected (human: tests for a domain stay next to that domain file).
+
 ## Risks / Trade-offs
 
 - [SCRIPT FLUSH races sibling tests on the shared CI Redis] → unique script body; EVALSHA miss is retried by Eval.

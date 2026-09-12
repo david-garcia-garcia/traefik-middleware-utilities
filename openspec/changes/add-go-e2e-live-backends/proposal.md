@@ -29,9 +29,9 @@ Dest CI’s `test` job starts Redis and Dragonfly and runs compiled live files i
 ## Impact
 
 - `.github/workflows/ci.yml` (split services/env onto `e2e`; `test` uses `-short`).
-- `simpleredis/live_test.go`, `simpleredis/yaegi_test.go`.
-- `windowcounter/live_test.go`, `windowcounter/yaegi_test.go`.
-- `tokenbucket/live_test.go`, `tokenbucket/yaegi_test.go`.
+- `simpleredis/{commands,commands_eval,commands_msetex,pool,simpleredis}_e2e_test.go`, `yaegi_e2e_test.go`.
+- `windowcounter/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`.
+- `tokenbucket/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`.
 - `README.md` Tests; `knowledge/devdocs/std_go_test-suites.md` plus index rows; prove-with lines on SimpleRedis, windowcounter, tokenbucket packets.
 - Existing live-env SHALL lines after archive.
 - No runtime API change. No new Redis/Dragonfly images. Pester compose unchanged.

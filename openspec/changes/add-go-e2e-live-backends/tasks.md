@@ -5,21 +5,21 @@
 
 ## 2. Shared live skip/fail
 
-- [ ] 2.1 In `simpleredis/live_test.go`, `windowcounter/live_test.go`, `tokenbucket/live_test.go`, and existing `TestYaegiLive_*`: skip when `-short` or both addrs unset; `t.Fatal` when exactly one addr is set; run every case on both engines when both are set
+- [x] 2.1 Shared `liveEngineAddrs` / `runForEachLiveEngine`: skip when `-short` or both addrs unset; `t.Fatal` when exactly one addr is set; run every case on both engines when both are set. Helpers in `{package}_e2e_test.go` or `{domain}_e2e_test.go`
 
 ## 3. SimpleRedis live coverage
 
-- [ ] 3.1 Expand `simpleredis/live_test.go` with engine-success Get/Set/Del/MGet/Incr/IncrBy/Expire/Eval/EVALSHA/NOSCRIPT-after-SCRIPT-FLUSH plus existing pool wait, MSetEX, and CLIENT KILL. Keys from `t.Name()`. Keep fake-TCP for malformed/AUTH
-- [ ] 3.2 Add `TestYaegiLive_RedisAndDragonfly` in `simpleredis/yaegi_test.go` matching windowcounter: compiled test owns skip; interpreted probe calls New/Get/Set/Del/Incr/Eval/MSetEX. GOPATH, stdlib only, `useunsafe` false, no Traefik
-- [ ] 3.3 Run `go test -short ./simpleredis/...` until unit tests pass and live tests skip
+- [x] 3.1 Domain e2e files: `commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, harness `simpleredis_e2e_test.go`. Engine-success Get/Set/Del/MGet/Incr/Expire/Eval/EVALSHA/NOSCRIPT-after-SCRIPT-FLUSH, pool wait, MSetEX, CLIENT KILL. Keys from `t.Name()`. Keep fake-TCP for malformed/AUTH
+- [x] 3.2 Add `yaegi_e2e_test.go` (`TestYaegiLive_RedisAndDragonfly`): compiled test owns skip; interpreted probe `LiveVerbs`. GOPATH, stdlib only, `useunsafe` false, no Traefik
+- [x] 3.3 Run `go test -short ./simpleredis/...` until unit tests pass and e2e tests skip
 
 ## 4. Limiter live coverage
 
-- [ ] 4.1 Expand `windowcounter/live_test.go` and Yaegi live with Peek denied-then-slides, buffered Peek, and expire-on-first-hit on both engines
-- [ ] 4.2 Expand `tokenbucket/live_test.go` and Yaegi live with refund-when-wait-exceeds-maxDelay on both engines
-- [ ] 4.3 Run `go test -short ./windowcounter/... ./tokenbucket/...` until unit tests pass and live tests skip
+- [x] 4.1 `windowcounter/limiter_e2e_test.go` and `limiter_yaegi_e2e_test.go`: Peek denied-then-slides, buffered Peek, expire-on-first-hit plus dest scenarios, both engines
+- [x] 4.2 `tokenbucket/limiter_e2e_test.go` and `limiter_yaegi_e2e_test.go`: refund-when-wait-exceeds-maxDelay plus dest scenarios, both engines
+- [x] 4.3 Run `go test -short ./windowcounter/... ./tokenbucket/...` until unit tests pass and e2e tests skip
 
 ## 5. Docs
 
-- [ ] 5.1 Add `knowledge/devdocs/std_go_test-suites.md` (lint, unit Go, Go E2E, Pester). Index row on `index_std_go.md`. Point prove-with on `std_go_simpleredis.md`, `std_go_windowcounter.md`, `std_go_tokenbucket.md` at that catalog. Update README Tests
-- [ ] 5.2 Run `openspec validate add-go-e2e-live-backends --type change --strict`
+- [x] 5.1 Add `knowledge/devdocs/std_go_test-suites.md` (lint, unit Go, Go E2E, Pester, `{domain}_e2e_test.go` naming). Index row on `index_std_go.md`. Point prove-with on `std_go_simpleredis.md`, `std_go_windowcounter.md`, `std_go_tokenbucket.md` at that catalog. Update README Tests
+- [x] 5.2 Run `openspec validate add-go-e2e-live-backends --type change --strict`

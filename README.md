@@ -55,18 +55,18 @@ Module path: `github.com/david-garcia-garcia/traefik-middleware-utilities`.
 
 ## Tests
 
+Four suites (see `knowledge/devdocs/std_go_test-suites.md`):
+
 ```text
-go test ./reclaim/...
-go test ./simpleredis/...
-go test ./windowcounter/...
-go test ./tokenbucket/...
-./Test-Integration.ps1
+go test -short ./...          # unit Go — fake TCP, no Redis
+go test ./...                # also Go E2E when *_LIVE_REDIS and *_LIVE_DRAGONFLY are set
+./Test-Integration.ps1      # Pester — Traefik local plugins
 ```
 
 `Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. The copied SimpleRedis client is Apache-2.0 (`LICENSE`).
 
-Window-counter live tests skip unless `WINDOWCOUNTER_LIVE_REDIS` and/or `WINDOWCOUNTER_LIVE_DRAGONFLY` are set (or under `-short`). Token-bucket live tests skip unless `TOKENBUCKET_LIVE_REDIS` and/or `TOKENBUCKET_LIVE_DRAGONFLY` are set (or under `-short`). SimpleRedis live tests skip unless `SIMPLEREDIS_LIVE_REDIS` and/or `SIMPLEREDIS_LIVE_DRAGONFLY` are set (or under `-short`). CI starts both engines and sets those variables so the suite does not skip.
+Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset, and fail if exactly one addr is set. Set both `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` (Redis `:6379`, Dragonfly `:6380`).
 
-CI (`.github/workflows/ci.yml`) runs golangci-lint, `go test -v ./...`, and that same Pester harness on every pull request and on pushes to `master`.
+CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines), Go E2E (`go test` with Redis 7 and Dragonfly), and that same Pester harness on every pull request and on pushes to `master`.
 
 Tag a version (`v1.0.0`) to cut a GitHub release via GoReleaser (source archive + SBOM; no plugin binary).

@@ -36,53 +36,6 @@ func TestYaegi_AllowRefund(t *testing.T) {
 	}
 }
 
-func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
-	if testing.Short() {
-		t.Skip("live engines skipped under -short")
-	}
-	backends := []struct {
-		name string
-		addr string
-	}{
-		{"redis", os.Getenv("TOKENBUCKET_LIVE_REDIS")},
-		{"dragonfly", os.Getenv("TOKENBUCKET_LIVE_DRAGONFLY")},
-	}
-	anyAddr := false
-	for _, backend := range backends {
-		if backend.addr == "" {
-			continue
-		}
-		anyAddr = true
-		backend := backend
-		t.Run(backend.name, func(t *testing.T) {
-			goPath := t.TempDir()
-			writeGopathTokenbucket(t, goPath)
-			writeGopathFile(t, goPath, "allowprobe", "roundtrip.go", allowprobeSrc)
-			t.Run("burstAfterIdle", func(t *testing.T) {
-				got := evalAllowprobe(t, goPath, fmt.Sprintf(`allowprobe.BurstAfterIdle(%q, %q)`, backend.addr, t.Name()))
-				if got != "ok" {
-					t.Fatalf("yaegi live burst: %q, want ok", got)
-				}
-			})
-			t.Run("twoInstancesShare", func(t *testing.T) {
-				got := evalAllowprobe(t, goPath, fmt.Sprintf(`allowprobe.TwoShare(%q, %q)`, backend.addr, t.Name()))
-				if got != "ok" {
-					t.Fatalf("yaegi live share: %q, want ok", got)
-				}
-			})
-			t.Run("memoryAgrees", func(t *testing.T) {
-				got := evalAllowprobe(t, goPath, fmt.Sprintf(`allowprobe.MemoryAgrees(%q, %q)`, backend.addr, t.Name()))
-				if got != "ok" {
-					t.Fatalf("yaegi live agree: %q, want ok", got)
-				}
-			})
-		})
-	}
-	if !anyAddr {
-		t.Skip("live addrs unset")
-	}
-}
-
 // evalAllowprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalAllowprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
