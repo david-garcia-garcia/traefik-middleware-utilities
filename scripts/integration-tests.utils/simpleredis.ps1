@@ -40,6 +40,8 @@ function Get-Sha1Hex {
 }
 
 $script:KongEvalDigest = Get-Sha1Hex $script:KongIncrbyExpireatScript
+$script:TtlEvalDigest = Get-Sha1Hex $script:TtlScript
+$script:TimeWaitHoldDigest = Get-Sha1Hex $script:TimeWaitHoldScript
 
 # New-SimpleRedisKey is a unique key name for one Pester request.
 function New-SimpleRedisKey {
@@ -58,6 +60,7 @@ function Invoke-SimpleRedis {
         [string]$Ex,
         [string]$At,
         [string]$Delta,
+        [string]$Digest,
         [switch]$Drop,
         [string]$Body,
         [int]$TimeoutSec = 10
@@ -76,6 +79,7 @@ function Invoke-SimpleRedis {
     if ($Ex) { $parts += "ex=$([uri]::EscapeDataString($Ex))" }
     if ($At) { $parts += "at=$([uri]::EscapeDataString($At))" }
     if ($Delta) { $parts += "delta=$([uri]::EscapeDataString($Delta))" }
+    if ($Digest) { $parts += "digest=$([uri]::EscapeDataString($Digest))" }
     if ($Drop) { $parts += "drop=1" }
     $uri = "$script:BaseUrl/$Engine/$Verb"
     if ($parts.Count -gt 0) {
@@ -132,11 +136,11 @@ function Assert-EvalShaMissThenHit {
     $expireUnix = [DateTimeOffset]::UtcNow.AddSeconds(60).ToUnixTimeSeconds().ToString()
     Clear-ScriptCache -BackendHost $BackendHost
     (Get-ScriptExists -BackendHost $BackendHost -Digest $script:KongEvalDigest) | Should -Be "0"
-    $response = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key (New-SimpleRedisKey) -Arg @("3", $expireUnix) -Body $script:KongIncrbyExpireatScript
+    $response = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key (New-SimpleRedisKey) -Arg @("3", $expireUnix) -Digest $script:KongEvalDigest -Body $script:KongIncrbyExpireatScript
     $response.StatusCode | Should -Be 200 -Because $response.Content
     $response.Content.Trim() | Should -Be "3"
     (Get-ScriptExists -BackendHost $BackendHost -Digest $script:KongEvalDigest) | Should -Be "1"
-    $again = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key (New-SimpleRedisKey) -Arg @("3", $expireUnix) -Body $script:KongIncrbyExpireatScript
+    $again = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key (New-SimpleRedisKey) -Arg @("3", $expireUnix) -Digest $script:KongEvalDigest -Body $script:KongIncrbyExpireatScript
     $again.StatusCode | Should -Be 200 -Because $again.Content
     $again.Content.Trim() | Should -Be "3"
 }
@@ -214,7 +218,7 @@ function Assert-SimpleRedisLiveCap {
     )
     Wait-BackendPing -BackendHost $BackendHost
     $sidecar = Start-NetnsReader -BackendHost $BackendHost
-    $holdUrl = "$script:BaseUrl$Path`?arg=500000"
+    $holdUrl = "$script:BaseUrl$Path`?arg=500000&digest=$([uri]::EscapeDataString($script:TimeWaitHoldDigest))"
     $http = [System.Net.Http.HttpClient]::new()
     $http.Timeout = [TimeSpan]::FromSeconds(15)
     try {

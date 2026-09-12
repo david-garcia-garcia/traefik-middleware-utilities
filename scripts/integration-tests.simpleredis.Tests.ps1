@@ -76,7 +76,7 @@ Describe "simpleredis Yaegi e2e" {
         param($Engine, $BackendHost)
         $key = New-SimpleRedisKey
         $expireUnix = [DateTimeOffset]::UtcNow.AddSeconds(60).ToUnixTimeSeconds().ToString()
-        $response = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key $key -Arg @("3", $expireUnix) -Body $script:KongIncrbyExpireatScript
+        $response = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key $key -Arg @("3", $expireUnix) -Digest $script:KongEvalDigest -Body $script:KongIncrbyExpireatScript
         $response.StatusCode | Should -Be 200 -Because $response.Content
         $response.Content.Trim() | Should -Be "3"
     }
@@ -93,7 +93,7 @@ Describe "simpleredis Yaegi e2e" {
         $key = New-SimpleRedisKey
         $set = Invoke-SimpleRedis -Engine $Engine -Verb msetex -Key $key -Ex 60 -Body "ok"
         $set.StatusCode | Should -Be 200 -Because $set.Content
-        $ttl = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key $key -Body $script:TtlScript
+        $ttl = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key $key -Digest $script:TtlEvalDigest -Body $script:TtlScript
         $ttl.StatusCode | Should -Be 200 -Because $ttl.Content
         [int]$ttl.Content.Trim() | Should -BeGreaterThan 0
     }
@@ -122,7 +122,7 @@ Describe "simpleredis Yaegi e2e" {
         $incrStored.StatusCode | Should -Be 200 -Because $incrStored.Content
         $incrStored.Content.Trim() | Should -Be "2"
         Invoke-SimpleRedis -Engine $Engine -Verb get -Key "$evalKey-warm" -Drop | Out-Null
-        $eval = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key $evalKey -Arg @("3", $expireUnix) -Body $script:KongIncrbyExpireatScript -Drop
+        $eval = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key $evalKey -Arg @("3", $expireUnix) -Digest $script:KongEvalDigest -Body $script:KongIncrbyExpireatScript -Drop
         $eval.StatusCode | Should -Be 200 -Because $eval.Content
         $eval.Content.Trim() | Should -Be "6"
         $evalStored = Invoke-SimpleRedis -Engine $Engine -Verb get -Key $evalKey

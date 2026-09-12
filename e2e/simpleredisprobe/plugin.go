@@ -130,7 +130,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	case "expireat":
 		m.serveExpireAt(rw, ctx, client, keys, q.Get("at"))
 	case "eval":
-		m.serveEval(rw, ctx, client, keys, args, body)
+		m.serveEval(rw, ctx, client, keys, args, q.Get("digest"), body)
 	case "msetex":
 		m.serveMSetEX(rw, ctx, client, keys, q.Get("ex"), body)
 	case "msetexat":
@@ -294,9 +294,13 @@ func (m *middleware) serveExpireAt(rw http.ResponseWriter, ctx context.Context, 
 	writeOK(rw, nil)
 }
 
-// serveEval Evals the request body with KEYS=keys and ARGV=args.
-func (m *middleware) serveEval(rw http.ResponseWriter, ctx context.Context, client *simpleredis.SimpleRedis, keys, args []string, body []byte) {
-	values, err := client.Eval(ctx, string(body), keys, args)
+// serveEval Evals the request body with KEYS=keys, ARGV=args, and the caller digest.
+func (m *middleware) serveEval(rw http.ResponseWriter, ctx context.Context, client *simpleredis.SimpleRedis, keys, args []string, digest string, body []byte) {
+	if digest == "" {
+		http.Error(rw, "digest required", http.StatusBadRequest)
+		return
+	}
+	values, err := client.Eval(ctx, string(body), digest, keys, args)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return

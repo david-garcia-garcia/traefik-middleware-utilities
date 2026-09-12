@@ -1,37 +1,115 @@
 # traefik-middleware-utilities
 
+[![Build Status](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/workflows/ci.yml/badge.svg)](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/david-garcia-garcia/traefik-middleware-utilities)](https://goreportcard.com/report/github.com/david-garcia-garcia/traefik-middleware-utilities)
+[![Latest GitHub release](https://img.shields.io/github/v/release/david-garcia-garcia/traefik-middleware-utilities?sort=semver)](https://github.com/david-garcia-garcia/traefik-middleware-utilities/releases/latest)
+[![License](https://img.shields.io/badge/license-Apache%202.0-brightgreen.svg)](LICENSE)
+
 Shared Go libraries for Traefik middlewares.
 
-Traefik loads local and catalog plugins through [Yaegi](https://github.com/traefik/yaegi), an interpreter. This repo exists so the pieces those middlewares keep rewriting — Redis, a reclaim table, and rate-limit primitives — live in one place and stay inside the subset of Go that Yaegi can run.
+## Why this exists
 
-## Libraries
+Traefik loads local and catalog plugins through [Yaegi](https://github.com/traefik/yaegi), an interpreter. It does not compile your plugin into Traefik.
 
-Each package is one job. Import the one that matches the middleware; do not mix their clocks.
+That is why this repo exists. The official Go Redis client (and other compiled-only libraries) will not run under Yaegi. A middleware that imports them cannot be loaded the way Traefik actually loads plugins, and cannot be tested that way either.
 
-| Library | Status | Package | Role |
-| --- | --- | --- | --- |
-| Reclaim table | Current | `reclaim/` | In-process table: one value per key, with create / sleep / wake / close when Traefik reloads config. |
-| SimpleRedis | Current | `simpleredis/` | Stdlib RESP client (GET/MGET/SET/DEL/INCR/EXPIRE/EVAL/MSetEX). Middlewares construct this with `New(Config)` instead of inventing a Redis client. Apache-2.0 (copied from crowdsec-bouncer). |
-| Window counter | Current | `windowcounter/` | Kong-style **sliding-window hit counter** on Redis or Dragonfly. Counts hits in a time window and returns allow/deny plus a sliding estimate. Local memory is only the `sync_rate` flush buffer. |
-| Token bucket | Current | `tokenbucket/` | Traefik **token bucket** (refill + burst). Same math in-process and on Redis/Dragonfly via `Eval`. |
+These packages are the pieces those middlewares otherwise rewrite: a Redis client, a reclaim table, and two rate-limit clocks. They stay in the subset of Go that Yaegi can interpret, and they are tested under Yaegi, not only as compiled Go.
 
-### What each one does
+They look like unrelated libraries. They share one module on purpose: the window counter and the token bucket are built on SimpleRedis, and reclaim is how a middleware keeps that client and those clocks across a Traefik reload. Splitting them would hide that they are one Redis-backed stack.
 
-**Reclaim table** (`reclaim/`) stores one Go value per key for the life of a Traefik plugin instance. Use it when the middleware must keep a client, a counter, or a limiter across requests and tear it down on reload (`Sleep` / `Wake` / `Close`). It does not talk to Redis and it does not decide admit/deny.
+## Reclaim table
 
-**SimpleRedis** (`simpleredis/`) is the shared Redis/Dragonfly session. `New(Config)` stores host, password, and database; the first command dials. Use it for GET/SET/INCR/EVAL/MSetEX. It does not implement a rate-limit algorithm.
+Package `reclaim/`. Keep one Go value per key for the life of a Traefik plugin instance — a Redis client, a counter, a limiter.
 
-**Window counter** (`windowcounter/`) is a distributed **hit counter**: `Take(key, limit, window)` increments the current window and admits while `current + previous × (1 − elapsed/window)` is still at or under `limit`. Redis (or Dragonfly) holds the integers. `sync_rate=0` talks to Redis on every Take; `sync_rate>0` buffers locally and flushes with EVAL. Pass its `Sleep`/`Wake`/`Close` into reclaim when the counter is the stored value.
+Call `reclaim.Open` from the plugin constructor (`New`). Pass Traefik's constructor context, not `req.Context()`. The first `Open` for a key runs `create` once. Later `Open`s on the same key return that same value. When Traefik reloads config it cancels the old context; the table sleeps the value, and if a new `New` opens the same key before grace ends, it wakes the stored value instead of creating another.
 
-**Token bucket** (`tokenbucket/`) is Traefik RateLimit’s clock: `Allow(key)` refills at `rate`, caps at `burst`, and returns allowed plus wait. In-process uses a mutex map; Redis uses `Eval` of the copied Lua (`#rl_source == 4`). Do not mix this clock with `windowcounter/`.
+Pass `Sleep` / `Wake` / `Close` as `reclaim.Hooks` when the stored value has those methods. Production uses the process table (`reclaim.Open`). Prefix keys when more than one type shares it.
 
-This is **not** Traefik’s HTTP RateLimit middleware. Token bucket and window counter are separate packages; pick the clock the middleware actually uses.
+```go
+var limiter *windowcounter.Limiter
+stored, err := reclaim.Open(ctx, "window:"+hash, logger, func() (any, error) {
+	var createErr error
+	limiter, createErr = windowcounter.New(client, 0)
+	return limiter, createErr
+}, reclaim.Hooks{
+	Sleep: func() { limiter.Sleep() },
+	Wake:  func() { limiter.Wake() },
+	Close: func() { limiter.Close() },
+})
+if err != nil {
+	return nil, err
+}
+limiter = stored.(*windowcounter.Limiter)
+```
+
+## SimpleRedis
+
+Package `simpleredis/`. A stdlib Redis/Dragonfly client (GET, MGET, SET, DEL, INCR, EXPIRE, EVAL, MSetEX). Use this instead of go-redis: that client does not interpret under Yaegi.
+
+Call `simpleredis.New` in Traefik `New`. It stores host, password, and database; it does not dial. The first command in `ServeHTTP` dials. Pass `req.Context()` on the request path.
+
+```go
+client := simpleredis.New(simpleredis.Config{Host: "redis:6379"})
+got, err := client.Get(req.Context(), "k")
+if err != nil {
+	return err
+}
+```
+
+Set `Pass` and `Database` on `Config` when AUTH or SELECT is needed. Match errors with `simpleredis.IsMiss`, `IsUnreachable`, and `errors.Is` against the exported sentinels — not by comparing error text. Call `Close` when the client is done; later commands do not redial. Apache-2.0 (`LICENSE`).
+
+## Window counter
+
+Package `windowcounter/`. A sliding-window hit counter: how many hits landed on a key in the last window. Kong-style, not Traefik RateLimit.
+
+`Take` records one hit and returns whether it is still under `limit`, plus the sliding estimate. `Peek` is the same observation without recording a hit. The estimate mixes this window with the previous one so the count slides instead of resetting at the boundary.
+
+Build it on a SimpleRedis you already constructed. Prefix keys in the caller. Do not mix this clock with `tokenbucket/`.
+
+```go
+counter, err := windowcounter.New(client, 0)
+if err != nil {
+	return err
+}
+allowed, estimated, err := counter.Peek(req.Context(), "ip:"+ip, 100, time.Minute)
+if err != nil {
+	return err
+}
+if !allowed {
+	return errLimited
+}
+// call backend; on failure:
+_, _, err = counter.Take(req.Context(), "ip:"+ip, 100, time.Minute)
+```
+
+`sync_rate` `0` talks to Redis on every Take or Peek. A positive duration batches locally and flushes on that interval. Pass `Sleep` / `Wake` / `Close` into reclaim when the counter is the stored value. Do not close the Redis client from the counter.
+
+## Token bucket
+
+Package `tokenbucket/`. Traefik RateLimit's clock: tokens refill at `rate` per second, cap at `burst`, one token per `Allow`. It is not a hit counter.
+
+`NewMemory` is in-process. `NewRedis` shares the bucket across Traefik instances on a SimpleRedis you already constructed. `Allow` returns whether the request is allowed and how long to wait. The library does not sleep and does not write HTTP 429 — the middleware does.
+
+```go
+limiter, err := tokenbucket.NewRedis(client, 100, 50, 5*time.Millisecond, 2*time.Second)
+if err != nil {
+	return err
+}
+allowed, wait, err := limiter.Allow(req.Context(), "ip:"+ip)
+if err != nil {
+	return err
+}
+if !allowed {
+	return errLimited
+}
+_ = wait
+```
+
+Compute `rate` from Traefik `average/period`. Prefix keys in the caller. Two limiter instances on one Redis key share burst. Do not mix this clock with `windowcounter/`.
 
 ## Yaegi
 
 This code is interpreted inside Traefik, not compiled into it. Treat that as a hard constraint, not a later port.
-
-Rules of thumb:
 
 - Prefer the Go standard library. Every import is also interpreted.
 - No cgo, no `unsafe`, no assembly, no `//go:embed` unless Yaegi in the target Traefik version is known to support it.
@@ -45,9 +123,9 @@ If a change would be fine in compiled Go but fails under Yaegi, the Yaegi failur
 
 ```text
 reclaim/         reclaim table
-simpleredis/     stdlib RESP client (Apache-2.0)
-windowcounter/   sliding-window Redis/Dragonfly hit counter
-tokenbucket/     Traefik token bucket (in-process and Redis EVAL)
+simpleredis/     stdlib Redis client (Apache-2.0)
+windowcounter/   sliding-window hit counter
+tokenbucket/     Traefik token bucket (in-process and Redis)
 e2e/             fake Traefik plugins + Pester harness (Yaegi)
 ```
 
@@ -64,7 +142,7 @@ go test ./...                # also Go E2E for each *_LIVE_REDIS / *_LIVE_DRAGON
 ./Test-Integration.ps1      # Pester — Traefik local plugins
 ```
 
-`Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. The copied SimpleRedis client is Apache-2.0 (`LICENSE`).
+`Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required.
 
 Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`).
 
