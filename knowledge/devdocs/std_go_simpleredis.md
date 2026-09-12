@@ -17,7 +17,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 - Call `MSetEX(names, values, seconds)` or `MSetEXAt(names, values, unixSeconds)` for many keys with one TTL. Do not MSET then EXPIRE. Match integer `0` as `redis:issue?`.
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
 - For a mixed batch, pass argv rows to `ExecPipeline`. Empty or nil `commands` returns nil, nil and does not dial. More than 64 commands returns `redis:issue?` and does not send. Inspect each slot’s `Values` and `Err` by `Error()` text; the batch error is only I/O, protocol, cap, unreachable, or timeout. Do not use `ExecPipeline` for a same-TTL group write; that is `MSetEX`.
-- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
+- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Allocation guards are `TestAlloc*` functions that call `testing.Benchmark` with `ReportAllocs` and fail on over-budget allocs/op or B/op; they do not need `-bench`. Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
 - Call `Eval(script, keys, args)` with the Lua body. Eval hashes the body each call (cheap SHA-1; no map, no lock) and sends EVALSHA; on NOSCRIPT it falls back once to EVAL so the engine stores the script. Do not SCRIPT LOAD at `New`.
 
 ## Pattern snippet
@@ -59,6 +59,8 @@ _ = slots
 - `simpleredis/commands_msetex.go` — MSetEX / MSetEXAt, capability cache
 - `simpleredis/commands_pipeline.go` — ExecPipeline, PipelineSlot
 - `simpleredis/resp.go` — RESP codec
+- `simpleredis/bench_test.go` — encode/decode benches and CI alloc guards
+- `simpleredis/interpretedcost_test.go` — Yaegi unsafe/encode cost measurements
 - `simpleredis/yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval/MSetEX/ExecPipeline
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`

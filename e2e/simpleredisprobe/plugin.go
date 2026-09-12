@@ -120,7 +120,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	msetexKey := prefix + ":msetex"
 	msetexAtKey := prefix + ":msetexat"
 
-	if err := m.client.Set(setKey, []byte("ok"), 60); err != nil {
+	if err := m.client.Set(setKey, []byte(prefix), 60); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
 	}
@@ -136,7 +136,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
 	}
-	if len(slots) != 2 || string(slots[0]) != "ok" || slots[1] != nil {
+	if len(slots) != 2 || string(slots[0]) != prefix || slots[1] != nil {
 		http.Error(rw, "mget slots", http.StatusBadGateway)
 		return
 	}
