@@ -81,12 +81,87 @@ func TestEvalMixedArrayReply(t *testing.T) {
 	}
 }
 
-func TestEvalNestedArrayIsIssue(t *testing.T) {
-	addr := startStaticRedis(t, "*1\r\n*0\r\n")
-	redis := New(Config{Host: addr})
-	_, err := redis.Eval("return {{}}", nil, nil)
-	if err == nil || err.Error() != RedisIssue {
-		t.Fatalf("Eval nested = %v, want %s", err, RedisIssue)
+func TestMalformedReplyIsIssueAndNotPooled(t *testing.T) {
+	cases := []struct {
+		name  string
+		reply string
+	}{
+		{"http-shaped", "HTTP/1.1 400 Bad Request\r\n"},
+		{"unknown-type", "?huh\r\n"},
+		{"missing-cr", ":42\n"},
+		{"empty-line", "\r\n"},
+		{"unparseable-count", "*abc\r\n"},
+		{"null-array", "*-1\r\n"},
+		{"bad-element-type", "*1\r\n?bad\r\n"},
+		{"empty-element-line", "*1\r\n\r\n"},
+		{"nested-array", "*1\r\n*0\r\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := startStaticRedis(t, tc.reply)
+			redis := New(Config{Host: addr})
+			_, err := redis.Get("k")
+			if err == nil || err.Error() != RedisIssue {
+				t.Fatalf("Get = %v, want %s", err, RedisIssue)
+			}
+			if err.Error() == RedisMiss {
+				t.Fatalf("Get = %v, must not be %s", err, RedisMiss)
+			}
+			if len(redis.idleConns) != 0 {
+				t.Fatalf("idle = %d, want 0", len(redis.idleConns))
+			}
+		})
+	}
+}
+
+func TestTruncatedReplyIsUnreachableAndNotPooled(t *testing.T) {
+	cases := []struct {
+		name         string
+		partialReply string
+	}{
+		{"truncated-array", "*2\r\n$1\r\na\r\n"},
+		{"truncated-bulk", "$10\r\nabc"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := startWriteThenCloseRedis(t, tc.partialReply)
+			redis := New(Config{Host: addr, MaxRetries: -1})
+			_, err := redis.Get("k")
+			if err == nil || err.Error() != RedisUnreachable {
+				t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
+			}
+			if len(redis.idleConns) != 0 {
+				t.Fatalf("idle = %d, want 0", len(redis.idleConns))
+			}
+		})
+	}
+}
+
+func TestRetryBorrowFailsAfterDirtyReuse(t *testing.T) {
+	addr, listenerClosed := startRetryBorrowFailRedis(t, "$10\r\nabc")
+	redis := New(Config{Host: addr, MaxRetries: 1, MinRetryBackoff: -1})
+
+	got, err := redis.Get("hit")
+	if err != nil {
+		t.Fatalf("first Get: %v", err)
+	}
+	if string(got) != "t" {
+		t.Fatalf("first Get = %q, want t", got)
+	}
+	if len(redis.idleConns) != 1 {
+		t.Fatalf("after first Get idle = %d, want 1", len(redis.idleConns))
+	}
+	select {
+	case <-listenerClosed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("listener did not close after the pooled hit")
+	}
+
+	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("second Get = %v, want %s", err, RedisUnreachable)
+	}
+	if len(redis.idleConns) != 0 {
+		t.Fatalf("idle = %d, want 0", len(redis.idleConns))
 	}
 }
 
@@ -180,6 +255,9 @@ func TestGarbageBulkLengthIsIssue(t *testing.T) {
 	_, err := redis.Get("k")
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("garbage bulk = %v, want %s", err, RedisIssue)
+	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after garbage bulk = %d, want 0", got)
 	}
 }
 

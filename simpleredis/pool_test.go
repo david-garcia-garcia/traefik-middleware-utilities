@@ -352,29 +352,3 @@ func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
 		t.Fatalf("second Get = %q, want %q", got, "hello")
 	}
 }
-
-func TestMalformedBulkHeaderIsIssueAndNotPooled(t *testing.T) {
-	addr := startStaticRedis(t, "$abc\r\n")
-	redis := New(Config{Host: addr})
-
-	_, err := redis.Get("k")
-	if err == nil || err.Error() != RedisIssue {
-		t.Fatalf("malformed bulk Get = %v, want %s", err, RedisIssue)
-	}
-	if got := pooledIdle(redis); got != 0 {
-		t.Fatalf("idle after malformed bulk = %d, want 0", got)
-	}
-}
-
-func TestIllegalArrayElementHeadIsIssueAndNotPooled(t *testing.T) {
-	addr := startStaticRedis(t, "*1\r\n#x\r\n")
-	redis := New(Config{Host: addr})
-
-	_, err := redis.Eval("return {1}", nil, nil)
-	if err == nil || err.Error() != RedisIssue {
-		t.Fatalf("illegal array head = %v, want %s", err, RedisIssue)
-	}
-	if got := pooledIdle(redis); got != 0 {
-		t.Fatalf("idle after illegal array head = %d, want 0", got)
-	}
-}

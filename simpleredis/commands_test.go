@@ -167,3 +167,37 @@ func TestExpireZeroReplyIsSuccess(t *testing.T) {
 		t.Fatalf("Expire :0: %v", err)
 	}
 }
+
+func TestVerbArityMismatchIsIssueAndPooled(t *testing.T) {
+	cases := []struct {
+		name    string
+		reply   string
+		command func(*SimpleRedis) error
+	}{
+		{"get-empty-array", "*0\r\n", func(redis *SimpleRedis) error {
+			_, err := redis.Get("k")
+			return err
+		}},
+		{"get-two-bulks", "*2\r\n$1\r\na\r\n$1\r\nb\r\n", func(redis *SimpleRedis) error {
+			_, err := redis.Get("k")
+			return err
+		}},
+		{"incr-empty-array", "*0\r\n", func(redis *SimpleRedis) error {
+			_, err := redis.Incr("k")
+			return err
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := startStaticRedis(t, tc.reply)
+			redis := New(Config{Host: addr})
+			err := tc.command(redis)
+			if err == nil || err.Error() != RedisIssue {
+				t.Fatalf("command = %v, want %s", err, RedisIssue)
+			}
+			if len(redis.idleConns) != 1 {
+				t.Fatalf("idle = %d, want 1", len(redis.idleConns))
+			}
+		})
+	}
+}
