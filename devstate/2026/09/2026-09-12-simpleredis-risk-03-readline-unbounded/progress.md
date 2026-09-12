@@ -6,7 +6,7 @@ JobName: 2026-09-12-simpleredis-risk-03-readline-unbounded
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-12T12:36:54.064Z |
 | explore | [x] | [x] | 2026-09-12T12:41:35.418Z |
-| propose | [x] | [ ] | |
+| propose | [x] | [x] | 2026-09-12T12:45:37.452Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
