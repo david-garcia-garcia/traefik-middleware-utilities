@@ -25,6 +25,11 @@ priority: normal
 local: ext_redis_resp_null-array/
 description: Official RESP2 encoding of a null array (*-1) versus null bulk and empty array.
 
+## Idle client close
+priority: normal
+local: ext_redis_clients_idle-close/
+description: How Redis closes a client TCP socket from the server (idle timeout vs CLIENT KILL).
+
 ## MSETEX
 priority: normal
 local: ext_redis_msetex/

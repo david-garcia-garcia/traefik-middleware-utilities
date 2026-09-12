@@ -59,7 +59,8 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 
 	switch line[0] {
 	case '+', ':':
-		return [][]byte{line[1:]}, true, nil
+		// Copy: ReadSlice view is invalid after the next read or idle release.
+		return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 	case '-':
 		return nil, true, replyError(line[1:])
 	case '$':
@@ -72,12 +73,9 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		}
 		return [][]byte{data}, true, nil
 	case '*':
-		count, convErr := strconv.Atoi(string(line[1:]))
-		if convErr != nil {
-			return nil, false, errIssue
-		}
+		count, ok := parseLen(line[1:])
 		// *-1 is a legal RESP2 nil array (BLPOP timeout, EXEC abort); this client has no verb that receives it, so it is redis:issue? not redis:miss.
-		if count < 0 {
+		if !ok || count < 0 {
 			return nil, false, errIssue
 		}
 		values := make([][]byte, count)
@@ -100,7 +98,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 				}
 				values[i] = data
 			case ':', '+':
-				values[i] = head[1:]
+				values[i] = append([]byte(nil), head[1:]...)
 			default:
 				return nil, false, errIssue
 			}
@@ -116,15 +114,15 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if len(head) == 0 || head[0] != '$' {
 		return nil, errIssue
 	}
-	length, err := strconv.Atoi(string(head[1:]))
-	if err != nil {
+	length, ok := parseLen(head[1:])
+	if !ok {
 		return nil, errIssue
 	}
 	if length < 0 {
 		return nil, errMiss
 	}
 	data := make([]byte, length+2)
-	if _, err = io.ReadFull(reader, data); err != nil {
+	if _, err := io.ReadFull(reader, data); err != nil {
 		return nil, err
 	}
 	return data[:length], nil
@@ -132,14 +130,59 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 
 // readLine reads one CRLF-terminated RESP line without the CRLF.
 func readLine(reader *bufio.Reader) ([]byte, error) {
-	line, err := reader.ReadBytes('\n')
+	line, err := reader.ReadSlice('\n')
 	if err != nil {
-		return nil, err
+		if err != bufio.ErrBufferFull {
+			return nil, err
+		}
+		// Partial aliases the bufio buffer; copy before the remainder read.
+		full := make([]byte, len(line))
+		copy(full, line)
+		remainder, remainderErr := reader.ReadBytes('\n')
+		if remainderErr != nil {
+			return nil, remainderErr
+		}
+		line = append(full, remainder...)
 	}
 	if len(line) < 2 || line[len(line)-2] != '\r' {
 		return nil, errIssue
 	}
 	return line[:len(line)-2], nil
+}
+
+const maxParseLen = int(^uint(0) >> 1)
+
+// parseLen parses a RESP length from the bytes after the type byte.
+// An optional leading minus is accepted so $-1 stays a miss. Empty or non-digit input is false.
+func parseLen(digits []byte) (int, bool) {
+	if len(digits) == 0 {
+		return 0, false
+	}
+	i := 0
+	negative := false
+	if digits[0] == '-' {
+		negative = true
+		i++
+		if i == len(digits) {
+			return 0, false
+		}
+	}
+	length := 0
+	for ; i < len(digits); i++ {
+		digitByte := digits[i]
+		if digitByte < '0' || digitByte > '9' {
+			return 0, false
+		}
+		digit := int(digitByte - '0')
+		if length > (maxParseLen-digit)/10 {
+			return 0, false
+		}
+		length = length*10 + digit
+	}
+	if negative {
+		return -length, true
+	}
+	return length, true
 }
 
 // replyError maps AUTH-class Redis errors to redis:noauth and otherwise returns the payload text.

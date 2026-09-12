@@ -170,6 +170,44 @@ BeforeAll {
             }
         }
     }
+
+    # Stop-TraefikEngineClientForTest CLIENT KILLs Traefik ADDR on Redis or Dragonfly (not TYPE/SKIPME).
+    function Stop-TraefikEngineClientForTest {
+        param(
+            [Parameter(Mandatory)]
+            [ValidateSet("redis", "dragonfly")]
+            [string]$Engine
+        )
+        # Traefik compose IP so CLIENT LIST can match addr=<ip>:<port>.
+        $traefikIp = (docker inspect -f "{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}" reclaim-e2e-traefik).Trim()
+        if (-not $traefikIp) {
+            throw "traefik container IP is empty"
+        }
+        $cli = @("compose", "-p", "reclaim-e2e", "exec", "-T", "redis", "redis-cli")
+        if ($Engine -eq "dragonfly") {
+            $cli += @("-h", "dragonfly")
+        }
+        # CLIENT LIST on the engine (Dragonfly via redis-cli -h dragonfly).
+        $list = docker @cli CLIENT LIST
+        if ($LASTEXITCODE -ne 0) {
+            throw "CLIENT LIST on $Engine failed"
+        }
+        # CLIENT KILL ADDR for each Traefik client; Dragonfly has no TYPE/SKIPME.
+        $killed = 0
+        foreach ($line in ($list -split "`r?`n")) {
+            if ($line -match "addr=$([regex]::Escape($traefikIp)):\d+") {
+                $addr = $Matches[0].Substring("addr=".Length)
+                docker @cli CLIENT KILL ADDR $addr | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    throw "CLIENT KILL ADDR $addr on $Engine failed"
+                }
+                $killed++
+            }
+        }
+        if ($killed -eq 0) {
+            throw "CLIENT KILL killed 0 Traefik clients on $Engine (ip $traefikIp). CLIENT LIST: $list"
+        }
+    }
 }
 
 Describe "reclaim Yaegi e2e" {
@@ -244,6 +282,24 @@ Describe "simpleredis Yaegi e2e" {
 
     It "GET /dragonfly proves EVALSHA miss then hit without stopping whoami-a or whoami-b" {
         Assert-EvalShaMissThenHit -Route "/dragonfly" -BackendHost "dragonfly"
+    }
+
+    It "GET /redis recovers after CLIENT KILL of the Traefik client" {
+        $warmup = Invoke-WebRequest -Uri "$script:BaseUrl/redis" -UseBasicParsing -TimeoutSec 10
+        $warmup.StatusCode | Should -Be 200
+        Stop-TraefikEngineClientForTest -Engine redis
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis?recover=1" -UseBasicParsing -TimeoutSec 10
+        $response.StatusCode | Should -Be 200
+        $response.Headers["X-SimpleRedis-Recover"] | Should -Be "ok"
+    }
+
+    It "GET /dragonfly recovers after CLIENT KILL of the Traefik client" {
+        $warmup = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly" -UseBasicParsing -TimeoutSec 10
+        $warmup.StatusCode | Should -Be 200
+        Stop-TraefikEngineClientForTest -Engine dragonfly
+        $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly?recover=1" -UseBasicParsing -TimeoutSec 10
+        $response.StatusCode | Should -Be 200
+        $response.Headers["X-SimpleRedis-Recover"] | Should -Be "ok"
     }
 
     It "GET /redis concurrent holds stay within default poolSize" {
