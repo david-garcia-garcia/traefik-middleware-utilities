@@ -54,14 +54,24 @@ Defines the RESP commands a SimpleRedis client speaks after it holds a session: 
 - **THEN** Del returns no error
 
 ### Requirement: Exported error strings are stable
-Callers SHALL match errors by `Error()` text. The session SHALL export these exact strings: `redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`. AUTH-class Redis error prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text.
+Callers SHALL match errors by `errors.Is` against the exported sentinel values (`ErrUnreachable`, `ErrMiss`, `ErrTimeout`, `ErrNoAuth`, `ErrIssue`, `ErrPoolWait`) or the predicates `IsMiss`, `IsUnreachable`, and `IsPoolWait`. The session SHALL still export these exact strings for display and legacy text matching: `redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`. AUTH-class Redis error prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text. `ErrPoolWait` SHALL wrap `ErrUnreachable` so `errors.Is` on the unreachable sentinel matches pool wait, while `IsPoolWait` still distinguishes pool saturation. A wrapped sentinel SHALL still match `errors.Is` and the corresponding predicate; `err.Error() ==` the token MUST NOT be the only supported match.
 
 #### Scenario: Rejected auth is redis:noauth
 - **WHEN** Redis replies `-NOAUTH`
 - **THEN** the command returns `redis:noauth`
 
+#### Scenario: Wrapped miss still matches the miss sentinel
+- **WHEN** a miss sentinel is wrapped with `%w`
+- **THEN** `errors.Is` and `IsMiss` still match
+- **AND** `err.Error()` is not equal to `redis:miss`
+
+#### Scenario: Pool wait matches unreachable and is distinct
+- **WHEN** the error is the pool-wait sentinel
+- **THEN** `errors.Is` matches the unreachable sentinel
+- **AND** `IsPoolWait` is true for pool wait and false for a plain unreachable sentinel
+
 ### Requirement: Interpreter tests observe Init Get Set Del
-Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`.
+Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`. Interpreted `clientprobe` SHALL also observe `errors.Is` against an exported sentinel and one of `IsMiss`, `IsUnreachable`, or `IsPoolWait`.
 
 #### Scenario: Yaegi Init Get Set Del
 - **WHEN** interpreted code Inits a client to a compiled fake Redis listener
@@ -94,6 +104,10 @@ Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `
 - **AND** it calls MSetEX twice
 - **THEN** the first call returns no error
 - **AND** the second call does not send `MSETEX`
+
+#### Scenario: Yaegi matches an exported sentinel
+- **WHEN** interpreted code calls `errors.Is` on an exported SimpleRedis sentinel and one predicate
+- **THEN** both matches succeed
 
 ### Requirement: Traefik request SET plus GET sets a response header
 A request through the nested SimpleRedis Traefik plugin SHALL SET a key to that request’s unique token (not a shared constant such as `"ok"`) and GET it back, then set a response header from that GET so Pester can assert the round-trip. MGet of that same key SHALL return the same token as Get. The same request SHALL also call Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against that backend, and set one response header per verb. Eval SHALL run twice on that request: `X-SimpleRedis-Eval` from the first result, `X-SimpleRedis-EvalAgain` from the second. The probe SHALL set `X-SimpleRedis-EvalDigest` to the SHA-1 hex of the Kong KEYS snippet const. The same request SHALL Get a missing key and set a response header whose value is `redis:miss`. After MSetEX it SHALL Eval `TTL` on that key listed in KEYS and set `X-SimpleRedis-MSetEX-TTL` to the positive TTL decimal. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new) and MUST NOT use `table.maxn`. Pester SHALL prove EVALSHA + NOSCRIPT fallback live on both engines: `SCRIPT FLUSH` then `SCRIPT EXISTS` of that digest is `0`, GET succeeds (`Eval` `3` and `EvalAgain` `3`), `EXISTS` is `1`, GET again succeeds. Same sequence against Dragonfly via `redis-cli -h dragonfly`. Pester SHALL run Get/MGet own-value assertions on both `/redis` (Redis) and `/dragonfly` (Dragonfly). Existing verb headers stay. Reclaim `/a` `/b` stay up. After RESP decode uses `ReadSlice`, Get, MGet, Incr, Eval, and MSetEX headers MUST still show those commands succeeded on both `/redis` and `/dragonfly`. This change MUST NOT add Redis or Dragonfly compose services.
