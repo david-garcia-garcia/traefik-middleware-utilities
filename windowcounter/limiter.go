@@ -42,7 +42,7 @@ type windowState struct {
 	expireAt   int64
 }
 
-// New builds a limiter on an already-Init SimpleRedis. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (INCR every Take).
+// New builds a limiter on a SimpleRedis from simpleredis.New. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (INCR every Take).
 func New(redis *simpleredis.SimpleRedis, syncRate time.Duration) (*Limiter, error) {
 	if redis == nil {
 		return nil, errors.New("windowcounter: redis is required")

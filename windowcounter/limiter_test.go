@@ -7,10 +7,15 @@ import (
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
+// newSimpleRedisForTest returns a New client for tests.
+func newSimpleRedisForTest(t testing.TB, host string) *simpleredis.SimpleRedis {
+	t.Helper()
+	return simpleredis.New(simpleredis.Config{Host: host})
+}
+
 func TestTake_NThenDeny(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -40,8 +45,7 @@ func TestTake_NThenDeny(t *testing.T) {
 
 func TestTake_ExpireOnFirstHit(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -60,8 +64,7 @@ func TestTake_ExpireOnFirstHit(t *testing.T) {
 
 func TestTake_SlidingBoundaryDoesNotDouble(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -92,8 +95,7 @@ func TestTake_SlidingBoundaryDoesNotDouble(t *testing.T) {
 }
 
 func TestTake_Unreachable(t *testing.T) {
-	client := &simpleredis.SimpleRedis{}
-	client.Init("127.0.0.1:1", "", "")
+	client := newSimpleRedisForTest(t, "127.0.0.1:1")
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +107,7 @@ func TestTake_Unreachable(t *testing.T) {
 }
 
 func TestNew_NegativeSyncRate(t *testing.T) {
-	client := &simpleredis.SimpleRedis{}
+	client := simpleredis.New(simpleredis.Config{})
 	if _, err := New(client, -time.Second); err == nil {
 		t.Fatal("want error")
 	}
@@ -113,8 +115,7 @@ func TestNew_NegativeSyncRate(t *testing.T) {
 
 func TestNew_FloorsSyncRateBelow20ms(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, time.Millisecond)
 	if err != nil {
 		t.Fatal(err)
@@ -126,8 +127,7 @@ func TestNew_FloorsSyncRateBelow20ms(t *testing.T) {
 }
 
 func TestTake_SubSecondWindow(t *testing.T) {
-	client := &simpleredis.SimpleRedis{}
-	client.Init("127.0.0.1:1", "", "")
+	client := newSimpleRedisForTest(t, "127.0.0.1:1")
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -140,8 +140,7 @@ func TestTake_SubSecondWindow(t *testing.T) {
 
 func TestBuffered_TickerFlushesWithoutSleep(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, time.Millisecond)
 	if err != nil {
 		t.Fatal(err)
@@ -173,10 +172,8 @@ func TestBuffered_TickerFlushesWithoutSleep(t *testing.T) {
 
 func TestBuffered_TwoClientsShareWithoutLastWriteWins(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	aClient := &simpleredis.SimpleRedis{}
-	aClient.Init(addr, "", "")
-	bClient := &simpleredis.SimpleRedis{}
-	bClient.Init(addr, "", "")
+	aClient := newSimpleRedisForTest(t, addr)
+	bClient := newSimpleRedisForTest(t, addr)
 	a, err := New(aClient, time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -216,8 +213,7 @@ func TestBuffered_TwoClientsShareWithoutLastWriteWins(t *testing.T) {
 
 func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, minSyncRate)
 	if err != nil {
 		t.Fatal(err)
@@ -238,8 +234,7 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 
 func TestAllow_IsTake(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -255,8 +250,7 @@ func TestAllow_IsTake(t *testing.T) {
 
 func TestPeek_DoesNotIncrement(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -291,8 +285,7 @@ func TestPeek_DoesNotIncrement(t *testing.T) {
 
 func TestPeek_BufferedDoesNotIncrement(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -328,8 +321,7 @@ func TestPeek_BufferedDoesNotIncrement(t *testing.T) {
 
 func TestPeek_AgreesWithTakeBeforeIncrement(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -361,8 +353,7 @@ func TestPeek_AgreesWithTakeBeforeIncrement(t *testing.T) {
 
 func TestPeek_BufferedTakeThenPeekDenies(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -398,8 +389,7 @@ func TestPeek_BufferedTakeThenPeekDenies(t *testing.T) {
 
 func TestPeek_StaysDeniedThenSlidesAllowed(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -446,8 +436,7 @@ func TestPeek_StaysDeniedThenSlidesAllowed(t *testing.T) {
 
 func TestPeek_BufferedSkipStormDoesNotGetEveryCall(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, time.Hour)
 	if err != nil {
 		t.Fatal(err)
@@ -476,8 +465,7 @@ func TestPeek_BufferedSkipStormDoesNotGetEveryCall(t *testing.T) {
 
 func TestPeek_ExactGetsEveryCall(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
-	client := &simpleredis.SimpleRedis{}
-	client.Init(addr, "", "")
+	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -496,8 +484,7 @@ func TestPeek_ExactGetsEveryCall(t *testing.T) {
 }
 
 func TestPeek_Unreachable(t *testing.T) {
-	client := &simpleredis.SimpleRedis{}
-	client.Init("127.0.0.1:1", "", "")
+	client := newSimpleRedisForTest(t, "127.0.0.1:1")
 	limiter, err := New(client, 0)
 	if err != nil {
 		t.Fatal(err)

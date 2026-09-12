@@ -14,7 +14,7 @@ type Redis struct {
 	redis *simpleredis.SimpleRedis
 }
 
-// NewRedis builds a Redis limiter on an already-Init SimpleRedis. rate is requests per second.
+// NewRedis builds a Redis limiter on a SimpleRedis from simpleredis.New. rate is requests per second.
 func NewRedis(redis *simpleredis.SimpleRedis, rate float64, burst int64, maxDelay, ttl time.Duration) (*Redis, error) {
 	if redis == nil {
 		return nil, errRedis
