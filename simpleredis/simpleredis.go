@@ -23,10 +23,10 @@ var (
 	errPoolWait = errors.New(RedisUnreachable)
 	// errNotFromNew is a client that did not come from New (nil in-use-turn channel). Error() is redis:unreachable so callers still match that token. Distinct from errUnreachable so MaxRetries does not sleep a programming error.
 	errNotFromNew = errors.New(RedisUnreachable)
-	errMiss     = errors.New(RedisMiss)
-	errTimeout  = errors.New(RedisTimeout)
-	errNoAuth   = errors.New(RedisNoAuth)
-	errIssue    = errors.New(RedisIssue)
+	errMiss       = errors.New(RedisMiss)
+	errTimeout    = errors.New(RedisTimeout)
+	errNoAuth     = errors.New(RedisNoAuth)
+	errIssue      = errors.New(RedisIssue)
 )
 
 // SimpleRedis is a pooled TCP RESP client. Obtain one with New; commands dial on first use.
