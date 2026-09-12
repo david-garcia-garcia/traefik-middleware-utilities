@@ -423,6 +423,9 @@ func TestPanicDuringDoReturnsInUseTurn(t *testing.T) {
 	if got, want := len(redis.inUseTurns), cap(redis.inUseTurns); got != want {
 		t.Fatalf("inUseTurns after panics = %d, want %d", got, want)
 	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after panics = %d, want 0", got)
+	}
 	started := time.Now()
 	conn, err := redis.borrow()
 	if err != nil {
