@@ -19,7 +19,7 @@ SimpleRedis reads each RESP line with `ReadSlice('\n')` so short headers do not 
 - Read a line with `ReadSlice('\n')`. On `bufio.ErrBufferFull`, copy the partial, then one `ReadBytes('\n')`, and append. Do not loop `ReadSlice`. Stay on `bufio.NewReader` (4096).
 - Copy a `+` or `:` payload with `append([]byte(nil), payload...)` before the next read and before `release`.
 - Parse bulk and array lengths from the bytes after the type byte (`parseLen`). Accept optional leading minus (`$-1` miss). Empty or non-digits is `redis:issue?`. Do not use `unsafe` or `strconv.Atoi(string(...))`.
-- Leave `readBulk` as `make([]byte, length+2)` plus `io.ReadFull`. Do not keep a `$` or `*` header slice across a later read.
+- Leave `readBulk` as `make([]byte, length+2)` plus `io.ReadFull`. After a complete read, the last two bytes must be CRLF; otherwise return `redis:issue?` so the socket is not pooled. Do not keep a `$` or `*` header slice across a later read.
 
 ## Pattern snippet
 
@@ -51,3 +51,4 @@ return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 - `ErrBufferFull` at 4096 (`bufio.NewReader` default), not go-redis 32 KiB. The remainder is one `ReadBytes`, not another `ReadSlice` loop.
 - Identical EVAL `:0` replies hide aliasing. Prove copy-on-escape with distinct payloads on one connection.
 - `parseLen` overflow is `false` (`redis:issue?`), not a wrap.
+- A full bulk whose trailer is not CRLF is `redis:issue?`, not a clean payload. Short `ReadFull` stays `redis:unreachable`. Do not pool that socket.
