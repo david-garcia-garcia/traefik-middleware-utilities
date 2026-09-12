@@ -34,3 +34,17 @@ phase: codereview
 findings: Standards 1 hard (block intro)
 fixed: `*` over-cap comment
 skipped: none
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: none
+skipped: none
+archived: openspec/changes/archive/2026-09-12-simpleredis-reply-alloc-caps
+
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+ci: Lint, Test, Go E2E, Integration Tests success

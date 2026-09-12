@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-12T12:56:42Z
+Developer review: ready for review — 2026-09-12T13:11:39Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** `readBulk` and `readReply` reject a `$` length above 64 MiB and a `*` count above `1 << 20` as `redis:issue?` before `make`. Over-cap, MaxInt64, `$268435456`, and MGET-shaped array `$` tests prove it. OpenSpec change `simpleredis-reply-alloc-caps` is still unarchived.
+**Developers.** `readBulk` and `readReply` reject a `$` length above 64 MiB and a `*` count above `1 << 20` as `redis:issue?` before `make`. Over-cap, MaxInt64, `$268435456`, and MGET-shaped array `$` tests prove it. Caps are in `std_go_simpleredis_resp-decode` and `std_go_simpleredis_resp-commands`.
 
 **End users.** None.
 
@@ -27,33 +27,33 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Apply landed locally (`go test ./simpleredis/...` passed). Remote CI is still queued. 1 item remains.
+Ready for review. CI succeeded. 0 items remain.
 
 Priority: P1 — a remote peer can size a heap allocation large enough to kill the Traefik process today
-Reviewed head: 64b96aa
+Reviewed head: 84f599c
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI still queued after the apply push |
-| CI proof | 3/6 | Lint, Test, Go E2E, Integration Tests queued — [run 34695046634](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695046634) |
-| Local tests proof | N/A | Remote CI is the proof axis; local `./simpleredis/...` passed |
+| Overall readiness | 6/6 | Open PR, CI succeeded, no open comments |
+| CI proof | 6/6 | Lint, Test, Go E2E, Integration Tests success — [run 34695259370](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695259370) |
+| Local tests proof | N/A | Remote CI is the proof axis |
 | Review resolution | 6/6 | OPEN PR 34; no reviewer comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-12-simpleredis-bug-02-unbounded-reply-allocation pushed | `git` / GitHub |
-| OpenSpec | simpleredis-reply-alloc-caps | `openspec/changes/simpleredis-reply-alloc-caps/` |
+| OpenSpec | simpleredis-reply-alloc-caps (archived) | `openspec/changes/archive/2026-09-12-simpleredis-reply-alloc-caps/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/34 | pr-host |
-| CI | build 34695046634 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695046634 | GitHub check runs |
-| Local tests | passed | handoff.yaml localTests; `go test ./simpleredis/...` |
+| CI | build 34695259370 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695259370 | GitHub check runs |
+| Local tests | passed | handoff.yaml |
 | PR comments | no comments | no `comments.md` |
 
 ## Specs
-- [std_go_simpleredis_resp-decode](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/openspec/changes/simpleredis-reply-alloc-caps/proposal.md) — modified
-- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/openspec/changes/simpleredis-reply-alloc-caps/proposal.md) — modified
+- [std_go_simpleredis_resp-decode](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/openspec/changes/archive/2026-09-12-simpleredis-reply-alloc-caps/proposal.md) — modified
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/openspec/changes/archive/2026-09-12-simpleredis-reply-alloc-caps/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -62,7 +62,7 @@ None.
 - [ ] [Cumulative array-reply decode budget](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/knowledge/debt/2026-09-12-simpleredis-cumulative-array-reply-budget.md) — per-element and count caps still allow a huge total array reply.
 
 ## How this fits together
-Local ticket on branch `2026-09-12-simpleredis-bug-02-unbounded-reply-allocation` opened PR 34 against `master`. Apply capped `$`/`*` allocations; archive and CI wait remain.
+Local ticket on branch `2026-09-12-simpleredis-bug-02-unbounded-reply-allocation` opened PR 34 against `master`. Specs archived; CI succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -71,12 +71,7 @@ Local ticket on branch `2026-09-12-simpleredis-bug-02-unbounded-reply-allocation
 | Who already owns client identity (address, user, tenant, Host, trust hop) for this change? | additive incidental | assumed — none. The cap classifies a RESP header; it does not set or rebuild a host fact. | explore |
 
 ## Before merge
-- [x] Cap `$` and `*` reply allocations at 64 MiB / `1 << 20` and return `redis:issue?` without the `make`
-- [x] Prove over-cap, panic-length, and `$268435456` allocation with `readReply` tests
-- [x] Stub PR 34 opened
-- [x] Explore recorded package consts and test spelling
-- [x] OpenSpec change `simpleredis-reply-alloc-caps` proposed
-- [ ] Wait for CI on 64b96aa and archive the change
+None.
 
 ## Findings
 None.
@@ -97,7 +92,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 64b96aa5aad2bd8921489f9928ea4eb5ac6cd989 | Card must match the branch you measured |
+| Reviewed head | 84f599cdd1db1ecfa0c160a32aa0623395ae8a7f | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -111,12 +106,10 @@ Is this the best way to solve the issue? Yes — ticket-named consts, not Config
 
 ### Evidence
 What I checked:
-- `go test ./simpleredis/...` passed (13.579s) at 5522748
-- `simpleredis/resp.go` cap before `make`; `errIssue` not retried
-- `knowledge/research/ext_redis_proto_max-bulk-len/` default 512 MiB; reply path uncapped
-- `knowledge/research/ext_go-redis_proto_reader-limit/` no go-redis reader bulk cap
-- PR 34; checks queued (run 34695046634)
-- Seven-axis review: Standards 1 hard (block intro on `*` gate) done; other axes none
+- `go test ./simpleredis/...` passed locally
+- CI Lint, Test, Go E2E, Integration Tests success on run 34695259370 (84f599c)
+- Main specs synced; change archived
+- PR 34 title `🐛 fix(simpleredis): reject oversized RESP reply headers`
 
 ### Rank-up moves
 None.
