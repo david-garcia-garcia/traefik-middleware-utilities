@@ -84,18 +84,20 @@ func (f *fakeRedis) serve(conn net.Conn) {
 			_, _ = io.WriteString(conn, reply)
 			continue
 		}
-		if args[0] == "GET" && f.holdCh != nil {
-			ch := f.holdCh
-			f.heldGets++
-			f.mu.Unlock()
-			<-ch
-			f.mu.Lock()
-			f.heldGets--
-		} else if args[0] == "GET" && f.getDelay > 0 {
-			delay := f.getDelay
-			f.mu.Unlock()
-			time.Sleep(delay)
-			f.mu.Lock()
+		if args[0] == "GET" {
+			if f.holdCh != nil {
+				ch := f.holdCh
+				f.heldGets++
+				f.mu.Unlock()
+				<-ch
+				f.mu.Lock()
+				f.heldGets--
+			} else if f.getDelay > 0 {
+				delay := f.getDelay
+				f.mu.Unlock()
+				time.Sleep(delay)
+				f.mu.Lock()
+			}
 		}
 		reply := f.commandReply(args)
 		if f.closeBeforeReplyOnce {
