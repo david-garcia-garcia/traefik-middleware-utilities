@@ -440,3 +440,38 @@ func startStaticRedis(t *testing.T, reply string) string {
 	}()
 	return listener.Addr().String()
 }
+
+// startSequentialRedis replies with replies[n] for the n-th command on each accepted socket.
+func startSequentialRedis(t *testing.T, replies []string) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func(conn net.Conn) {
+				defer conn.Close()
+				reader := bufio.NewReader(conn)
+				n := 0
+				for {
+					if _, err := readCommand(reader); err != nil {
+						return
+					}
+					if n >= len(replies) {
+						return
+					}
+					_, _ = io.WriteString(conn, replies[n])
+					n++
+				}
+			}(conn)
+		}
+	}()
+	return listener.Addr().String()
+}
