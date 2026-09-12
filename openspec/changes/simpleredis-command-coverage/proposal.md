@@ -1,12 +1,12 @@
 ## Why
 
-Compiled live e2e already calls every public SimpleRedis verb, but Yaegi live omits several, compiled Eval never names KEYS as its own case, and Traefik Pester dumps every verb onto one GET so a 502 cannot name the command. Isolation and the missing Traefik MSetEXAt proof need a path-dispatched probe.
+Compiled live e2e already calls every public SimpleRedis verb, but Yaegi live omits several, compiled Eval never names KEYS as its own case, and Traefik Pester used to dump every verb onto one GET so a 502 could not name the command. The probe is a thin HTTP map of SimpleRedis; Pester owns the sequences.
 
 ## What Changes
 
 - Add compiled live cases: Eval with KEYS/ARGV (Kong incrby+expireat shape) and MSetEXAt with a future Unix time then Get + positive TTL.
 - Expand Yaegi live `LiveVerbs` to MGet, IncrBy, Expire, ExpireAt, and MSetEXAt. Fake-TCP Yaegi stays the existing subset.
-- Replace the Traefik one-request header dump with path cases: `ServeHTTP` switches on the last path segment; Pester gets one `It` per case per engine (`/redis/get`, `/dragonfly/msetexat`, …). Exact `/redis` and `/dragonfly` stay health Set+Get. Handshake routers stay Set+Get 502. Recover, drop, and hold become their own paths with the same jobs they have today.
+- Map each public verb to `/redis/<verb>` and `/dragonfly/<verb>` (query `key`/`arg`/`ex`/`at`/`delta`, body for Set/Eval/MSetEX). Success is HTTP 200 with the reply body; a command error is 502 with `err.Error()`. Exact `/redis` and `/dragonfly` stay health Set+Get. Handshake routers stay Set+Get 502. Pester composes recover (Set+Get after CLIENT KILL), drop (`drop=1`), and hold (Eval of a TIME wait). No `X-SimpleRedis-*` result headers.
 
 ## Capabilities
 
@@ -17,13 +17,13 @@ None.
 ### Modified Capabilities
 
 - `std_go_simpleredis_live-e2e`: Compiled Eval KEYS case, future MSetEXAt TTL landing, and Yaegi live covering the full public verb set.
-- `std_go_simpleredis_resp-commands`: Traefik probe is path-dispatched; Pester asserts one case per request instead of every verb header on one GET.
-- `std_go_simpleredis_tcp-session`: Recover is `/redis/recover`; drop-relay is `/redis/drop`; health `/redis` is Set+Get only.
+- `std_go_simpleredis_resp-commands`: Traefik probe maps verbs to paths; Pester asserts status and body per request.
+- `std_go_simpleredis_tcp-session`: Recover is Pester Set+Get after kill; drop-relay is `drop=1`; health `/redis` is Set+Get only.
 
 ## Impact
 
 - `simpleredis/commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `yaegi_test.go` `LiveVerbs`, `yaegi_e2e_test.go`.
-- `e2e/simpleredisprobe/plugin.go`, `scripts/integration-tests.Tests.ps1`, `Test-Integration.ps1` health URLs (still `/redis` and `/dragonfly`).
+- `e2e/simpleredisprobe/plugin.go`, `scripts/integration-tests.simpleredis.Tests.ps1`, `scripts/integration-tests.utils/`, `Test-Integration.ps1` health URLs (still `/redis` and `/dragonfly`).
 - `openspec/specs/std_go_simpleredis_live-e2e/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`.
 - Usage packets that name the Yaegi live subset or Traefik dump (`knowledge/devdocs/std_go_simpleredis.md`, `std_go_test-suites.md`) after apply.
-- No runtime client API change. No new compose routers (PathPrefix already matches `/redis/<case>`). No Redis 8 / native Dragonfly MSETEX.
+- No runtime client API change. No new compose routers (PathPrefix already matches `/redis/<verb>`). No Redis 8 / native Dragonfly MSETEX.

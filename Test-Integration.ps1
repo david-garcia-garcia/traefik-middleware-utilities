@@ -9,7 +9,7 @@
 param(
     [switch]$SkipDockerCleanup,
     [switch]$SkipWait,
-    [string]$TestPath = "./scripts/integration-tests.Tests.ps1"
+    [string]$TestPath = "./scripts"
 )
 
 $ErrorActionPreference = "Stop"
@@ -113,11 +113,20 @@ try {
     }
 
     if (-not (Test-Path $TestPath)) {
-        throw "test file not found: $TestPath"
+        throw "test path not found: $TestPath"
+    }
+
+    $pesterPath = $TestPath
+    $testPathItem = Get-Item $TestPath
+    if ($testPathItem.PSIsContainer) {
+        $pesterPath = @(Get-ChildItem $TestPath -Filter *.Tests.ps1 | ForEach-Object FullName)
+        if ($pesterPath.Count -eq 0) {
+            throw "no *.Tests.ps1 under $TestPath"
+        }
     }
 
     $pesterConfig = New-PesterConfiguration
-    $pesterConfig.Run.Path = $TestPath
+    $pesterConfig.Run.Path = $pesterPath
     $pesterConfig.Output.Verbosity = "Detailed"
     $pesterConfig.Run.Exit = $false
     $pesterConfig.Run.PassThru = $true

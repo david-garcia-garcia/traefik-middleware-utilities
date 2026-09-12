@@ -40,7 +40,7 @@ Four suites, six jobs (`test` and `race` are both unit; Go E2E is Redis and Drag
 - Unit: `go test -short ./...`. CI job `test` (`Unit`): `go test -short -timeout 2m -count=1 -v ./...`. Files `{domain}_test.go` (and `{domain}_yaegi_test.go` against a compiled fake).
 - Unit race: CI job `race`: `go test -race -short -timeout 10m -count=1 -v ./...`. Same files as unit. `TestAlloc*` skip.
 - Go E2E: `go test ./...` with the LIVE addrs for the engines to hit. Files `{domain}_e2e_test.go` and `{domain}_yaegi_e2e_test.go` sit next to that domain’s `.go` and `{domain}_test.go`. Shared skip/wait helpers that are not one domain live in `{package}_e2e_test.go` (same job as `fake_redis_test.go` for the fake peer). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` with the same one-or-both rule. CI job `e2e-redis` sets Redis addrs only; `e2e-dragonfly` sets Dragonfly addrs only.
-- Pester: `./Test-Integration.ps1`. Docker required.
+- Pester: `./Test-Integration.ps1`. Docker required. Domain files are `scripts/integration-tests.<domain>.Tests.ps1` (reclaim, simpleredis). Helpers are `scripts/integration-tests.utils/*.ps1` (not `*Tests.ps1`).
 - Do not dump every live case into one `live_test.go`. Name the file for the domain it proves (`commands_e2e_test.go` beside `commands.go` / `commands_test.go`).
 - Skip under `-short` or both live addrs unset. One addr set runs that engine only.
 
@@ -60,12 +60,12 @@ limiter_yaegi_e2e_test.go # interpreted, live
 - `simpleredis/commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, `simpleredis_e2e_test.go`, `yaegi_e2e_test.go`
 - `windowcounter/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
 - `tokenbucket/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
-- `Test-Integration.ps1`
+- `Test-Integration.ps1`, `scripts/integration-tests.reclaim.Tests.ps1`, `scripts/integration-tests.simpleredis.Tests.ps1`, `scripts/integration-tests.utils/`
 
 ## Gotchas
 
 - Unit CI does not start Redis. A test that needs a live engine belongs in `*_e2e_test.go`, not `{domain}_test.go`.
 - Unit CI on Ubuntu runs `test` without `-race` (`TestAlloc*` run) and `race` with `-race` (`TestAlloc*` skip). A green race job does not prove `inUseTurns` length or idle-cap accounting.
-- Pester `/redis/<case>` and `/dragonfly/<case>` are Traefik proof (one `It` per verb). Exact `/redis` and `/dragonfly` are health Set+Get. Compiled `*_e2e_test.go` is the client/limiter proof.
+- Pester `scripts/integration-tests.simpleredis.Tests.ps1` drives `/redis/<verb>` and `/dragonfly/<verb>` (status + body). Exact `/redis` and `/dragonfly` are health Set+Get. Reclaim is `scripts/integration-tests.reclaim.Tests.ps1`. Compiled `*_e2e_test.go` is the client/limiter proof.
 - Auth/SELECT handshake failure is Go E2E: SELECT 99 on dest engines (`pool_e2e_test.go`); WRONGPASS on `SIMPLEREDIS_LIVE_*_AUTH`. Malformed RESP and LOADING retry stay on fake TCP.
 - Reclaim has no Redis client; it has no Go E2E files.
