@@ -9,7 +9,7 @@
 
 ## 3. SimpleRedis live coverage
 
-- [x] 3.1 Domain e2e files: `commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, harness `simpleredis_e2e_test.go`. Engine-success Get/Set/Del/MGet/Incr/Expire/Eval/EVALSHA/NOSCRIPT-after-SCRIPT-FLUSH, pool wait, MSetEX, CLIENT KILL. Keys from `t.Name()`. Keep fake-TCP for malformed/AUTH
+- [x] 3.1 Domain e2e files: `commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, harness `simpleredis_e2e_test.go`. Engine-success Get/Set/Del/MGet/Incr/Expire/Eval/EVALSHA/NOSCRIPT-after-SCRIPT-FLUSH, pool wait, MSetEX, CLIENT KILL, SELECT 99, WRONGPASS on `SIMPLEREDIS_LIVE_*_AUTH`. Keys from `t.Name()`. Keep fake-TCP for malformed RESP and AUTH-class prefixes dest engines do not emit
 - [x] 3.2 Add `yaegi_e2e_test.go` (`TestYaegiLive_RedisAndDragonfly`): compiled test owns skip; interpreted probe `LiveVerbs`. GOPATH, stdlib only, `useunsafe` false, no Traefik
 - [x] 3.3 Run `go test -short ./simpleredis/...` until unit tests pass and e2e tests skip
 

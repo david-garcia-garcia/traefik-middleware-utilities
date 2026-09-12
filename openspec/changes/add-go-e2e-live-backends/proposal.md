@@ -9,7 +9,7 @@ Dest CI’s `test` job starts Redis and Dragonfly and runs compiled live files i
 - Keep `integration` as Pester (`Test-Integration.ps1`).
 - Add GitHub job `e2e` (`Go E2E`): dest’s Redis 7 `:6379` and Dragonfly `:6380`, all `*_LIVE_*` env, `go test` without `-short`.
 - Every compiled and Yaegi live case table-drives both engines. Skip only when `-short` or both addrs unset; exactly one addr set fails.
-- Expand live SimpleRedis to engine-success verbs (Get/Set/Del/MGet/Incr/Expire/Eval/MSetEX, pool wait, peer-close) plus Yaegi live. Expand window-counter and token-bucket live scenarios. Do not port fake-peer abuse, AUTH/SELECT, or reclaim.
+- Expand live SimpleRedis to engine-success verbs (Get/Set/Del/MGet/Incr/Expire/Eval/MSetEX, pool wait, peer-close) plus Yaegi live. Keep DestBranch SELECT 99 and WRONGPASS live proof. Expand window-counter and token-bucket live scenarios. Do not port fake-peer abuse or reclaim.
 - Document the four suites in `knowledge/devdocs/std_go_test-suites.md`. Point per-library prove-with lines and README Tests at that catalog.
 
 ## Capabilities

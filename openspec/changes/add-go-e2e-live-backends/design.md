@@ -14,8 +14,7 @@ See proposal.md Why. Dest already table-drives `live_test.go` on env addrs and s
 **Non-Goals:**
 - Build tags.
 - Renaming the Pester job.
-- AUTH/SELECT live Redis (`--requirepass`).
-- Extra engine images.
+- Extra engine images (Valkey / Redis 8).
 - Changing limiter or SimpleRedis runtime APIs.
 
 ## Decisions

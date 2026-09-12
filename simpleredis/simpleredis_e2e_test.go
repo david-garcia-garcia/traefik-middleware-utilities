@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bufio"
+	"errors"
 	"net"
 	"os"
 	"strconv"
@@ -15,24 +16,71 @@ type liveEngineForTest struct {
 	addr string
 }
 
+// errLiveEngineOneAddr is the fail-closed result when exactly one of Redis or Dragonfly is set.
+var errLiveEngineOneAddr = errors.New("exactly one live engine address is set; set both or neither")
+
+// lookupLiveEngineAddrs returns both engines, bothUnset when neither addr is set, or errLiveEngineOneAddr when exactly one is set.
+func lookupLiveEngineAddrs(redisAddr, dragonflyAddr string) (engines []liveEngineForTest, bothUnset bool, err error) {
+	if redisAddr == "" && dragonflyAddr == "" {
+		return nil, true, nil
+	}
+	if redisAddr == "" || dragonflyAddr == "" {
+		return nil, false, errLiveEngineOneAddr
+	}
+	return []liveEngineForTest{
+		{name: "redis", addr: redisAddr},
+		{name: "dragonfly", addr: dragonflyAddr},
+	}, false, nil
+}
+
 // liveEngineAddrs skips under -short or both env unset, fails when exactly one addr is set, else returns both engines.
 func liveEngineAddrs(t *testing.T, redisEnv, dragonflyEnv string) []liveEngineForTest {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("live engines skipped under -short")
 	}
-	redisAddr := os.Getenv(redisEnv)
-	dragonflyAddr := os.Getenv(dragonflyEnv)
-	if redisAddr == "" && dragonflyAddr == "" {
+	engines, bothUnset, err := lookupLiveEngineAddrs(os.Getenv(redisEnv), os.Getenv(dragonflyEnv))
+	if bothUnset {
 		t.Skip(redisEnv + " and " + dragonflyEnv + " unset")
 	}
-	if redisAddr == "" || dragonflyAddr == "" {
-		t.Fatal("exactly one live engine address is set; set both or neither")
+	if err != nil {
+		t.Fatal(err)
 	}
-	return []liveEngineForTest{
-		{name: "redis", addr: redisAddr},
-		{name: "dragonfly", addr: dragonflyAddr},
-	}
+	return engines
+}
+
+// TestLookupLiveEngineAddrs proves both-or-neither without dialing an engine (runs under -short).
+func TestLookupLiveEngineAddrs(t *testing.T) {
+	t.Run("bothUnset", func(t *testing.T) {
+		engines, bothUnset, err := lookupLiveEngineAddrs("", "")
+		if err != nil || !bothUnset || len(engines) != 0 {
+			t.Fatalf("lookup(\"\",\"\") = %v unset=%v err=%v", engines, bothUnset, err)
+		}
+	})
+	t.Run("onlyRedis", func(t *testing.T) {
+		_, bothUnset, err := lookupLiveEngineAddrs("127.0.0.1:6379", "")
+		if bothUnset || !errors.Is(err, errLiveEngineOneAddr) {
+			t.Fatalf("onlyRedis unset=%v err=%v, want errLiveEngineOneAddr", bothUnset, err)
+		}
+	})
+	t.Run("onlyDragonfly", func(t *testing.T) {
+		_, bothUnset, err := lookupLiveEngineAddrs("", "127.0.0.1:6380")
+		if bothUnset || !errors.Is(err, errLiveEngineOneAddr) {
+			t.Fatalf("onlyDragonfly unset=%v err=%v, want errLiveEngineOneAddr", bothUnset, err)
+		}
+	})
+	t.Run("bothSet", func(t *testing.T) {
+		engines, bothUnset, err := lookupLiveEngineAddrs("127.0.0.1:6379", "127.0.0.1:6380")
+		if err != nil || bothUnset || len(engines) != 2 {
+			t.Fatalf("bothSet = %v unset=%v err=%v", engines, bothUnset, err)
+		}
+		if engines[0].name != "redis" || engines[0].addr != "127.0.0.1:6379" {
+			t.Fatalf("engines[0] = %+v, want redis 127.0.0.1:6379", engines[0])
+		}
+		if engines[1].name != "dragonfly" || engines[1].addr != "127.0.0.1:6380" {
+			t.Fatalf("engines[1] = %+v, want dragonfly 127.0.0.1:6380", engines[1])
+		}
+	})
 }
 
 // runForEachLiveEngine table-drives Redis then Dragonfly after liveEngineAddrs.
