@@ -17,3 +17,9 @@ phase: propose
 findings: none
 fixed: none
 skipped: none
+
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: backendbackoff Gate Allow/Report/Close
+skipped: local -race (no cgo); CI Unit race will prove it
