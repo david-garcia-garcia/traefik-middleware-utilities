@@ -24,3 +24,8 @@ description: Redis EVALSHA SHA-1 digest, volatile script cache, and NOSCRIPT mis
 priority: normal
 local: ext_redis_pipelining/
 description: Redis RESP pipelining: one write of N commands, N ordered replies, mixed verbs including EVAL, and -ERR vs I/O.
+
+## MSETEX
+priority: normal
+local: ext_redis_msetex/
+description: Redis 8.4 MSETEX argv/reply and Redis 7 unknown-command detection for engines that lack it.

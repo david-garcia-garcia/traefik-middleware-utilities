@@ -1,4 +1,4 @@
-// Package simpleredis is a stdlib pooled TCP RESP client (GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL, ExecPipeline).
+// Package simpleredis is a stdlib pooled TCP RESP client (GET, MGET, SET with EX, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL, MSetEX, MSetEXAt, ExecPipeline).
 package simpleredis
 
 import (
@@ -51,6 +51,10 @@ type SimpleRedis struct {
 	closed      atomic.Bool
 	// inUseTurns is a PoolSize-buffered semaphore of concurrent in-use sockets. Idle sockets do not hold a turn.
 	inUseTurns chan struct{}
+
+	// groupWriteMu guards groupWrite (native MSETEX vs Lua fallback). Not idleConnsMu: that lock is the unused-socket list.
+	groupWriteMu sync.Mutex
+	groupWrite   groupWritePath
 }
 
 // New copies cfg onto a client and builds the in-use-turn channel. Does not dial. Call before concurrent use.
@@ -74,7 +78,7 @@ func New(cfg Config) *SimpleRedis {
 	return sr
 }
 
-// Close drains unused pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval/ExecPipeline return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
+// Close drains unused pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval/MSetEX/MSetEXAt/ExecPipeline return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
 func (sr *SimpleRedis) Close() {
 	if !sr.closed.CompareAndSwap(false, true) {
 		return

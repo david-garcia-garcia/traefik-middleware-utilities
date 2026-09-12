@@ -65,6 +65,36 @@ func TestYaegi_ExecPipeline(t *testing.T) {
 	}
 }
 
+// TestYaegi_MSetEXNative proves interpreted MSetEX against a compiled fake that implements MSETEX.
+func TestYaegi_MSetEXNative(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{})
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.MSetEXNative(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi msetex native: %q, want ok", got)
+	}
+}
+
+// TestYaegi_MSetEXLua proves interpreted MSetEX falls back to EVAL and a second call skips MSETEX.
+func TestYaegi_MSetEXLua(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	fake.setRejectMSetEX()
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.MSetEXLua(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi msetex lua: %q, want ok", got)
+	}
+	if fake.msetexSendCount() != 1 {
+		t.Fatalf("MSETEX sends = %d, want 1", fake.msetexSendCount())
+	}
+}
+
 // evalClientprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalClientprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -218,6 +248,41 @@ func PipelineIncrGet(host string) string {
 	}
 	if len(slots[1].Values) != 1 || string(slots[1].Values[0]) != "1" {
 		return fmt.Sprintf("get:%q", slots[1].Values)
+	}
+	return "ok"
+}
+
+// MSetEXNative writes one pair via MSetEX against a native MSETEX fake.
+func MSetEXNative(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host})
+	if err := client.MSetEX([]string{"yaegi-msetex"}, [][]byte{[]byte("ok")}, 60); err != nil {
+		return "msetex:" + err.Error()
+	}
+	got, err := client.Get("yaegi-msetex")
+	if err != nil {
+		return "get:" + err.Error()
+	}
+	if string(got) != "ok" {
+		return "get:" + string(got)
+	}
+	return "ok"
+}
+
+// MSetEXLua calls MSetEX twice so a reject-MSETEX fake can prove the cache.
+func MSetEXLua(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host})
+	if err := client.MSetEX([]string{"yaegi-msetex-lua"}, [][]byte{[]byte("ok")}, 60); err != nil {
+		return "first:" + err.Error()
+	}
+	if err := client.MSetEX([]string{"yaegi-msetex-lua-2"}, [][]byte{[]byte("ok")}, 60); err != nil {
+		return "second:" + err.Error()
+	}
+	got, err := client.Get("yaegi-msetex-lua")
+	if err != nil {
+		return "get:" + err.Error()
+	}
+	if string(got) != "ok" {
+		return "get:" + string(got)
 	}
 	return "ok"
 }

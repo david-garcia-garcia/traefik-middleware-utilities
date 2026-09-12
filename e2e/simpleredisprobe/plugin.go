@@ -38,6 +38,9 @@ while true do
 end
 return 1`
 
+// ttlScript returns TTL for KEYS[1] so Pester can assert MSetEX expiry landed.
+const ttlScript = `return redis.call('TTL', KEYS[1])`
+
 // kongScriptDigest is SHA-1 hex of kongIncrbyExpireatScript (Redis sha1hex).
 func kongScriptDigest() string {
 	sum := sha1.Sum([]byte(kongIncrbyExpireatScript)) //nolint:gosec // Redis EVALSHA digest is SHA-1
@@ -85,7 +88,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return mw, nil
 }
 
-// ServeHTTP optionally holds one pool socket via ?hold= microseconds (Eval TIME-wait) and returns. Without hold it runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval twice, and one mixed ExecPipeline, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
+// ServeHTTP optionally holds one pool socket via ?hold= microseconds (Eval TIME-wait) and returns. Without hold it runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval twice, MSetEX, MSetEXAt, and one mixed ExecPipeline, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// Hold occupies a live turn so Pester can contend for poolSize. Return after the wait; verb and pipeline headers are the non-hold path.
 	if hold := req.URL.Query().Get("hold"); hold != "" {
@@ -109,6 +112,8 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	delKey := prefix + ":del"
 	pipeIncrKey := prefix + ":pipeincr"
 	pipeEvalKey := prefix + ":pipeeval"
+	msetexKey := prefix + ":msetex"
+	msetexAtKey := prefix + ":msetexat"
 
 	if err := m.client.Set(setKey, []byte("ok"), 60); err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
@@ -199,6 +204,27 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("X-SimpleRedis-EvalAgain", string(evalAgainValues[0]))
 	rw.Header().Set("X-SimpleRedis-EvalDigest", kongScriptDigest())
+
+	if err := m.client.MSetEX([]string{msetexKey}, [][]byte{[]byte("ok")}, 60); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-MSetEX", "ok")
+	ttlValues, err := m.client.Eval(ttlScript, []string{msetexKey}, nil)
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if len(ttlValues) != 1 {
+		http.Error(rw, "msetex ttl slots", http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-MSetEX-TTL", string(ttlValues[0]))
+
+	if err := m.client.MSetEXAt([]string{msetexAtKey}, [][]byte{[]byte("ok")}, time.Now().Add(60*time.Second).Unix()); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
 
 	// Mixed INCR+EXPIRE+GET+EVAL on unique keys; EVAL lists KEYS[1] (Lua 5.1-safe).
 	pipeSlots, err := m.client.ExecPipeline([][][]byte{
