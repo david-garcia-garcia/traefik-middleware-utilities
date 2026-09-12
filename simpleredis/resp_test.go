@@ -84,20 +84,71 @@ func TestEvalMixedArrayReply(t *testing.T) {
 	}
 }
 
+func TestReadReplyUnsupportedAndMalformed(t *testing.T) {
+	cases := []struct {
+		name    string
+		wire    string
+		errText string
+		clean   bool
+		slots   []string
+	}{
+		{name: "null-array", wire: "*-1\r\n", errText: RedisIssue, clean: false},
+		{name: "nested-array", wire: "*1\r\n*1\r\n$1\r\na\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "error-in-array", wire: "*1\r\n-ERR nope\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "http-shaped", wire: "HTTP/1.1 400 Bad Request\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "unknown-type", wire: "?huh\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "resp3-null", wire: "_\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "resp3-bool", wire: "#t\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "resp3-double", wire: ",1.5\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "resp3-bignum", wire: "(1\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "resp3-map", wire: "%0\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "resp3-set", wire: "~0\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "resp3-verbatim", wire: "=0\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "resp3-push", wire: ">0\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "missing-cr", wire: ":42\n", errText: RedisIssue, clean: false},
+		{name: "empty-line", wire: "\r\n", errText: RedisIssue, clean: false},
+		{name: "unparseable-count", wire: "*abc\r\n", errText: RedisIssue, clean: false},
+		{name: "empty-element-line", wire: "*1\r\n\r\n", errText: RedisIssue, clean: false},
+		{name: "bad-element-type", wire: "*1\r\n?bad\r\n", errText: RedisUnsupportedReply, clean: false},
+		{name: "tokenbucket-three-bulk", wire: "*3\r\n$4\r\ntrue\r\n$1\r\n0\r\n$1\r\n0\r\n", clean: true, slots: []string{"true", "0", "0"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			values, clean, err := readReply(bufio.NewReader(strings.NewReader(tc.wire)))
+			if clean != tc.clean {
+				t.Fatalf("clean = %v, want %v (err=%v)", clean, tc.clean, err)
+			}
+			if tc.errText == "" {
+				if err != nil {
+					t.Fatalf("err = %v, want nil", err)
+				}
+				if len(values) != len(tc.slots) {
+					t.Fatalf("values = %q, want %q", values, tc.slots)
+				}
+				for i, slot := range tc.slots {
+					if string(values[i]) != slot {
+						t.Fatalf("values[%d] = %q, want %s", i, values[i], slot)
+					}
+				}
+				return
+			}
+			if err == nil || err.Error() != tc.errText {
+				t.Fatalf("err = %v, want %s", err, tc.errText)
+			}
+		})
+	}
+}
+
 func TestMalformedReplyIsIssueAndNotPooled(t *testing.T) {
 	cases := []struct {
 		name  string
 		reply string
 	}{
-		{"http-shaped", "HTTP/1.1 400 Bad Request\r\n"},
-		{"unknown-type", "?huh\r\n"},
 		{"missing-cr", ":42\n"},
 		{"empty-line", "\r\n"},
 		{"unparseable-count", "*abc\r\n"},
 		{"null-array", "*-1\r\n"},
-		{"bad-element-type", "*1\r\n?bad\r\n"},
 		{"empty-element-line", "*1\r\n\r\n"},
-		{"nested-array", "*1\r\n*0\r\n"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -110,10 +161,79 @@ func TestMalformedReplyIsIssueAndNotPooled(t *testing.T) {
 			if err.Error() == RedisMiss {
 				t.Fatalf("Get = %v, must not be %s", err, RedisMiss)
 			}
-			if len(redis.idleConns) != 0 {
-				t.Fatalf("idle = %d, want 0", len(redis.idleConns))
+			if pooledIdle(redis) != 0 {
+				t.Fatalf("idle = %d, want 0", pooledIdle(redis))
 			}
 		})
+	}
+}
+
+func TestUnsupportedReplyIsNotPooled(t *testing.T) {
+	cases := []struct {
+		name  string
+		reply string
+	}{
+		{"http-shaped", "HTTP/1.1 400 Bad Request\r\n"},
+		{"unknown-type", "?huh\r\n"},
+		{"bad-element-type", "*1\r\n?bad\r\n"},
+		{"nested-array", "*1\r\n*0\r\n"},
+		{"error-in-array", "*1\r\n-ERR nope\r\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			addr := startStaticRedis(t, tc.reply)
+			redis := New(Config{Host: addr})
+			_, err := redis.Get("k")
+			if err == nil || err.Error() != RedisUnsupportedReply {
+				t.Fatalf("Get = %v, want %s", err, RedisUnsupportedReply)
+			}
+			if err.Error() == RedisIssue || err.Error() == RedisUnreachable {
+				t.Fatalf("Get = %v, must not be issue or unreachable", err)
+			}
+			if pooledIdle(redis) != 0 {
+				t.Fatalf("idle = %d, want 0", pooledIdle(redis))
+			}
+		})
+	}
+}
+
+func TestEvalNestedArrayRedials(t *testing.T) {
+	addr, accepts := startFirstAcceptThenRestRedis(t, "*1\r\n*1\r\n$1\r\na\r\n", "*3\r\n$4\r\ntrue\r\n$1\r\n0\r\n$1\r\n0\r\n")
+	redis := New(Config{Host: addr, MaxRetries: -1})
+	_, err := redis.Eval("return {1,{2}}", nil, nil)
+	if err == nil || err.Error() != RedisUnsupportedReply {
+		t.Fatalf("Eval nested = %v, want %s", err, RedisUnsupportedReply)
+	}
+	if err.Error() == RedisUnreachable {
+		t.Fatalf("Eval nested = %v, must not be %s", err, RedisUnreachable)
+	}
+	if pooledIdle(redis) != 0 {
+		t.Fatalf("idle after nested = %d, want 0", pooledIdle(redis))
+	}
+	if got := accepts(); got != 1 {
+		t.Fatalf("accepts after nested Eval = %d, want 1", got)
+	}
+	values, err := redis.Eval("return {tostring(true), tostring(0), tostring(0)}", nil, nil)
+	if err != nil {
+		t.Fatalf("Eval after redial: %v", err)
+	}
+	if len(values) != 3 || string(values[0]) != "true" || string(values[1]) != "0" || string(values[2]) != "0" {
+		t.Fatalf("Eval after redial = %q", values)
+	}
+	if got := accepts(); got != 2 {
+		t.Fatalf("accepts after second Eval = %d, want 2 (redial)", got)
+	}
+}
+
+func TestEvalTokenBucketThreeBulkStrings(t *testing.T) {
+	addr := startStaticRedis(t, "*3\r\n$4\r\ntrue\r\n$1\r\n0\r\n$1\r\n0\r\n")
+	redis := New(Config{Host: addr})
+	values, err := redis.Eval("return {tostring(true), tostring(0), tostring(0)}", nil, nil)
+	if err != nil {
+		t.Fatalf("Eval three bulk: %v", err)
+	}
+	if len(values) != 3 || string(values[0]) != "true" || string(values[1]) != "0" || string(values[2]) != "0" {
+		t.Fatalf("Eval three bulk = %q", values)
 	}
 }
 
