@@ -2,6 +2,8 @@ package simpleredis
 
 import (
 	"bufio"
+	"bytes"
+	"io"
 	"net"
 	"strings"
 	"testing"
@@ -233,19 +235,81 @@ func TestArraySlotsSurviveLaterRead(t *testing.T) {
 	}
 }
 
-func TestLongStatusLineDecodes(t *testing.T) {
+// TestLongStatusLineIsIssueAndNotPooled proves a 5000-byte + status is redis:issue? and not pooled.
+func TestLongStatusLineIsIssueAndNotPooled(t *testing.T) {
 	payload := strings.Repeat("A", 5000)
 	addr := startStaticRedis(t, "+"+payload+"\r\n")
 	redis := New(Config{Host: addr})
-	values, err := redis.Eval("return 'x'", nil, nil)
-	if err != nil {
-		t.Fatalf("long status: %v", err)
+	_, err := redis.Eval("return 'x'", nil, nil)
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("long status: %v, want %s", err, RedisIssue)
 	}
-	if len(values) != 1 {
-		t.Fatalf("long status values=%q", values)
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after long status = %d, want 0", got)
 	}
-	if string(values[0]) != payload {
-		t.Fatalf("long status len=%d, want %d", len(values[0]), len(payload))
+}
+
+// testPeerCounter counts bytes a bufio.Reader pulled from a fake peer.
+type testPeerCounter struct {
+	body      io.Reader
+	bytesRead int
+}
+
+// Read records how many bytes the bufio reader pulled from the fake peer.
+func (peer *testPeerCounter) Read(p []byte) (int, error) {
+	n, err := peer.body.Read(p)
+	peer.bytesRead += n
+	return n, err
+}
+
+// TestReadLineBufferFullIsIssue proves ErrBufferFull is redis:issue? and the peer delivered at most 4096 bytes.
+func TestReadLineBufferFullIsIssue(t *testing.T) {
+	// Unterminated stream: fill the 4096 buffer with no newline.
+	unterminated := &testPeerCounter{body: bytes.NewReader(bytes.Repeat([]byte{'A'}, 8192))}
+	line, err := readLine(bufio.NewReader(unterminated))
+	if err != errIssue {
+		t.Fatalf("unterminated = %v %q, want %v", err, line, errIssue)
+	}
+	if unterminated.bytesRead > 4096 {
+		t.Fatalf("unterminated consumed %d, want <= 4096", unterminated.bytesRead)
+	}
+
+	// Terminated line longer than the buffer: still stop at ErrBufferFull.
+	overCap := make([]byte, 0, 5003)
+	overCap = append(overCap, '+')
+	overCap = append(overCap, bytes.Repeat([]byte{'A'}, 5000)...)
+	overCap = append(overCap, '\r', '\n')
+	terminated := &testPeerCounter{body: bytes.NewReader(overCap)}
+	line, err = readLine(bufio.NewReader(terminated))
+	if err != errIssue {
+		t.Fatalf("over-cap = %v %q, want %v", err, line, errIssue)
+	}
+	if terminated.bytesRead > 4096 {
+		t.Fatalf("over-cap consumed %d, want <= 4096", terminated.bytesRead)
+	}
+}
+
+// TestReadLineShortestLegalLines proves +OK, :1, and $-1 still decode.
+func TestReadLineShortestLegalLines(t *testing.T) {
+	cases := []struct {
+		name string
+		wire string
+		want string
+	}{
+		{"status-ok", "+OK\r\n", "+OK"},
+		{"integer-one", ":1\r\n", ":1"},
+		{"null-bulk", "$-1\r\n", "$-1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := readLine(bufio.NewReader(strings.NewReader(tc.wire)))
+			if err != nil {
+				t.Fatalf("readLine: %v", err)
+			}
+			if string(got) != tc.want {
+				t.Fatalf("readLine = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
