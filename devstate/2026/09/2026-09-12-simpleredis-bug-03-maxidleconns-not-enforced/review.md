@@ -21,3 +21,9 @@ phase: implement
 findings: none
 fixed: release idle-only trim; TestIdleCapAfterSequentialRelease; TestConcurrentGetsQuiesceAtMaxIdleConns
 skipped: clamp MaxIdleConns; idle reaper
+
+## codereview (2026-09-12)
+phase: codereview
+findings: none
+fixed: none
+skipped: none

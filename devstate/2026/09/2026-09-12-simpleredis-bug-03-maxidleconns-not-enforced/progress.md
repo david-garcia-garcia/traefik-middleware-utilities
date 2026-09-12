@@ -8,7 +8,7 @@ JobName: 2026-09-12-simpleredis-bug-03-maxidleconns-not-enforced
 | explore | [x] | [x] | 2026-09-12T12:41:21Z |
 | propose | [x] | [x] | 2026-09-12T12:44:46Z |
 | implement | [x] | [x] | 2026-09-12T12:53:48Z |
-| codereview | [x] | [ ] | |
+| codereview | [x] | [x] | 2026-09-12T13:05:53Z |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
