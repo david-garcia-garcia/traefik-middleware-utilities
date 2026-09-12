@@ -65,7 +65,7 @@ Idle keys SHALL expire after `TTL` on a later Allow (lazy). Allow SHALL refresh 
 `New(Config)` SHALL apply defaults for any zero field: `FailureRatio` 0.30, `TripFailures` 5, `BaseCooldown` 1s, `MaxCooldown` 10s, `Jitter` 0.10, `TTL` 60s. Construction SHALL fail when `FailureRatio` is not in (0, 1), `TripFailures` is less than 1, `BaseCooldown` is not greater than zero, `MaxCooldown` is less than `BaseCooldown`, `Jitter` is not in [0, 1), or `TTL` is less than 1s. `Jitter` 0 SHALL be valid and SHALL disable jitter.
 
 #### Scenario: New rejects invalid ratio
-- **WHEN** New is called with FailureRatio 0 or 1 or a negative value
+- **WHEN** New is called with FailureRatio 1 or a negative value
 - **THEN** construction returns an error
 - **AND** no map entry is created
 

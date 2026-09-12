@@ -13,9 +13,9 @@ Traefik loads local and catalog plugins through [Yaegi](https://github.com/traef
 
 That is why this repo exists. The official Go Redis client (and other compiled-only libraries) will not run under Yaegi. A middleware that imports them cannot be loaded the way Traefik actually loads plugins, and cannot be tested that way either.
 
-These packages are the pieces those middlewares otherwise rewrite: a Redis client, a reclaim table, and two rate-limit clocks. They stay in the subset of Go that Yaegi can interpret, and they are tested under Yaegi, not only as compiled Go.
+These packages are the pieces those middlewares otherwise rewrite: a Redis client, a reclaim table, two rate-limit clocks, and an in-memory backend backoff gate. They stay in the subset of Go that Yaegi can interpret, and they are tested under Yaegi, not only as compiled Go.
 
-They look like unrelated libraries. They share one module on purpose: the window counter and the token bucket are built on SimpleRedis, and reclaim is how a middleware keeps that client and those clocks across a Traefik reload. Splitting them would hide that they are one Redis-backed stack.
+They look like unrelated libraries. They share one module on purpose: the window counter and the token bucket are built on SimpleRedis, reclaim is how a middleware keeps a client or gate across a Traefik reload, and not every package talks to Redis. Splitting them would hide that they are one middleware stack under the same Yaegi constraint.
 
 ## Reclaim table
 
@@ -107,6 +107,31 @@ _ = wait
 
 Compute `rate` from Traefik `average/period`. Prefix keys in the caller. Two limiter instances on one Redis key share burst. Do not mix this clock with `windowcounter/`.
 
+## Backend backoff
+
+Package `backendbackoff/`. An in-memory per-key admission gate: stop forwarding into an unhealthy backend, then back off exponentially while it recovers. It is not Traefik's CircuitBreaker middleware and not a token bucket.
+
+`Allow` says whether a real backend attempt may proceed and how long to wait if not. After an admitted attempt, `Report` the boolean outcome. The library does not sleep, does not write HTTP, and does not classify status codes. Denied requests must not be Reported.
+
+```go
+gate, err := backendbackoff.New(backendbackoff.Config{})
+if err != nil {
+	return err
+}
+allowed, retryAfter, err := gate.Allow(req.Context(), "backend:"+host)
+if err != nil {
+	return err
+}
+if !allowed {
+	return errLimited
+}
+_ = retryAfter
+ok := callBackend()
+gate.Report("backend:"+host, ok)
+```
+
+Prefix keys in the caller. Store the Gate in `reclaim.Open` so a Traefik reload keeps the map (`Close` as the reclaim hook; no Sleep/Wake). Two Gate instances do not share state. Do not import `tokenbucket`.
+
 ## Yaegi
 
 This code is interpreted inside Traefik, not compiled into it. Treat that as a hard constraint, not a later port.
@@ -126,6 +151,7 @@ reclaim/         reclaim table
 simpleredis/     stdlib Redis client (Apache-2.0)
 windowcounter/   sliding-window hit counter
 tokenbucket/     Traefik token bucket (in-process and Redis)
+backendbackoff/  in-memory backend backoff gate
 e2e/             fake Traefik plugins + Pester harness (Yaegi)
 ```
 
@@ -144,7 +170,7 @@ go test ./...                # also Go E2E for each *_LIVE_REDIS / *_LIVE_DRAGON
 
 `Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required.
 
-Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`).
+Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`). `backendbackoff/` has no store and no `*_LIVE_*` var.
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines, 2m timeout, `TestAlloc*` run), unit `go test -race -short` (no engines, 10m timeout), Go E2E Redis (`go test` with Redis 7, no `-race`), Go E2E Dragonfly (`go test` with Dragonfly, no `-race`), and that same Pester harness on every pull request and on pushes to `master`.
 
