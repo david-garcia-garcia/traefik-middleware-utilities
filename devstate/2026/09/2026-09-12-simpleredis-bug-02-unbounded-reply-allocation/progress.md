@@ -9,6 +9,6 @@ JobName: 2026-09-12-simpleredis-bug-02-unbounded-reply-allocation
 | propose | [x] | [x] | 2026-09-12T12:46:39Z |
 | implement | [x] | [x] | 2026-09-12T12:50:56Z |
 | codereview | [x] | [x] | 2026-09-12T12:57:47Z |
-| devdocsimpact | [x] | [ ] | |
-| archive | [ ] | [ ] | |
+| devdocsimpact | [x] | [x] | 2026-09-12T12:58:30Z |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
