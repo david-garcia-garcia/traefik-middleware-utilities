@@ -7,3 +7,11 @@
   Why: those checks run after a successful clean `readReply`; honouring uniform `idle==0` would add a destroy-on-arity branch to verbs whose job is not connection hygiene.
   By: explore
   Requester: not asked
+
+- [x] taken  retry-borrow dirty reply is truncated I/O not `?huh`
+  Asked: malformed `?huh` on a reused conn then retry borrow fails (`redis:unreachable`).
+  Instead: truncated bulk then close, `MaxRetries: 1`.
+  Owner: `simpleredis/commands.go` (`shouldRetry`)
+  Why: master retry (#21) retries `redis:unreachable` only, not `redis:issue?`.
+  By: merge origin/master
+  Requester: not asked
