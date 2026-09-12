@@ -138,11 +138,17 @@ func writeGopathSimpleredis(t testing.TB, goPath string) {
 // writeGopathClientprobe writes the interpreted probe package under GOPATH/src/clientprobe.
 func writeGopathClientprobe(t testing.TB, goPath string) {
 	t.Helper()
-	dir := filepath.Join(goPath, "src", "clientprobe")
+	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+}
+
+// writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
+func writeGopathFile(t testing.TB, goPath, pkg, name, src string) {
+	t.Helper()
+	dir := filepath.Join(goPath, "src", pkg)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "roundtrip.go"), []byte(clientprobeSrc), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
