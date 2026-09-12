@@ -109,7 +109,7 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **AND** the peer observes a second GET on a new connection
 
 ### Requirement: Full pool wait returns redis:unreachable
-When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried.
+When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried. The pool-wait sentinel SHALL wrap the unreachable sentinel so `errors.Is` matches unreachable, and the retry classifier MUST still treat pool wait as not retryable (`shouldRetry` false for pool wait, true for a plain unreachable sentinel). Identity compare, or a pool-wait check before unreachable, is required; rewriting the classifier to `errors.Is` against unreachable alone MUST NOT retry pool wait.
 
 #### Scenario: Pool wait times out
 - **WHEN** all live sockets at the default `poolSize` (8) are busy
@@ -118,8 +118,14 @@ When every live socket is checked out, a further command SHALL wait for an in-us
 - **THEN** that command returns `redis:unreachable`
 - **AND** the fake or server observes no additional TCP connection for that command
 
+#### Scenario: Pool wait is not retried after wrapping unreachable
+- **WHEN** the error is the pool-wait sentinel
+- **THEN** command retry does not retry that error
+- **WHEN** the error is the plain unreachable sentinel
+- **THEN** command retry does retry that error
+
 ### Requirement: Live cap is proven on Redis and Dragonfly
-The session SHALL keep at most `poolSize` live TCP connections (idle plus in use; const default 8) against a real Redis and a real Dragonfly. Fake-server tests MUST NOT be the only proof. Traefik local-plugin Pester on `/redis` and `/dragonfly` SHALL overlap requests long enough to contend for sockets, observe at most `poolSize` clients on that backend (default 8), and observe `redis:unreachable` when a waiter exceeds the pool wait. Compiled tests gated on live addresses SHALL prove pool-wait `redis:unreachable` on both engines; they MAY set `Config.PoolSize` so a shared CI Redis is not left in Lua BUSY. Those compiled tests MUST skip under `-short` or when both `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY` are unset, MUST fail when exactly one address is set, and MUST run on the CI `e2e` job. Any Lua used to hold a socket MUST be Lua 5.1-safe (no `table.maxn`) and MUST list touched keys in KEYS (zero keys when none are touched). Compose project `reclaim-e2e`, routes `/a` `/b`, and existing verb headers MUST keep their semantics.
+The session SHALL keep at most `poolSize` live TCP connections (idle plus in use; const default 8) against a real Redis and a real Dragonfly. Fake-server tests MUST NOT be the only proof. Traefik local-plugin Pester on `/redis` and `/dragonfly` SHALL overlap requests long enough to contend for sockets, observe at most `poolSize` clients on that backend (default 8), and observe `redis:unreachable` when a waiter exceeds the pool wait. Compiled tests gated on live addresses SHALL prove pool-wait `redis:unreachable` on both engines; they MAY set `Config.PoolSize` so a shared CI Redis is not left in Lua BUSY. Those compiled tests MUST skip under `-short` or when both `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY` are unset, MUST run the set engine when exactly one address is set, and MUST run on CI `e2e-redis` and `e2e-dragonfly`. Any Lua used to hold a socket MUST be Lua 5.1-safe (no `table.maxn`) and MUST list touched keys in KEYS (zero keys when none are touched). Compose project `reclaim-e2e`, routes `/a` `/b`, and existing verb headers MUST keep their semantics.
 
 #### Scenario: Concurrent holds stay within poolSize on Redis
 - **WHEN** overlapping requests through the Traefik plugin hold sockets against compose Redis
@@ -240,7 +246,7 @@ When a command’s reply is a short bulk read (the peer announces more payload b
 ### Requirement: Peer-closed idle socket is retried
 When a pooled idle TCP connection is closed by the Redis or Dragonfly peer while it is still younger than thirty seconds, the next command SHALL treat that failure as a dead connection (not a timeout) and SHALL retry on a new dial under the go-redis-shaped `MaxRetries` policy. An I/O end-of-file on that reused socket MUST map to an error whose `Error()` text is `redis:unreachable`. A timeout MUST NOT be retried. Closing the client-side file descriptor of a pooled socket is a distinct failure and MUST remain a separate proof; that path MUST NOT stand in for peer close. If the retry cannot obtain a connection, the command SHALL return `redis:unreachable`. The dead socket MUST NOT be returned to the idle pool.
 
-Compiled tests MUST close the **accepted** socket from the server after the first reply and MUST NOT close the client. Live tests MUST close the pooled connection with `CLIENT KILL` by `ADDR` or `ID` (not `TYPE` or `SKIPME`) against both Redis and Dragonfly, then the next command SHALL succeed on a new dial. Those live tests MUST skip under `-short` or when both SimpleRedis live addresses are unset, MUST fail when exactly one address is set, and MUST run on the CI `e2e` job. The nested Traefik plugin SHALL keep `simpleredis.New` in Traefik `New`. A recover request (`recover=1`) SHALL run Set and Get only, SHALL set `X-SimpleRedis-Recover: ok` when those succeed after recovery, and MUST NOT Eval. Default `/redis` and `/dragonfly` verb headers MUST stay. Existing Eval on the default path SHALL remain Lua 5.1-safe and SHALL list its keys in `KEYS`. Compose idle `timeout` SHALL stay 0. The SimpleRedis Pester Describe MUST NOT stop `whoami-a` or `whoami-b`.
+Compiled tests MUST close the **accepted** socket from the server after the first reply and MUST NOT close the client. Live tests MUST close the pooled connection with `CLIENT KILL` by `ADDR` or `ID` (not `TYPE` or `SKIPME`) against both Redis and Dragonfly, then the next command SHALL succeed on a new dial. Those live tests MUST skip under `-short` or when both SimpleRedis live addresses are unset, MUST run the set engine when exactly one address is set, and MUST run on CI `e2e-redis` and `e2e-dragonfly`. The nested Traefik plugin SHALL keep `simpleredis.New` in Traefik `New`. A recover request (`recover=1`) SHALL run Set and Get only, SHALL set `X-SimpleRedis-Recover: ok` when those succeed after recovery, and MUST NOT Eval. Default `/redis` and `/dragonfly` verb headers MUST stay. Existing Eval on the default path SHALL remain Lua 5.1-safe and SHALL list its keys in `KEYS`. Compose idle `timeout` SHALL stay 0. The SimpleRedis Pester Describe MUST NOT stop `whoami-a` or `whoami-b`.
 
 #### Scenario: Peer-closed idle is retried
 - **WHEN** a compiled fake Redis accepts one connection, answers the first Get, and closes that accepted socket without reading further
@@ -326,4 +332,12 @@ When a caller returns an in-use-turn token while the in-use-turn channel is alre
 - **THEN** those goroutines all finish
 - **AND** the in-use-turn channel `len` equals `cap`
 - **AND** `OverFrees()` is 0
+
+### Requirement: Session source keeps copy conversions
+The SimpleRedis session source SHALL convert command names, scripts, and decimal arguments with `[]byte(...)` and integer-reply payloads with `string(...)`. It MUST NOT add `unsafe` zero-copy helpers in session source. It MUST NOT import `unsafe` or use cgo. Traefik local-plugin `useunsafe` MUST stay false.
+
+#### Scenario: Copy conversions stay in session source
+- **WHEN** the session source converts a string key, script, or decimal argument to bytes, or a bulk integer payload to a string
+- **THEN** that conversion is `[]byte(...)` or `string(...)`
+- **AND** session source has no unsafe pointer or header cast that aliases string and `[]byte`
 
