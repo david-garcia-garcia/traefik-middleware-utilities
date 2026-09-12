@@ -78,6 +78,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		if !ok || count < 0 {
 			return nil, false, errIssue
 		}
+		// Over-cap * must not make; a later short read retries as unreachable.
 		if count > maxArrayCount {
 			return nil, false, errIssue
 		}
