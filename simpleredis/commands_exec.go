@@ -45,7 +45,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		// If do panics under Yaegi, the process does not crash and this in-use-turn is lost.
 		// Not deferred-release: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/29
 		values, reusable, err := sr.do(ctx, conn, args)
-		if stop := ctx.Err(); stop != nil {
+		if stop := contextStop(ctx); stop != nil {
 			sr.release(conn, false)
 			return nil, libraryTimeout(stop, libraryOwnsDeadline)
 		}
@@ -65,7 +65,8 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 }
 
 // bindCommandDeadline wraps ctx with (maxRetries+1)*(DialTimeout+IOTimeout) when that instant is sooner than the parent.
-// libraryOwnsDeadline is true when DeadlineExceeded on the returned ctx is the library budget.
+// Same shape as net.Dialer / http.Client: one child context, not a parallel time.Time next to ctx.
+// libraryOwnsDeadline is true when DeadlineExceeded on the returned ctx is the library budget (maps to redis:timeout).
 func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context, maxRetries int) (context.Context, context.CancelFunc, bool) {
 	libraryDeadline := time.Now().Add(time.Duration(maxRetries+1) * (sr.DialTimeout() + sr.IOTimeout()))
 	if parent, ok := ctx.Deadline(); ok && !parent.After(libraryDeadline) {
@@ -84,6 +85,7 @@ func libraryTimeout(err error, libraryOwnsDeadline bool) error {
 }
 
 // contextStop is ctx.Err(), or DeadlineExceeded when the deadline time has passed but Done has not closed yet.
+// The timer and the socket SetDeadline are independent clocks; Done can lag the wall clock by a few ms.
 func contextStop(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
