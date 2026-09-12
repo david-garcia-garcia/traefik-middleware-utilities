@@ -33,4 +33,4 @@ description: Kong Gateway rate-limiting window types and Redis sync_rate behavio
 ## go-redis
 priority: normal
 local: index_ext_go-redis.md
-description: go-redis client internals this product copies as stdlib-only control flow (not an import).
+description: Official go-redis client pool, option, and proto.Reader.readLine behavior this product copies the shape of, without importing the library.

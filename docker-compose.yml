@@ -54,6 +54,24 @@ services:
     ulimits:
       memlock: -1
 
+  redis-drop:
+    build:
+      context: ./e2e/respdroprelay
+    hostname: redis-drop
+    environment:
+      UPSTREAM: redis:6379
+    depends_on:
+      - redis
+
+  dragonfly-drop:
+    build:
+      context: ./e2e/respdroprelay
+    hostname: dragonfly-drop
+    environment:
+      UPSTREAM: dragonfly:6379
+    depends_on:
+      - dragonfly
+
   whoami-redis:
     image: traefik/whoami
     labels:
@@ -63,6 +81,7 @@ services:
       - "traefik.http.routers.simpleredis.middlewares=simpleredis@docker"
       - "traefik.http.services.simpleredis.loadbalancer.server.port=80"
       - "traefik.http.middlewares.simpleredis.plugin.simpleredisprobe.host=redis:6379"
+      - "traefik.http.middlewares.simpleredis.plugin.simpleredisprobe.dropHost=redis-drop:6379"
 
   whoami-dragonfly:
     image: traefik/whoami
@@ -73,3 +92,4 @@ services:
       - "traefik.http.routers.simpleredis-dragonfly.middlewares=simpleredis-dragonfly@docker"
       - "traefik.http.services.simpleredis-dragonfly.loadbalancer.server.port=80"
       - "traefik.http.middlewares.simpleredis-dragonfly.plugin.simpleredisprobe.host=dragonfly:6379"
+      - "traefik.http.middlewares.simpleredis-dragonfly.plugin.simpleredisprobe.dropHost=dragonfly-drop:6379"
