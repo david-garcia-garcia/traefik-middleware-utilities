@@ -49,6 +49,16 @@ fixed: none
 skipped: none
 archived: openspec/changes/archive/2026-09-12-simpleredis-unsupported-reply/
 
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+pr: 40 https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/40
+ci: Lint=success Test=success Go E2E=success Integration Tests=success run=34695198641
+verdict: ready for review
+
+
 
 
 
