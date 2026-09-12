@@ -11,6 +11,7 @@ import (
 )
 
 // do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty.
+// Any panic here loses the in-use-turn when this client runs in a Traefik middleware: Traefik recovers the request and release never runs.
 func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
 	if err := conn.netConn.SetDeadline(time.Now().Add(sr.ioTimeout)); err != nil {
 		return nil, false, errUnreachable
