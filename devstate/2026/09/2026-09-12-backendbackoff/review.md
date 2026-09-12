@@ -23,3 +23,21 @@ phase: implement
 findings: none
 fixed: backendbackoff Gate Allow/Report/Close
 skipped: local -race (no cgo); CI Unit race will prove it
+
+## codereview (2026-09-12)
+phase: codereview
+findings: Report-after-TTL, idle proof, probe credit, lost-probe, OPEN Report ignored, cap at B, Yaegi filename, job comments, key not source
+fixed: those hard/wrong items
+skipped: extra New validation tests, 65536 dropOne, jitter-on/MaxCooldown math
+
+## devdocsimpact (2026-09-12)
+phase: devdocsimpact
+findings: Report-after-TTL gotcha missing from usage packet
+fixed: gotcha added to std_go_backendbackoff.md
+skipped: none
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: live specs std_go_backendbackoff_allow and std_go_backendbackoff_cooldown; change moved to archive/2026-09-12-backendbackoff-gate
+skipped: none

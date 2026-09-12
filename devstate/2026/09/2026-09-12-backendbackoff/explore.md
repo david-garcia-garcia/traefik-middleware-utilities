@@ -42,8 +42,8 @@ Traefik CircuitBreaker (docs, not a library we wrap): expression default empty; 
 
 - Q: What defaults for `p`, `B`, base cooldown, max cooldown, jitter fraction, and idle TTL?
   Rank: additive asked — requirement Unknowns names these knobs; new Config this change creates
-  Decision: assumed — `FailureRatio` `p=0.30` (Traefik CircuitBreaker docs example `NetworkErrorRatio() > 0.30`); `TripFailures` `B=5` (requirement illustration: consecutive failures that trip a dead backend); `BaseCooldown=1s` (first OPEN wait, so exponential has steps before the cap); `MaxCooldown=10s` (Traefik `fallbackDuration` default); `Jitter=0.10` (cooldown × (1 + jitter×(2u−1)), `u∈[0,1)`); `TTL=60s` (idle drop; must outlive sparse traffic so `B` can accumulate; tokenbucket/Traefik 2s source TTL would reset credit between slow failures). Zero `Config` fields apply these. Construction fails when `p` not in (0,1), `B<1`, `BaseCooldown<=0`, `MaxCooldown < BaseCooldown`, `Jitter` not in [0,1), `TTL < 1s`.
-  By: explore
+  Decision: assumed — `FailureRatio` `p=0.30` (Traefik CircuitBreaker docs example `NetworkErrorRatio() > 0.30`); `TripFailures` `B=5` (requirement illustration: consecutive failures that trip a dead backend); `BaseCooldown=1s` (first OPEN wait, so exponential has steps before the cap); `MaxCooldown=10s` (Traefik `fallbackDuration` default); `Jitter=0.10` (cooldown × (1 + jitter×(2u−1)), `u∈[0,1)`); `TTL=60s` (idle drop; must outlive sparse traffic so `B` can accumulate; tokenbucket/Traefik 2s source TTL would reset credit between slow failures). A fully zero `Config` applies all of those, including jitter 0.10. On a partial Config, `Jitter` 0 disables jitter so tests can freeze cooldowns. Construction fails when `p` not in (0,1), `B<1`, `BaseCooldown<=0`, `MaxCooldown < BaseCooldown`, `Jitter` not in [0,1), `TTL < 1s`.
+  By: implement
 
 - Q: Does Allow return a retryAfter duration beside the boolean?
   Rank: additive asked — requirement Unknowns; inclination yes
