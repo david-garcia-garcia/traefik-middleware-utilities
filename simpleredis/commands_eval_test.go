@@ -132,15 +132,19 @@ func TestEvalUsesCallerDigest(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 	script := "return 1"
-	digest := ScriptSHA1Hex(script)
-	if _, err := redis.Eval(script, digest, nil, nil); err != nil {
-		t.Fatalf("first Eval: %v", err)
+	digest := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	if digest == ScriptSHA1Hex(script) {
+		t.Fatal("caller digest collided with ScriptSHA1Hex(script)")
 	}
+	fake.loadScriptDigestForTest(digest, script)
 	if _, err := redis.Eval(script, digest, nil, nil); err != nil {
-		t.Fatalf("second Eval: %v", err)
+		t.Fatalf("Eval: %v", err)
 	}
 	got := fake.lastEvalCommand()
 	if len(got) < 2 || got[0] != evalShaVerb || got[1] != digest {
-		t.Fatalf("EVALSHA argv = %v, want digest %s", got, digest)
+		t.Fatalf("EVALSHA argv = %v, want caller digest %s", got, digest)
+	}
+	if got[1] == ScriptSHA1Hex(script) {
+		t.Fatalf("EVALSHA used ScriptSHA1Hex(script), Eval hashed")
 	}
 }

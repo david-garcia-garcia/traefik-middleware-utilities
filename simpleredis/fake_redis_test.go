@@ -279,6 +279,13 @@ func (f *fakeRedis) lastExpireCommand() []string {
 	return append([]string(nil), f.lastExpire...)
 }
 
+// loadScriptDigestForTest pretends Redis already compiled script under digest.
+func (f *fakeRedis) loadScriptDigestForTest(digest, script string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.loadedScripts[digest] = script
+}
+
 // lastEvalCommand returns the last EVAL or EVALSHA argv.
 func (f *fakeRedis) lastEvalCommand() []string {
 	f.mu.Lock()
