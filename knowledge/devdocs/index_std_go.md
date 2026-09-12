@@ -8,7 +8,7 @@ description: How a Traefik middleware stores one value per key with create, slee
 ## SimpleRedis
 priority: normal
 local: std_go_simpleredis.md
-description: How a Traefik middleware Inits and speaks GET/MGET/SET/DEL/INCR/EXPIRE/EVAL and ExecPipeline over stdlib TCP RESP.
+description: How a Traefik middleware builds SimpleRedis with New(Config) and speaks GET/MGET/SET/DEL/INCR/EXPIRE/EVAL and ExecPipeline over stdlib TCP RESP.
 
 ## Window counter
 priority: normal
