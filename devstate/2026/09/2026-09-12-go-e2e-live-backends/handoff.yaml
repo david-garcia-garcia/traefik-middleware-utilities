@@ -11,7 +11,7 @@ localTests: none
 requirement: requirement.md
 comments: none
 explore: explore.md
-change: none
+change: add-go-e2e-live-backends
 pr:
   id: "26"
   url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
