@@ -1,0 +1,15 @@
+issueKey: 2026-09-12-simpleredis-ci-01-no-race-detector-in-ci
+jobName: 2026-09-12-simpleredis-ci-01-no-race-detector-in-ci
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 140ac1152e254949dff944a22e2d5ca7fd8a0d881172511000825e70039134ba
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
