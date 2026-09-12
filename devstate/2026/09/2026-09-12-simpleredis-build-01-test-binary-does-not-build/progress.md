@@ -8,7 +8,7 @@ JobName: 2026-09-12-simpleredis-build-01-test-binary-does-not-build
 | explore | [x] | [x] | 2026-09-12T12:43:03.313Z |
 | propose | [x] | [x] | 2026-09-12T12:46:16.685Z |
 | implement | [x] | [x] | 2026-09-12T12:48:15.710Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
