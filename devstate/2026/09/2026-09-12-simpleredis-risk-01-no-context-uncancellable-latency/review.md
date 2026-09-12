@@ -24,3 +24,12 @@ skipped: none
 change: bound-simpleredis-command-latency
 head: 21d67196aaf4870692eaee3ccde2bbc0680eba62
 ci: queued run 34694601810
+
+## implement (2026-09-12T12:54:20Z)
+phase: implement
+findings: none
+fixed: defaults, overall deadline, *Context twins
+skipped: circuit breaker
+head: a5c15d86ce6e02dd1187ccb014004df81a79c2c1
+localTests: passed
+ci: queued run 34694946377
