@@ -4,6 +4,8 @@ package simpleredisprobe
 
 import (
 	"context"
+	"crypto/sha1" //nolint:gosec // Redis EVALSHA digest is SHA-1
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -35,9 +37,16 @@ while true do
 end
 return 1`
 
+// kongScriptDigest is SHA-1 hex of kongIncrbyExpireatScript (Redis sha1hex).
+func kongScriptDigest() string {
+	sum := sha1.Sum([]byte(kongIncrbyExpireatScript)) //nolint:gosec // Redis EVALSHA digest is SHA-1
+	return hex.EncodeToString(sum[:])
+}
+
 // Config is the dynamic plugin settings Traefik decodes.
 type Config struct {
-	Host string `json:"host,omitempty" yaml:"host,omitempty"`
+	Host     string `json:"host,omitempty" yaml:"host,omitempty"`
+	DropHost string `json:"dropHost,omitempty" yaml:"dropHost,omitempty"`
 }
 
 // CreateConfig returns default plugin settings (compose Redis, no password).
@@ -45,10 +54,11 @@ func CreateConfig() *Config {
 	return &Config{Host: defaultHost}
 }
 
-// middleware holds the Inited client and the next handler in the Traefik chain.
+// middleware holds the Inited clients and the next handler in the Traefik chain.
 type middleware struct {
-	next   http.Handler
-	client *simpleredis.SimpleRedis
+	next       http.Handler
+	client     *simpleredis.SimpleRedis
+	dropClient *simpleredis.SimpleRedis
 }
 
 // New Inits SimpleRedis from Config and returns a handler. It does not dial.
@@ -68,10 +78,16 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 
 	client := &simpleredis.SimpleRedis{}
 	client.Init(host, "", "")
-	return &middleware{next: next, client: client}, nil
+	mw := &middleware{next: next, client: client}
+	if cfg.DropHost != "" {
+		dropClient := &simpleredis.SimpleRedis{}
+		dropClient.Init(cfg.DropHost, "", "")
+		mw.dropClient = dropClient
+	}
+	return mw, nil
 }
 
-// ServeHTTP optionally holds one pool socket via ?hold= microseconds (Eval TIME-wait), then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval and copies results into headers.
+// ServeHTTP optionally holds one pool socket via ?hold= microseconds (Eval TIME-wait), then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval twice, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	// Hold occupies a live turn so Pester can contend for the pool cap.
 	if hold := req.URL.Query().Get("hold"); hold != "" {
@@ -89,6 +105,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	expireKey := prefix + ":expire"
 	expireAtKey := prefix + ":expireat"
 	evalKey := prefix + ":eval"
+	evalAgainKey := prefix + ":eval2"
 	delKey := prefix + ":del"
 
 	if err := m.client.Set(setKey, []byte("ok"), 60); err != nil {
@@ -157,7 +174,8 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("X-SimpleRedis-ExpireAt", "ok")
 
-	evalValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalKey}, []string{"3", strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)})
+	expireUnix := strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)
+	evalValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalKey}, []string{"3", expireUnix})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -168,5 +186,61 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("X-SimpleRedis-Eval", string(evalValues[0]))
 
+	evalAgainValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalAgainKey}, []string{"3", expireUnix})
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if len(evalAgainValues) != 1 {
+		http.Error(rw, "eval again slots", http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-EvalAgain", string(evalAgainValues[0]))
+	rw.Header().Set("X-SimpleRedis-EvalDigest", kongScriptDigest())
+
+	if m.dropClient != nil {
+		m.writeDropHeaders(rw, prefix)
+	}
+
 	m.next.ServeHTTP(rw, req)
+}
+
+// writeDropHeaders warms the drop-relay pool, then Incr and Eval through it (lost reply is retried; stored values are double-apply), and reads stored values from the engine client.
+func (m *middleware) writeDropHeaders(rw http.ResponseWriter, prefix string) {
+	dropIncrKey := prefix + ":dropincr"
+	dropEvalKey := prefix + ":dropeval"
+
+	// Warm so Incr is a reused socket; GET miss still pools. Lost-reply Incr then retries on a new session whose first command is INCR and must succeed (double-apply).
+	_, _ = m.dropClient.Get(prefix + ":dropwarm")
+	incrValue, incrErr := m.dropClient.Incr(dropIncrKey)
+	rw.Header().Set("X-SimpleRedis-DropIncr", dropResultText(incrErr, strconv.FormatInt(incrValue, 10)))
+	incrStored, incrStoredErr := m.client.Get(dropIncrKey)
+	rw.Header().Set("X-SimpleRedis-DropIncrStored", storedText(incrStored, incrStoredErr))
+
+	// Warm again so Eval is also a reused socket (Incr closed the previous one).
+	_, _ = m.dropClient.Get(prefix + ":dropwarm2")
+	evalValues, evalErr := m.dropClient.Eval(kongIncrbyExpireatScript, []string{dropEvalKey}, []string{"3", strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)})
+	evalText := "ok"
+	if len(evalValues) == 1 {
+		evalText = string(evalValues[0])
+	}
+	rw.Header().Set("X-SimpleRedis-DropEval", dropResultText(evalErr, evalText))
+	evalStored, evalStoredErr := m.client.Get(dropEvalKey)
+	rw.Header().Set("X-SimpleRedis-DropEvalStored", storedText(evalStored, evalStoredErr))
+}
+
+// dropResultText is the integer reply when the drop command succeeded, or err.Error when it failed.
+func dropResultText(err error, success string) string {
+	if err != nil {
+		return err.Error()
+	}
+	return success
+}
+
+// storedText is the GET payload, or the GET error text when the engine key is missing.
+func storedText(value []byte, err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return string(value)
 }
