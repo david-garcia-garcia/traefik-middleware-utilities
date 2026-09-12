@@ -1,5 +1,5 @@
-// Package simpleredisprobe is a Traefik local plugin that Inits SimpleRedis
-// and runs every client verb on each request so Pester can prove the library loads under Yaegi.
+// Package simpleredisprobe is a Traefik local plugin that builds SimpleRedis
+// with simpleredis.New and runs every client verb on each request so Pester can prove the library loads under Yaegi.
 package simpleredisprobe
 
 import (
@@ -24,6 +24,20 @@ if exists == 0 then
 end
 return value`
 
+// timeWaitHoldScript busy-waits ARGV microseconds via TIME so ?hold= occupies a poolSize turn. Zero KEYS; Lua 5.1-safe (no table.maxn).
+const timeWaitHoldScript = `local start = redis.call("TIME")
+local startSec = tonumber(start[1])
+local startUsec = tonumber(start[2])
+local need = tonumber(ARGV[1])
+while true do
+  local now = redis.call("TIME")
+  local elapsed = (tonumber(now[1]) - startSec) * 1000000 + (tonumber(now[2]) - startUsec)
+  if elapsed >= need then
+    break
+  end
+end
+return 1`
+
 // kongScriptDigest is SHA-1 hex of kongIncrbyExpireatScript (Redis sha1hex).
 func kongScriptDigest() string {
 	sum := sha1.Sum([]byte(kongIncrbyExpireatScript)) //nolint:gosec // Redis EVALSHA digest is SHA-1
@@ -41,14 +55,14 @@ func CreateConfig() *Config {
 	return &Config{Host: defaultHost}
 }
 
-// middleware holds the Inited clients and the next handler in the Traefik chain.
+// middleware holds the SimpleRedis clients and the next handler in the Traefik chain.
 type middleware struct {
 	next       http.Handler
 	client     *simpleredis.SimpleRedis
 	dropClient *simpleredis.SimpleRedis
 }
 
-// New Inits SimpleRedis from Config and returns a handler. It does not dial.
+// New constructs SimpleRedis from Config and returns a handler. It does not dial.
 func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http.Handler, error) {
 	_ = ctx
 	_ = name
@@ -63,19 +77,25 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 		host = defaultHost
 	}
 
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	mw := &middleware{next: next, client: client}
 	if cfg.DropHost != "" {
-		dropClient := &simpleredis.SimpleRedis{}
-		dropClient.Init(cfg.DropHost, "", "")
-		mw.dropClient = dropClient
+		mw.dropClient = simpleredis.New(simpleredis.Config{Host: cfg.DropHost})
 	}
 	return mw, nil
 }
 
-// ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval twice, then copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
+// ServeHTTP optionally holds one pool socket via ?hold= microseconds (Eval TIME-wait), then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval twice, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	// Hold occupies a live turn so Pester can contend for poolSize.
+	if hold := req.URL.Query().Get("hold"); hold != "" {
+		if _, err := m.client.Eval(timeWaitHoldScript, nil, []string{hold}); err != nil {
+			http.Error(rw, err.Error(), http.StatusBadGateway)
+			return
+		}
+		rw.Header().Set("X-SimpleRedis-Hold", "ok")
+	}
+
 	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
 	setKey := prefix + ":set"
 	incrKey := prefix + ":incr"
