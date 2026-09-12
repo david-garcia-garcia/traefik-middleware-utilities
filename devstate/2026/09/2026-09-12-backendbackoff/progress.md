@@ -8,7 +8,7 @@ JobName: 2026-09-12-backendbackoff
 | explore | [x] | [x] | 2026-09-12T18:13:50Z |
 | propose | [x] | [x] | 2026-09-12T18:18:40Z |
 | implement | [x] | [x] | 2026-09-12T18:26:10Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |

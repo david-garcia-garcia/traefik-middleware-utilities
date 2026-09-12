@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// BenchmarkAllowWarm measures allocs on Allow of an existing CLOSED key.
 func BenchmarkAllowWarm(b *testing.B) {
 	gate, err := New(Config{
 		FailureRatio: defaultFailureRatio,
@@ -36,6 +37,7 @@ const (
 	allowWarmBytes  int64 = 64 // measured 0 + 64
 )
 
+// skipAllocCeilingIfRace skips dest alloc ceilings when the race detector inflates B/op.
 func skipAllocCeilingIfRace(t *testing.T) {
 	t.Helper()
 	if !raceDetectorOn {
@@ -44,10 +46,12 @@ func skipAllocCeilingIfRace(t *testing.T) {
 	t.Skip("alloc ceilings measure dest non-race builds; the detector inflates B/op")
 }
 
+// allocExceedsCeiling reports whether allocs/op or B/op exceeded the recorded ceilings.
 func allocExceedsCeiling(result testing.BenchmarkResult, maxAllocs, maxBytes int64) (allocsOver, bytesOver bool) {
 	return result.AllocsPerOp() > maxAllocs, result.AllocedBytesPerOp() > maxBytes
 }
 
+// assertAllocCeiling fails the Test when the bench result is over the Go 1.21 allocs/op or B/op ceiling.
 func assertAllocCeiling(t *testing.T, name string, result testing.BenchmarkResult, maxAllocs, maxBytes int64) {
 	t.Helper()
 	allocs := result.AllocsPerOp()

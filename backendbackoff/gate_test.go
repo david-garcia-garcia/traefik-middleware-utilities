@@ -69,6 +69,77 @@ func TestReport_ConsecutiveFailuresTrip(t *testing.T) {
 	}
 }
 
+func TestAllow_LostProbeLeaseAdmits(t *testing.T) {
+	gate := newTestGate(t)
+	now := time.Unix(1_700_000_000, 0)
+	gate.SetNowForTest(func() time.Time { return now })
+	trip(t, gate)
+	now = now.Add(time.Second)
+	if _, _, err := gate.Allow(context.Background(), "k"); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(time.Second)
+	allowed, _, err := gate.Allow(context.Background(), "k")
+	if err != nil || !allowed {
+		t.Fatalf("lost probe lease must admit: allowed=%v err=%v", allowed, err)
+	}
+}
+
+func TestReport_OpenIgnored(t *testing.T) {
+	gate := newTestGate(t)
+	now := time.Unix(1_700_000_000, 0)
+	gate.SetNowForTest(func() time.Time { return now })
+	trip(t, gate)
+	if err := gate.Report("k", true); err != nil {
+		t.Fatal(err)
+	}
+	allowed, retryAfter, err := gate.Allow(context.Background(), "k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if allowed {
+		t.Fatal("Report success while OPEN must not close")
+	}
+	if retryAfter != time.Second {
+		t.Fatalf("retryAfter = %v, want 1s", retryAfter)
+	}
+}
+
+func TestReport_SuccessCapsAtB(t *testing.T) {
+	gate := newTestGate(t)
+	if _, _, err := gate.Allow(context.Background(), "k"); err != nil {
+		t.Fatal(err)
+	}
+	if err := gate.Report("k", true); err != nil {
+		t.Fatal(err)
+	}
+	gate.mu.Lock()
+	credit := gate.keys["k"].credit
+	gate.mu.Unlock()
+	if credit != 5 {
+		t.Fatalf("credit = %v, want B", credit)
+	}
+}
+
+func TestReport_AfterTTLStillRecords(t *testing.T) {
+	gate := newTestGate(t)
+	now := time.Unix(1_700_000_000, 0)
+	gate.SetNowForTest(func() time.Time { return now })
+	if _, _, err := gate.Allow(context.Background(), "k"); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(2 * time.Minute)
+	if err := gate.Report("k", false); err != nil {
+		t.Fatal(err)
+	}
+	gate.mu.Lock()
+	credit := gate.keys["k"].credit
+	gate.mu.Unlock()
+	if credit != 4 {
+		t.Fatalf("credit = %v, want 4 after Report past TTL", credit)
+	}
+}
+
 func TestReport_SuccessCredits(t *testing.T) {
 	gate := newTestGate(t)
 	ctx := context.Background()
@@ -92,25 +163,40 @@ func TestReport_SuccessCredits(t *testing.T) {
 }
 
 func TestAllow_IdleKeyPresumedHealthy(t *testing.T) {
-	gate := newTestGate(t)
+	gate, err := New(Config{
+		FailureRatio: 0.30,
+		TripFailures: 5,
+		BaseCooldown: 10 * time.Second,
+		MaxCooldown:  10 * time.Second,
+		Jitter:       0,
+		TTL:          3 * time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	ctx := context.Background()
-	for i := 0; i < defaultTripFailures; i++ {
-		if _, _, err := gate.Allow(ctx, "k"); err != nil {
-			t.Fatal(err)
-		}
-		if err := gate.Report("k", false); err != nil {
-			t.Fatal(err)
-		}
-	}
-	now = now.Add(2 * time.Minute)
-	allowed, _, err := gate.Allow(ctx, "k")
+	trip(t, gate)
+	now = now.Add(4 * time.Second)
+	allowed, _, err := gate.Allow(context.Background(), "k")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !allowed {
 		t.Fatal("idle OPEN key must drop and admit")
+	}
+	gate.mu.Lock()
+	credit := gate.keys["k"].credit
+	gate.mu.Unlock()
+	if credit != 5 {
+		t.Fatalf("credit = %v, want B", credit)
+	}
+	if err := gate.Report("k", false); err != nil {
+		t.Fatal(err)
+	}
+	allowed, _, err = gate.Allow(context.Background(), "k")
+	if err != nil || !allowed {
+		t.Fatal("one failure after idle drop must not re-OPEN")
 	}
 }
 
@@ -190,6 +276,16 @@ func TestReport_ProbeSuccessRetainsN(t *testing.T) {
 	}
 	if err := gate.Report("k", true); err != nil {
 		t.Fatal(err)
+	}
+	gate.mu.Lock()
+	credit := gate.keys["k"].credit
+	state := gate.keys["k"].state
+	gate.mu.Unlock()
+	if credit != 5 {
+		t.Fatalf("probe success credit = %v, want B", credit)
+	}
+	if state != stateClosed {
+		t.Fatalf("state = %v, want CLOSED", state)
 	}
 	trip(t, gate)
 	allowed, retryAfter, err := gate.Allow(ctx, "k")
@@ -322,6 +418,7 @@ func TestReport_CanceledRequestStillRecords(t *testing.T) {
 	}
 }
 
+// newTestGate is a jitter-off gate with packaged trip and cooldown knobs.
 func newTestGate(t *testing.T) *Gate {
 	t.Helper()
 	gate, err := New(Config{
@@ -338,6 +435,7 @@ func newTestGate(t *testing.T) *Gate {
 	return gate
 }
 
+// trip Reports B consecutive failures so the next Allow is OPEN.
 func trip(t *testing.T, gate *Gate) {
 	t.Helper()
 	ctx := context.Background()

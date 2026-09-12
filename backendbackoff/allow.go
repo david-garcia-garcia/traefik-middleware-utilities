@@ -17,6 +17,7 @@ func (g *Gate) Allow(ctx context.Context, key string) (bool, time.Duration, erro
 		return false, 0, errClosed
 	}
 	entry := g.loadEntry(key, now)
+	// Idle longer than ttl is a new key. Refresh so OPEN denies do not drop the map slot.
 	entry.expireAt = now.Add(g.cfg.TTL)
 	switch entry.state {
 	case stateClosed:
@@ -54,10 +55,7 @@ func (g *Gate) Report(key string, success bool) error {
 	if entry == nil {
 		return nil
 	}
-	if !now.Before(entry.expireAt) {
-		delete(g.keys, key)
-		return nil
-	}
+	// Expire is Allow's job. An admitted attempt that Reports after TTL still lands.
 	entry.expireAt = now.Add(g.cfg.TTL)
 	switch entry.state {
 	case stateOpen:
@@ -98,6 +96,7 @@ func (g *Gate) Report(key string, success bool) error {
 	}
 }
 
+// loadEntry returns the key's slot, dropping it first when idle TTL has elapsed.
 func (g *Gate) loadEntry(key string, now time.Time) *memEntry {
 	entry := g.keys[key]
 	if entry != nil && !now.Before(entry.expireAt) {
@@ -119,6 +118,7 @@ func (g *Gate) loadEntry(key string, now time.Time) *memEntry {
 	return entry
 }
 
+// resetNIfClosedLongEnough sets n to 0 after one MaxCooldown of continuous CLOSED.
 func (g *Gate) resetNIfClosedLongEnough(entry *memEntry, now time.Time) {
 	if entry.closedSince.IsZero() {
 		return
@@ -129,21 +129,23 @@ func (g *Gate) resetNIfClosedLongEnough(entry *memEntry, now time.Time) {
 	entry.n = 0
 }
 
+// dropExpired removes keys whose ttl has elapsed.
 func (g *Gate) dropExpired(now time.Time) {
-	for source, entry := range g.keys {
+	for key, entry := range g.keys {
 		if !now.Before(entry.expireAt) {
-			delete(g.keys, source)
+			delete(g.keys, key)
 		}
 	}
 }
 
+// dropOne removes one map slot when at cap so a new key can be stored.
 func (g *Gate) dropOne(now time.Time) {
 	g.dropExpired(now)
 	if len(g.keys) < maxMemorySources {
 		return
 	}
-	for source := range g.keys {
-		delete(g.keys, source)
+	for key := range g.keys {
+		delete(g.keys, key)
 		return
 	}
 }

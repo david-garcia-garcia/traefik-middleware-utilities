@@ -40,6 +40,7 @@ type Config struct {
 	TTL          time.Duration
 }
 
+// gateState is CLOSED, OPEN, or HALF-OPEN for one key.
 type gateState int
 
 const (
@@ -60,6 +61,7 @@ type Gate struct {
 	keys   map[string]*memEntry
 }
 
+// memEntry is one key's credit, backoff exponent, and idle expire time.
 type memEntry struct {
 	credit           float64
 	n                int
@@ -86,6 +88,7 @@ func New(cfg Config) (*Gate, error) {
 	}, nil
 }
 
+// resolveConfig fills zero fields then rejects knobs that cannot trip or wait.
 func resolveConfig(cfg Config) (Config, error) {
 	allZero := cfg == Config{}
 	if cfg.FailureRatio == 0 {
@@ -144,12 +147,15 @@ func (g *Gate) SetNowForTest(now func() time.Time) {
 	g.now = now
 }
 
+// successCredit is p/(1-p) added on a successful Report.
 func (g *Gate) successCredit() float64 {
 	return g.cfg.FailureRatio / (1 - g.cfg.FailureRatio)
 }
 
+// cooldownDuration is BaseCooldown * 2^n, jittered, capped at MaxCooldown.
 func (g *Gate) cooldownDuration(n int) time.Duration {
 	wait := g.cfg.BaseCooldown
+	// Double until MaxCooldown rather than 2^n in float.
 	for i := 0; i < n; i++ {
 		if wait > g.cfg.MaxCooldown/2 {
 			wait = g.cfg.MaxCooldown
@@ -163,8 +169,9 @@ func (g *Gate) cooldownDuration(n int) time.Duration {
 	if g.cfg.Jitter <= 0 {
 		return wait
 	}
-	u := g.rng.Float64()
-	jittered := time.Duration(float64(wait) * (1 + g.cfg.Jitter*(2*u-1)))
+	// Spread wait by ±Jitter so replicas that trip together do not probe in lockstep.
+	jitterSample := g.rng.Float64()
+	jittered := time.Duration(float64(wait) * (1 + g.cfg.Jitter*(2*jitterSample-1)))
 	if jittered < 0 {
 		jittered = 0
 	}

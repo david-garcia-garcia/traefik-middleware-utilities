@@ -13,7 +13,7 @@
 ## 3. Proofs
 
 - [x] 3.1 Compiled tests: consecutive-failure trip, success credit, idle drop, deny refreshes TTL, canceled context, first-trip cooldown, probe retain/increment `n`, n reset, Close
-- [x] 3.2 `limiter_yaegi_test.go`: GOPATH interp, stdlib only, useunsafe false, Allow-then-Report trip
+- [x] 3.2 `gate_yaegi_test.go`: GOPATH interp, stdlib only, useunsafe false, Allow-then-Report trip
 - [x] 3.3 `TestAlloc*` on warm CLOSED Allow; skip under race; ceilings from a measured Go 1.21 run with simpleredis slack convention
 - [x] 3.4 `go test -short ./backendbackoff/...` passing; `go test -race -short ./backendbackoff/...` passing (skip alloc)
 
