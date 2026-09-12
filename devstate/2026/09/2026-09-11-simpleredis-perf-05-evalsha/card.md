@@ -1,11 +1,11 @@
-Developer review: ready for review — 2026-09-11T22:31:25Z
+Developer review: ready for review — 2026-09-12T07:16:23Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** `SimpleRedis.Eval` keeps `Eval(script, keys, args)` and sends EVALSHA of a client SHA-1 digest, falling back once to EVAL on NOSCRIPT; live catalog `std_go_simpleredis_resp-commands` now requires that path; Yaegi and Pester `/redis` `/dragonfly` prove the miss then hit.
+**Developers.** `SimpleRedis.Eval` hashes the Lua body on every call (no digest map or lock), sends EVALSHA, and falls back once to EVAL on NOSCRIPT; live catalog `std_go_simpleredis_resp-commands` requires that path.
 
 **End users.** None.
 
@@ -24,27 +24,27 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Change `simpleredis-evalsha` is archived and folded into `std_go_simpleredis_resp-commands`. CI on 0bf814c succeeded. 0 items remain.
+Change `simpleredis-evalsha` is archived and folded into `std_go_simpleredis_resp-commands`. CI on fcaaf55 succeeded. 0 items remain.
 
 Priority: P3 — extra EVAL bytes on DestBranch; no wrong answers or outages
-Reviewed head: 0bf814c
+Reviewed head: fcaaf55
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Checklist clear and CI succeeded |
-| CI proof | 6/6 | Lint, Test, and Integration Tests succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34654048698 |
+| CI proof | 6/6 | Lint, Test, and Integration Tests succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34680176102 |
 | Local tests proof | N/A | Remote CI is the proof axis |
 | Review resolution | 6/6 | No OPEN PR comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin 0bf814c |
+| Branch | 2026-09-11-simpleredis-perf-05-evalsha pushed | `git` origin fcaaf55 |
 | OpenSpec | simpleredis-evalsha archived | `openspec/changes/archive/2026-09-11-simpleredis-evalsha/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/13 | GitHub PR 13 |
-| CI | build 34654048698 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34654048698 | GitHub check runs (Lint success; Test success; Integration Tests success) |
+| CI | build 34680176102 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34680176102 | GitHub check runs (Lint success; Test success; Integration Tests success) |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -52,13 +52,13 @@ Owner decision: None.
 - [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/openspec/changes/archive/2026-09-11-simpleredis-evalsha/proposal.md) — modified
 
 ## Deviations from the ask
-None.
+- taken: cache SHA-1 of each distinct script with a mutex → hash the body each Eval call (no map, no lock) — `simpleredis/simpleredis.go` `Eval` — SHA-1 of a limiter script is cheaper than that lock, and Go maps are not concurrent. Requester: confirmed.
 
 ## Follow-up issues
 None.
 
 ## How this fits together
-Archive of `simpleredis-evalsha` on `2026-09-11-simpleredis-perf-05-evalsha` and PR 13. Catalog requires EVALSHA-inside-Eval. CI run 34654048698 succeeded.
+IssueKey `2026-09-11-simpleredis-perf-05-evalsha` on PR 13. Catalog requires EVALSHA-inside-Eval with per-call SHA-1. CI run 34680176102 succeeded.
 
 ## Explore Decisions
 None.
@@ -74,9 +74,9 @@ None.
 [Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
 [Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_spec.md) — 0 total, 0 pending, 0 completed
 [Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_security.md) — 0 total, 0 pending, 0 completed
-[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_performance.md) — 1 total, 0 pending, 0 completed, 1 skipped
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_performance.md) — 0 total, 0 pending, 0 completed
 [Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_dead.md) — 0 total, 0 pending, 0 completed
-[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_coverage.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-11-simpleredis-perf-05-evalsha/devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/codereview_coverage.md) — 1 total, 0 pending, 0 completed, 1 skipped
 
 ## Agent review details
 
@@ -85,26 +85,26 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 0bf814c57e2370e334dff246861c7bdf599c5ced | Card must match the branch you measured |
+| Reviewed head | fcaaf550ba4296824bfc5b8cf53ad0222151d696 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: keep `Eval(script, keys, args)` and send EVALSHA with a NOSCRIPT→EVAL fallback so callers and scripts (KEYS, no `table.maxn`) stay the same.
+Best possible solution: keep `Eval(script, keys, args)` and hash the body each call, then EVALSHA with a NOSCRIPT→EVAL fallback, so callers stay the same and the hot path has no digest mutex.
 
 Do we have a high-confidence way to reproduce? Yes — compiled fake argv, Yaegi `EvalNoScript`, and Pester SCRIPT FLUSH/EXISTS on `/redis` and `/dragonfly`.
 
-Is this the best way to solve the issue? Yes — digest plus fallback beats shipping the body, and avoids `SCRIPT LOAD` at Init.
+Is this the best way to solve the issue? Yes — per-call SHA-1 beats a mutex around a map of script bodies, and avoids `SCRIPT LOAD` at Init.
 
 ### Evidence
 What I checked:
-- `origin/master...HEAD` at 0bf814c (Eval EVALSHA + NOSCRIPT fallback; catalog `std_go_simpleredis_resp-commands` folded; change archived)
-- FindSpecHost: fold `std_go_simpleredis_resp-commands` high; validate_spec_map and validate_artifact_names clean
+- `origin/master...HEAD` at fcaaf55 (Eval hashes each call, EVALSHA, NOSCRIPT→EVAL; catalog `std_go_simpleredis_resp-commands` folded; change archived)
 - Seven-axis files under `devstate/2026/09/2026-09-11-simpleredis-perf-05-evalsha/`; 0 hard/missing/wrong remaining
-- PR 13 OPEN; title `⚡️ perf(simpleredis): send EVALSHA with NOSCRIPT fallback`; CI run 34654048698 success (Lint, Test, Integration Tests)
+- `go test ./simpleredis/ -count=1` passed
+- PR 13 OPEN; title `⚡️ perf(simpleredis): send EVALSHA with NOSCRIPT fallback`; CI run 34680176102 success (Lint, Test, Integration Tests)
 - qualify: qualified-with-gaps; localTests: passed; change: simpleredis-evalsha (`handoff.yaml`)
 
 ### Rank-up moves
 - Probe SHA-1 copy vs `scriptSHA1Hex` (Standards judgement, skipped)
-- Digest map has no cap (Performance judgement, skipped; callers pass consts)
+- Yaegi fallback does not assert EVALSHA argv (Test coverage judgement, skipped)

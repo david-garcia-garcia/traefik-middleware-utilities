@@ -45,3 +45,9 @@ phase: pullrequest
 findings: reused PR 13; title ready; CI 34654048698 succeeded (Lint, Test, Integration Tests); verdict ready for review
 fixed: n/a
 skipped: n/a
+
+## codereview (2026-09-12)
+phase: codereview
+findings: Standards 1 judgement, Test coverage 1 judgement; Nitpicks/Spec/Security/Performance/Dead none; 0 hard/missing/wrong
+fixed: unused evalCount; drop relay EVALSHA so lost-reply Pester still double-applies
+skipped: Standards 1 Duplicated Code (probe sha1hex); Coverage 1 Yaegi argv
