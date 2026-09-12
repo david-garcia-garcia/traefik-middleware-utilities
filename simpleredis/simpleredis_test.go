@@ -22,7 +22,7 @@ func TestUnreachableHost(t *testing.T) {
 	}
 }
 
-func TestCloseDrainsIdleAndDoesNotRepool(t *testing.T) {
+func TestCloseDrainsIdleAndDoesNotRedial(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
 
@@ -45,8 +45,34 @@ func TestCloseDrainsIdleAndDoesNotRepool(t *testing.T) {
 	if fake.connections() != 1 {
 		t.Fatalf("Get after Close opened %d connections, want 1", fake.connections())
 	}
-	if len(redis.idleConns) != 0 {
-		t.Fatalf("release after Close idle = %d, want 0", len(redis.idleConns))
+}
+
+// TestCloseDuringInFlightCommandClosesSocketOnRelease closes while a Get is held, then asserts idle empty and no redial.
+func TestCloseDuringInFlightCommandClosesSocketOnRelease(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.holdGetsForTest(t)
+	redis := New(Config{Host: addr, IOTimeout: 5 * time.Second})
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, err := redis.Get("hit")
+		errCh <- err
+	}()
+	fake.waitHeldGets(t, 1)
+	redis.Close()
+	fake.releaseHeldGetsForTest()
+	if err := <-errCh; err != nil {
+		t.Fatalf("in-flight Get: %v", err)
+	}
+	if got := len(redis.idleConns); got != 0 {
+		t.Fatalf("idle after in-flight Close = %d, want 0", got)
+	}
+	fake.waitOpenSocketsEqual(t, 0)
+	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("Get after Close = %v, want %s", err, RedisUnreachable)
+	}
+	if fake.connections() != 1 {
+		t.Fatalf("Get after Close accepted %d, want 1", fake.connections())
 	}
 }
 
