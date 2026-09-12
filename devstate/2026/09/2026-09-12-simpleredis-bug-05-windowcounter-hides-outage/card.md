@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-12T13:12:48.837Z
+Developer review: ready for review — 2026-09-12T13:16:55.527Z
 
 ## What this changes
 **Operators.** None.
@@ -29,18 +29,18 @@ flowchart TD
 ```
 
 ## Merge readiness
-OpenSpec change archived into the live catalog. CI on this head is still in progress. 1 item remains.
+CI on this head succeeded. Ready for review. 0 items remain.
 
 Priority: P1 — production is serving a wrong public contract today: buffered Take admits without an error while Redis is down, so the shared limit does not hold.
 
-Reviewed head: 6b8f45f
+Reviewed head: b0fb45a
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI in progress on the archive commit |
-| CI proof | 3/6 | run 34695793389 in progress |
+| Overall readiness | 6/6 | CI succeeded; no open comments |
+| CI proof | 6/6 | run 34695858312 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695858312 |
 | Local tests proof | N/A | prHost remote; CI covers remote |
 | Review resolution | 6/6 | OPEN PR, no comments |
 
@@ -50,7 +50,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-12-simpleredis-bug-05-windowcounter-hides-outage pushed | `git` / origin |
 | OpenSpec | windowcounter-buffered-flush-error | `openspec/changes/archive/2026-09-12-windowcounter-buffered-flush-error/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/30 | pr-host List/Create |
-| CI | build 34695793389 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695793389 | Lint in_progress, Test in_progress, Go E2E in_progress, Integration Tests in_progress |
+| CI | build 34695858312 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695858312 | Lint success, Test success, Go E2E success, Integration Tests success |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | none |
 
@@ -65,7 +65,7 @@ None.
 None.
 
 ## How this fits together
-Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, PR #30, change archived at `openspec/changes/archive/2026-09-12-windowcounter-buffered-flush-error/`, CI run 34695793389 in progress.
+Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, PR #30 titled for the buffered outage fix, change archived, CI run 34695858312 succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -77,11 +77,7 @@ Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, PR #30, chang
 | What does Kong Advanced / OSS do when a buffered flush fails? | additive incidental | assumed — do not clone Kong for flush-fail; follow std_go_windowcounter_sliding-take Redis-errors-propagate. Kong sync_rate remains the accuracy knob only. | explore |
 
 ## Before merge
-- [x] [P1] Land staleness k=1 so buffered Take/Peek return lastFlushErr on Redis outage
-- [x] Seven-axis review (nitpicks done, coverage tests landed, unused flushFailedAt skipped)
-- [x] Window counter usage packet names buffered flush-error
-- [x] Archive change into live sliding-take and sync-flush specs
-- [ ] Wait for CI success on PR #30
+None.
 
 ## Findings
 None.
@@ -102,7 +98,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 6b8f45f895cae109eeb41de33c5ea72601978741 | Card must match the branch you measured |
+| Reviewed head | b0fb45ab2e8250b63fdafb4d3bec133af772255a | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -116,9 +112,8 @@ Is this the best way to solve the issue? Yes versus `master`: it matches sliding
 
 ### Evidence
 What I checked:
-- Live specs synced; change moved to `openspec/changes/archive/2026-09-12-windowcounter-buffered-flush-error/`
-- validate_spec_map OK; validate_artifact_names OK
-- PR #30 OPEN; CI run 34695793389 in progress
+- CI run 34695858312: Lint success, Test success, Go E2E success, Integration Tests success
+- PR #30 OPEN, title ready, head b0fb45ab2e8250b63fdafb4d3bec133af772255a
 
 ### Rank-up moves
 None.

@@ -41,3 +41,9 @@ phase: archive
 findings: folded sliding-take and sync-flush; moved to archive/2026-09-12-windowcounter-buffered-flush-error
 fixed: live specs + folder move
 skipped: FindSpecHost Task reused recorded high-confidence verdicts
+
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: PR #30 reused; title ready; CI 34695858312 succeeded
+fixed: ready title; delivery card
+skipped: comments.md absent
