@@ -1,74 +1,80 @@
-Developer review: in progress — 2026-09-12T16:49:18Z
+Developer review: ready for review — 2026-09-12T18:16:11Z
 
 ## What this changes
-**Operators.** None.
+**Operators.** GitHub Actions now runs Integration Tests (reclaim), Integration Tests Redis, and Integration Tests Dragonfly instead of one combined Pester job.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** The Traefik SimpleRedis probe maps each public verb to `/<engine>/<verb>` (200 + Redis body, 502 + `err.Error()`); Pester is split by domain with `-Suite`/`-Engine`; compiled live adds Eval KEYS and future MSetEXAt; Yaegi live covers Get through MSetEXAt.
 
 **End users.** None.
 
 ## Motivation
-On master, compiled live e2e already exercises Get, MGet, Set, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against Redis and Dragonfly when the LIVE addrs are set. Yaegi live still only runs Set, Get, Del, Incr, Eval, and MSetEX. The Traefik probe on `/redis` and `/dragonfly` calls MSetEXAt after MSetEX, but it never sets a response header for that verb, and Pester never asserts it.
+On master, Traefik Pester still dumps every SimpleRedis verb onto one GET `/redis` or `/dragonfly`. A 502 cannot name the command; MSetEXAt runs with no header. Yaegi live omits MGet, IncrBy, Expire, ExpireAt, and MSetEXAt. Compiled Eval live is `return N` with nil keys while Traefik uses the Kong KEYS script. Compiled MSetEXAt live only proves a past-EXAT miss. One Integration Tests job mixes reclaim with both engines.
 
-If we do not merge, a broken MSetEXAt under Yaegi/Traefik can 502 only when that call fails, and a silent success path stays unproven. Compiled Eval live still uses nil keys; the Traefik path is the Kong KEYS script.
+If we do not merge, a Traefik verb regression stays an undifferentiated 502, Yaegi never proves those verbs on live engines, and a Redis-only or Dragonfly-only Pester fail does not name the backend.
 
 ```mermaid
-sequenceDiagram
-  participant Pester
-  participant Probe as Traefik probe
-  participant Engine as Redis or Dragonfly
-  Pester->>Probe: GET /redis or /dragonfly
-  Probe->>Engine: Set Get MGet Del Incr IncrBy Expire ExpireAt Eval MSetEX
-  Probe-->>Pester: headers for those verbs
-  Probe->>Engine: MSetEXAt
-  Note over Probe,Pester: no X-SimpleRedis-MSetEXAt header
+flowchart LR
+  subgraph dest [DestBranch]
+    Dump[GET /redis dumps every verb]
+  end
+  subgraph intended [this change]
+    Cases[GET /redis/get one It per case]
+  end
 ```
 
 ## Merge readiness
-Prepare grounded the ticket and opened the stub PR. Coverage gaps are not closed yet. 2 items remain.
+Implement landed on HEAD. CI succeeded. 0 items remain.
 
 Priority: P3 — spec, docs, tests, or internal clarity — no current user or operator harm
-Reviewed head: 57c0fcf
-Owner decision: None.
+Reviewed head: cd9dc0b
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Stub PR is open; CI has not been measured |
-| CI proof | 1/6 | pushed and still not seen |
-| Local tests proof | N/A | prHost is github; localTests none |
+| Overall readiness | 6/6 | Apply landed; CI succeeded; no open PR comments |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34710406766 |
+| Local tests proof | N/A | prHost is github; CI proof covers remote |
 | Review resolution | 6/6 | OPEN PR has no comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-12-command-e2e-and-integration-coverage pushed | git |
-| OpenSpec | none | openspec/ |
+| OpenSpec | simpleredis-command-coverage | openspec/changes/simpleredis-command-coverage/ |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/43 | GitHub PR 43 |
-| CI | not seen | pr-host CI |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 34710406766 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34710406766 | GitHub checks 8/8 success |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-None.
+- [std_go_simpleredis_live-e2e](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-command-e2e-and-integration-coverage/openspec/changes/simpleredis-command-coverage/proposal.md) — modified
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-command-e2e-and-integration-coverage/openspec/changes/simpleredis-command-coverage/proposal.md) — modified
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-command-e2e-and-integration-coverage/openspec/changes/simpleredis-command-coverage/proposal.md) — modified
+- [std_go_ci_test-suites](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-command-e2e-and-integration-coverage/openspec/changes/simpleredis-command-coverage/proposal.md) — added
 
 ## Deviations from the ask
-None.
+- taken: Traefik Pester proves every public command on one request with one header per verb → ServeHTTP maps each public verb to `/<engine>/<verb>`; Pester asserts status and body — `e2e/simpleredisprobe/plugin.go` — honouring the dump would keep adding headers to one handler whose failures are 502s with no isolated It. Requester: confirmed.
+- taken: one result header per verb → success is HTTP 200 with the Redis payload in the body; command errors are 502 with `err.Error()` — `e2e/simpleredisprobe/plugin.go` — headers existed only because success forwarded to whoami. Requester: confirmed.
+- taken: one It per engine or `-TestCases` redis/dragonfly in the same job → one SimpleRedis file; `INTEGRATION_ENGINE` selects the backend; CI is Integration Tests (reclaim), Integration Tests Redis, and Integration Tests Dragonfly — `.github/workflows/ci.yml` — Redis and Dragonfly are the same Traefik proof; Go E2E already splits engines. Requester: confirmed.
 
 ## Follow-up issues
 None.
 
 ## How this fits together
-Local ticket on branch `2026-09-12-command-e2e-and-integration-coverage` opened GitHub PR 43 into `master`. CI has not been measured.
+Local ticket on branch `2026-09-12-command-e2e-and-integration-coverage` opened GitHub PR 43 into `master`. Apply is on `cd9dc0b`; CI run 34710406766 succeeded.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| Should Yaegi live LiveVerbs grow to the remaining public verbs (MGet, IncrBy, Expire, ExpireAt, MSetEXAt)? | additive asked | assumed — expand LiveVerbs and the Yaegi live spec line; leave fake-TCP Yaegi at the existing subset | explore |
+| Should compiled TestLive_Eval add a KEYS/ARGV case matching the Traefik Kong snippet, not only return N with nil keys? | additive asked | assumed — add one compiled Eval KEYS case; keep integer / EVALSHA / FLUSH cases | explore |
+| Should compiled TestLive_MSetEX add a future-EXAT landing (Get + positive TTL) in addition to past-miss? | additive asked | assumed — add msetexAtTTLLanded next to pastExatMiss | explore |
 
 ## Before merge
-- [ ] Close compiled live e2e gaps so every public command is proven on Redis and Dragonfly [P3]
-- [ ] Close the Traefik probe/Pester gap for MSetEXAt (header plus assert) [P3]
+None.
 
 ## Findings
 None.
@@ -81,25 +87,25 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
+| Specs in this PR | 1 added / 3 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 57c0fcf955256d6cb6693bf450cbe101b4d20b02 | Card must match the branch you measured |
+| Reviewed head | cd9dc0b4bc513db57e4cf089a0c2dceed3222fe4 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not applicable until apply; prepare only recorded gaps versus master.
+Best possible solution: map SimpleRedis verbs to HTTP paths so Pester owns sequences, split CI engines like Go E2E, and fill compiled/Yaegi live gaps versus the DestBranch dump.
 
-Do we have a high-confidence way to reproduce? Yes, compiled `*_e2e_test.go` plus `Test-Integration.ps1` on `/redis` and `/dragonfly`.
+Do we have a high-confidence way to reproduce? Yes, Go E2E Redis/Dragonfly plus the three Integration Tests jobs on run 34710406766.
 
-Is this the best way to solve the issue? Not applicable until apply.
+Is this the best way to solve the issue? Yes — PathPrefix already matches subpaths; one job per engine names the failing backend.
 
 ### Evidence
 What I checked:
-- Public verbs and live files (`simpleredis/commands.go`, `commands_eval.go`, `commands_msetex.go`, `commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `yaegi_e2e_test.go`, SHA 57c0fcf)
-- Traefik probe and Pester (`e2e/simpleredisprobe/plugin.go`, `scripts/integration-tests.Tests.ps1`)
-- PR 43 OPEN, comment lists empty
+- `go test -short ./...` passed (cd9dc0b)
+- GitHub checks 8/8 success (build 34710406766)
+- merged origin/master at beede1d before this card
 
 ### Rank-up moves
 None.

@@ -16,3 +16,10 @@ phase: propose
 findings: fold live-e2e and resp-commands
 fixed: none
 skipped: none
+
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: none
+skipped: none
+taken: HTTP status/body instead of result headers; CI engine jobs instead of duplicate Pester Its
