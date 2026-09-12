@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 	"net"
 	"strconv"
@@ -96,26 +97,6 @@ func BenchmarkEval(b *testing.B) {
 	}
 }
 
-// repeatReader replays one canned RESP payload forever so decode cost is client-only.
-type repeatReader struct {
-	payload []byte
-	pos     int
-}
-
-// Read copies the canned RESP payload into p, wrapping at the end so decode can loop.
-func (r *repeatReader) Read(p []byte) (int, error) {
-	written := 0
-	for written < len(p) {
-		n := copy(p[written:], r.payload[r.pos:])
-		written += n
-		r.pos += n
-		if r.pos == len(r.payload) {
-			r.pos = 0
-		}
-	}
-	return written, nil
-}
-
 // encodeGet encodes a GET argv to Discard so CI can gate encode allocs/op and B/op.
 func encodeGet(b *testing.B) {
 	writer := bufio.NewWriter(io.Discard)
@@ -153,50 +134,6 @@ func encodeEval(b *testing.B) {
 	}
 }
 
-// decodeBulk decodes one canned bulk GET reply through readReply.
-func decodeBulk(b *testing.B) {
-	reader := bufio.NewReader(&repeatReader{payload: []byte("$17\r\nsome-cached-value\r\n")})
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, _, err := readReply(reader); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// decodeArray10 decodes one canned 10-bulk array reply through readReply.
-func decodeArray10(b *testing.B) {
-	payload := []byte("*10\r\n")
-	for i := 0; i < 10; i++ {
-		payload = append(payload, "$8\r\nvalue-00\r\n"...)
-	}
-	reader := bufio.NewReader(&repeatReader{payload: payload})
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, _, err := readReply(reader); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// decodeInteger decodes one canned integer reply through readReply and parseIntegerReply.
-func decodeInteger(b *testing.B) {
-	reader := bufio.NewReader(&repeatReader{payload: []byte(":1234567\r\n")})
-
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		values, _, err := readReply(reader)
-		if _, err = parseIntegerReply(values, err); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 // cannedBulkGET builds a `$<n>` bulk payload of length bytes plus the trailing CRLF.
 func cannedBulkGET(length int) []byte {
 	payload := make([]byte, 0, 16+length+2)
@@ -208,13 +145,29 @@ func cannedBulkGET(length int) []byte {
 	return payload
 }
 
-// decodeBulk100KB decodes a canned 100 KiB bulk GET (`$102400`) through readReply.
-func decodeBulk100KB(b *testing.B) {
-	reader := bufio.NewReader(&repeatReader{payload: cannedBulkGET(largeBulkBytes)})
+// array10Reply is a 10-slot bulk array of one-byte values (DestBranch ReadSlice fixture).
+func array10Reply() []byte {
+	var buf bytes.Buffer
+	buf.WriteString("*10\r\n")
+	for i := 0; i < 10; i++ {
+		buf.WriteString("$1\r\n")
+		buf.WriteByte(byte('a' + i))
+		buf.WriteString("\r\n")
+	}
+	return buf.Bytes()
+}
 
+// benchDecode runs readReply against compiled RESP, resetting the reader each op
+// so a ReadSlice view is not reused across iterations.
+func benchDecode(b *testing.B, resp []byte) {
+	b.Helper()
+	src := bytes.NewReader(resp)
+	reader := bufio.NewReader(src)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		src.Reset(resp)
+		reader.Reset(src)
 		if _, _, err := readReply(reader); err != nil {
 			b.Fatal(err)
 		}
@@ -239,13 +192,28 @@ func BenchmarkEncodeGet(b *testing.B) { encodeGet(b) }
 
 func BenchmarkEncodeEval(b *testing.B) { encodeEval(b) }
 
-func BenchmarkDecodeBulk(b *testing.B) { decodeBulk(b) }
+// BenchmarkDecodeBulk measures decode allocs for one bulk string reply (compiled RESP).
+// Post-ReadSlice: ~2 allocs/op (payload + [][]byte); dest ReadBytes baseline was 3.
+func BenchmarkDecodeBulk(b *testing.B) {
+	benchDecode(b, []byte("$17\r\n0123456789abcdefg\r\n"))
+}
 
-func BenchmarkDecodeArray10(b *testing.B) { decodeArray10(b) }
+// BenchmarkDecodeArray10 measures decode allocs for a 10-slot bulk array (compiled RESP).
+// Post-ReadSlice: ~11 allocs/op (values slice + 10 payloads); dest ReadBytes baseline was 22.
+func BenchmarkDecodeArray10(b *testing.B) {
+	benchDecode(b, array10Reply())
+}
 
-func BenchmarkDecodeInteger(b *testing.B) { decodeInteger(b) }
+// BenchmarkDecodeInteger measures decode allocs for one integer reply (compiled RESP).
+// Post-ReadSlice: ~2 allocs/op (payload copy + [][]byte); dest ReadBytes baseline was 2.
+func BenchmarkDecodeInteger(b *testing.B) {
+	benchDecode(b, []byte(":1234567\r\n"))
+}
 
-func BenchmarkDecodeBulk100KB(b *testing.B) { decodeBulk100KB(b) }
+// BenchmarkDecodeBulk100KB measures a canned 100 KiB bulk GET (`$102400`) through readReply.
+func BenchmarkDecodeBulk100KB(b *testing.B) {
+	benchDecode(b, cannedBulkGET(largeBulkBytes))
+}
 
 func BenchmarkEncodeSet100KB(b *testing.B) { encodeSet100KB(b) }
 
@@ -363,20 +331,20 @@ func TestConnectionChurnAcrossBursts(t *testing.T) {
 		bursts, width, total, fake.connections(), width, redis.MaxIdleConns())
 }
 
-// Go 1.21 linux/amd64 measured allocs/op and B/op (CI toolchain). Slack: +1
-// allocs/op; B/op = measured + 64, or +20% when that is larger.
+// Go 1.21 linux/amd64 measured allocs/op and B/op (CI toolchain) on the ReadSlice
+// decode path. Slack: +1 allocs/op; B/op = measured + 64, or +20% when that is larger.
 const (
 	encodeGetAllocs      int64 = 6      // measured 5
 	encodeGetBytes       int64 = 112    // measured 48 + 64
 	encodeEvalAllocs     int64 = 20     // measured 19
 	encodeEvalBytes      int64 = 864    // measured 800 + 64
-	decodeBulkAllocs     int64 = 4      // measured 3
-	decodeBulkBytes      int64 = 117    // measured 53 + 64
-	decodeArrayAllocs    int64 = 23     // measured 22
-	decodeArrayBytes     int64 = 472    // measured 408 + 64
+	decodeBulkAllocs     int64 = 3      // measured 2
+	decodeBulkBytes      int64 = 112    // measured 48 + 64
+	decodeArrayAllocs    int64 = 12     // measured 11
+	decodeArrayBytes     int64 = 344    // measured 280 + 64
 	decodeIntegerAllocs  int64 = 3      // measured 2
-	decodeIntegerBytes   int64 = 104    // measured 40 + 64
-	decode100KBAllocs    int64 = 4      // measured 3
+	decodeIntegerBytes   int64 = 112    // measured 48 + 64
+	decode100KBAllocs    int64 = 3      // measured 2
 	decode100KBBytes     int64 = 127843 // measured 106536 + 20%
 	encodeSet100KBAllocs int64 = 8      // measured 7
 	encodeSet100KBBytes  int64 = 96     // measured 32 + 64
@@ -424,19 +392,19 @@ func TestAllocEncodeEval(t *testing.T) {
 }
 
 func TestAllocDecodeBulk(t *testing.T) {
-	assertAllocCeiling(t, "decode bulk", testing.Benchmark(decodeBulk), decodeBulkAllocs, decodeBulkBytes)
+	assertAllocCeiling(t, "decode bulk", testing.Benchmark(BenchmarkDecodeBulk), decodeBulkAllocs, decodeBulkBytes)
 }
 
 func TestAllocDecodeArray10(t *testing.T) {
-	assertAllocCeiling(t, "decode array10", testing.Benchmark(decodeArray10), decodeArrayAllocs, decodeArrayBytes)
+	assertAllocCeiling(t, "decode array10", testing.Benchmark(BenchmarkDecodeArray10), decodeArrayAllocs, decodeArrayBytes)
 }
 
 func TestAllocDecodeInteger(t *testing.T) {
-	assertAllocCeiling(t, "decode integer", testing.Benchmark(decodeInteger), decodeIntegerAllocs, decodeIntegerBytes)
+	assertAllocCeiling(t, "decode integer", testing.Benchmark(BenchmarkDecodeInteger), decodeIntegerAllocs, decodeIntegerBytes)
 }
 
 func TestAllocDecodeBulk100KB(t *testing.T) {
-	assertAllocCeiling(t, "decode 100KB bulk", testing.Benchmark(decodeBulk100KB), decode100KBAllocs, decode100KBBytes)
+	assertAllocCeiling(t, "decode 100KB bulk", testing.Benchmark(BenchmarkDecodeBulk100KB), decode100KBAllocs, decode100KBBytes)
 }
 
 func TestAllocEncodeSet100KB(t *testing.T) {
