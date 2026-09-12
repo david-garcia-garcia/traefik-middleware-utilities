@@ -21,3 +21,9 @@ phase: implement
 findings: dest compile and Yaegi already green; no helper added
 fixed: none (dest already had writeGopathFile)
 skipped: copying caller files; shared helper extract
+
+## codereview (2026-09-12)
+phase: codereview
+findings: Standards 1 hard (compile spec copied interpreter-pass)
+fixed: dropped interpreter-pass and no-Traefik from ADDED compile requirement (4cc376b)
+skipped: none
