@@ -20,6 +20,11 @@ priority: normal
 local: ext_redis_evalsha/
 description: Redis EVALSHA SHA-1 digest, volatile script cache, and NOSCRIPT miss wire text.
 
+## RESP bulk strings
+priority: normal
+local: ext_redis_resp_bulk-string/
+description: RESP2 bulk-string wire form, null bulk, and why a truncated payload is a transport fake not a Redis command.
+
 ## RESP2 null array
 priority: normal
 local: ext_redis_resp_null-array/

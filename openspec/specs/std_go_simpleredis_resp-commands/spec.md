@@ -96,17 +96,25 @@ Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `
 - **AND** the second call does not send `MSETEX`
 
 ### Requirement: Traefik request SET plus GET sets a response header
-A request through the nested SimpleRedis Traefik plugin SHALL SET a key and GET it back, then set a response header from that GET so Pester can assert the round-trip. The same request SHALL also call MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against that backend, and set one response header per verb. Eval SHALL run twice on that request: `X-SimpleRedis-Eval` from the first result, `X-SimpleRedis-EvalAgain` from the second. The probe SHALL set `X-SimpleRedis-EvalDigest` to the SHA-1 hex of the Kong KEYS snippet const. The same request SHALL Get a missing key and set a response header whose value is `redis:miss`. After MSetEX it SHALL Eval `TTL` on that key listed in KEYS and set `X-SimpleRedis-MSetEX-TTL` to the positive TTL decimal. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new) and MUST NOT use `table.maxn`. Pester SHALL prove EVALSHA + NOSCRIPT fallback live on both engines: `SCRIPT FLUSH` then `SCRIPT EXISTS` of that digest is `0`, GET succeeds (`Eval` `3` and `EvalAgain` `3`), `EXISTS` is `1`, GET again succeeds. Same sequence against Dragonfly via `redis-cli -h dragonfly`. Existing verb headers stay. Reclaim `/a` `/b` stay up. After RESP decode uses `ReadSlice`, Get, MGet, Incr, Eval, and MSetEX headers MUST still show those commands succeeded on both `/redis` and `/dragonfly`. This change MUST NOT add Redis or Dragonfly compose services.
+A request through the nested SimpleRedis Traefik plugin SHALL SET a key to that request’s unique token (not a shared constant such as `"ok"`) and GET it back, then set a response header from that GET so Pester can assert the round-trip. MGet of that same key SHALL return the same token as Get. The same request SHALL also call Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against that backend, and set one response header per verb. Eval SHALL run twice on that request: `X-SimpleRedis-Eval` from the first result, `X-SimpleRedis-EvalAgain` from the second. The probe SHALL set `X-SimpleRedis-EvalDigest` to the SHA-1 hex of the Kong KEYS snippet const. The same request SHALL Get a missing key and set a response header whose value is `redis:miss`. After MSetEX it SHALL Eval `TTL` on that key listed in KEYS and set `X-SimpleRedis-MSetEX-TTL` to the positive TTL decimal. Compose SHALL include `redis:7-alpine` at `redis:6379` with no password and an empty database, and `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379` with no password and an empty database. Eval SHALL send a Lua 5.1-safe script that lists its key in KEYS (INCRBY plus EXPIREAT when the key is new) and MUST NOT use `table.maxn`. Pester SHALL prove EVALSHA + NOSCRIPT fallback live on both engines: `SCRIPT FLUSH` then `SCRIPT EXISTS` of that digest is `0`, GET succeeds (`Eval` `3` and `EvalAgain` `3`), `EXISTS` is `1`, GET again succeeds. Same sequence against Dragonfly via `redis-cli -h dragonfly`. Pester SHALL run Get/MGet own-value assertions on both `/redis` (Redis) and `/dragonfly` (Dragonfly). Existing verb headers stay. Reclaim `/a` `/b` stay up. After RESP decode uses `ReadSlice`, Get, MGet, Incr, Eval, and MSetEX headers MUST still show those commands succeeded on both `/redis` and `/dragonfly`. This change MUST NOT add Redis or Dragonfly compose services.
 
 #### Scenario: Pester asserts the GET header
 - **WHEN** a request is made on the plugin’s whoami route `/redis`
-- **THEN** the response includes a header whose value is the bytes GET returned after SET
+- **THEN** the response includes a header whose value is the unique token GET returned after SET
 - **AND** the Redis Pester Describe does not stop `whoami-a` or `whoami-b`
 
 #### Scenario: Pester asserts every verb on Redis and Dragonfly
 - **WHEN** a request is made on `/redis` (Redis) and on `/dragonfly` (Dragonfly)
 - **THEN** each response includes headers for Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEX-TTL that show those commands succeeded
 - **AND** the MSetEX-TTL header is a positive decimal
+- **AND** neither route’s tests stop `whoami-a` or `whoami-b`
+
+#### Scenario: Pester asserts Get and MGet own-value on Redis and Dragonfly
+- **WHEN** two requests are made on `/redis`
+- **AND** two requests are made on `/dragonfly`
+- **THEN** each response’s Get header equals the unique token that request Set
+- **AND** that response’s MGet header equals its Get header
+- **AND** the two requests on the same route have distinct Get header values
 - **AND** neither route’s tests stop `whoami-a` or `whoami-b`
 
 #### Scenario: Pester asserts Get-miss on Redis and Dragonfly
@@ -251,6 +259,14 @@ A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-sha
 - **THEN** the command returns `redis:unreachable`
 - **AND** the idle pool is empty
 
+#### Scenario: Truncated bulk after a complete ReadSlice head returns own-value on the next Get
+- **WHEN** `MaxRetries` is `-1`
+- **AND** a Get receives `$100\r\n`, then 40 bytes, then a close
+- **THEN** that Get returns `redis:unreachable`
+- **AND** the idle pool is empty
+- **WHEN** a later Get receives a complete bulk of known bytes
+- **THEN** that Get returns those bytes
+
 #### Scenario: Nested array is not pooled
 - **WHEN** an array element is a nested array
 - **THEN** the command returns `redis:issue?`
@@ -279,6 +295,26 @@ A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-sha
 - **WHEN** Incr receives a well-formed empty array `*0`
 - **THEN** Incr returns `redis:issue?`
 - **AND** the connection remains in the idle pool
+
+### Requirement: CI allocation guards fail on over-budget encode and decode
+The compiled `go test` suite for SimpleRedis SHALL fail when client-side encode or decode of GET, EVAL, a bulk reply, a 10-slot array, an integer reply, or a 100 KB bulk exceeds the Go 1.21 `allocs/op` or `B/op` ceiling recorded in that test. Those guards SHALL run as compiled tests that measure `AllocsPerOp` and `AllocedBytesPerOp` without requiring `go test -bench`. They MUST NOT assert wall-clock `ns/op`. They MUST NOT dial live Redis or Dragonfly. Compose Redis (`redis:7-alpine`) and Dragonfly (`docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2`) plus Pester `/redis` and `/dragonfly` SHALL keep proving Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, and MSetEX on both engines. Eval SHALL stay a Lua 5.1-safe script that lists its key in KEYS. CI MUST NOT drop or skip either engine’s tests.
+
+#### Scenario: Over-budget allocs fail without bench flag
+- **WHEN** `go test ./simpleredis/...` runs without `-bench`
+- **AND** a client-side encode or decode loop reports `AllocsPerOp` or `AllocedBytesPerOp` above the Go 1.21 ceiling recorded in that test
+- **THEN** that test fails
+
+#### Scenario: 100 KB bulk decode is guarded
+- **WHEN** the decode guard runs a canned `$102400` bulk GET of `100*1024` bytes
+- **THEN** `AllocsPerOp` and `AllocedBytesPerOp` are compared to the Go 1.21 ceiling
+- **AND** the fixture is not a live Redis or Dragonfly round-trip
+
+#### Scenario: Live verb coverage stays on Redis and Dragonfly
+- **WHEN** CI integration runs
+- **THEN** Pester `GET /redis` and `GET /dragonfly` still assert Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, and MSetEX
+- **AND** Eval uses a Lua 5.1-safe script with KEYS declared
+- **AND** neither engine’s tests are skipped
+
 
 ### Requirement: MSetEX and MSetEXAt write many keys with one shared TTL
 `MSetEX(names, values, seconds)` SHALL send native Redis `MSETEX` with decimal `numkeys` equal to `len(names)`, then each name/value pair in order, then `EX` and that duration as decimal seconds. `MSetEXAt(names, values, unixSeconds)` SHALL send the same argv with `EXAT` and that Unix timestamp. Both SHALL require `len(names) == len(values)`, reject empty or nil `names`, and reject more than 1024 pairs, each with `redis:issue?` and MUST NOT dial. The client MUST send `EX` or `EXAT`; it MUST NOT omit expiration and MUST NOT send NX, XX, PX, PXAT, or KEEPTTL. Integer reply `1` SHALL return no error. Integer reply `0` SHALL return `redis:issue?`. A `:` payload that is not a signed integer, or any integer other than `1` or `0`, SHALL return `redis:issue?`. AUTH-class prefixes still map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text unless they are unknown-command (fallback below). Clustered engines need all keys in one hash slot (hash tags); the client MUST NOT hash-tag, split, or retry cross-slot. Zero or negative TTL values SHALL be passed through, same as `Set`.
