@@ -1,7 +1,7 @@
 # Traefik compose URLs and log wait for Pester. Dot-sourced via Import.ps1.
 
-$script:BaseUrl = "http://localhost:8000"
-$script:TraefikApiUrl = "http://localhost:8080"
+$env:INTEGRATION_BASE_URL = "http://localhost:8000"
+$env:INTEGRATION_TRAEFIK_API_URL = "http://localhost:8080"
 
 # Wait-TraefikPluginLog is true when docker logs reclaim-e2e-traefik match Pattern before TimeoutSeconds.
 function Wait-TraefikPluginLog {
@@ -24,6 +24,6 @@ function Wait-TraefikPluginLog {
 
 # Assert-TraefikApiReachable is HTTP 200 on the Traefik API rawdata URL.
 function Assert-TraefikApiReachable {
-    $response = Invoke-WebRequest -Uri "$script:TraefikApiUrl/api/rawdata" -UseBasicParsing -TimeoutSec 10
+    $response = Invoke-WebRequest -Uri "$env:INTEGRATION_TRAEFIK_API_URL/api/rawdata" -UseBasicParsing -TimeoutSec 10
     $response.StatusCode | Should -Be 200
 }

@@ -74,7 +74,7 @@ Describe "simpleredis Yaegi e2e ($($script:Engine))" {
     It "POST /$($script:Engine)/eval returns 3" {
         $key = New-SimpleRedisKey
         $expireUnix = [DateTimeOffset]::UtcNow.AddSeconds(60).ToUnixTimeSeconds().ToString()
-        $response = Invoke-SimpleRedis -Engine $script:Engine -Verb eval -Key $key -Arg @("3", $expireUnix) -Digest $script:KongEvalDigest -Body $script:KongIncrbyExpireatScript
+        $response = Invoke-SimpleRedis -Engine $script:Engine -Verb eval -Key $key -Arg @("3", $expireUnix) -Digest $KongEvalDigest -Body $KongIncrbyExpireatScript
         $response.StatusCode | Should -Be 200 -Because $response.Content
         $response.Content.Trim() | Should -Be "3"
     }
@@ -89,7 +89,7 @@ Describe "simpleredis Yaegi e2e ($($script:Engine))" {
         $key = New-SimpleRedisKey
         $set = Invoke-SimpleRedis -Engine $script:Engine -Verb msetex -Key $key -Ex 60 -Body "ok"
         $set.StatusCode | Should -Be 200 -Because $set.Content
-        $ttl = Invoke-SimpleRedis -Engine $script:Engine -Verb eval -Key $key -Digest $script:TtlEvalDigest -Body $script:TtlScript
+        $ttl = Invoke-SimpleRedis -Engine $script:Engine -Verb eval -Key $key -Digest $TtlEvalDigest -Body $TtlScript
         $ttl.StatusCode | Should -Be 200 -Because $ttl.Content
         [int]$ttl.Content.Trim() | Should -BeGreaterThan 0
     }
@@ -116,7 +116,7 @@ Describe "simpleredis Yaegi e2e ($($script:Engine))" {
         $incrStored.StatusCode | Should -Be 200 -Because $incrStored.Content
         $incrStored.Content.Trim() | Should -Be "2"
         Invoke-SimpleRedis -Engine $script:Engine -Verb get -Key "$evalKey-warm" -Drop | Out-Null
-        $eval = Invoke-SimpleRedis -Engine $script:Engine -Verb eval -Key $evalKey -Arg @("3", $expireUnix) -Digest $script:KongEvalDigest -Body $script:KongIncrbyExpireatScript -Drop
+        $eval = Invoke-SimpleRedis -Engine $script:Engine -Verb eval -Key $evalKey -Arg @("3", $expireUnix) -Digest $KongEvalDigest -Body $KongIncrbyExpireatScript -Drop
         $eval.StatusCode | Should -Be 200 -Because $eval.Content
         $eval.Content.Trim() | Should -Be "6"
         $evalStored = Invoke-SimpleRedis -Engine $script:Engine -Verb get -Key $evalKey
@@ -129,23 +129,23 @@ Describe "simpleredis Yaegi e2e ($($script:Engine))" {
     }
 
     It "GET /$($script:Engine)-wrong-password returns 502 redis:noauth" {
-        $response = Invoke-WebRequest -Uri "$script:BaseUrl/$($script:Engine)-wrong-password" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
+        $response = Invoke-WebRequest -Uri "$env:INTEGRATION_BASE_URL/$($script:Engine)-wrong-password" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
         $response.StatusCode | Should -Be 502
         $response.Content.Trim() | Should -Be "redis:noauth"
     }
 
     It "GET /$($script:Engine)-database-99 returns 502 ERR DB index is out of range" {
-        $response = Invoke-WebRequest -Uri "$script:BaseUrl/$($script:Engine)-database-99" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
+        $response = Invoke-WebRequest -Uri "$env:INTEGRATION_BASE_URL/$($script:Engine)-database-99" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
         $response.StatusCode | Should -Be 502
         $response.Content | Should -Match "ERR DB index is out of range"
     }
 
     It "two GET /$($script:Engine) health return distinct own-values" {
-        Assert-TwoDistinctHealthValues -Url "$script:BaseUrl/$($script:Engine)"
+        Assert-TwoDistinctHealthValues -Url "$env:INTEGRATION_BASE_URL/$($script:Engine)"
     }
 
     It "POST /$($script:Engine)/set then GET recovers after CLIENT KILL of the Traefik client" {
-        $warmup = Invoke-WebRequest -Uri "$script:BaseUrl/$($script:Engine)" -UseBasicParsing -TimeoutSec 10
+        $warmup = Invoke-WebRequest -Uri "$env:INTEGRATION_BASE_URL/$($script:Engine)" -UseBasicParsing -TimeoutSec 10
         $warmup.StatusCode | Should -Be 200
         Stop-TraefikEngineClientForTest -Engine $script:Engine
         $key = New-SimpleRedisKey

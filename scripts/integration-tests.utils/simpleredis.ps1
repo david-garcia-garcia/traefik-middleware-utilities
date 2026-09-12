@@ -1,7 +1,7 @@
 # SimpleRedis HTTP probe helpers for Pester. Dot-sourced via Import.ps1.
 # Engine comes from INTEGRATION_ENGINE (set by Test-Integration.ps1 -Engine).
 
-$script:KongIncrbyExpireatScript = @'
+$KongIncrbyExpireatScript = @'
 local exists = redis.call("exists", KEYS[1])
 local value = redis.call("incrby", KEYS[1], ARGV[1])
 if exists == 0 then
@@ -9,8 +9,8 @@ if exists == 0 then
 end
 return value
 '@
-$script:TtlScript = "return redis.call('TTL', KEYS[1])"
-$script:TimeWaitHoldScript = @'
+$TtlScript = "return redis.call('TTL', KEYS[1])"
+$TimeWaitHoldScript = @'
 local start = redis.call("TIME")
 local startSec = tonumber(start[1])
 local startUsec = tonumber(start[2])
@@ -24,8 +24,8 @@ while true do
 end
 return 1
 '@
-$script:KongIncrbyExpireatScript = $script:KongIncrbyExpireatScript.Replace("`r`n", "`n")
-$script:TimeWaitHoldScript = $script:TimeWaitHoldScript.Replace("`r`n", "`n")
+$KongIncrbyExpireatScript = $KongIncrbyExpireatScript.Replace("`r`n", "`n")
+$TimeWaitHoldScript = $TimeWaitHoldScript.Replace("`r`n", "`n")
 
 # Get-Sha1Hex is lowercase hex SHA-1 of Text (Redis EVALSHA digest).
 function Get-Sha1Hex {
@@ -35,9 +35,13 @@ function Get-Sha1Hex {
     return -join ($hash | ForEach-Object { $_.ToString("x2") })
 }
 
-$script:KongEvalDigest = Get-Sha1Hex $script:KongIncrbyExpireatScript
-$script:TtlEvalDigest = Get-Sha1Hex $script:TtlScript
-$script:TimeWaitHoldDigest = Get-Sha1Hex $script:TimeWaitHoldScript
+$KongEvalDigest = Get-Sha1Hex $KongIncrbyExpireatScript
+$TtlEvalDigest = Get-Sha1Hex $TtlScript
+$TimeWaitHoldDigest = Get-Sha1Hex $TimeWaitHoldScript
+$env:INTEGRATION_KONG_SCRIPT = $KongIncrbyExpireatScript
+$env:INTEGRATION_KONG_DIGEST = $KongEvalDigest
+$env:INTEGRATION_HOLD_SCRIPT = $TimeWaitHoldScript
+$env:INTEGRATION_HOLD_DIGEST = $TimeWaitHoldDigest
 
 # New-SimpleRedisKey is a unique key name for one Pester request.
 function New-SimpleRedisKey {
@@ -77,7 +81,7 @@ function Invoke-SimpleRedis {
     if ($Delta) { $parts += "delta=$([uri]::EscapeDataString($Delta))" }
     if ($Digest) { $parts += "digest=$([uri]::EscapeDataString($Digest))" }
     if ($Drop) { $parts += "drop=1" }
-    $uri = "$script:BaseUrl/$Engine/$Verb"
+    $uri = "$env:INTEGRATION_BASE_URL/$Engine/$Verb"
     if ($parts.Count -gt 0) {
         $uri = "$uri`?$($parts -join '&')"
     }
@@ -131,12 +135,12 @@ function Assert-EvalShaMissThenHit {
     )
     $expireUnix = [DateTimeOffset]::UtcNow.AddSeconds(60).ToUnixTimeSeconds().ToString()
     Clear-ScriptCache -BackendHost $BackendHost
-    (Get-ScriptExists -BackendHost $BackendHost -Digest $script:KongEvalDigest) | Should -Be "0"
-    $response = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key (New-SimpleRedisKey) -Arg @("3", $expireUnix) -Digest $script:KongEvalDigest -Body $script:KongIncrbyExpireatScript
+    (Get-ScriptExists -BackendHost $BackendHost -Digest $env:INTEGRATION_KONG_DIGEST) | Should -Be "0"
+    $response = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key (New-SimpleRedisKey) -Arg @("3", $expireUnix) -Digest $env:INTEGRATION_KONG_DIGEST -Body $env:INTEGRATION_KONG_SCRIPT
     $response.StatusCode | Should -Be 200 -Because $response.Content
     $response.Content.Trim() | Should -Be "3"
-    (Get-ScriptExists -BackendHost $BackendHost -Digest $script:KongEvalDigest) | Should -Be "1"
-    $again = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key (New-SimpleRedisKey) -Arg @("3", $expireUnix) -Digest $script:KongEvalDigest -Body $script:KongIncrbyExpireatScript
+    (Get-ScriptExists -BackendHost $BackendHost -Digest $env:INTEGRATION_KONG_DIGEST) | Should -Be "1"
+    $again = Invoke-SimpleRedis -Engine $Engine -Verb eval -Key (New-SimpleRedisKey) -Arg @("3", $expireUnix) -Digest $env:INTEGRATION_KONG_DIGEST -Body $env:INTEGRATION_KONG_SCRIPT
     $again.StatusCode | Should -Be 200 -Because $again.Content
     $again.Content.Trim() | Should -Be "3"
 }
@@ -214,13 +218,13 @@ function Assert-SimpleRedisLiveCap {
     )
     Wait-BackendPing -BackendHost $BackendHost
     $sidecar = Start-NetnsReader -BackendHost $BackendHost
-    $holdUrl = "$script:BaseUrl$Path`?arg=500000&digest=$([uri]::EscapeDataString($script:TimeWaitHoldDigest))"
+    $holdUrl = "$env:INTEGRATION_BASE_URL$Path`?arg=500000&digest=$([uri]::EscapeDataString($env:INTEGRATION_HOLD_DIGEST))"
     $http = [System.Net.Http.HttpClient]::new()
     $http.Timeout = [TimeSpan]::FromSeconds(15)
     try {
         # Default liveCap is 8; fill poolSize then the waiter is redis:unreachable.
         $holds = 1..8 | ForEach-Object {
-            $http.PostAsync($holdUrl, ([System.Net.Http.StringContent]::new($script:TimeWaitHoldScript)))
+            $http.PostAsync($holdUrl, ([System.Net.Http.StringContent]::new($env:INTEGRATION_HOLD_SCRIPT)))
         }
         $deadline = [DateTime]::UtcNow.AddMilliseconds(400)
         $established = 0
@@ -232,7 +236,7 @@ function Assert-SimpleRedisLiveCap {
         } while ($established -lt 8 -and [DateTime]::UtcNow -lt $deadline)
         $established | Should -BeGreaterOrEqual 8 -Because "tcp dump was: $tcpDump"
         $established | Should -BeLessOrEqual 10 -Because "tcp dump was: $tcpDump"
-        $waiter = $http.PostAsync($holdUrl, ([System.Net.Http.StringContent]::new($script:TimeWaitHoldScript))).GetAwaiter().GetResult()
+        $waiter = $http.PostAsync($holdUrl, ([System.Net.Http.StringContent]::new($env:INTEGRATION_HOLD_SCRIPT))).GetAwaiter().GetResult()
         [int]$waiter.StatusCode | Should -Be 502
         $waiterBody = $waiter.Content.ReadAsStringAsync().GetAwaiter().GetResult()
         $waiterBody | Should -Match "redis:unreachable"
