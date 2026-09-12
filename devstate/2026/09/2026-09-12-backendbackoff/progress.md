@@ -6,7 +6,7 @@ JobName: 2026-09-12-backendbackoff
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-12T18:08:01Z |
 | explore | [x] | [x] | 2026-09-12T18:13:50Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
