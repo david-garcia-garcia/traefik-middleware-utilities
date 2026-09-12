@@ -79,3 +79,4 @@ if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 
 - Empty password skips AUTH; empty database skips SELECT. When both are set, AUTH runs before SELECT.
 - `SELECT` out of range is `ERR DB index is out of range`, not `redis:noauth`. A handshake AUTH or SELECT error closes the socket, is not pooled, and is not retried.
 - Probe success labels on `/redis` and `/dragonfly` stay host-only (empty password and database). Failure routes `/redis-wrong-password` `/dragonfly-wrong-password` set `Password`; `/redis-database-99` `/dragonfly-database-99` set `Database`.
+- A panic inside a command after borrow still returns the in-use-turn and closes the socket. The panic is not recovered. Handshake AUTH/SELECT panics while dial still holds the turn are a leftover.

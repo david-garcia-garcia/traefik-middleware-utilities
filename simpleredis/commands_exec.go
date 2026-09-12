@@ -23,8 +23,7 @@ func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
 			last = err
 			continue
 		}
-		values, reusable, err := sr.do(conn, args)
-		sr.release(conn, reusable)
+		values, err := sr.doAndRelease(conn, args)
 		if err == nil {
 			return values, nil
 		}
@@ -34,6 +33,15 @@ func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
 		last = err
 	}
 	return nil, last
+}
+
+// doAndRelease runs one RESP command on conn and always returns the in-use-turn, including when do panics.
+func (sr *SimpleRedis) doAndRelease(conn *pooledConn, args [][]byte) (values [][]byte, err error) {
+	var reusable bool
+	// Panic leaves reusable false, so release closes the socket instead of pooling it.
+	defer func() { sr.release(conn, reusable) }()
+	values, reusable, err = sr.do(conn, args)
+	return values, err
 }
 
 // retryLimits maps 0/-1 sentinels to go-redis Options defaults without mutating the exported fields.

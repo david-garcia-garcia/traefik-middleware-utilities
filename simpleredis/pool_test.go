@@ -406,3 +406,30 @@ func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
 		t.Fatalf("second Get = %q, want %q", got, "hello")
 	}
 }
+
+func TestPanicDuringDoReturnsInUseTurn(t *testing.T) {
+	addr := startStaticRedis(t, "*1000000000000000000\r\n")
+	redis := New(Config{Host: addr, PoolSize: 2, PoolTimeout: 200 * time.Millisecond, MaxRetries: -1})
+	for i := 0; i < 2; i++ {
+		func() {
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("Get %d: want panic", i)
+				}
+			}()
+			_, _ = redis.Get("k")
+		}()
+	}
+	if got, want := len(redis.inUseTurns), cap(redis.inUseTurns); got != want {
+		t.Fatalf("inUseTurns after panics = %d, want %d", got, want)
+	}
+	started := time.Now()
+	conn, err := redis.borrow()
+	if err != nil {
+		t.Fatalf("borrow after panics: %v", err)
+	}
+	if waited := time.Since(started); waited >= redis.PoolTimeout() {
+		t.Fatalf("borrow after panics waited %v, want no PoolTimeout", waited)
+	}
+	redis.release(conn, false)
+}
