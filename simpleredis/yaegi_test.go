@@ -147,6 +147,18 @@ func writeGopathClientprobe(t testing.TB, goPath string) {
 	}
 }
 
+// writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
+func writeGopathFile(t testing.TB, goPath, pkg, name, src string) {
+	t.Helper()
+	dir := filepath.Join(goPath, "src", pkg)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 const clientprobeSrc = `package clientprobe
 
 import (
