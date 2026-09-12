@@ -33,5 +33,5 @@ description: How a Traefik middleware Allows then Reports a per-key in-memory ba
 ## Test suites
 priority: normal
 local: std_go_test-suites.md
-description: Lint, unit Go (plain `-short` and `Unit race`), Go E2E Redis, Go E2E Dragonfly, and Pester — what each suite is for and how test files are named.
+description: Lint, unit Go (plain `-short` and `Unit race`), Go E2E Redis, Go E2E Dragonfly, and Pester (reclaim, Redis, Dragonfly) — what each suite is for and how test files are named.
 
