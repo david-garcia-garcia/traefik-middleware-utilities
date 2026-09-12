@@ -1,7 +1,9 @@
 package windowcounter
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -16,6 +18,20 @@ func newSimpleRedisForTest(t testing.TB, host string) *simpleredis.SimpleRedis {
 	return simpleredis.New(simpleredis.Config{Host: host})
 }
 
+func TestCountFromRedisGet_WrappedMissIsZero(t *testing.T) {
+	wrapped := fmt.Errorf("context: %w", simpleredis.ErrMiss)
+	if wrapped.Error() == simpleredis.RedisMiss {
+		t.Fatal("wrapped.Error() still equals RedisMiss; test would not catch dest string compare")
+	}
+	n, err := countFromRedisGet(nil, wrapped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("count %d, want 0", n)
+	}
+}
+
 func TestTake_NThenDeny(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
 	client := newSimpleRedisForTest(t, addr)
@@ -26,7 +42,7 @@ func TestTake_NThenDeny(t *testing.T) {
 	const limit int64 = 3
 	window := time.Minute
 	for i := int64(0); i < limit; i++ {
-		allowed, estimated, takeErr := limiter.Take("k", limit, window)
+		allowed, estimated, takeErr := limiter.Take(context.Background(), "k", limit, window)
 		if takeErr != nil {
 			t.Fatal(takeErr)
 		}
@@ -34,7 +50,7 @@ func TestTake_NThenDeny(t *testing.T) {
 			t.Fatalf("take %d denied, estimated %v", i+1, estimated)
 		}
 	}
-	allowed, estimated, err := limiter.Take("k", limit, window)
+	allowed, estimated, err := limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +72,7 @@ func TestTake_ExpireOnFirstHit(t *testing.T) {
 	window := 10 * time.Second
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Take("k", 5, window); err != nil {
+	if _, _, err := limiter.Take(context.Background(), "k", 5, window); err != nil {
 		t.Fatal(err)
 	}
 	got := fake.lastExpireCommand()
@@ -78,7 +94,7 @@ func TestTake_SlidingBoundaryDoesNotDouble(t *testing.T) {
 	now := start.Add(9 * time.Second)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := int64(0); i < limit; i++ {
-		allowed, _, takeErr := limiter.Take("k", limit, window)
+		allowed, _, takeErr := limiter.Take(context.Background(), "k", limit, window)
 		if takeErr != nil {
 			t.Fatal(takeErr)
 		}
@@ -88,7 +104,7 @@ func TestTake_SlidingBoundaryDoesNotDouble(t *testing.T) {
 	}
 	now = start.Add(window)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, estimated, err := limiter.Take("k", limit, window)
+	allowed, estimated, err := limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +119,7 @@ func TestTake_Unreachable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = limiter.Take("k", 1, time.Minute)
+	_, _, err = limiter.Take(context.Background(), "k", 1, time.Minute)
 	if err == nil || err.Error() != simpleredis.RedisUnreachable {
 		t.Fatalf("err %v want %s", err, simpleredis.RedisUnreachable)
 	}
@@ -135,7 +151,7 @@ func TestTake_SubSecondWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = limiter.Take("k", 1, 500*time.Millisecond)
+	_, _, err = limiter.Take(context.Background(), "k", 1, 500*time.Millisecond)
 	if err == nil {
 		t.Fatal("want window error")
 	}
@@ -151,7 +167,7 @@ func TestBuffered_TickerFlushesWithoutSleep(t *testing.T) {
 	t.Cleanup(func() { limiter.Close() })
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, _, err := limiter.Take("tick-k", 10, time.Minute)
+	allowed, _, err := limiter.Take(context.Background(), "tick-k", 10, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +178,7 @@ func TestBuffered_TickerFlushesWithoutSleep(t *testing.T) {
 	redisKey := redisWindowKey("tick-k", windowStart)
 	deadline := time.Now().Add(time.Second)
 	for {
-		raw, getErr := client.Get(redisKey)
+		raw, getErr := client.Get(context.Background(), redisKey)
 		if getErr == nil && string(raw) == "1" {
 			return
 		}
@@ -188,14 +204,14 @@ func TestBuffered_TwoClientsShareWithoutLastWriteWins(t *testing.T) {
 	const limit int64 = 3
 	window := time.Minute
 	for i := 0; i < 2; i++ {
-		allowed, _, takeErr := a.Take("share", limit, window)
+		allowed, _, takeErr := a.Take(context.Background(), "share", limit, window)
 		if takeErr != nil {
 			t.Fatal(takeErr)
 		}
 		if !allowed {
 			t.Fatalf("a take %d denied", i+1)
 		}
-		allowed, _, takeErr = b.Take("share", limit, window)
+		allowed, _, takeErr = b.Take(context.Background(), "share", limit, window)
 		if takeErr != nil {
 			t.Fatal(takeErr)
 		}
@@ -205,7 +221,7 @@ func TestBuffered_TwoClientsShareWithoutLastWriteWins(t *testing.T) {
 	}
 	a.Sleep()
 	b.Sleep()
-	allowed, estimated, err := a.Take("share", limit, window)
+	allowed, estimated, err := a.Take(context.Background(), "share", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +239,7 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 	}
 	limiter.Sleep()
 	limiter.Close()
-	if _, err := client.Incr("still-open"); err != nil {
+	if _, err := client.Incr(context.Background(), "still-open"); err != nil {
 		t.Fatalf("redis closed by limiter: %v", err)
 	}
 	limiter.Wake()
@@ -242,7 +258,7 @@ func TestAllow_IsTake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	allowed, _, err := limiter.Allow("k", 1, time.Minute)
+	allowed, _, err := limiter.Allow(context.Background(), "k", 1, time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +279,7 @@ func TestPeek_DoesNotIncrement(t *testing.T) {
 	const limit int64 = 5
 	window := time.Minute
 	for i := 0; i < 5; i++ {
-		allowed, estimated, peekErr := limiter.Peek("k", limit, window)
+		allowed, estimated, peekErr := limiter.Peek(context.Background(), "k", limit, window)
 		if peekErr != nil {
 			t.Fatal(peekErr)
 		}
@@ -274,7 +290,7 @@ func TestPeek_DoesNotIncrement(t *testing.T) {
 			t.Fatalf("peek %d estimated %v want 0", i+1, estimated)
 		}
 	}
-	allowed, estimated, err := limiter.Take("k", limit, window)
+	allowed, estimated, err := limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +315,7 @@ func TestPeek_BufferedDoesNotIncrement(t *testing.T) {
 	const limit int64 = 5
 	window := time.Minute
 	for i := 0; i < 5; i++ {
-		allowed, estimated, peekErr := limiter.Peek("k", limit, window)
+		allowed, estimated, peekErr := limiter.Peek(context.Background(), "k", limit, window)
 		if peekErr != nil {
 			t.Fatal(peekErr)
 		}
@@ -310,7 +326,7 @@ func TestPeek_BufferedDoesNotIncrement(t *testing.T) {
 			t.Fatalf("peek %d estimated %v want 0", i+1, estimated)
 		}
 	}
-	allowed, estimated, err := limiter.Take("k", limit, window)
+	allowed, estimated, err := limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -334,15 +350,15 @@ func TestPeek_AgreesWithTakeBeforeIncrement(t *testing.T) {
 	const limit int64 = 3
 	window := time.Minute
 	for i := int64(0); i < limit-1; i++ {
-		if _, _, takeErr := limiter.Take("k", limit, window); takeErr != nil {
+		if _, _, takeErr := limiter.Take(context.Background(), "k", limit, window); takeErr != nil {
 			t.Fatal(takeErr)
 		}
 	}
-	peekAllowed, peekEstimated, err := limiter.Peek("k", limit, window)
+	peekAllowed, peekEstimated, err := limiter.Peek(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
-	takeAllowed, takeEstimated, err := limiter.Take("k", limit, window)
+	takeAllowed, takeEstimated, err := limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,18 +383,18 @@ func TestPeek_BufferedTakeThenPeekDenies(t *testing.T) {
 	const limit int64 = 2
 	window := time.Minute
 	for i := int64(0); i < limit+1; i++ {
-		if _, _, takeErr := limiter.Take("k", limit, window); takeErr != nil {
+		if _, _, takeErr := limiter.Take(context.Background(), "k", limit, window); takeErr != nil {
 			t.Fatal(takeErr)
 		}
 	}
-	peekAllowed, peekEstimated, err := limiter.Peek("k", limit, window)
+	peekAllowed, peekEstimated, err := limiter.Peek(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if peekAllowed {
 		t.Fatalf("buffered peek after fill allowed, estimated %v", peekEstimated)
 	}
-	takeAllowed, takeEstimated, err := limiter.Take("k", limit, window)
+	takeAllowed, takeEstimated, err := limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,11 +419,11 @@ func TestPeek_StaysDeniedThenSlidesAllowed(t *testing.T) {
 	now := start
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := int64(0); i < limit+1; i++ {
-		if _, _, takeErr := limiter.Take("k", limit, window); takeErr != nil {
+		if _, _, takeErr := limiter.Take(context.Background(), "k", limit, window); takeErr != nil {
 			t.Fatal(takeErr)
 		}
 	}
-	allowed, estimated, err := limiter.Peek("k", limit, window)
+	allowed, estimated, err := limiter.Peek(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,7 +432,7 @@ func TestPeek_StaysDeniedThenSlidesAllowed(t *testing.T) {
 	}
 	now = start.Add(window)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, estimated, err = limiter.Peek("k", limit, window)
+	allowed, estimated, err = limiter.Peek(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +441,7 @@ func TestPeek_StaysDeniedThenSlidesAllowed(t *testing.T) {
 	}
 	now = start.Add(window + 4*time.Second)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, estimated, err = limiter.Peek("k", limit, window)
+	allowed, estimated, err = limiter.Peek(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +465,7 @@ func TestPeek_BufferedSkipStormDoesNotGetEveryCall(t *testing.T) {
 	limiter.SetNowForTest(func() time.Time { return now })
 	const limit int64 = 10
 	window := time.Minute
-	if _, _, err := limiter.Peek("k", limit, window); err != nil {
+	if _, _, err := limiter.Peek(context.Background(), "k", limit, window); err != nil {
 		t.Fatal(err)
 	}
 	afterSeed := fake.getCallCount()
@@ -457,7 +473,7 @@ func TestPeek_BufferedSkipStormDoesNotGetEveryCall(t *testing.T) {
 		t.Fatal("seed peek sent no GET")
 	}
 	for i := 0; i < 20; i++ {
-		if _, _, peekErr := limiter.Peek("k", limit, window); peekErr != nil {
+		if _, _, peekErr := limiter.Peek(context.Background(), "k", limit, window); peekErr != nil {
 			t.Fatal(peekErr)
 		}
 	}
@@ -477,7 +493,7 @@ func TestPeek_ExactGetsEveryCall(t *testing.T) {
 	limiter.SetNowForTest(func() time.Time { return now })
 	const n = 4
 	for i := 0; i < n; i++ {
-		if _, _, peekErr := limiter.Peek("k", 10, time.Minute); peekErr != nil {
+		if _, _, peekErr := limiter.Peek(context.Background(), "k", 10, time.Minute); peekErr != nil {
 			t.Fatal(peekErr)
 		}
 	}
@@ -492,7 +508,7 @@ func TestPeek_Unreachable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = limiter.Peek("k", 1, time.Minute)
+	_, _, err = limiter.Peek(context.Background(), "k", 1, time.Minute)
 	if err == nil || err.Error() != simpleredis.RedisUnreachable {
 		t.Fatalf("err %v want %s", err, simpleredis.RedisUnreachable)
 	}
@@ -525,11 +541,11 @@ func TestTake_BufferedPendingDeltaOutage(t *testing.T) {
 	t.Cleanup(func() { limiter.Close() })
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+	if _, _, err := limiter.Take(context.Background(), "k", 5, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	getsAfterSeed := fake.getCallCount()
-	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+	if _, _, err := limiter.Take(context.Background(), "k", 5, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	if fake.getCallCount() != getsAfterSeed {
@@ -538,9 +554,9 @@ func TestTake_BufferedPendingDeltaOutage(t *testing.T) {
 	fake.Kill()
 	now = now.Add(time.Hour)
 	limiter.SetNowForTest(func() time.Time { return now })
-	_, _, err = limiter.Take("k", 5, time.Minute)
+	_, _, err = limiter.Take(context.Background(), "k", 5, time.Minute)
 	wantRedisOutage(t, err)
-	_, _, err = limiter.Peek("k", 5, time.Minute)
+	_, _, err = limiter.Peek(context.Background(), "k", 5, time.Minute)
 	wantRedisOutage(t, err)
 }
 
@@ -552,7 +568,7 @@ func TestTake_BufferedFlushThenKillFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { limiter.Close() })
-	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+	if _, _, err := limiter.Take(context.Background(), "k", 5, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(time.Second)
@@ -572,7 +588,7 @@ func TestTake_BufferedFlushThenKillFailsClosed(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	fake.Kill()
-	_, _, err = limiter.Take("k", 5, time.Minute)
+	_, _, err = limiter.Take(context.Background(), "k", 5, time.Minute)
 	wantRedisOutage(t, err)
 }
 
@@ -597,7 +613,7 @@ func TestTake_BufferedTwoInstancesOutage(t *testing.T) {
 	window := time.Minute
 	nilErrorAdmits := 0
 	for _, limiter := range []*Limiter{a, b} {
-		allowed, _, takeErr := limiter.Take("share", limit, window)
+		allowed, _, takeErr := limiter.Take(context.Background(), "share", limit, window)
 		if takeErr != nil {
 			t.Fatal(takeErr)
 		}
@@ -612,7 +628,7 @@ func TestTake_BufferedTwoInstancesOutage(t *testing.T) {
 	sawOutage := false
 	for _, limiter := range []*Limiter{a, b} {
 		for i := 0; i < 4; i++ {
-			allowed, _, takeErr := limiter.Take("share", limit, window)
+			allowed, _, takeErr := limiter.Take(context.Background(), "share", limit, window)
 			if takeErr != nil {
 				wantRedisOutage(t, takeErr)
 				sawOutage = true
@@ -654,14 +670,14 @@ func TestTake_BufferedSleepStoresFlushError(t *testing.T) {
 	t.Cleanup(func() { limiter.Close() })
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+	if _, _, err := limiter.Take(context.Background(), "k", 5, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	fake.Kill()
 	limiter.Sleep()
-	_, _, err = limiter.Take("k", 5, time.Minute)
+	_, _, err = limiter.Take(context.Background(), "k", 5, time.Minute)
 	wantRedisOutage(t, err)
-	_, _, err = limiter.Peek("k", 5, time.Minute)
+	_, _, err = limiter.Peek(context.Background(), "k", 5, time.Minute)
 	wantRedisOutage(t, err)
 }
 
@@ -675,13 +691,13 @@ func TestPeek_BufferedEmptyFlushThenKill(t *testing.T) {
 	t.Cleanup(func() { limiter.Close() })
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+	if _, _, err := limiter.Take(context.Background(), "k", 5, time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	limiter.Sleep()
 	fake.Kill()
 	now = now.Add(time.Hour)
 	limiter.SetNowForTest(func() time.Time { return now })
-	_, _, err = limiter.Peek("k", 5, time.Minute)
+	_, _, err = limiter.Peek(context.Background(), "k", 5, time.Minute)
 	wantRedisOutage(t, err)
 }

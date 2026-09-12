@@ -5,7 +5,7 @@ Sliding-window hit counter: admit or deny a hit on an opaque key against a limit
 ## Requirements
 
 ### Requirement: Take admits until the sliding estimate exceeds the limit
-`Take(key, limit, window)` SHALL increment the current-window counter, then return `allowed` true when the sliding estimate is less than or equal to `limit`, and false otherwise. `Allow` SHALL be the same operation. The estimate SHALL be `current + previous × (1 − elapsed/window)` using the caller's opaque `key`. Denied hits SHALL still occupy the window. Prefixing of `key` is the caller's job.
+`Take(ctx, key, limit, window)` SHALL increment the current-window counter, then return `allowed` true when the sliding estimate is less than or equal to `limit`, and false otherwise. `Allow` SHALL be the same operation. The first argument SHALL be a `context.Context`. A caller with no deadline SHALL pass `context.Background()`. The estimate SHALL be `current + previous × (1 − elapsed/window)` using the caller's opaque `key`. Denied hits SHALL still occupy the window. Prefixing of `key` is the caller's job.
 
 #### Scenario: N Takes then deny
 - **WHEN** the limit is N and the window has no prior hits
@@ -33,7 +33,7 @@ The current window start SHALL be `floor(unixSeconds / windowSeconds) × windowS
 - **AND** it is not remaining quota and not an integer ceiling of the estimate
 
 ### Requirement: Peek observes without increment
-`Peek(key, limit, window)` SHALL return `allowed` and the sliding estimate using the same arguments, formula, and Redis keys as Take, and MUST NOT increment the current-window counter. `Allow` SHALL remain the same operation as Take and MUST NOT become Peek.
+`Peek(ctx, key, limit, window)` SHALL return `allowed` and the sliding estimate using the same arguments, formula, and Redis keys as Take, and MUST NOT increment the current-window counter. `Allow` SHALL remain the same operation as Take and MUST NOT become Peek. The first argument SHALL be a `context.Context`.
 
 #### Scenario: N Peeks then Take sees count 1
 - **WHEN** the window has no prior hits

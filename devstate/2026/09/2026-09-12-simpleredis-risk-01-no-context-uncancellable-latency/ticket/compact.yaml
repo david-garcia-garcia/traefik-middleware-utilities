@@ -1,0 +1,6 @@
+host: local
+ref: none
+title: "risk-01 — 8.1 s of un-cancellable latency per request when Redis is unreachable"
+url: none
+number: none
+source: simpleredisfixes2/risk-01-no-context-uncancellable-latency.md

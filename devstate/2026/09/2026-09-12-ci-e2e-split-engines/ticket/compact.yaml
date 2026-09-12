@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: Split Go E2E CI into Redis vs Dragonfly jobs
+url: none
+number: none

@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ func TestMSetEXNativeArgv(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	if err := redis.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 60); err != nil {
+	if err := redis.MSetEX(context.Background(), []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 60); err != nil {
 		t.Fatalf("MSetEX: %v", err)
 	}
 	got := fake.lastMSetEXCommand()
@@ -24,7 +25,7 @@ func TestMSetEXNativeArgv(t *testing.T) {
 		}
 	}
 
-	hit, err := redis.Get("a")
+	hit, err := redis.Get(context.Background(), "a")
 	if err != nil {
 		t.Fatalf("Get a: %v", err)
 	}
@@ -37,7 +38,7 @@ func TestMSetEXAtArgv(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	if err := redis.MSetEXAt([]string{"k"}, [][]byte{[]byte("v")}, 1700000000); err != nil {
+	if err := redis.MSetEXAt(context.Background(), []string{"k"}, [][]byte{[]byte("v")}, 1700000000); err != nil {
 		t.Fatalf("MSetEXAt: %v", err)
 	}
 	got := fake.lastMSetEXCommand()
@@ -55,7 +56,7 @@ func TestMSetEXAtArgv(t *testing.T) {
 func TestMSetEXIntegerZeroIsIssue(t *testing.T) {
 	addr := startStaticRedis(t, ":0\r\n")
 	redis := New(Config{Host: addr})
-	if err := redis.MSetEX([]string{"k"}, [][]byte{[]byte("v")}, 60); err == nil || err.Error() != RedisIssue {
+	if err := redis.MSetEX(context.Background(), []string{"k"}, [][]byte{[]byte("v")}, 60); err == nil || err.Error() != RedisIssue {
 		t.Fatalf("MSetEX :0 = %v, want %s", err, RedisIssue)
 	}
 }
@@ -64,13 +65,13 @@ func TestMSetEXRejectsEmptyMismatchAndCap(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	if err := redis.MSetEX(nil, nil, 60); err == nil || err.Error() != RedisIssue {
+	if err := redis.MSetEX(context.Background(), nil, nil, 60); err == nil || err.Error() != RedisIssue {
 		t.Fatalf("empty = %v, want %s", err, RedisIssue)
 	}
-	if err := redis.MSetEX([]string{}, [][]byte{}, 60); err == nil || err.Error() != RedisIssue {
+	if err := redis.MSetEX(context.Background(), []string{}, [][]byte{}, 60); err == nil || err.Error() != RedisIssue {
 		t.Fatalf("empty slice = %v, want %s", err, RedisIssue)
 	}
-	if err := redis.MSetEX([]string{"a"}, nil, 60); err == nil || err.Error() != RedisIssue {
+	if err := redis.MSetEX(context.Background(), []string{"a"}, nil, 60); err == nil || err.Error() != RedisIssue {
 		t.Fatalf("mismatch = %v, want %s", err, RedisIssue)
 	}
 	names := make([]string, maxMSetEXPairs+1)
@@ -79,7 +80,7 @@ func TestMSetEXRejectsEmptyMismatchAndCap(t *testing.T) {
 		names[i] = "k"
 		values[i] = []byte("v")
 	}
-	if err := redis.MSetEX(names, values, 60); err == nil || err.Error() != RedisIssue {
+	if err := redis.MSetEX(context.Background(), names, values, 60); err == nil || err.Error() != RedisIssue {
 		t.Fatalf("over cap = %v, want %s", err, RedisIssue)
 	}
 	if fake.connections() != 0 {
@@ -92,7 +93,7 @@ func TestMSetEXUnknownCommandFallsBackAndCaches(t *testing.T) {
 	fake.setRejectMSetEX()
 	redis := New(Config{Host: addr})
 
-	if err := redis.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 60); err != nil {
+	if err := redis.MSetEX(context.Background(), []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 60); err != nil {
 		t.Fatalf("first MSetEX: %v", err)
 	}
 	got := fake.lastEvalCommand()
@@ -103,14 +104,14 @@ func TestMSetEXUnknownCommandFallsBackAndCaches(t *testing.T) {
 		t.Fatalf("MSETEX sends after first = %d, want 1", fake.msetexSendCount())
 	}
 
-	if err := redis.MSetEX([]string{"c"}, [][]byte{[]byte("3")}, 30); err != nil {
+	if err := redis.MSetEX(context.Background(), []string{"c"}, [][]byte{[]byte("3")}, 30); err != nil {
 		t.Fatalf("second MSetEX: %v", err)
 	}
 	if fake.msetexSendCount() != 1 {
 		t.Fatalf("MSETEX sends after cache = %d, want 1", fake.msetexSendCount())
 	}
 
-	hit, err := redis.Get("a")
+	hit, err := redis.Get(context.Background(), "a")
 	if err != nil {
 		t.Fatalf("Get a: %v", err)
 	}
@@ -140,10 +141,10 @@ func TestMSetEXAtPastIsMiss(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	if err := redis.MSetEXAt([]string{"gone"}, [][]byte{[]byte("v")}, time.Now().Unix()-10); err != nil {
+	if err := redis.MSetEXAt(context.Background(), []string{"gone"}, [][]byte{[]byte("v")}, time.Now().Unix()-10); err != nil {
 		t.Fatalf("MSetEXAt past: %v", err)
 	}
-	if _, err := redis.Get("gone"); err == nil || err.Error() != RedisMiss {
+	if _, err := redis.Get(context.Background(), "gone"); err == nil || err.Error() != RedisMiss {
 		t.Fatalf("Get after past EXAT = %v, want %s", err, RedisMiss)
 	}
 }
