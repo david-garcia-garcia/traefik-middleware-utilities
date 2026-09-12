@@ -25,6 +25,11 @@ priority: normal
 local: ext_redis_resp_bulk-string/
 description: RESP2 bulk-string wire form, null bulk, and why a truncated payload is a transport fake not a Redis command.
 
+## Idle client close
+priority: normal
+local: ext_redis_clients_idle-close/
+description: How Redis closes a client TCP socket from the server (idle timeout vs CLIENT KILL).
+
 ## MSETEX
 priority: normal
 local: ext_redis_msetex/

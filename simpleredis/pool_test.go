@@ -64,6 +64,7 @@ func TestRejectedAuthIsReturned(t *testing.T) {
 	}
 }
 
+// TestStaleConnectionIsRetried proves client-fd close retries on SetDeadline/os.ErrClosed, not peer EOF.
 func TestStaleConnectionIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
@@ -72,6 +73,7 @@ func TestStaleConnectionIsRetried(t *testing.T) {
 		t.Fatalf("first Get: %v", err)
 	}
 
+	// Client-side close so SetDeadline fails with os.ErrClosed and ioError never sees io.EOF.
 	redis.idleConnsMu.Lock()
 	for _, conn := range redis.idleConns {
 		conn.close()
@@ -80,13 +82,70 @@ func TestStaleConnectionIsRetried(t *testing.T) {
 
 	got, err := redis.Get("hit")
 	if err != nil {
-		t.Fatalf("Get on a dead pooled connection: %v", err)
+		t.Fatalf("Get on a client-closed pooled connection: %v", err)
 	}
 	if string(got) != "t" {
 		t.Fatalf("Get = %q, want %q", got, "t")
 	}
 	if fake.connections() != 2 {
 		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+}
+
+// TestPeerClosedIdleConnEOFIsRetried proves a server-closed idle socket is retried on a new dial.
+func TestPeerClosedIdleConnEOFIsRetried(t *testing.T) {
+	fake, addr := startPeerCloseFake(t, map[string]string{"hit": "t"}, true)
+	redis := New(Config{Host: addr})
+
+	got, err := redis.Get("hit")
+	if err != nil {
+		t.Fatalf("first Get: %v", err)
+	}
+	if string(got) != "t" {
+		t.Fatalf("first Get = %q, want t", got)
+	}
+	redis.idleConnsMu.Lock()
+	if len(redis.idleConns) != 1 {
+		redis.idleConnsMu.Unlock()
+		t.Fatalf("idle after first Get = %d, want 1", len(redis.idleConns))
+	}
+	dead := redis.idleConns[0]
+	redis.idleConnsMu.Unlock()
+
+	fake.waitFirstClosed(t)
+
+	got, err = redis.Get("hit")
+	if err != nil {
+		t.Fatalf("second Get: %v", err)
+	}
+	if string(got) != "t" {
+		t.Fatalf("second Get = %q, want t", got)
+	}
+	if fake.connections() != 2 {
+		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+	redis.idleConnsMu.Lock()
+	for _, conn := range redis.idleConns {
+		if conn == dead {
+			redis.idleConnsMu.Unlock()
+			t.Fatal("dead conn still in idle")
+		}
+	}
+	redis.idleConnsMu.Unlock()
+}
+
+// TestPeerClosedIdleRetryBorrowFailsUnreachable proves retry borrow after peer close returns redis:unreachable when the listener is gone.
+func TestPeerClosedIdleRetryBorrowFailsUnreachable(t *testing.T) {
+	fake, addr := startPeerCloseFake(t, map[string]string{"hit": "t"}, false)
+	redis := New(Config{Host: addr})
+
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("first Get: %v", err)
+	}
+	fake.waitFirstClosed(t)
+
+	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("second Get = %v, want %s", err, RedisUnreachable)
 	}
 }
 
@@ -261,6 +320,7 @@ func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
 }
 
 func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
+	// ReadSlice takes the complete `$100` head; io.ReadFull then fails on the 40-byte payload.
 	truncated := append([]byte("$100\r\n"), bytes.Repeat([]byte("x"), 40)...)
 	ownValue := []byte("$5\r\nhello\r\n")
 	addr := startRawReplyRedis(t, []rawReply{

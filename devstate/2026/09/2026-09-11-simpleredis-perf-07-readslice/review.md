@@ -1,0 +1,47 @@
+## prepare (2026-09-11)
+phase: prepare
+findings: none
+fixed: none (no product apply)
+skipped: none
+
+## explore (2026-09-11)
+phase: explore
+findings: none
+fixed: none (no decode apply)
+skipped: none
+
+## propose (2026-09-11)
+phase: propose
+findings: none
+fixed: none (no decode apply)
+skipped: none
+
+## implement (2026-09-11)
+phase: implement
+findings: none
+fixed: ReadSlice decode, copy-on-escape, parseLen, unit tests, benches, live Redis and Dragonfly (c07a9b9)
+skipped: none
+
+## codereview (2026-09-11)
+phase: codereview
+findings: 1 Nitpicks hard + 1 Coverage hard Status: done; 1 Standards judgement skipped; Spec/Security/Performance/Dead none
+fixed: parseLen locals `length`/`digitByte`; TestParseLen overflow digits (3c1ec7c)
+skipped: Duplicated Code extract of two-site `+`/`:` copy (judgement; design-named shape)
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: missing-packet RESP decode; stale-usage SimpleRedis Key files
+fixed: created `knowledge/devdocs/std_go_simpleredis_resp-decode.md`; `index_std_go.md` row; SimpleRedis Key files pointer (701bee0)
+skipped: none
+
+## archive (2026-09-11)
+phase: archive
+findings: new std_go_simpleredis_resp-decode; fold std_go_simpleredis_resp-commands; validate_spec_map and validate_artifact_names OK
+fixed: catalog synced; change moved to archive/2026-09-11-simpleredis-readslice-decode
+skipped: none
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: none
+fixed: reused PR 20; dropped WIP; gitmoji perf title; CI Lint/Test/Integration Tests success on 8e15852 (build 34652978083)
+skipped: none
