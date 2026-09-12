@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-bug-05-windowcounter-hides-outage
+jobName: 2026-09-12-simpleredis-bug-05-windowcounter-hides-outage
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: a15c339b2cae51b98ce38056ec22b0169ef0f1020e2c6c9651cb0530d18a1e5d
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 30
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/30
