@@ -296,6 +296,26 @@ A reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-sha
 - **THEN** Incr returns `redis:issue?`
 - **AND** the connection remains in the idle pool
 
+### Requirement: CI allocation guards fail on over-budget encode and decode
+The compiled `go test` suite for SimpleRedis SHALL fail when client-side encode or decode of GET, EVAL, a bulk reply, a 10-slot array, an integer reply, or a 100 KB bulk exceeds the Go 1.21 `allocs/op` or `B/op` ceiling recorded in that test. Those guards SHALL run as compiled tests that measure `AllocsPerOp` and `AllocedBytesPerOp` without requiring `go test -bench`. They MUST NOT assert wall-clock `ns/op`. They MUST NOT dial live Redis or Dragonfly. Compose Redis (`redis:7-alpine`) and Dragonfly (`docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2`) plus Pester `/redis` and `/dragonfly` SHALL keep proving Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, and MSetEX on both engines. Eval SHALL stay a Lua 5.1-safe script that lists its key in KEYS. CI MUST NOT drop or skip either engine’s tests.
+
+#### Scenario: Over-budget allocs fail without bench flag
+- **WHEN** `go test ./simpleredis/...` runs without `-bench`
+- **AND** a client-side encode or decode loop reports `AllocsPerOp` or `AllocedBytesPerOp` above the Go 1.21 ceiling recorded in that test
+- **THEN** that test fails
+
+#### Scenario: 100 KB bulk decode is guarded
+- **WHEN** the decode guard runs a canned `$102400` bulk GET of `100*1024` bytes
+- **THEN** `AllocsPerOp` and `AllocedBytesPerOp` are compared to the Go 1.21 ceiling
+- **AND** the fixture is not a live Redis or Dragonfly round-trip
+
+#### Scenario: Live verb coverage stays on Redis and Dragonfly
+- **WHEN** CI integration runs
+- **THEN** Pester `GET /redis` and `GET /dragonfly` still assert Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, and MSetEX
+- **AND** Eval uses a Lua 5.1-safe script with KEYS declared
+- **AND** neither engine’s tests are skipped
+
+
 ### Requirement: MSetEX and MSetEXAt write many keys with one shared TTL
 `MSetEX(names, values, seconds)` SHALL send native Redis `MSETEX` with decimal `numkeys` equal to `len(names)`, then each name/value pair in order, then `EX` and that duration as decimal seconds. `MSetEXAt(names, values, unixSeconds)` SHALL send the same argv with `EXAT` and that Unix timestamp. Both SHALL require `len(names) == len(values)`, reject empty or nil `names`, and reject more than 1024 pairs, each with `redis:issue?` and MUST NOT dial. The client MUST send `EX` or `EXAT`; it MUST NOT omit expiration and MUST NOT send NX, XX, PX, PXAT, or KEEPTTL. Integer reply `1` SHALL return no error. Integer reply `0` SHALL return `redis:issue?`. A `:` payload that is not a signed integer, or any integer other than `1` or `0`, SHALL return `redis:issue?`. AUTH-class prefixes still map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text unless they are unknown-command (fallback below). Clustered engines need all keys in one hash slot (hash tags); the client MUST NOT hash-tag, split, or retry cross-slot. Zero or negative TTL values SHALL be passed through, same as `Set`.
 
