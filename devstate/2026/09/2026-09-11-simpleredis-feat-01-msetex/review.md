@@ -1,0 +1,67 @@
+# Review
+
+## prepare (2026-09-11)
+phase: prepare
+findings: none
+fixed: none
+skipped: product apply not started; explore not started
+
+## explore (2026-09-11)
+phase: explore
+findings: none
+fixed: none
+skipped: product apply not started; propose not started
+
+## propose (2026-09-11)
+phase: propose
+findings: none
+fixed: none
+skipped: product apply not started; implement not started
+change: simpleredis-msetex
+specs: modified std_go_simpleredis_resp-commands
+ci: 34651220084 success
+
+## implement (2026-09-11)
+phase: implement
+findings: none
+fixed: MSetEX / MSetEXAt on SimpleRedis (native MSETEX, Lua fallback, 1024 pair cap, capability cache); live Redis 7 + Dragonfly; Yaegi both paths; probe/Pester; usage packet
+skipped: none
+change: simpleredis-msetex
+specs: modified std_go_simpleredis_resp-commands
+ci: 34652973190 success
+
+## codereview (2026-09-11)
+phase: codereview
+findings: none
+fixed: none
+skipped: none
+change: simpleredis-msetex
+specs: modified std_go_simpleredis_resp-commands
+ci: 34654134540 success
+
+## devdocsimpact (2026-09-11)
+phase: devdocsimpact
+findings: stale-usage taken on std_go_simpleredis
+fixed: How-to/Gotchas integer-0 redis:issue?, pass-through TTL, native→Lua recache, past-EXAT Get miss
+skipped: none
+change: simpleredis-msetex
+specs: modified std_go_simpleredis_resp-commands
+ci: 34654939236 success
+
+## archive (2026-09-11)
+phase: archive
+findings: none
+fixed: delta synced into live std_go_simpleredis_resp-commands; change moved to openspec/changes/archive/2026-09-11-simpleredis-msetex
+skipped: none
+change: simpleredis-msetex
+specs: modified std_go_simpleredis_resp-commands
+ci: 34655629742 success
+
+## pullrequest (2026-09-11)
+phase: pullrequest
+findings: none
+fixed: title ready without WIP; comments none; CI Lint/Test/Integration Tests succeeded on e16c217
+skipped: none
+change: simpleredis-msetex
+specs: modified std_go_simpleredis_resp-commands
+ci: 34656129755 success

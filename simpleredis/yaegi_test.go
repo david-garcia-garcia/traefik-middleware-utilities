@@ -18,7 +18,7 @@ func TestYaegi_NewGetSetDel(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.RoundTrip(%q)`, addr))
 	if got != "ok" {
@@ -31,7 +31,7 @@ func TestYaegi_IncrAndEval(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.IncrAndEval(%q)`, addr))
 	if got != "ok" {
@@ -44,11 +44,41 @@ func TestYaegi_EvalNoScriptFallback(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.EvalNoScript(%q)`, addr))
 	if got != "ok" {
 		t.Fatalf("yaegi eval noscript fallback: %q, want ok", got)
+	}
+}
+
+// TestYaegi_MSetEXNative proves interpreted MSetEX against a compiled fake that implements MSETEX.
+func TestYaegi_MSetEXNative(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{})
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.MSetEXNative(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi msetex native: %q, want ok", got)
+	}
+}
+
+// TestYaegi_MSetEXLua proves interpreted MSetEX falls back to EVAL and a second call skips MSETEX.
+func TestYaegi_MSetEXLua(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	fake.setRejectMSetEX()
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.MSetEXLua(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi msetex lua: %q, want ok", got)
+	}
+	if fake.msetexSendCount() != 1 {
+		t.Fatalf("MSETEX sends = %d, want 1", fake.msetexSendCount())
 	}
 }
 
@@ -105,14 +135,14 @@ func writeGopathSimpleredis(t testing.TB, goPath string) {
 	}
 }
 
-// writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
-func writeGopathFile(t testing.TB, goPath, pkg, name, src string) {
+// writeGopathClientprobe writes the interpreted probe package under GOPATH/src/clientprobe.
+func writeGopathClientprobe(t testing.TB, goPath string) {
 	t.Helper()
-	dir := filepath.Join(goPath, "src", pkg)
+	dir := filepath.Join(goPath, "src", "clientprobe")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "roundtrip.go"), []byte(clientprobeSrc), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -177,6 +207,41 @@ func EvalNoScript(host string) string {
 	}
 	if len(values) != 1 || string(values[0]) != "3" {
 		return fmt.Sprintf("eval:%q", values)
+	}
+	return "ok"
+}
+
+// MSetEXNative writes one pair via MSetEX against a native MSETEX fake.
+func MSetEXNative(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host})
+	if err := client.MSetEX([]string{"yaegi-msetex"}, [][]byte{[]byte("ok")}, 60); err != nil {
+		return "msetex:" + err.Error()
+	}
+	got, err := client.Get("yaegi-msetex")
+	if err != nil {
+		return "get:" + err.Error()
+	}
+	if string(got) != "ok" {
+		return "get:" + string(got)
+	}
+	return "ok"
+}
+
+// MSetEXLua calls MSetEX twice so a reject-MSETEX fake can prove the cache.
+func MSetEXLua(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host})
+	if err := client.MSetEX([]string{"yaegi-msetex-lua"}, [][]byte{[]byte("ok")}, 60); err != nil {
+		return "first:" + err.Error()
+	}
+	if err := client.MSetEX([]string{"yaegi-msetex-lua-2"}, [][]byte{[]byte("ok")}, 60); err != nil {
+		return "second:" + err.Error()
+	}
+	got, err := client.Get("yaegi-msetex-lua")
+	if err != nil {
+		return "get:" + err.Error()
+	}
+	if string(got) != "ok" {
+		return "get:" + string(got)
 	}
 	return "ok"
 }
