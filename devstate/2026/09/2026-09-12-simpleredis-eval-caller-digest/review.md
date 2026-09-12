@@ -49,4 +49,13 @@ fixed: none
 skipped: none
 archived: openspec/changes/archive/2026-09-12-simpleredis-eval-caller-digest/
 
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/42
+ci: 34706988223 succeeded
+
+
 

@@ -11,4 +11,4 @@ JobName: 2026-09-12-simpleredis-eval-caller-digest
 | codereview | [x] | [x] | 2026-09-12T17:00:40Z |
 | devdocsimpact | [x] | [x] | 2026-09-12T17:00:40Z |
 | archive | [x] | [x] | 2026-09-12T17:00:40Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-12T17:04:06Z |
