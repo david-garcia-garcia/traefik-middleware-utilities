@@ -9,6 +9,33 @@ import (
 	"time"
 )
 
+func TestLive_RedisAndDragonfly(t *testing.T) {
+	if testing.Short() {
+		t.Skip("live engines skipped under -short")
+	}
+	backends := []struct {
+		name string
+		addr string
+	}{
+		{"redis", os.Getenv("SIMPLEREDIS_LIVE_REDIS")},
+		{"dragonfly", os.Getenv("SIMPLEREDIS_LIVE_DRAGONFLY")},
+	}
+	anyAddr := false
+	for _, backend := range backends {
+		if backend.addr == "" {
+			continue
+		}
+		anyAddr = true
+		backend := backend
+		t.Run(backend.name, func(t *testing.T) {
+			runLivePoolBackend(t, backend.addr)
+		})
+	}
+	if !anyAddr {
+		t.Skip("SIMPLEREDIS_LIVE_REDIS and SIMPLEREDIS_LIVE_DRAGONFLY unset")
+	}
+}
+
 // TestLive_PeerCloseEOFRedial proves live Redis and Dragonfly recover after CLIENT KILL of the pooled socket.
 func TestLive_PeerCloseEOFRedial(t *testing.T) {
 	if testing.Short() {
@@ -37,11 +64,31 @@ func TestLive_PeerCloseEOFRedial(t *testing.T) {
 	}
 }
 
+// runLivePoolBackend builds a live client then holds the only in-use turn
+// so a waiter is redis:unreachable without a Lua BUSY on the shared CI Redis.
+func runLivePoolBackend(t *testing.T, addr string) {
+	t.Helper()
+	client := waitLiveSimpleRedis(t, addr)
+	t.Cleanup(client.Close)
+
+	t.Run("waiterIsUnreachable", func(t *testing.T) {
+		conn, err := client.borrow()
+		if err != nil {
+			t.Fatalf("borrow: %v", err)
+		}
+		defer client.release(conn, true)
+		err = client.Set("simpleredis-live-waiter", []byte("1"), 60)
+		if err == nil || err.Error() != RedisUnreachable {
+			t.Fatalf("waiter Set = %v, want %s", err, RedisUnreachable)
+		}
+	})
+}
+
 // runLivePeerCloseRecovery Gets, CLIENT KILLs that pooled ADDR (or ID), then Gets on a new dial.
 func runLivePeerCloseRecovery(t *testing.T, addr string) {
 	t.Helper()
-	client := waitLiveSimpleRedisForTest(t, addr)
-	t.Cleanup(func() { client.Close() })
+	client := waitLiveSimpleRedis(t, addr)
+	t.Cleanup(client.Close)
 
 	key := "simpleredis-live-eof:" + t.Name()
 	if err := client.Set(key, []byte("ok"), 60); err != nil {
@@ -55,13 +102,13 @@ func runLivePeerCloseRecovery(t *testing.T, addr string) {
 		t.Fatalf("Get = %q, want ok", got)
 	}
 
-	client.mu.Lock()
-	if len(client.idle) != 1 {
-		client.mu.Unlock()
-		t.Fatalf("idle after Get = %d, want 1", len(client.idle))
+	client.idleConnsMu.Lock()
+	if len(client.idleConns) != 1 {
+		client.idleConnsMu.Unlock()
+		t.Fatalf("idle after Get = %d, want 1", len(client.idleConns))
 	}
-	killed := client.idle[0]
-	client.mu.Unlock()
+	killed := client.idleConns[0]
+	client.idleConnsMu.Unlock()
 
 	killPooledIdleAddrOrIDForTest(t, client)
 
@@ -73,27 +120,24 @@ func runLivePeerCloseRecovery(t *testing.T, addr string) {
 		t.Fatalf("Get after CLIENT KILL = %q, want ok", got)
 	}
 
-	client.mu.Lock()
-	defer client.mu.Unlock()
-	for _, conn := range client.idle {
+	client.idleConnsMu.Lock()
+	defer client.idleConnsMu.Unlock()
+	for _, conn := range client.idleConns {
 		if conn == killed {
 			t.Fatal("killed socket was reused")
 		}
 	}
 }
 
-// waitLiveSimpleRedisForTest retries Set until the engine accepts connections or the wait expires.
-func waitLiveSimpleRedisForTest(t *testing.T, addr string) *SimpleRedis {
+// waitLiveSimpleRedis builds a one-slot client and waits until Set against addr succeeds.
+func waitLiveSimpleRedis(t *testing.T, addr string) *SimpleRedis {
 	t.Helper()
-	client := &SimpleRedis{}
-	client.Init(addr, "", "")
+	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: 80 * time.Millisecond})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		err := client.Set("simpleredis-live-probe", []byte("ok"), 60)
-		if err == nil {
+		if err := client.Set("simpleredis-live-probe", []byte("1"), 60); err == nil {
 			return client
-		}
-		if time.Now().After(deadline) {
+		} else if time.Now().After(deadline) {
 			t.Fatalf("live %s: %v", addr, err)
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -104,14 +148,14 @@ func waitLiveSimpleRedisForTest(t *testing.T, addr string) *SimpleRedis {
 // If the engine reports 0 (Docker port-publish NAT), it KILLs by that socket's CLIENT ID instead.
 func killPooledIdleAddrOrIDForTest(t *testing.T, sr *SimpleRedis) {
 	t.Helper()
-	sr.mu.Lock()
-	if len(sr.idle) == 0 {
-		sr.mu.Unlock()
+	sr.idleConnsMu.Lock()
+	if len(sr.idleConns) == 0 {
+		sr.idleConnsMu.Unlock()
 		t.Fatal("no idle pooled conn to kill")
 	}
-	pooled := sr.idle[0]
+	pooled := sr.idleConns[0]
 	addr := pooled.netConn.LocalAddr().String()
-	sr.mu.Unlock()
+	sr.idleConnsMu.Unlock()
 
 	killed := clientKillFromSidecarForTest(t, sr.host, "ADDR", addr)
 	if killed == 0 {
@@ -126,12 +170,12 @@ func killPooledIdleAddrOrIDForTest(t *testing.T, sr *SimpleRedis) {
 // clientKillFromSidecarForTest dials host and sends CLIENT KILL <filter> <value>. Returns the killed count.
 func clientKillFromSidecarForTest(t *testing.T, host, filter, value string) int {
 	t.Helper()
-	netConn, err := net.DialTimeout("tcp", host, dialTimeout)
+	netConn, err := net.DialTimeout("tcp", host, defaultDialTimeout)
 	if err != nil {
 		t.Fatalf("sidecar dial %s: %v", host, err)
 	}
 	defer netConn.Close()
-	if err := netConn.SetDeadline(time.Now().Add(ioTimeout)); err != nil {
+	if err := netConn.SetDeadline(time.Now().Add(defaultIOTimeout)); err != nil {
 		t.Fatal(err)
 	}
 	writer := bufio.NewWriter(netConn)
