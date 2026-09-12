@@ -27,3 +27,9 @@ phase: codereview
 findings: none
 fixed: none
 skipped: none
+
+## devdocsimpact (2026-09-12)
+phase: devdocsimpact
+findings: none
+fixed: none
+skipped: usage rewrite (packet already true)
