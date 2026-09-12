@@ -39,7 +39,7 @@ func startTestFakeRedis(t *testing.T) (*testFakeRedis, string) {
 	return fake, listener.Addr().String()
 }
 
-// serve answers AUTH/SELECT/GET/INCR/EXPIRE/EVAL on one accepted socket.
+// serve answers AUTH/SELECT/GET/INCR/EXPIRE/EVALSHA/EVAL on one accepted socket.
 func (f *testFakeRedis) serve(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
@@ -65,6 +65,9 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 		case "EXPIRE", "EXPIREAT":
 			f.lastExpire = append([]string(nil), args...)
 			_, _ = io.WriteString(conn, ":1\r\n")
+		case "EVALSHA":
+			// No script cache: NOSCRIPT so SimpleRedis Eval falls back to EVAL.
+			_, _ = io.WriteString(conn, "-NOSCRIPT No matching script. Please use EVAL.\r\n")
 		case "EVAL":
 			if args[1] == flushScript && len(args) >= 6 {
 				key := args[3]
