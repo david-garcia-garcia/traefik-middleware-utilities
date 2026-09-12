@@ -9,3 +9,9 @@ phase: explore
 findings: dest compile exit 0; five TestYaegi_* PASS; helper already on dest
 fixed: none
 skipped: shared helper extract; apm_modules gitignore; copying caller untracked files
+
+## propose (2026-09-12)
+phase: propose
+findings: fold std_go_simpleredis_resp-commands; dest already has helper
+fixed: OpenSpec change simpleredis-test-binary-compile
+skipped: shared helper extract; copying caller files
