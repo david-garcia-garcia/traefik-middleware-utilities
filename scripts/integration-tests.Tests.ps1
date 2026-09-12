@@ -22,6 +22,14 @@ BeforeAll {
     # SHA-1 of e2e/simpleredisprobe kongIncrbyExpireatScript (crypto/sha1 lowercase hex).
     $script:KongEvalDigest = "ff5f5f110f45a4519e6747630d51c5a5687e9608"
 
+    function Get-SimpleRedisHeader {
+        param(
+            $Response,
+            [string]$Name
+        )
+        return [string]@($Response.Headers[$Name])[0]
+    }
+
     function Invoke-RedisCli {
         param(
             [string]$BackendHost,
@@ -49,8 +57,9 @@ BeforeAll {
 
     function Assert-SimpleRedisVerbHeaders {
         param($Response)
-        $Response.Headers["X-SimpleRedis-Value"] | Should -Be "ok"
-        $Response.Headers["X-SimpleRedis-MGet"] | Should -Be "ok"
+        $value = Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-Value"
+        $value | Should -Match '^srp:\d+$'
+        (Get-SimpleRedisHeader -Response $Response -Name "X-SimpleRedis-MGet") | Should -Be $value
         $Response.Headers["X-SimpleRedis-Del"] | Should -Be "ok"
         $Response.Headers["X-SimpleRedis-Incr"] | Should -Be "1"
         $Response.Headers["X-SimpleRedis-IncrBy"] | Should -Be "5"
@@ -82,6 +91,19 @@ BeforeAll {
         $again = Invoke-WebRequest -Uri "$script:BaseUrl$Route" -UseBasicParsing -TimeoutSec 10
         $again.StatusCode | Should -Be 200
         $again.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
+    }
+
+    function Assert-TwoDistinctOwnValues {
+        param([string]$Url)
+        $first = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15 -SkipHttpErrorCheck
+        $second = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15 -SkipHttpErrorCheck
+        $first.StatusCode | Should -Be 200 -Because $first.Content
+        $second.StatusCode | Should -Be 200 -Because $second.Content
+        Assert-SimpleRedisVerbHeaders -Response $first
+        Assert-SimpleRedisVerbHeaders -Response $second
+        $a = Get-SimpleRedisHeader -Response $first -Name "X-SimpleRedis-Value"
+        $b = Get-SimpleRedisHeader -Response $second -Name "X-SimpleRedis-Value"
+        $a | Should -Not -Be $b
     }
 
     function script:Wait-BackendPing {
@@ -306,6 +328,14 @@ Describe "simpleredis Yaegi e2e" {
         $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly-database-99" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
         $response.StatusCode | Should -Be 502
         $response.Content | Should -Match "ERR DB index is out of range"
+    }
+
+    It "two GET /redis return distinct own-values" {
+        Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/redis"
+    }
+
+    It "two GET /dragonfly return distinct own-values" {
+        Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/dragonfly"
     }
 
     It "GET /redis recovers after CLIENT KILL of the Traefik client" {

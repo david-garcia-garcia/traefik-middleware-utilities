@@ -16,7 +16,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 - Do not dial in Traefik `New`. Call `simpleredis.New` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, `Eval`, or `MSetEX`).
 - Call `MSetEX(names, values, seconds)` or `MSetEXAt(names, values, unixSeconds)` for many keys with one TTL. Do not MSET then EXPIRE. Match integer `0` as `redis:issue?`.
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
-- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Handshake AUTH/SELECT failure is the in-process fake plus skip-if-unset live engines: `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY` (pool wait, SELECT 99, and CLIENT KILL recover) and `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (WRONGPASS). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly, including handshake failure and recover routes).
+- Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Handshake AUTH/SELECT failure is the in-process fake plus skip-if-unset live engines: `SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY` (pool wait, SELECT 99, and CLIENT KILL recover) and `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (WRONGPASS). Allocation guards are `TestAlloc*` functions that call `testing.Benchmark` with `ReportAllocs` and fail on over-budget allocs/op or B/op; they do not need `-bench`. Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly, including handshake failure and recover routes).
 - Call `Eval(script, keys, args)` with the Lua body. Eval hashes the body each call (cheap SHA-1; no map, no lock) and sends EVALSHA; on NOSCRIPT it falls back once to EVAL so the engine stores the script. Do not SCRIPT LOAD at `New`.
 
 ## Pattern snippet
@@ -50,6 +50,8 @@ if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 
 - `simpleredis/commands_msetex.go` — MSetEX / MSetEXAt, capability cache
 - `simpleredis/resp.go` — RESP codec
 - `simpleredis/live_test.go` — skip-if-unset pool wait, SELECT 99, WRONGPASS, MSetEX TTL, and CLIENT KILL recover
+- `simpleredis/bench_test.go` — encode/decode benches and CI alloc guards
+- `simpleredis/interpretedcost_test.go` — Yaegi unsafe/encode cost measurements
 - `simpleredis/yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval/MSetEX
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin (`Host`, optional `Password`, `Database`, `DropHost`)
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`

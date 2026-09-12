@@ -770,3 +770,61 @@ func startRetryBorrowFailRedis(t *testing.T, truncatedReply string) (addr string
 	}()
 	return listener.Addr().String(), closed
 }
+
+// rawReply is one canned wire blob written after a command on one Accept.
+type rawReply struct {
+	payload    []byte
+	closeAfter bool
+}
+
+// startRawReplyRedis listens locally and, per Accept, reads one command then writes that Accept's payload.
+func startRawReplyRedis(t *testing.T, replies []rawReply) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	var mu sync.Mutex
+	accept := 0
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			index := accept
+			accept++
+			mu.Unlock()
+			go serveRawReply(conn, replies, index)
+		}
+	}()
+	return listener.Addr().String()
+}
+
+// serveRawReply reads one command on conn, writes replies[index], and closes when closeAfter is set.
+func serveRawReply(conn net.Conn, replies []rawReply, index int) {
+	defer conn.Close()
+	if index < 0 || index >= len(replies) {
+		return
+	}
+	reader := bufio.NewReader(conn)
+	if _, err := readCommand(reader); err != nil {
+		return
+	}
+	reply := replies[index]
+	_, _ = conn.Write(reply.payload)
+	if reply.closeAfter {
+		return
+	}
+}
+
+// pooledIdle is the idle-list length under the client mutex.
+func pooledIdle(sr *SimpleRedis) int {
+	sr.idleConnsMu.Lock()
+	idleCount := len(sr.idleConns)
+	sr.idleConnsMu.Unlock()
+	return idleCount
+}

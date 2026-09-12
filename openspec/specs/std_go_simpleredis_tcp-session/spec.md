@@ -222,6 +222,22 @@ When AUTH on a new dial returns an error, the session SHALL close that socket an
 - **WHEN** those passworded engines are unset
 - **THEN** the live wrong-password tests skip
 
+### Requirement: Dirty reply is not returned to the idle pool
+When a command’s reply is a short bulk read (the peer announces more payload bytes than it writes before closing), the session SHALL NOT return that socket to the idle pool. That discard is not a retry. When `MaxRetries` is off (`-1`), a short bulk read SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT return `redis:issue?`. After that failed command, a later command on the same client SHALL return the value for its own key; the discarded socket MUST NOT leak a prior payload. Truncated-payload coverage MUST be a unit test against a peer that can write raw bytes and close mid-stream; it MUST NOT depend on live Redis or Dragonfly emitting a lying length. After `readLine` uses `ReadSlice` for the RESP head, the short-read path is still `io.ReadFull` of the announced bulk payload; the unit fake MUST still announce `$100`, write 40 bytes, and close so that payload `ReadFull` fails. Other malformed type bytes, missing CR, unparseable lengths, and illegal array-element heads are specified on `std_go_simpleredis_resp-commands`.
+
+#### Scenario: Truncated bulk is unreachable and not pooled
+- **WHEN** `MaxRetries` is `-1`
+- **AND** a Get receives `$100\r\n`, then 40 bytes, then a close
+- **THEN** the command returns `redis:unreachable`
+- **AND** the error is not `redis:issue?`
+- **AND** the idle pool is empty after that call
+
+#### Scenario: Second Get after truncate returns its own value
+- **WHEN** that truncated Get has returned
+- **AND** a later Get is issued for a key whose next reply is a complete bulk of known bytes
+- **THEN** that Get returns those bytes
+- **AND** the idle pool was empty after the truncated call
+
 ### Requirement: Peer-closed idle socket is retried
 When a pooled idle TCP connection is closed by the Redis or Dragonfly peer while it is still younger than thirty seconds, the next command SHALL treat that failure as a dead connection (not a timeout) and SHALL retry on a new dial under the go-redis-shaped `MaxRetries` policy. An I/O end-of-file on that reused socket MUST map to an error whose `Error()` text is `redis:unreachable`. A timeout MUST NOT be retried. Closing the client-side file descriptor of a pooled socket is a distinct failure and MUST remain a separate proof; that path MUST NOT stand in for peer close. If the retry cannot obtain a connection, the command SHALL return `redis:unreachable`. The dead socket MUST NOT be returned to the idle pool.
 
