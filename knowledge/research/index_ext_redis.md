@@ -25,6 +25,11 @@ priority: normal
 local: ext_redis_pipelining/
 description: Redis RESP pipelining: one write of N commands, N ordered replies, mixed verbs including EVAL, and -ERR vs I/O.
 
+## RESP2 null array
+priority: normal
+local: ext_redis_resp_null-array/
+description: Official RESP2 encoding of a null array (*-1) versus null bulk and empty array.
+
 ## Idle client close
 priority: normal
 local: ext_redis_clients_idle-close/
