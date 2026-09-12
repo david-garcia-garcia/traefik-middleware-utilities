@@ -433,19 +433,19 @@ func TestOverFreeAccountingStaysBalanced(t *testing.T) {
 	// Healthy fake: successful Get/release cycles.
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	healthy := New(Config{Host: addr, MaxRetries: -1})
-	hammerGets(t, healthy, "hit", goroutines, getsPerGoroutine)
+	hammerGets(t, healthy, goroutines, getsPerGoroutine)
 	assertTurnsFullAndNoOverFrees(t, healthy)
 
 	// Dead address: dial failure frees the turn before returning.
 	dead := New(Config{Host: "127.0.0.1:1", DialTimeout: 20 * time.Millisecond, MaxRetries: -1})
-	hammerGets(t, dead, "hit", goroutines, getsPerGoroutine)
+	hammerGets(t, dead, goroutines, getsPerGoroutine)
 	assertTurnsFullAndNoOverFrees(t, dead)
 
 	// AUTH reject: handshake failure closes the socket and frees the turn.
 	authFake, authAddr := startFakeRedis(t, map[string]string{"hit": "t"})
 	authFake.setHandshakeReplies("-WRONGPASS invalid password\r\n", statusOKReply)
 	authReject := New(Config{Host: authAddr, Pass: "wrong-password", MaxRetries: -1})
-	hammerGets(t, authReject, "hit", goroutines, getsPerGoroutine)
+	hammerGets(t, authReject, goroutines, getsPerGoroutine)
 	assertTurnsFullAndNoOverFrees(t, authReject)
 
 	// Starved pool: waiters hit PoolTimeout without taking a turn.
@@ -454,12 +454,12 @@ func TestOverFreeAccountingStaysBalanced(t *testing.T) {
 	starvedFake.getDelay = 80 * time.Millisecond
 	starvedFake.mu.Unlock()
 	starved := New(Config{Host: starvedAddr, PoolSize: 1, PoolTimeout: 15 * time.Millisecond, MaxRetries: -1})
-	hammerGets(t, starved, "hit", goroutines, getsPerGoroutine)
+	hammerGets(t, starved, goroutines, getsPerGoroutine)
 	assertTurnsFullAndNoOverFrees(t, starved)
 }
 
-// hammerGets runs goroutines×getsPerGoroutine Get calls and waits for every goroutine to finish.
-func hammerGets(t *testing.T, sr *SimpleRedis, key string, goroutines, getsPerGoroutine int) {
+// hammerGets runs goroutines×getsPerGoroutine Get("hit") calls and waits for every goroutine to finish.
+func hammerGets(t *testing.T, sr *SimpleRedis, goroutines, getsPerGoroutine int) {
 	t.Helper()
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
@@ -467,7 +467,7 @@ func hammerGets(t *testing.T, sr *SimpleRedis, key string, goroutines, getsPerGo
 		go func() {
 			defer wg.Done()
 			for j := 0; j < getsPerGoroutine; j++ {
-				_, _ = sr.Get(key)
+				_, _ = sr.Get("hit")
 			}
 		}()
 	}
@@ -487,4 +487,3 @@ func assertTurnsFullAndNoOverFrees(t *testing.T, sr *SimpleRedis) {
 		t.Fatalf("OverFrees = %d, want 0", got)
 	}
 }
-
