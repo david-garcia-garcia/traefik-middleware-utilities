@@ -20,6 +20,11 @@ priority: normal
 local: ext_redis_evalsha/
 description: Redis EVALSHA SHA-1 digest, volatile script cache, and NOSCRIPT miss wire text.
 
+## Idle client close
+priority: normal
+local: ext_redis_clients_idle-close/
+description: How Redis closes a client TCP socket from the server (idle timeout vs CLIENT KILL).
+
 ## MSETEX
 priority: normal
 local: ext_redis_msetex/

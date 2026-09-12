@@ -88,8 +88,13 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return mw, nil
 }
 
-// ServeHTTP optionally holds one pool socket via ?hold= microseconds (Eval TIME-wait), then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval twice, MSetEX, and MSetEXAt, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
+// ServeHTTP runs Set+Get only when recover=1; otherwise optionally holds via ?hold=, then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval twice, MSetEX, and MSetEXAt, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	if req.URL.Query().Get("recover") == "1" {
+		m.serveRecover(rw, req)
+		return
+	}
+
 	// Hold occupies a live turn so Pester can contend for poolSize.
 	if hold := req.URL.Query().Get("hold"); hold != "" {
 		if _, err := m.client.Eval(timeWaitHoldScript, nil, []string{hold}); err != nil {
@@ -226,6 +231,22 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		m.writeDropHeaders(rw, prefix)
 	}
 
+	m.next.ServeHTTP(rw, req)
+}
+
+// serveRecover runs Set+Get only and sets X-SimpleRedis-Recover when those succeed. It does not Eval.
+func (m *middleware) serveRecover(rw http.ResponseWriter, req *http.Request) {
+	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
+	setKey := prefix + ":set"
+	if err := m.client.Set(setKey, []byte("ok"), 60); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if _, err := m.client.Get(setKey); err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-Recover", "ok")
 	m.next.ServeHTTP(rw, req)
 }
 
