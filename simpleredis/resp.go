@@ -149,20 +149,14 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 }
 
 // readLine reads one CRLF-terminated RESP line without the CRLF.
+// A line that fills the bufio buffer without a newline is redis:issue? and is not grown.
 func readLine(reader *bufio.Reader) ([]byte, error) {
 	line, err := reader.ReadSlice('\n')
 	if err != nil {
-		if err != bufio.ErrBufferFull {
-			return nil, err
+		if err == bufio.ErrBufferFull {
+			return nil, errIssue
 		}
-		// Partial aliases the bufio buffer; copy before the remainder read.
-		full := make([]byte, len(line))
-		copy(full, line)
-		remainder, remainderErr := reader.ReadBytes('\n')
-		if remainderErr != nil {
-			return nil, remainderErr
-		}
-		line = append(full, remainder...)
+		return nil, err
 	}
 	if len(line) < 2 || line[len(line)-2] != '\r' {
 		return nil, errIssue
