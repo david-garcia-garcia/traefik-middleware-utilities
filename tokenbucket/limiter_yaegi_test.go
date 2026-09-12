@@ -117,6 +117,7 @@ func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
 const allowprobeSrc = `package allowprobe
 
 import (
+	"context"
 	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket"
@@ -132,7 +133,7 @@ func BurstAfterIdle(host, key string) string {
 	now := time.Unix(1700000000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 3; i++ {
-		allowed, _, allowErr := limiter.Allow(key)
+		allowed, _, allowErr := limiter.Allow(context.Background(), key)
 		if allowErr != nil {
 			return "allow:" + allowErr.Error()
 		}
@@ -140,7 +141,7 @@ func BurstAfterIdle(host, key string) string {
 			return "early"
 		}
 	}
-	allowed, wait, err := limiter.Allow(key)
+	allowed, wait, err := limiter.Allow(context.Background(), key)
 	if err != nil {
 		return "delay:" + err.Error()
 	}
@@ -165,7 +166,7 @@ func TwoShare(host, key string) string {
 	a.SetNowForTest(func() time.Time { return now })
 	b.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 3; i++ {
-		allowed, _, allowErr := a.Allow(key)
+		allowed, _, allowErr := a.Allow(context.Background(), key)
 		if allowErr != nil {
 			return "a:" + allowErr.Error()
 		}
@@ -173,7 +174,7 @@ func TwoShare(host, key string) string {
 			return "a-early"
 		}
 	}
-	allowed, _, err := b.Allow(key)
+	allowed, _, err := b.Allow(context.Background(), key)
 	if err != nil {
 		return "b:" + err.Error()
 	}
@@ -197,11 +198,11 @@ func MemoryAgrees(host, key string) string {
 	mem.SetNowForTest(func() time.Time { return now })
 	red.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 4; i++ {
-		mAllowed, mWait, mErr := mem.Allow(key)
+		mAllowed, mWait, mErr := mem.Allow(context.Background(), key)
 		if mErr != nil {
 			return "m:" + mErr.Error()
 		}
-		rAllowed, rWait, rErr := red.Allow(key)
+		rAllowed, rWait, rErr := red.Allow(context.Background(), key)
 		if rErr != nil {
 			return "r:" + rErr.Error()
 		}
@@ -227,7 +228,7 @@ func RefundAfterBurst(host, key string) string {
 	now := time.Unix(1700000000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 3; i++ {
-		allowed, _, allowErr := limiter.Allow(key)
+		allowed, _, allowErr := limiter.Allow(context.Background(), key)
 		if allowErr != nil {
 			return "allow:" + allowErr.Error()
 		}
@@ -235,14 +236,14 @@ func RefundAfterBurst(host, key string) string {
 			return "early"
 		}
 	}
-	allowed, wait, err := limiter.Allow(key)
+	allowed, wait, err := limiter.Allow(context.Background(), key)
 	if err != nil {
 		return "deny:" + err.Error()
 	}
 	if allowed || wait <= time.Microsecond {
 		return "not-denied"
 	}
-	allowedAfterRefund, waitAfterRefund, err := limiter.Allow(key)
+	allowedAfterRefund, waitAfterRefund, err := limiter.Allow(context.Background(), key)
 	if err != nil {
 		return "refund:" + err.Error()
 	}

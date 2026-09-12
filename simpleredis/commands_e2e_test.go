@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -18,26 +19,26 @@ func runLiveCommandsBackend(t *testing.T, addr string) {
 
 	t.Run("getHitAndMiss", func(t *testing.T) {
 		key := t.Name()
-		if err := client.Set(key, []byte("t"), 60); err != nil {
+		if err := client.Set(context.Background(), key, []byte("t"), 60); err != nil {
 			t.Fatalf("Set: %v", err)
 		}
-		got, err := client.Get(key)
+		got, err := client.Get(context.Background(), key)
 		if err != nil {
 			t.Fatalf("Get hit: %v", err)
 		}
 		if string(got) != "t" {
 			t.Fatalf("Get hit = %q, want t", got)
 		}
-		if _, err = client.Get(key + "-missing"); err == nil || err.Error() != RedisMiss {
+		if _, err = client.Get(context.Background(), key+"-missing"); err == nil || err.Error() != RedisMiss {
 			t.Fatalf("Get missing = %v, want %s", err, RedisMiss)
 		}
 	})
 	t.Run("setExThenGet", func(t *testing.T) {
 		key := t.Name()
-		if err := client.Set(key, []byte("v"), 60); err != nil {
+		if err := client.Set(context.Background(), key, []byte("v"), 60); err != nil {
 			t.Fatalf("Set: %v", err)
 		}
-		got, err := client.Get(key)
+		got, err := client.Get(context.Background(), key)
 		if err != nil {
 			t.Fatalf("Get: %v", err)
 		}
@@ -48,13 +49,13 @@ func runLiveCommandsBackend(t *testing.T, addr string) {
 	})
 	t.Run("del", func(t *testing.T) {
 		key := t.Name()
-		if err := client.Set(key, []byte("gone"), 60); err != nil {
+		if err := client.Set(context.Background(), key, []byte("gone"), 60); err != nil {
 			t.Fatalf("Set: %v", err)
 		}
-		if err := client.Del(key); err != nil {
+		if err := client.Del(context.Background(), key); err != nil {
 			t.Fatalf("Del: %v", err)
 		}
-		if _, err := client.Get(key); err == nil || err.Error() != RedisMiss {
+		if _, err := client.Get(context.Background(), key); err == nil || err.Error() != RedisMiss {
 			t.Fatalf("Get after Del = %v, want %s", err, RedisMiss)
 		}
 	})
@@ -62,13 +63,13 @@ func runLiveCommandsBackend(t *testing.T, addr string) {
 		hitA := t.Name() + "-a"
 		hitC := t.Name() + "-c"
 		missB := t.Name() + "-b"
-		if err := client.Set(hitA, []byte("t"), 60); err != nil {
+		if err := client.Set(context.Background(), hitA, []byte("t"), 60); err != nil {
 			t.Fatalf("Set a: %v", err)
 		}
-		if err := client.Set(hitC, []byte("f"), 60); err != nil {
+		if err := client.Set(context.Background(), hitC, []byte("f"), 60); err != nil {
 			t.Fatalf("Set c: %v", err)
 		}
-		got, err := client.MGet([]string{hitA, missB, hitC})
+		got, err := client.MGet(context.Background(), []string{hitA, missB, hitC})
 		if err != nil {
 			t.Fatalf("MGet: %v", err)
 		}
@@ -78,21 +79,21 @@ func runLiveCommandsBackend(t *testing.T, addr string) {
 		if string(got[0]) != "t" || got[1] != nil || string(got[2]) != "f" {
 			t.Fatalf("MGet = %q, want [t <nil> f]", got)
 		}
-		empty, err := client.MGet(nil)
+		empty, err := client.MGet(context.Background(), nil)
 		if empty != nil || err != nil {
 			t.Fatalf("MGet(nil) = %v, %v, want nil, nil", empty, err)
 		}
 	})
 	t.Run("incrThenIncrBy", func(t *testing.T) {
 		key := t.Name()
-		first, err := client.Incr(key)
+		first, err := client.Incr(context.Background(), key)
 		if err != nil {
 			t.Fatalf("Incr: %v", err)
 		}
 		if first != 1 {
 			t.Fatalf("Incr = %d, want 1", first)
 		}
-		got, err := client.IncrBy(key, 5)
+		got, err := client.IncrBy(context.Background(), key, 5)
 		if err != nil {
 			t.Fatalf("IncrBy: %v", err)
 		}
@@ -102,20 +103,20 @@ func runLiveCommandsBackend(t *testing.T, addr string) {
 	})
 	t.Run("expireThenTTL", func(t *testing.T) {
 		key := t.Name()
-		if err := client.Set(key, []byte("1"), 60); err != nil {
+		if err := client.Set(context.Background(), key, []byte("1"), 60); err != nil {
 			t.Fatalf("Set: %v", err)
 		}
-		if err := client.Expire(key, 90); err != nil {
+		if err := client.Expire(context.Background(), key, 90); err != nil {
 			t.Fatalf("Expire: %v", err)
 		}
 		assertLiveTTLPositive(t, client, key)
 	})
 	t.Run("expireAtThenTTL", func(t *testing.T) {
 		key := t.Name()
-		if err := client.Set(key, []byte("1"), 60); err != nil {
+		if err := client.Set(context.Background(), key, []byte("1"), 60); err != nil {
 			t.Fatalf("Set: %v", err)
 		}
-		if err := client.ExpireAt(key, time.Now().Unix()+90); err != nil {
+		if err := client.ExpireAt(context.Background(), key, time.Now().Unix()+90); err != nil {
 			t.Fatalf("ExpireAt: %v", err)
 		}
 		assertLiveTTLPositive(t, client, key)

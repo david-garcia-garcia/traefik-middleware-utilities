@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -18,10 +19,10 @@ func runLiveMSetEXBackend(t *testing.T, addr string) {
 
 	t.Run("msetexTTLLanded", func(t *testing.T) {
 		key := t.Name()
-		if err := client.MSetEX([]string{key}, [][]byte{[]byte("ok")}, 60); err != nil {
+		if err := client.MSetEX(context.Background(), []string{key}, [][]byte{[]byte("ok")}, 60); err != nil {
 			t.Fatalf("MSetEX: %v", err)
 		}
-		got, err := client.Get(key)
+		got, err := client.Get(context.Background(), key)
 		if err != nil {
 			t.Fatalf("Get: %v", err)
 		}
@@ -32,10 +33,10 @@ func runLiveMSetEXBackend(t *testing.T, addr string) {
 	})
 	t.Run("msetexAtTTLLanded", func(t *testing.T) {
 		key := t.Name()
-		if err := client.MSetEXAt([]string{key}, [][]byte{[]byte("ok")}, time.Now().Unix()+90); err != nil {
+		if err := client.MSetEXAt(context.Background(), []string{key}, [][]byte{[]byte("ok")}, time.Now().Unix()+90); err != nil {
 			t.Fatalf("MSetEXAt: %v", err)
 		}
-		got, err := client.Get(key)
+		got, err := client.Get(context.Background(), key)
 		if err != nil {
 			t.Fatalf("Get: %v", err)
 		}
@@ -46,10 +47,10 @@ func runLiveMSetEXBackend(t *testing.T, addr string) {
 	})
 	t.Run("pastExatMiss", func(t *testing.T) {
 		key := t.Name()
-		if err := client.MSetEXAt([]string{key}, [][]byte{[]byte("v")}, time.Now().Unix()-10); err != nil {
+		if err := client.MSetEXAt(context.Background(), []string{key}, [][]byte{[]byte("v")}, time.Now().Unix()-10); err != nil {
 			t.Fatalf("MSetEXAt: %v", err)
 		}
-		if _, err := client.Get(key); err == nil || err.Error() != RedisMiss {
+		if _, err := client.Get(context.Background(), key); err == nil || err.Error() != RedisMiss {
 			t.Fatalf("Get after past EXAT = %v, want %s", err, RedisMiss)
 		}
 	})
