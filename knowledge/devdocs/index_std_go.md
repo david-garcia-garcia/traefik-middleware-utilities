@@ -28,5 +28,5 @@ description: How a Traefik middleware Allows a Traefik RateLimit token-bucket co
 ## Test suites
 priority: normal
 local: std_go_test-suites.md
-description: Lint, unit Go, Go E2E (live Redis and Dragonfly), and Pester — what each suite is for and how test files are named.
+description: Lint, unit Go (plain `-short` and `Unit race`), Go E2E Redis, Go E2E Dragonfly, and Pester (reclaim, Redis, Dragonfly) — what each suite is for and how test files are named.
 

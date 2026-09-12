@@ -9,10 +9,18 @@
 param(
     [switch]$SkipDockerCleanup,
     [switch]$SkipWait,
-    [string]$TestPath = "./scripts/integration-tests.Tests.ps1"
+    [string]$TestPath,
+    [ValidateSet("reclaim", "simpleredis", "all")]
+    [string]$Suite = "all",
+    [ValidateSet("redis", "dragonfly")]
+    [string]$Engine
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Suite -eq "simpleredis" -and -not $Engine) {
+    throw "-Engine redis or dragonfly is required when -Suite simpleredis"
+}
 
 function Write-Step {
     param([string]$Message)
@@ -78,6 +86,32 @@ function Test-ServiceHealth {
     return $false
 }
 
+# Test-EngineStackHealth waits until one engine's Redis, drop, auth, and Traefik /<engine> health respond.
+function Test-EngineStackHealth {
+    param([string]$Engine)
+    $ready = @(
+        (Test-RedisHealth -BackendHost $Engine -ServiceName $Engine),
+        (Test-RedisHealth -BackendHost "$Engine-drop" -ServiceName "$Engine-drop"),
+        (Test-RedisHealth -BackendHost "$Engine-auth" -ServiceName "$Engine-auth" -Password "secret"),
+        (Test-ServiceHealth -Url "http://localhost:8000/$Engine" -ServiceName "whoami /$Engine")
+    )
+    return ($ready -notcontains $false)
+}
+
+# Invoke-IntegrationPester runs the given Tests.ps1 files and throws if any It failed.
+function Invoke-IntegrationPester {
+    param([string[]]$Path)
+    $pesterConfig = New-PesterConfiguration
+    $pesterConfig.Run.Path = $Path
+    $pesterConfig.Output.Verbosity = "Detailed"
+    $pesterConfig.Run.Exit = $false
+    $pesterConfig.Run.PassThru = $true
+    $result = Invoke-Pester -Configuration $pesterConfig
+    if ($result.FailedCount -gt 0) {
+        throw "$($result.FailedCount) Pester test(s) failed"
+    }
+}
+
 try {
     Import-Module Pester -Force -ErrorAction Stop
 
@@ -93,38 +127,57 @@ try {
     }
 
     if (-not $SkipWait) {
-        $ready = @(
-            (Test-ServiceHealth -Url "http://localhost:8080/api/rawdata" -ServiceName "Traefik API"),
-            (Test-RedisHealth -BackendHost "redis" -ServiceName "redis"),
-            (Test-RedisHealth -BackendHost "dragonfly" -ServiceName "dragonfly"),
-            (Test-RedisHealth -BackendHost "redis-drop" -ServiceName "redis-drop"),
-            (Test-RedisHealth -BackendHost "dragonfly-drop" -ServiceName "dragonfly-drop"),
-            (Test-RedisHealth -BackendHost "redis-auth" -ServiceName "redis-auth" -Password "secret"),
-            (Test-RedisHealth -BackendHost "dragonfly-auth" -ServiceName "dragonfly-auth" -Password "secret"),
-            (Test-ServiceHealth -Url "http://localhost:8000/a" -ServiceName "whoami /a"),
-            (Test-ServiceHealth -Url "http://localhost:8000/b" -ServiceName "whoami /b"),
-            (Test-ServiceHealth -Url "http://localhost:8000/redis" -ServiceName "whoami /redis"),
-            (Test-ServiceHealth -Url "http://localhost:8000/dragonfly" -ServiceName "whoami /dragonfly")
-        )
+        $ready = @((Test-ServiceHealth -Url "http://localhost:8080/api/rawdata" -ServiceName "Traefik API"))
+        if ($Suite -eq "reclaim") {
+            $ready += (Test-ServiceHealth -Url "http://localhost:8000/a" -ServiceName "whoami /a")
+            $ready += (Test-ServiceHealth -Url "http://localhost:8000/b" -ServiceName "whoami /b")
+        }
+        elseif ($Suite -eq "simpleredis") {
+            $ready += (Test-EngineStackHealth -Engine $Engine)
+        }
+        else {
+            $ready += (Test-EngineStackHealth -Engine "redis")
+            $ready += (Test-EngineStackHealth -Engine "dragonfly")
+            $ready += (Test-ServiceHealth -Url "http://localhost:8000/a" -ServiceName "whoami /a")
+            $ready += (Test-ServiceHealth -Url "http://localhost:8000/b" -ServiceName "whoami /b")
+        }
         if ($ready -contains $false) {
             docker logs reclaim-e2e-traefik 2>&1 | Select-Object -Last 80
             throw "services failed to start"
         }
     }
 
-    if (-not (Test-Path $TestPath)) {
-        throw "test file not found: $TestPath"
+    if ($TestPath) {
+        if (-not (Test-Path $TestPath)) {
+            throw "test path not found: $TestPath"
+        }
+        $pesterPath = $TestPath
+        $testPathItem = Get-Item $TestPath
+        if ($testPathItem.PSIsContainer) {
+            $pesterPath = @(Get-ChildItem $TestPath -Filter *.Tests.ps1 | ForEach-Object FullName)
+            if ($pesterPath.Count -eq 0) {
+                throw "no *.Tests.ps1 under $TestPath"
+            }
+        }
+        if ($Engine) {
+            $env:INTEGRATION_ENGINE = $Engine
+        }
+        Invoke-IntegrationPester -Path $pesterPath
     }
-
-    $pesterConfig = New-PesterConfiguration
-    $pesterConfig.Run.Path = $TestPath
-    $pesterConfig.Output.Verbosity = "Detailed"
-    $pesterConfig.Run.Exit = $false
-    $pesterConfig.Run.PassThru = $true
-    $result = Invoke-Pester -Configuration $pesterConfig
-
-    if ($result.FailedCount -gt 0) {
-        throw "$($result.FailedCount) Pester test(s) failed"
+    else {
+        if ($Suite -in @("reclaim", "all")) {
+            Invoke-IntegrationPester -Path "./scripts/integration-tests.reclaim.Tests.ps1"
+        }
+        if ($Suite -in @("simpleredis", "all")) {
+            $engines = @($Engine)
+            if (-not $Engine) {
+                $engines = @("redis", "dragonfly")
+            }
+            foreach ($Engine in $engines) {
+                $env:INTEGRATION_ENGINE = $Engine
+                Invoke-IntegrationPester -Path "./scripts/integration-tests.simpleredis.Tests.ps1"
+            }
+        }
     }
 }
 finally {

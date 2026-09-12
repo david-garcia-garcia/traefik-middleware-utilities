@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-risk-01-no-context-uncancellable-latency
+jobName: 2026-09-12-simpleredis-risk-01-no-context-uncancellable-latency
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 217232fb77019ea447c28f995d0932f9848d745b02af131c9e328a372b941a39
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: bound-simpleredis-command-latency
+pr:
+  id: 28
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/28

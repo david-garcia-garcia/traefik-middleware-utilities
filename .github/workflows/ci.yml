@@ -25,7 +25,7 @@ jobs:
         version: latest
 
   test:
-    name: Test
+    name: Unit
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Repository
@@ -37,8 +37,21 @@ jobs:
     - name: Run Tests
       run: go test -short -timeout 2m -count=1 -v ./...
 
-  e2e:
-    name: Go E2E
+  race:
+    name: Unit race
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+    - name: Setup Go
+      uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
+      with:
+        go-version: "1.21"
+    - name: Run Tests
+      run: go test -race -short -timeout 10m -count=1 -v ./...
+
+  e2e-redis:
+    name: Go E2E Redis
     runs-on: ubuntu-latest
     services:
       redis:
@@ -50,6 +63,43 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 12
+    env:
+      WINDOWCOUNTER_LIVE_REDIS: 127.0.0.1:6379
+      TOKENBUCKET_LIVE_REDIS: 127.0.0.1:6379
+      SIMPLEREDIS_LIVE_REDIS: 127.0.0.1:6379
+      SIMPLEREDIS_LIVE_REDIS_AUTH: 127.0.0.1:6381
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+    - name: Setup Go
+      uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
+      with:
+        go-version: "1.21"
+    - name: Start passworded Redis
+      run: |
+        docker run -d --name simpleredis-redis-auth -p 6381:6379 redis:7-alpine redis-server --requirepass secret
+        ok=0
+        for i in $(seq 1 30); do
+          if docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6381 -a secret ping | grep -q PONG; then
+            ok=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$ok" != 1 ]; then
+          echo "passworded Redis on 6381 did not become ready"
+          exit 1
+        fi
+    - name: Run Tests
+      run: go test -timeout 5m -count=1 -v ./...
+    - name: Stop passworded Redis
+      if: always()
+      run: docker rm -f simpleredis-redis-auth
+
+  e2e-dragonfly:
+    name: Go E2E Dragonfly
+    runs-on: ubuntu-latest
+    services:
       dragonfly:
         image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2
         ports:
@@ -63,13 +113,9 @@ jobs:
           --health-timeout 3s
           --health-retries 12
     env:
-      WINDOWCOUNTER_LIVE_REDIS: 127.0.0.1:6379
       WINDOWCOUNTER_LIVE_DRAGONFLY: 127.0.0.1:6380
-      TOKENBUCKET_LIVE_REDIS: 127.0.0.1:6379
       TOKENBUCKET_LIVE_DRAGONFLY: 127.0.0.1:6380
-      SIMPLEREDIS_LIVE_REDIS: 127.0.0.1:6379
       SIMPLEREDIS_LIVE_DRAGONFLY: 127.0.0.1:6380
-      SIMPLEREDIS_LIVE_REDIS_AUTH: 127.0.0.1:6381
       SIMPLEREDIS_LIVE_DRAGONFLY_AUTH: 127.0.0.1:6382
     steps:
     - name: Checkout Repository
@@ -78,29 +124,26 @@ jobs:
       uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
       with:
         go-version: "1.21"
-    - name: Start passworded Redis and Dragonfly
+    - name: Start passworded Dragonfly
       run: |
-        docker run -d --name simpleredis-redis-auth -p 6381:6379 redis:7-alpine redis-server --requirepass secret
         docker run -d --name simpleredis-dragonfly-auth --ulimit memlock=-1 -p 6382:6379 docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2 --requirepass=secret
-        for port in 6381 6382; do
-          ok=0
-          for i in $(seq 1 30); do
-            if docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p "$port" -a secret ping | grep -q PONG; then
-              ok=1
-              break
-            fi
-            sleep 1
-          done
-          if [ "$ok" != 1 ]; then
-            echo "passworded engine on $port did not become ready"
-            exit 1
+        ok=0
+        for i in $(seq 1 30); do
+          if docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6382 -a secret ping | grep -q PONG; then
+            ok=1
+            break
           fi
+          sleep 1
         done
+        if [ "$ok" != 1 ]; then
+          echo "passworded Dragonfly on 6382 did not become ready"
+          exit 1
+        fi
     - name: Run Tests
       run: go test -timeout 5m -count=1 -v ./...
-    - name: Stop passworded Redis and Dragonfly
+    - name: Stop passworded Dragonfly
       if: always()
-      run: docker rm -f simpleredis-redis-auth simpleredis-dragonfly-auth
+      run: docker rm -f simpleredis-dragonfly-auth
 
   integration:
     name: Integration Tests
@@ -127,7 +170,7 @@ jobs:
         pwsh -c "Install-Module -Name Pester -Force -Scope CurrentUser -SkipPublisherCheck"
     - name: Run integration tests
       shell: pwsh
-      run: ./Test-Integration.ps1 -SkipDockerCleanup
+      run: ./Test-Integration.ps1 -SkipDockerCleanup -Suite reclaim
     - name: Show logs on failure
       if: failure()
       run: |
@@ -137,28 +180,98 @@ jobs:
         docker compose logs whoami-a
         echo "=== Whoami-b logs ==="
         docker compose logs whoami-b
+    - name: Cleanup
+      if: always()
+      run: docker compose down -v
+
+  integration-redis:
+    name: Integration Tests Redis
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Install PowerShell and Pester
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https software-properties-common
+
+        wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+
+        sudo dpkg --force-confdef --force-confold -i packages-microsoft-prod.deb
+
+        sudo apt-get update
+        sudo apt-get install -y powershell
+
+        pwsh -c "Install-Module -Name Pester -Force -Scope CurrentUser -SkipPublisherCheck"
+    - name: Run integration tests
+      shell: pwsh
+      run: ./Test-Integration.ps1 -SkipDockerCleanup -Suite simpleredis -Engine redis
+    - name: Show logs on failure
+      if: failure()
+      run: |
+        echo "=== Traefik logs ==="
+        docker compose logs traefik
         echo "=== Redis logs ==="
         docker compose logs redis
-        echo "=== Dragonfly logs ==="
-        docker compose logs dragonfly
         echo "=== Whoami-redis logs ==="
         docker compose logs whoami-redis
-        echo "=== Whoami-dragonfly logs ==="
-        docker compose logs whoami-dragonfly
         echo "=== Redis-drop logs ==="
         docker compose logs redis-drop
-        echo "=== Dragonfly-drop logs ==="
-        docker compose logs dragonfly-drop
         echo "=== Redis-auth logs ==="
         docker compose logs redis-auth
-        echo "=== Dragonfly-auth logs ==="
-        docker compose logs dragonfly-auth
         echo "=== Whoami-redis-wrong-password logs ==="
         docker compose logs whoami-redis-wrong-password
-        echo "=== Whoami-dragonfly-wrong-password logs ==="
-        docker compose logs whoami-dragonfly-wrong-password
         echo "=== Whoami-redis-database-99 logs ==="
         docker compose logs whoami-redis-database-99
+    - name: Cleanup
+      if: always()
+      run: docker compose down -v
+
+  integration-dragonfly:
+    name: Integration Tests Dragonfly
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Install PowerShell and Pester
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https software-properties-common
+
+        wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+
+        sudo dpkg --force-confdef --force-confold -i packages-microsoft-prod.deb
+
+        sudo apt-get update
+        sudo apt-get install -y powershell
+
+        pwsh -c "Install-Module -Name Pester -Force -Scope CurrentUser -SkipPublisherCheck"
+    - name: Run integration tests
+      shell: pwsh
+      run: ./Test-Integration.ps1 -SkipDockerCleanup -Suite simpleredis -Engine dragonfly
+    - name: Show logs on failure
+      if: failure()
+      run: |
+        echo "=== Traefik logs ==="
+        docker compose logs traefik
+        echo "=== Dragonfly logs ==="
+        docker compose logs dragonfly
+        echo "=== Whoami-dragonfly logs ==="
+        docker compose logs whoami-dragonfly
+        echo "=== Dragonfly-drop logs ==="
+        docker compose logs dragonfly-drop
+        echo "=== Dragonfly-auth logs ==="
+        docker compose logs dragonfly-auth
+        echo "=== Whoami-dragonfly-wrong-password logs ==="
+        docker compose logs whoami-dragonfly-wrong-password
         echo "=== Whoami-dragonfly-database-99 logs ==="
         docker compose logs whoami-dragonfly-database-99
     - name: Cleanup

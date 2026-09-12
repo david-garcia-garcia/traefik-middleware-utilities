@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// TestYaegiLive_RedisAndDragonfly runs interpreted New/Get/Set/Del/Incr/Eval/MSetEX against each live engine.
+// TestYaegiLive_RedisAndDragonfly runs interpreted New plus every public verb against each live engine.
 func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
 		client := waitLiveSimpleRedis(t, addr)
