@@ -17,7 +17,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket`
 ## How to use
 
 - `NewMemory(rate, burst, maxDelay, ttl)` or `NewRedis(client, rate, burst, maxDelay, ttl)` once.
-- Call `Allow(key)` per request. Match Redis errors by `Error()` text.
+- Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline. Match Redis errors by `Error()` text.
 - Prove with `go test -short ./tokenbucket/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
 
 ## Pattern snippet
@@ -27,7 +27,8 @@ limiter, err := tokenbucket.NewRedis(client, 100, 50, 5*time.Millisecond, 2*time
 if err != nil {
 	return err
 }
-allowed, wait, err := limiter.Allow("ip:" + ip)
+ctx := req.Context()
+allowed, wait, err := limiter.Allow(ctx, "ip:" + ip)
 if err != nil {
 	return err
 }

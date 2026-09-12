@@ -1,6 +1,9 @@
 package simpleredis
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 // TestLive_Eval proves Eval integer, EVALSHA, and NOSCRIPT after SCRIPT FLUSH on live Redis and Dragonfly.
 func TestLive_Eval(t *testing.T) {
@@ -15,7 +18,7 @@ func runLiveEvalBackend(t *testing.T, addr string) {
 
 	t.Run("evalInteger", func(t *testing.T) {
 		script := "return 7 -- " + t.Name()
-		values, err := client.Eval(script, nil, nil)
+		values, err := client.Eval(context.Background(), script, nil, nil)
 		if err != nil {
 			t.Fatalf("Eval: %v", err)
 		}
@@ -29,10 +32,10 @@ func runLiveEvalBackend(t *testing.T, addr string) {
 	})
 	t.Run("secondEvalHitsEvalSha", func(t *testing.T) {
 		script := "return 8 -- " + t.Name()
-		if _, err := client.Eval(script, nil, nil); err != nil {
+		if _, err := client.Eval(context.Background(), script, nil, nil); err != nil {
 			t.Fatalf("first Eval: %v", err)
 		}
-		values, err := client.Eval(script, nil, nil)
+		values, err := client.Eval(context.Background(), script, nil, nil)
 		if err != nil {
 			t.Fatalf("second Eval: %v", err)
 		}
@@ -46,13 +49,13 @@ func runLiveEvalBackend(t *testing.T, addr string) {
 	})
 	t.Run("evalAfterScriptFlush", func(t *testing.T) {
 		script := "return 9 -- " + t.Name()
-		if _, err := client.Eval(script, nil, nil); err != nil {
+		if _, err := client.Eval(context.Background(), script, nil, nil); err != nil {
 			t.Fatalf("seed Eval: %v", err)
 		}
-		if _, err := client.exec([]byte("SCRIPT"), []byte("FLUSH")); err != nil {
+		if _, err := client.exec(context.Background(), []byte("SCRIPT"), []byte("FLUSH")); err != nil {
 			t.Fatalf("SCRIPT FLUSH: %v", err)
 		}
-		values, err := client.Eval(script, nil, nil)
+		values, err := client.Eval(context.Background(), script, nil, nil)
 		if err != nil {
 			t.Fatalf("Eval after FLUSH: %v", err)
 		}
