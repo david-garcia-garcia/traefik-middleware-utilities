@@ -45,3 +45,9 @@ phase: pullrequest
 findings: none
 fixed: reused PR 22; title `✅ test(simpleredis): guard no-adopt unsafe zero-copy`; Test, Lint, Integration Tests success on 9e2a75a
 skipped: none
+
+## sync (2026-09-12)
+phase: sync
+findings: none
+fixed: merged origin/master; resolved resp-commands spec conflict (Eval three-bulk from master plus this PR's unsafe-guard requirements)
+skipped: none; CI succeeded on 7c1fb46 (run 34704214063)
