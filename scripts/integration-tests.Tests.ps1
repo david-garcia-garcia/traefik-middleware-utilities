@@ -142,15 +142,15 @@ BeforeAll {
             # Default liveCap is 8; fill poolSize then the waiter is redis:unreachable.
             $holds = 1..8 | ForEach-Object { $http.GetAsync($holdUrl) }
             $deadline = [DateTime]::UtcNow.AddMilliseconds(400)
-            $live = 0
+            $established = 0
             $tcpDump = ""
             do {
                 Start-Sleep -Milliseconds 40
                 $tcpDump = Read-BackendTcp -BackendHost $BackendHost -SidecarName $sidecar
-                $live = Count-Established6379 -TcpDump $tcpDump
-            } while ($live -lt 8 -and [DateTime]::UtcNow -lt $deadline)
-            $live | Should -BeGreaterOrEqual 8 -Because "tcp dump was: $tcpDump"
-            $live | Should -BeLessOrEqual 10 -Because "tcp dump was: $tcpDump"
+                $established = Count-Established6379 -TcpDump $tcpDump
+            } while ($established -lt 8 -and [DateTime]::UtcNow -lt $deadline)
+            $established | Should -BeGreaterOrEqual 8 -Because "tcp dump was: $tcpDump"
+            $established | Should -BeLessOrEqual 10 -Because "tcp dump was: $tcpDump"
             $waiter = $http.GetAsync($holdUrl).GetAwaiter().GetResult()
             [int]$waiter.StatusCode | Should -Be 502
             $waiterBody = $waiter.Content.ReadAsStringAsync().GetAwaiter().GetResult()

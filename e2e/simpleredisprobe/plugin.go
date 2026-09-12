@@ -24,6 +24,7 @@ if exists == 0 then
 end
 return value`
 
+// timeWaitHoldScript busy-waits ARGV microseconds via TIME so ?hold= occupies a poolSize turn. Zero KEYS; Lua 5.1-safe (no table.maxn).
 const timeWaitHoldScript = `local start = redis.call("TIME")
 local startSec = tonumber(start[1])
 local startUsec = tonumber(start[2])
