@@ -182,6 +182,46 @@ A Traefik local plugin SHALL import this module’s `simpleredis` package. Traef
 - **WHEN** the Redis Pester Describe runs
 - **THEN** it does not stop `whoami-a` or `whoami-b`
 
+### Requirement: Handshake AUTH or SELECT failure closes and is not pooled
+When AUTH on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool. AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. When SELECT on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool, and SHALL return that error text. `ERR DB index is out of range` MUST NOT map to `redis:noauth`. AUTH SHALL run before SELECT when both password and database are non-empty. A handshake failure SHALL surface one error to the caller and MUST NOT open a second TCP connection for that command. In-process handshake-failure tests SHALL use a fake whose AUTH and SELECT replies are configurable (default success so existing success tests stay). Live Redis and Dragonfly tests SHALL prove the cases each dest engine supports and SHALL skip when those engines are unset.
+
+#### Scenario: Fake AUTH rejected maps to redis:noauth and is not pooled
+- **WHEN** the client is created with `New` with a non-empty password and an empty database
+- **AND** the fake replies to AUTH with an AUTH-class prefix (`NOAUTH`, `WRONGPASS`, `NOPERM`, or `ERR Client sent AUTH`)
+- **AND** a command is issued
+- **THEN** the command returns `redis:noauth`
+- **AND** the idle pool is empty
+- **AND** the fake observes that the client closed the socket
+- **AND** the fake accepted one TCP connection
+
+#### Scenario: Fake SELECT rejected after AUTH is not pooled
+- **WHEN** the client is created with `New` with a password and database `99`
+- **AND** the fake replies `+OK` to AUTH and `-ERR DB index is out of range` to SELECT
+- **AND** a command is issued
+- **THEN** AUTH is sent before SELECT
+- **AND** the command returns `ERR DB index is out of range`
+- **AND** the idle pool is empty
+- **AND** the fake observes that the client closed the socket
+- **AND** the fake accepted one TCP connection
+
+#### Scenario: Live SELECT 99 on Redis and Dragonfly
+- **WHEN** dest Redis and Dragonfly are reachable without a password
+- **AND** the client is created with `New` with database `99`
+- **AND** a command is issued
+- **THEN** each engine returns `ERR DB index is out of range`
+- **AND** the idle pool is empty
+- **WHEN** those engines are unset
+- **THEN** the live SELECT tests skip
+
+#### Scenario: Live wrong password on Redis and Dragonfly with requirepass
+- **WHEN** dest Redis and Dragonfly are reachable with requirepass set
+- **AND** the client is created with `New` with a wrong password
+- **AND** a command is issued
+- **THEN** each engine returns `redis:noauth`
+- **AND** the idle pool is empty
+- **WHEN** those passworded engines are unset
+- **THEN** the live wrong-password tests skip
+
 ### Requirement: Dirty reply is not returned to the idle pool
 When a command’s reply is a short bulk read (the peer announces more payload bytes than it writes before closing), the session SHALL NOT return that socket to the idle pool. That discard is not a retry. When `MaxRetries` is off (`-1`), a short bulk read SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT return `redis:issue?`. After that failed command, a later command on the same client SHALL return the value for its own key; the discarded socket MUST NOT leak a prior payload. Truncated-payload coverage MUST be a unit test against a peer that can write raw bytes and close mid-stream; it MUST NOT depend on live Redis or Dragonfly emitting a lying length. After `readLine` uses `ReadSlice` for the RESP head, the short-read path is still `io.ReadFull` of the announced bulk payload; the unit fake MUST still announce `$100`, write 40 bytes, and close so that payload `ReadFull` fails. Other malformed type bytes, missing CR, unparseable lengths, and illegal array-element heads are specified on `std_go_simpleredis_resp-commands`.
 

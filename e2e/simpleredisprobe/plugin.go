@@ -50,10 +50,12 @@ func kongScriptDigest() string {
 // Config is the dynamic plugin settings Traefik decodes.
 type Config struct {
 	Host     string `json:"host,omitempty" yaml:"host,omitempty"`
+	Password string `json:"password,omitempty" yaml:"password,omitempty"`
+	Database string `json:"database,omitempty" yaml:"database,omitempty"`
 	DropHost string `json:"dropHost,omitempty" yaml:"dropHost,omitempty"`
 }
 
-// CreateConfig returns default plugin settings (compose Redis, no password).
+// CreateConfig returns default plugin settings (compose Redis, no password, empty database).
 func CreateConfig() *Config {
 	return &Config{Host: defaultHost}
 }
@@ -80,7 +82,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 		host = defaultHost
 	}
 
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client := simpleredis.New(simpleredis.Config{Host: host, Pass: cfg.Password, Database: cfg.Database})
 	mw := &middleware{next: next, client: client}
 	if cfg.DropHost != "" {
 		mw.dropClient = simpleredis.New(simpleredis.Config{Host: cfg.DropHost})

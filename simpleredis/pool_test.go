@@ -167,6 +167,60 @@ func TestAuthAndSelectOncePerDial(t *testing.T) {
 	}
 }
 
+func TestHandshakeAuthRejectedMapsToNoAuthAndIsNotPooled(t *testing.T) {
+	replies := []string{
+		"-NOAUTH Authentication required.\r\n",
+		"-WRONGPASS invalid username-password pair or user is disabled.\r\n",
+		"-NOPERM this user has no permissions\r\n",
+		"-ERR Client sent AUTH, but no password is set\r\n",
+	}
+	for _, reply := range replies {
+		reply := reply
+		t.Run(reply, func(t *testing.T) {
+			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+			fake.setHandshakeReplies(reply, statusOKReply)
+			redis := New(Config{Host: addr, Pass: "wrong-password"})
+			if _, err := redis.Get("hit"); err == nil || err.Error() != RedisNoAuth {
+				t.Fatalf("Get = %v, want %s", err, RedisNoAuth)
+			}
+			if len(redis.idleConns) != 0 {
+				t.Fatalf("idle = %d, want 0", len(redis.idleConns))
+			}
+			fake.waitHangups(t, 1)
+			if fake.connections() != 1 {
+				t.Fatalf("opened %d connections, want 1", fake.connections())
+			}
+			auths, selects, gets := fake.handshakeCounts()
+			if auths != 1 || selects != 0 || gets != 0 {
+				t.Fatalf("AUTH=%d SELECT=%d GET=%d, want 1, 0, 0", auths, selects, gets)
+			}
+		})
+	}
+}
+
+func TestHandshakeSelectRejectedAfterAuthIsNotPooled(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.setHandshakeReplies(statusOKReply, "-ERR DB index is out of range\r\n")
+	redis := New(Config{Host: addr, Pass: "secret", Database: "99"})
+	if _, err := redis.Get("hit"); err == nil || err.Error() != "ERR DB index is out of range" {
+		t.Fatalf("Get = %v, want ERR DB index is out of range", err)
+	}
+	if len(redis.idleConns) != 0 {
+		t.Fatalf("idle = %d, want 0", len(redis.idleConns))
+	}
+	fake.waitHangups(t, 1)
+	if fake.connections() != 1 {
+		t.Fatalf("opened %d connections, want 1", fake.connections())
+	}
+	if !fake.handshakeAuthBeforeSelect() {
+		t.Fatal("SELECT ran before AUTH")
+	}
+	auths, selects, gets := fake.handshakeCounts()
+	if auths != 1 || selects != 1 || gets != 0 {
+		t.Fatalf("AUTH=%d SELECT=%d GET=%d, want 1, 1, 0", auths, selects, gets)
+	}
+}
+
 func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
