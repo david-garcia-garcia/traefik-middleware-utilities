@@ -22,4 +22,31 @@ fixed: none
 skipped: none
 change: simpleredis-eval-caller-digest
 
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: none
+skipped: none
+localTests: passed
+
+## codereview (2026-09-12)
+phase: codereview
+findings: coverage 1 hard
+fixed: TestEvalUsesCallerDigest now asserts EVALSHA argv is a caller digest that is not ScriptSHA1Hex(script)
+skipped: none
+
+## devdocsimpact (2026-09-12)
+phase: devdocsimpact
+findings: none
+fixed: none
+skipped: none
+units: SimpleRedis Eval / ScriptSHA1Hex
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: none
+skipped: none
+archived: openspec/changes/archive/2026-09-12-simpleredis-eval-caller-digest/
+
 
