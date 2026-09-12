@@ -20,6 +20,11 @@ priority: normal
 local: ext_dragonfly_pipelining/
 description: Dragonfly Redis-compat pipelining, default queue/buffer limits, and huge-pipeline deadlock flags for CI.
 
+## Idle client close
+priority: normal
+local: ext_dragonfly_clients_idle-close/
+description: How Dragonfly closes a client TCP socket from the server (idle --timeout vs CLIENT KILL ADDR/ID).
+
 ## MSETEX
 priority: normal
 local: ext_dragonfly_msetex/

@@ -1,0 +1,7 @@
+host: local
+ref: none
+title: "test-01 — The realistic stale-connection case (server closed, io.EOF) is untested"
+url: none
+number: none
+source: simpleredisfixes/test-01-server-closed-eof-redial.md
+index: simpleredisfixes/README.md

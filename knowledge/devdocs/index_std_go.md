@@ -10,6 +10,11 @@ priority: normal
 local: std_go_simpleredis.md
 description: How a Traefik middleware builds SimpleRedis with New(Config) and speaks GET/MGET/SET/DEL/INCR/EXPIRE/EVAL/MSetEX/MSetEXAt and ExecPipeline over stdlib TCP RESP.
 
+## RESP decode
+priority: normal
+local: std_go_simpleredis_resp-decode.md
+description: How SimpleRedis reads RESP lines with ReadSlice, copies escaping +/: payloads, and parses lengths from bytes.
+
 ## Window counter
 priority: normal
 local: std_go_windowcounter.md

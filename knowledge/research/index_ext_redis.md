@@ -25,6 +25,11 @@ priority: normal
 local: ext_redis_pipelining/
 description: Redis RESP pipelining: one write of N commands, N ordered replies, mixed verbs including EVAL, and -ERR vs I/O.
 
+## Idle client close
+priority: normal
+local: ext_redis_clients_idle-close/
+description: How Redis closes a client TCP socket from the server (idle timeout vs CLIENT KILL).
+
 ## MSETEX
 priority: normal
 local: ext_redis_msetex/
