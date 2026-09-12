@@ -228,6 +228,9 @@ func clientKillFromSidecarForTest(t *testing.T, host, filter, value string) int 
 	if err := writeCommand(writer, [][]byte{[]byte("CLIENT"), []byte("KILL"), []byte(filter), []byte(value)}); err != nil {
 		t.Fatalf("CLIENT KILL %s %s: %v", filter, value, err)
 	}
+	if err := writer.Flush(); err != nil {
+		t.Fatalf("CLIENT KILL %s %s flush: %v", filter, value, err)
+	}
 	values, _, err := readReply(reader)
 	if err != nil {
 		t.Fatalf("CLIENT KILL %s %s: %v", filter, value, err)

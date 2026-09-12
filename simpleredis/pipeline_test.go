@@ -57,6 +57,37 @@ func dialCounting(t *testing.T, client *SimpleRedis, addr string) *countingConn 
 	return counting
 }
 
+func TestWriteCommandSendsOnlyAfterFlush(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{"k": "v"})
+	raw, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = raw.Close() })
+	counting := &countingConn{Conn: raw}
+	writer := bufio.NewWriter(counting)
+	reader := bufio.NewReader(raw)
+	if err := writeCommand(writer, [][]byte{[]byte("GET"), []byte("k")}); err != nil {
+		t.Fatalf("writeCommand: %v", err)
+	}
+	if counting.writeCount() != 0 {
+		t.Fatalf("Writes before Flush = %d, want 0", counting.writeCount())
+	}
+	if err := writer.Flush(); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	if counting.writeCount() != 1 {
+		t.Fatalf("Writes after Flush = %d, want 1", counting.writeCount())
+	}
+	values, _, err := readReply(reader)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	if len(values) != 1 || string(values[0]) != "v" {
+		t.Fatalf("GET = %q, want v", values)
+	}
+}
+
 func TestPipelineOneWriteOrderedReplies(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"k": "v"})
 	redis := New(Config{Host: addr})
