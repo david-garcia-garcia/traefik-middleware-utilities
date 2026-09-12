@@ -40,6 +40,8 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 			last = err
 			continue
 		}
+		// If do panics under Yaegi, the process does not crash and this in-use-turn is lost.
+		// Not deferred-release: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/29
 		values, reusable, err := sr.do(ctx, deadline, conn, args)
 		if ctx.Err() != nil {
 			sr.release(conn, false)

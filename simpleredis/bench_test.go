@@ -383,30 +383,46 @@ func TestAllocCeilingFailsWhenOverBudget(t *testing.T) {
 	}
 }
 
+// skipAllocCeilingIfRace skips dest alloc ceilings when the race detector inflates B/op.
+func skipAllocCeilingIfRace(t *testing.T) {
+	t.Helper()
+	if !raceDetectorOn {
+		return
+	}
+	t.Skip("alloc ceilings measure dest non-race builds; the detector inflates B/op")
+}
+
 func TestAllocEncodeGet(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "encode GET", testing.Benchmark(encodeGet), encodeGetAllocs, encodeGetBytes)
 }
 
 func TestAllocEncodeEval(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "encode EVAL", testing.Benchmark(encodeEval), encodeEvalAllocs, encodeEvalBytes)
 }
 
 func TestAllocDecodeBulk(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "decode bulk", testing.Benchmark(BenchmarkDecodeBulk), decodeBulkAllocs, decodeBulkBytes)
 }
 
 func TestAllocDecodeArray10(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "decode array10", testing.Benchmark(BenchmarkDecodeArray10), decodeArrayAllocs, decodeArrayBytes)
 }
 
 func TestAllocDecodeInteger(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "decode integer", testing.Benchmark(BenchmarkDecodeInteger), decodeIntegerAllocs, decodeIntegerBytes)
 }
 
 func TestAllocDecodeBulk100KB(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "decode 100KB bulk", testing.Benchmark(BenchmarkDecodeBulk100KB), decode100KBAllocs, decode100KBBytes)
 }
 
 func TestAllocEncodeSet100KB(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "encode 100KB SET", testing.Benchmark(encodeSet100KB), encodeSet100KBAllocs, encodeSet100KBBytes)
 }

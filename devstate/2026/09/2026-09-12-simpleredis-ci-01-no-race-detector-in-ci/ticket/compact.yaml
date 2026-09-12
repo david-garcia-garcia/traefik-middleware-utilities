@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: ci-01 — CI never runs the race detector on a hand-rolled concurrent pool
+url: none
+number: none

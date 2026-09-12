@@ -267,8 +267,13 @@ func (l *Limiter) bufferedCountLocked(redisKey string) (int64, error) {
 // getCount reads a Redis integer. A miss is zero.
 func (l *Limiter) getCount(redisKey string) (int64, error) {
 	raw, err := l.redis.Get(redisKey)
+	return countFromRedisGet(raw, err)
+}
+
+// countFromRedisGet turns a GET payload into a window count. A miss, including a wrapped miss, is zero.
+func countFromRedisGet(raw []byte, err error) (int64, error) {
 	if err != nil {
-		if err.Error() == simpleredis.RedisMiss {
+		if simpleredis.IsMiss(err) {
 			return 0, nil
 		}
 		return 0, err

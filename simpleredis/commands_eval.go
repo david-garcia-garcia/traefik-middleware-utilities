@@ -16,6 +16,7 @@ const (
 )
 
 // Eval runs a Lua script with KEYS then ARGV. Hashes the body each call and sends EVALSHA; on NOSCRIPT falls back once to EVAL.
+// The reply is a flat array of bulk strings or integers; Lua authors wrap each slot with tostring. Nested tables and {err=...} inside an array are redis:unsupported-reply.
 func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]byte, error) {
 	return sr.EvalContext(context.Background(), script, keys, args)
 }

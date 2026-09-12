@@ -13,6 +13,7 @@ import (
 )
 
 // do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty.
+// Any panic here loses the in-use-turn when this client runs in a Traefik middleware: Traefik recovers the request and release never runs.
 func (sr *SimpleRedis) do(ctx context.Context, deadline time.Time, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
@@ -41,8 +42,8 @@ func (sr *SimpleRedis) do(ctx context.Context, deadline time.Time, conn *pooledC
 		return nil, false, ctx.Err()
 	}
 	if err != nil && !clean {
-		if err == errIssue {
-			return nil, false, errIssue
+		if isDirtyProtocolError(err) {
+			return nil, false, err
 		}
 		return nil, false, ioError(err)
 	}
@@ -112,6 +113,10 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		if !ok || count < 0 {
 			return nil, false, errIssue
 		}
+		// Over-cap * must not make; a later short read retries as unreachable.
+		if count > maxArrayCount {
+			return nil, false, errIssue
+		}
 		values := make([][]byte, count)
 		for i := 0; i < count; i++ {
 			head, headErr := readLine(reader)
@@ -134,16 +139,23 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 			case ':', '+':
 				values[i] = append([]byte(nil), head[1:]...)
 			default:
-				return nil, false, errIssue
+				// Nested array, error-in-array, or other element type this decoder does not decode.
+				return nil, false, errUnsupportedReply
 			}
 		}
 		return values, true, nil
 	default:
-		return nil, false, errIssue
+		// Unknown type byte (HTTP-shaped, RESP3, garbage). Well-framed enough to refuse, not to parse.
+		return nil, false, errUnsupportedReply
 	}
 }
 
-// readBulk reads a $ payload (or a miss when length is negative).
+// isDirtyProtocolError is a framing or unsupported-type sentinel. It must not become redis:unreachable.
+func isDirtyProtocolError(err error) bool {
+	return err == errIssue || err == errUnsupportedReply
+}
+
+// readBulk reads a $ payload (or a miss when length is negative) and requires a CRLF trailer.
 func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if len(head) == 0 || head[0] != '$' {
 		return nil, errIssue
@@ -155,28 +167,30 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if length < 0 {
 		return nil, errMiss
 	}
+	// Over-cap headers must not allocate; truncated ReadFull would retry as unreachable.
+	if length > maxBulkLength {
+		return nil, errIssue
+	}
 	data := make([]byte, length+2)
 	if _, err := io.ReadFull(reader, data); err != nil {
 		return nil, err
+	}
+	// Trailer must be CRLF; otherwise the stream is off a reply boundary.
+	if data[length] != '\r' || data[length+1] != '\n' {
+		return nil, errIssue
 	}
 	return data[:length], nil
 }
 
 // readLine reads one CRLF-terminated RESP line without the CRLF.
+// A line that fills the bufio buffer without a newline is redis:issue? and is not grown.
 func readLine(reader *bufio.Reader) ([]byte, error) {
 	line, err := reader.ReadSlice('\n')
 	if err != nil {
-		if err != bufio.ErrBufferFull {
-			return nil, err
+		if err == bufio.ErrBufferFull {
+			return nil, errIssue
 		}
-		// Partial aliases the bufio buffer; copy before the remainder read.
-		full := make([]byte, len(line))
-		copy(full, line)
-		remainder, remainderErr := reader.ReadBytes('\n')
-		if remainderErr != nil {
-			return nil, remainderErr
-		}
-		line = append(full, remainder...)
+		return nil, err
 	}
 	if len(line) < 2 || line[len(line)-2] != '\r' {
 		return nil, errIssue
@@ -184,7 +198,11 @@ func readLine(reader *bufio.Reader) ([]byte, error) {
 	return line[:len(line)-2], nil
 }
 
-const maxParseLen = int(^uint(0) >> 1)
+const (
+	maxBulkLength = 64 << 20 // largest $ payload this decoder will allocate
+	maxArrayCount = 1 << 20  // largest * count this decoder will allocate
+	maxParseLen   = int(^uint(0) >> 1)
+)
 
 // parseLen parses a RESP length from the bytes after the type byte.
 // An optional leading minus is accepted so $-1 stays a miss. Empty or non-digit input is false.
