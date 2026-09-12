@@ -138,7 +138,8 @@ BeforeAll {
         $holdUrl = "$script:BaseUrl$Path`?hold=500000"
         $http = [System.Net.Http.HttpClient]::new()
         $http.Timeout = [TimeSpan]::FromSeconds(15)
-        try {
+		try {
+            # Default liveCap is 8; fill poolSize then the waiter is redis:unreachable.
             $holds = 1..8 | ForEach-Object { $http.GetAsync($holdUrl) }
             $deadline = [DateTime]::UtcNow.AddMilliseconds(400)
             $live = 0
@@ -150,10 +151,10 @@ BeforeAll {
             } while ($live -lt 8 -and [DateTime]::UtcNow -lt $deadline)
             $live | Should -BeGreaterOrEqual 8 -Because "tcp dump was: $tcpDump"
             $live | Should -BeLessOrEqual 10 -Because "tcp dump was: $tcpDump"
-            $ninth = $http.GetAsync($holdUrl).GetAwaiter().GetResult()
-            [int]$ninth.StatusCode | Should -Be 502
-            $ninthBody = $ninth.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-            $ninthBody | Should -Match "redis:unreachable"
+            $waiter = $http.GetAsync($holdUrl).GetAwaiter().GetResult()
+            [int]$waiter.StatusCode | Should -Be 502
+            $waiterBody = $waiter.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            $waiterBody | Should -Match "redis:unreachable"
             foreach ($hold in $holds) {
                 $completed = $hold.GetAwaiter().GetResult()
                 [int]$completed.StatusCode | Should -BeIn @(200, 502)
@@ -242,11 +243,11 @@ Describe "simpleredis Yaegi e2e" {
         Assert-EvalShaMissThenHit -Route "/dragonfly" -BackendHost "dragonfly"
     }
 
-    It "GET /redis concurrent holds stay within eight live clients" {
+    It "GET /redis concurrent holds stay within default poolSize" {
         Assert-SimpleRedisLiveCap -Path "/redis" -BackendHost "redis"
     }
 
-    It "GET /dragonfly concurrent holds stay within eight live clients" {
+    It "GET /dragonfly concurrent holds stay within default poolSize" {
         Assert-SimpleRedisLiveCap -Path "/dragonfly" -BackendHost "dragonfly"
     }
 }

@@ -89,7 +89,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 
 // ServeHTTP optionally holds one pool socket via ?hold= microseconds (Eval TIME-wait), then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval twice, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	// Hold occupies a live turn so Pester can contend for the pool cap.
+	// Hold occupies a live turn so Pester can contend for poolSize.
 	if hold := req.URL.Query().Get("hold"); hold != "" {
 		if _, err := m.client.Eval(timeWaitHoldScript, nil, []string{hold}); err != nil {
 			http.Error(rw, err.Error(), http.StatusBadGateway)

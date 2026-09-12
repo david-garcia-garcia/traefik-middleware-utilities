@@ -384,16 +384,20 @@ func (sr *SimpleRedis) borrow() (*pooledConn, bool, error) {
 	sr.ensureSlots()
 	sr.mu.Unlock()
 
-	// Wait for an in-use turn so live sockets stay at poolSize.
-	wait := sr.slotWait()
-	timer := time.NewTimer(wait)
+	// Uncontended borrow must not allocate a timer; the wait exists only for a waiter past poolSize.
 	select {
 	case <-sr.slots:
-		if !timer.Stop() {
-			<-timer.C
+	default:
+		// Waiter past poolSize: allocate a stoppable timer (not time.After).
+		timer := time.NewTimer(sr.slotWait())
+		select {
+		case <-sr.slots:
+			if !timer.Stop() {
+				<-timer.C
+			}
+		case <-timer.C:
+			return nil, false, errPoolWait
 		}
-	case <-timer.C:
-		return nil, false, errPoolWait
 	}
 
 	// Prefer a young idle socket over a new dial.
@@ -442,7 +446,7 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 	conn.lastUsed = time.Now()
 
 	sr.mu.Lock()
-	// Close only when shut or idle is already eight and live is at cap.
+	// Close only when shut or idle is already maxIdleConns and live is at liveCap().
 	// inUse still includes this socket until freeSlot runs.
 	idleFull := len(sr.idle) >= maxIdleConns
 	inUse := 0
