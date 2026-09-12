@@ -15,3 +15,11 @@ fixed: none
 skipped: none
 decisions: Eval(script, digest, keys, args); export ScriptSHA1Hex; no digest-vs-body check; reuse callers hash at package init
 
+## propose (2026-09-12)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: simpleredis-eval-caller-digest
+
+

@@ -6,8 +6,8 @@ JobName: 2026-09-12-simpleredis-eval-caller-digest
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-12T16:31:44Z |
 | explore | [x] | [x] | 2026-09-12T16:42:21Z |
-| propose | [x] | [ ] | |
-| implement | [ ] | [ ] | |
+| propose | [x] | [x] | 2026-09-12T16:46:30Z |
+| implement | [x] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
