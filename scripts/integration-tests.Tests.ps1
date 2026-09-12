@@ -243,14 +243,6 @@ Describe "simpleredis Yaegi e2e" {
         Assert-EvalShaMissThenHit -Route "/dragonfly" -BackendHost "dragonfly"
     }
 
-    It "GET /redis concurrent holds stay within default poolSize" {
-        Assert-SimpleRedisLiveCap -Path "/redis" -BackendHost "redis"
-    }
-
-    It "GET /dragonfly concurrent holds stay within default poolSize" {
-        Assert-SimpleRedisLiveCap -Path "/dragonfly" -BackendHost "dragonfly"
-    }
-
     It "GET /redis-wrong-password returns 502 redis:noauth" {
         $response = Invoke-WebRequest -Uri "$script:BaseUrl/redis-wrong-password" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
         $response.StatusCode | Should -Be 502
@@ -273,5 +265,13 @@ Describe "simpleredis Yaegi e2e" {
         $response = Invoke-WebRequest -Uri "$script:BaseUrl/dragonfly-database-99" -UseBasicParsing -TimeoutSec 10 -SkipHttpErrorCheck
         $response.StatusCode | Should -Be 502
         $response.Content | Should -Match "ERR DB index is out of range"
+    }
+
+    It "GET /redis concurrent holds stay within default poolSize" {
+        Assert-SimpleRedisLiveCap -Path "/redis" -BackendHost "redis"
+    }
+
+    It "GET /dragonfly concurrent holds stay within default poolSize" {
+        Assert-SimpleRedisLiveCap -Path "/dragonfly" -BackendHost "dragonfly"
     }
 }
