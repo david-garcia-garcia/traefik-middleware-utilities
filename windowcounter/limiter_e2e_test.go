@@ -127,7 +127,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		const limit int64 = 3
 		window := time.Minute
 		for i := int64(0); i < limit; i++ {
-			allowed, _, takeErr := limiter.Take(key, limit, window)
+			allowed, _, takeErr := limiter.Take(context.Background(), key, limit, window)
 			if takeErr != nil {
 				t.Fatal(takeErr)
 			}
@@ -135,7 +135,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 				t.Fatalf("take %d denied", i+1)
 			}
 		}
-		allowed, _, err := limiter.Take(key, limit, window)
+		allowed, _, err := limiter.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -158,14 +158,14 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		const limit int64 = 3
 		window := time.Minute
 		for i := 0; i < 2; i++ {
-			allowed, _, takeErr := a.Take(key, limit, window)
+			allowed, _, takeErr := a.Take(context.Background(), key, limit, window)
 			if takeErr != nil {
 				t.Fatal(takeErr)
 			}
 			if !allowed {
 				t.Fatal("a denied early")
 			}
-			allowed, _, takeErr = b.Take(key, limit, window)
+			allowed, _, takeErr = b.Take(context.Background(), key, limit, window)
 			if takeErr != nil {
 				t.Fatal(takeErr)
 			}
@@ -175,7 +175,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		a.Sleep()
 		b.Sleep()
-		allowed, _, err := a.Take(key, limit, window)
+		allowed, _, err := a.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -197,7 +197,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := int64(0); i < limit; i++ {
-			allowed, _, takeErr := limiter.Take(key, limit, window)
+			allowed, _, takeErr := limiter.Take(context.Background(), key, limit, window)
 			if takeErr != nil {
 				t.Fatal(takeErr)
 			}
@@ -207,7 +207,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		now = time.Unix(start, 0).Add(window)
 		limiter.SetNowForTest(func() time.Time { return now })
-		allowed, _, err := limiter.Take(key, limit, window)
+		allowed, _, err := limiter.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -224,7 +224,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		const limit int64 = 5
 		window := time.Minute
 		for i := 0; i < 3; i++ {
-			allowed, estimated, peekErr := limiter.Peek(key, limit, window)
+			allowed, estimated, peekErr := limiter.Peek(context.Background(), key, limit, window)
 			if peekErr != nil {
 				t.Fatal(peekErr)
 			}
@@ -232,7 +232,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 				t.Fatalf("peek %d denied, estimated %v", i+1, estimated)
 			}
 		}
-		allowed, estimated, err := limiter.Take(key, limit, window)
+		allowed, estimated, err := limiter.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -255,11 +255,11 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := int64(0); i < limit+1; i++ {
-			if _, _, takeErr := limiter.Take(key, limit, window); takeErr != nil {
+			if _, _, takeErr := limiter.Take(context.Background(), key, limit, window); takeErr != nil {
 				t.Fatal(takeErr)
 			}
 		}
-		allowed, estimated, err := limiter.Peek(key, limit, window)
+		allowed, estimated, err := limiter.Peek(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -268,7 +268,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		now = start.Add(window)
 		limiter.SetNowForTest(func() time.Time { return now })
-		allowed, estimated, err = limiter.Peek(key, limit, window)
+		allowed, estimated, err = limiter.Peek(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -277,7 +277,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		now = start.Add(window + 4*time.Second)
 		limiter.SetNowForTest(func() time.Time { return now })
-		allowed, estimated, err = limiter.Peek(key, limit, window)
+		allowed, estimated, err = limiter.Peek(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -300,7 +300,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		window := time.Minute
 		key := t.Name()
 		for i := 0; i < 5; i++ {
-			allowed, estimated, peekErr := limiter.Peek(key, limit, window)
+			allowed, estimated, peekErr := limiter.Peek(context.Background(), key, limit, window)
 			if peekErr != nil {
 				t.Fatal(peekErr)
 			}
@@ -311,7 +311,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 				t.Fatalf("peek %d estimated %v want 0", i+1, estimated)
 			}
 		}
-		allowed, estimated, err := limiter.Take(key, limit, window)
+		allowed, estimated, err := limiter.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -331,7 +331,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		now := time.Unix(1_700_000_000, 0)
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
-		if _, _, err := limiter.Take(key, 5, window); err != nil {
+		if _, _, err := limiter.Take(context.Background(), key, 5, window); err != nil {
 			t.Fatal(err)
 		}
 		windowStart := now.Unix() / 10 * 10

@@ -6,12 +6,12 @@ Dest `exec` loops `attempt <= maxRetries` with `time.Sleep` and no context (`sim
 
 **Goals:**
 - Proxy-shaped zero-Config defaults and a derived overall command deadline.
-- Every public verb takes `context.Context` first; cancel closes the socket and frees the turn.
+- Every public SimpleRedis verb takes `context.Context` first; cancel closes the socket and frees the turn.
+- Windowcounter `Take`/`Peek`/`Allow` and tokenbucket `Allow` take the same `ctx` and pass it into Redis.
 - Compiled black-hole, handshake-stall, and cancel tests.
 
 **Non-Goals:**
 - Circuit breaker (debt note).
-- Passing a request context through `windowcounter.Take` or `tokenbucket.Allow`.
 - A new `CommandTimeout` Config field.
 - Changing go-redis sentinel meaning of leftover `0` inside `retryLimits` except via `applyDefaults` at `New`.
 - Importing go-redis or miniredis.
@@ -26,7 +26,7 @@ Dest `exec` loops `attempt <= maxRetries` with `time.Sleep` and no context (`sim
 
 4. **Error tokens.** `ctx.Err()` for cancel / caller deadline. Derived-budget expiry is `redis:timeout`. `shouldRetry` retries neither. Alternative: collapse cancel to `redis:unreachable` — rejected; that hides which failure it was.
 
-5. **Proof is compiled tests.** Black-hole `203.0.113.1:6379` asserts elapsed ≤ budget + 50ms slack (this host measured 8.047s before the fix). Handshake: fake that accepts TCP and never replies, with `Pass` and `Database`. Cancel: cancel mid-command against that stall. Do not assert elapsed ≈ 8s. The probe passes `req.Context()`. windowcounter and tokenbucket pass `context.Background()`.
+5. **Proof is compiled tests.** Black-hole `203.0.113.1:6379` asserts elapsed ≤ budget + 50ms slack (this host measured 8.047s before the fix). Handshake: fake that accepts TCP and never replies, with `Pass` and `Database`. Cancel: cancel mid-command against that stall. Do not assert elapsed ≈ 8s. The probe passes `req.Context()`. Windowcounter and tokenbucket admit methods take `ctx`; the flush ticker uses `context.Background()`.
 
 ## Risks / Trade-offs
 
