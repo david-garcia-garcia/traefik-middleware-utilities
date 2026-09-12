@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-go-e2e-live-backends
+jobName: 2026-09-12-go-e2e-live-backends
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 6e57554635379273f47c3bae41e6ccdff95eba6c82d793dfcc9d53e90afb9fb5
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: "26"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
