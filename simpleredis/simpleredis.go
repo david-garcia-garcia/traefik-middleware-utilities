@@ -10,21 +10,23 @@ import (
 
 // Error strings for redis.
 const (
-	RedisUnreachable = "redis:unreachable"
-	RedisMiss        = "redis:miss"
-	RedisTimeout     = "redis:timeout"
-	RedisNoAuth      = "redis:noauth"
-	RedisIssue       = "redis:issue?"
+	RedisUnreachable      = "redis:unreachable"
+	RedisMiss             = "redis:miss"
+	RedisTimeout          = "redis:timeout"
+	RedisNoAuth           = "redis:noauth"
+	RedisIssue            = "redis:issue?"
+	RedisUnsupportedReply = "redis:unsupported-reply"
 )
 
 var (
 	errUnreachable = errors.New(RedisUnreachable)
 	// errPoolWait is a waiter past liveCap. Error() is redis:unreachable so callers still match that token. Distinct from errUnreachable so MaxRetries does not multiply poolTimeout.
-	errPoolWait = errors.New(RedisUnreachable)
-	errMiss     = errors.New(RedisMiss)
-	errTimeout  = errors.New(RedisTimeout)
-	errNoAuth   = errors.New(RedisNoAuth)
-	errIssue    = errors.New(RedisIssue)
+	errPoolWait         = errors.New(RedisUnreachable)
+	errMiss             = errors.New(RedisMiss)
+	errTimeout          = errors.New(RedisTimeout)
+	errNoAuth           = errors.New(RedisNoAuth)
+	errIssue            = errors.New(RedisIssue)
+	errUnsupportedReply = errors.New(RedisUnsupportedReply)
 )
 
 // SimpleRedis is a pooled TCP RESP client. Obtain one with New; commands dial on first use.

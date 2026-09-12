@@ -20,8 +20,8 @@ func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, erro
 	}
 	values, clean, err := readReply(conn.reader)
 	if err != nil && !clean {
-		if err == errIssue {
-			return nil, false, errIssue
+		if isDirtyProtocolError(err) {
+			return nil, false, err
 		}
 		return nil, false, ioError(err)
 	}
@@ -100,13 +100,20 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 			case ':', '+':
 				values[i] = append([]byte(nil), head[1:]...)
 			default:
-				return nil, false, errIssue
+				// Nested array, error-in-array, or other element type this decoder does not decode.
+				return nil, false, errUnsupportedReply
 			}
 		}
 		return values, true, nil
 	default:
-		return nil, false, errIssue
+		// Unknown type byte (HTTP-shaped, RESP3, garbage). Well-framed enough to refuse, not to parse.
+		return nil, false, errUnsupportedReply
 	}
+}
+
+// isDirtyProtocolError is a framing or unsupported-type sentinel. It must not become redis:unreachable.
+func isDirtyProtocolError(err error) bool {
+	return err == errIssue || err == errUnsupportedReply
 }
 
 // readBulk reads a $ payload (or a miss when length is negative).
