@@ -3,29 +3,53 @@ package simpleredis
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// Error strings for redis.
+// Error strings for redis. Keep for display and legacy text matching.
 const (
-	RedisUnreachable = "redis:unreachable"
-	RedisMiss        = "redis:miss"
-	RedisTimeout     = "redis:timeout"
-	RedisNoAuth      = "redis:noauth"
-	RedisIssue       = "redis:issue?"
+	RedisUnreachable      = "redis:unreachable"
+	RedisMiss             = "redis:miss"
+	RedisTimeout          = "redis:timeout"
+	RedisNoAuth           = "redis:noauth"
+	RedisIssue            = "redis:issue?"
+	RedisUnsupportedReply = "redis:unsupported-reply"
 )
 
+// Exported sentinels. Match with errors.Is or IsMiss / IsUnreachable / IsPoolWait, not string equality.
 var (
-	errUnreachable = errors.New(RedisUnreachable)
-	// errPoolWait is a waiter past liveCap. Error() is redis:unreachable so callers still match that token. Distinct from errUnreachable so MaxRetries does not multiply poolTimeout.
-	errPoolWait = errors.New(RedisUnreachable)
-	errMiss     = errors.New(RedisMiss)
-	errTimeout  = errors.New(RedisTimeout)
-	errNoAuth   = errors.New(RedisNoAuth)
-	errIssue    = errors.New(RedisIssue)
+	ErrUnreachable      = errors.New(RedisUnreachable)
+	ErrMiss             = errors.New(RedisMiss)
+	ErrTimeout          = errors.New(RedisTimeout)
+	ErrNoAuth           = errors.New(RedisNoAuth)
+	ErrIssue            = errors.New(RedisIssue)
+	ErrUnsupportedReply = errors.New(RedisUnsupportedReply)
 )
+
+// ErrPoolWait is pool saturation. It wraps ErrUnreachable so callers matching the broad condition keep working.
+var ErrPoolWait = fmt.Errorf("%w", ErrUnreachable)
+
+var (
+	errUnreachable      = ErrUnreachable
+	errPoolWait         = ErrPoolWait
+	errMiss             = ErrMiss
+	errTimeout          = ErrTimeout
+	errNoAuth           = ErrNoAuth
+	errIssue            = ErrIssue
+	errUnsupportedReply = ErrUnsupportedReply
+)
+
+// IsMiss reports whether err is a Redis miss, including wrapping.
+func IsMiss(err error) bool { return errors.Is(err, ErrMiss) }
+
+// IsUnreachable reports whether err is redis:unreachable, including pool wait and wrapping.
+func IsUnreachable(err error) bool { return errors.Is(err, ErrUnreachable) }
+
+// IsPoolWait reports whether err is pool saturation, including wrapping.
+func IsPoolWait(err error) bool { return errors.Is(err, ErrPoolWait) }
 
 // SimpleRedis is a pooled TCP RESP client. Obtain one with New; commands dial on first use.
 // Pool, timeout, and retry knobs live on Config and are frozen at New; they are not fields on this type.

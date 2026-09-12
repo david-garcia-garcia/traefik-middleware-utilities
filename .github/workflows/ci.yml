@@ -25,7 +25,33 @@ jobs:
         version: latest
 
   test:
-    name: Test
+    name: Unit
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+    - name: Setup Go
+      uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
+      with:
+        go-version: "1.21"
+    - name: Run Tests
+      run: go test -short -timeout 2m -count=1 -v ./...
+
+  race:
+    name: Unit race
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+    - name: Setup Go
+      uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
+      with:
+        go-version: "1.21"
+    - name: Run Tests
+      run: go test -race -short -timeout 10m -count=1 -v ./...
+
+  e2e:
+    name: Go E2E
     runs-on: ubuntu-latest
     services:
       redis:
@@ -56,6 +82,8 @@ jobs:
       TOKENBUCKET_LIVE_DRAGONFLY: 127.0.0.1:6380
       SIMPLEREDIS_LIVE_REDIS: 127.0.0.1:6379
       SIMPLEREDIS_LIVE_DRAGONFLY: 127.0.0.1:6380
+      SIMPLEREDIS_LIVE_REDIS_AUTH: 127.0.0.1:6381
+      SIMPLEREDIS_LIVE_DRAGONFLY_AUTH: 127.0.0.1:6382
     steps:
     - name: Checkout Repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -63,8 +91,29 @@ jobs:
       uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
       with:
         go-version: "1.21"
+    - name: Start passworded Redis and Dragonfly
+      run: |
+        docker run -d --name simpleredis-redis-auth -p 6381:6379 redis:7-alpine redis-server --requirepass secret
+        docker run -d --name simpleredis-dragonfly-auth --ulimit memlock=-1 -p 6382:6379 docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2 --requirepass=secret
+        for port in 6381 6382; do
+          ok=0
+          for i in $(seq 1 30); do
+            if docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p "$port" -a secret ping | grep -q PONG; then
+              ok=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ok" != 1 ]; then
+            echo "passworded engine on $port did not become ready"
+            exit 1
+          fi
+        done
     - name: Run Tests
-      run: go test -timeout 2m -count=1 -v ./...
+      run: go test -timeout 5m -count=1 -v ./...
+    - name: Stop passworded Redis and Dragonfly
+      if: always()
+      run: docker rm -f simpleredis-redis-auth simpleredis-dragonfly-auth
 
   integration:
     name: Integration Tests
@@ -113,6 +162,18 @@ jobs:
         docker compose logs redis-drop
         echo "=== Dragonfly-drop logs ==="
         docker compose logs dragonfly-drop
+        echo "=== Redis-auth logs ==="
+        docker compose logs redis-auth
+        echo "=== Dragonfly-auth logs ==="
+        docker compose logs dragonfly-auth
+        echo "=== Whoami-redis-wrong-password logs ==="
+        docker compose logs whoami-redis-wrong-password
+        echo "=== Whoami-dragonfly-wrong-password logs ==="
+        docker compose logs whoami-dragonfly-wrong-password
+        echo "=== Whoami-redis-database-99 logs ==="
+        docker compose logs whoami-redis-database-99
+        echo "=== Whoami-dragonfly-database-99 logs ==="
+        docker compose logs whoami-dragonfly-database-99
     - name: Cleanup
       if: always()
       run: docker compose down -v

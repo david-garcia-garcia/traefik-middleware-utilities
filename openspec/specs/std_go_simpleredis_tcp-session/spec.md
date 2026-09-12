@@ -109,7 +109,7 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **AND** the peer observes a second GET on a new connection
 
 ### Requirement: Full pool wait returns redis:unreachable
-When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried.
+When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried. The pool-wait sentinel SHALL wrap the unreachable sentinel so `errors.Is` matches unreachable, and the retry classifier MUST still treat pool wait as not retryable (`shouldRetry` false for pool wait, true for a plain unreachable sentinel). Identity compare, or a pool-wait check before unreachable, is required; rewriting the classifier to `errors.Is` against unreachable alone MUST NOT retry pool wait.
 
 #### Scenario: Pool wait times out
 - **WHEN** all live sockets at the default `poolSize` (8) are busy
@@ -118,8 +118,14 @@ When every live socket is checked out, a further command SHALL wait for an in-us
 - **THEN** that command returns `redis:unreachable`
 - **AND** the fake or server observes no additional TCP connection for that command
 
+#### Scenario: Pool wait is not retried after wrapping unreachable
+- **WHEN** the error is the pool-wait sentinel
+- **THEN** command retry does not retry that error
+- **WHEN** the error is the plain unreachable sentinel
+- **THEN** command retry does retry that error
+
 ### Requirement: Live cap is proven on Redis and Dragonfly
-The session SHALL keep at most `poolSize` live TCP connections (idle plus in use; const default 8) against a real Redis and a real Dragonfly. Fake-server tests MUST NOT be the only proof. Traefik local-plugin Pester on `/redis` and `/dragonfly` SHALL overlap requests long enough to contend for sockets, observe at most `poolSize` clients on that backend (default 8), and observe `redis:unreachable` when a waiter exceeds the pool wait. Compiled tests gated on live addresses SHALL prove pool-wait `redis:unreachable` on both engines; they MAY set `Config.PoolSize` so a shared CI Redis is not left in Lua BUSY. Any Lua used to hold a socket MUST be Lua 5.1-safe (no `table.maxn`) and MUST list touched keys in KEYS (zero keys when none are touched). Compose project `reclaim-e2e`, routes `/a` `/b`, and existing verb headers MUST keep their semantics.
+The session SHALL keep at most `poolSize` live TCP connections (idle plus in use; const default 8) against a real Redis and a real Dragonfly. Fake-server tests MUST NOT be the only proof. Traefik local-plugin Pester on `/redis` and `/dragonfly` SHALL overlap requests long enough to contend for sockets, observe at most `poolSize` clients on that backend (default 8), and observe `redis:unreachable` when a waiter exceeds the pool wait. Compiled tests gated on live addresses SHALL prove pool-wait `redis:unreachable` on both engines; they MAY set `Config.PoolSize` so a shared CI Redis is not left in Lua BUSY. Those compiled tests MUST skip under `-short` or when both `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY` are unset, MUST fail when exactly one address is set, and MUST run on the CI `e2e` job. Any Lua used to hold a socket MUST be Lua 5.1-safe (no `table.maxn`) and MUST list touched keys in KEYS (zero keys when none are touched). Compose project `reclaim-e2e`, routes `/a` `/b`, and existing verb headers MUST keep their semantics.
 
 #### Scenario: Concurrent holds stay within poolSize on Redis
 - **WHEN** overlapping requests through the Traefik plugin hold sockets against compose Redis
@@ -136,7 +142,6 @@ The session SHALL keep at most `poolSize` live TCP connections (idle plus in use
 - **THEN** that request fails with `redis:unreachable`
 - **WHEN** the same overlap is run against Dragonfly
 - **THEN** that request fails with `redis:unreachable`
-
 ### Requirement: Close drains the pool and blocks redial
 `Close` SHALL close idle pooled connections and mark the client closed. After `Close`, `Get`, `MGet`, `Set`, and `Del` SHALL return `redis:unreachable` and MUST NOT dial. `Close` SHALL be idempotent. In-flight commands MAY finish; their sockets SHALL be closed on release.
 
@@ -182,6 +187,46 @@ A Traefik local plugin SHALL import this module’s `simpleredis` package. Traef
 - **WHEN** the Redis Pester Describe runs
 - **THEN** it does not stop `whoami-a` or `whoami-b`
 
+### Requirement: Handshake AUTH or SELECT failure closes and is not pooled
+When AUTH on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool. AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. When SELECT on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool, and SHALL return that error text. `ERR DB index is out of range` MUST NOT map to `redis:noauth`. AUTH SHALL run before SELECT when both password and database are non-empty. A handshake failure SHALL surface one error to the caller and MUST NOT open a second TCP connection for that command. In-process handshake-failure tests SHALL use a fake whose AUTH and SELECT replies are configurable (default success so existing success tests stay). Live Redis and Dragonfly tests SHALL prove the cases each dest engine supports and SHALL skip when those engines are unset.
+
+#### Scenario: Fake AUTH rejected maps to redis:noauth and is not pooled
+- **WHEN** the client is created with `New` with a non-empty password and an empty database
+- **AND** the fake replies to AUTH with an AUTH-class prefix (`NOAUTH`, `WRONGPASS`, `NOPERM`, or `ERR Client sent AUTH`)
+- **AND** a command is issued
+- **THEN** the command returns `redis:noauth`
+- **AND** the idle pool is empty
+- **AND** the fake observes that the client closed the socket
+- **AND** the fake accepted one TCP connection
+
+#### Scenario: Fake SELECT rejected after AUTH is not pooled
+- **WHEN** the client is created with `New` with a password and database `99`
+- **AND** the fake replies `+OK` to AUTH and `-ERR DB index is out of range` to SELECT
+- **AND** a command is issued
+- **THEN** AUTH is sent before SELECT
+- **AND** the command returns `ERR DB index is out of range`
+- **AND** the idle pool is empty
+- **AND** the fake observes that the client closed the socket
+- **AND** the fake accepted one TCP connection
+
+#### Scenario: Live SELECT 99 on Redis and Dragonfly
+- **WHEN** dest Redis and Dragonfly are reachable without a password
+- **AND** the client is created with `New` with database `99`
+- **AND** a command is issued
+- **THEN** each engine returns `ERR DB index is out of range`
+- **AND** the idle pool is empty
+- **WHEN** those engines are unset
+- **THEN** the live SELECT tests skip
+
+#### Scenario: Live wrong password on Redis and Dragonfly with requirepass
+- **WHEN** dest Redis and Dragonfly are reachable with requirepass set
+- **AND** the client is created with `New` with a wrong password
+- **AND** a command is issued
+- **THEN** each engine returns `redis:noauth`
+- **AND** the idle pool is empty
+- **WHEN** those passworded engines are unset
+- **THEN** the live wrong-password tests skip
+
 ### Requirement: Dirty reply is not returned to the idle pool
 When a command’s reply is a short bulk read (the peer announces more payload bytes than it writes before closing), the session SHALL NOT return that socket to the idle pool. That discard is not a retry. When `MaxRetries` is off (`-1`), a short bulk read SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT return `redis:issue?`. After that failed command, a later command on the same client SHALL return the value for its own key; the discarded socket MUST NOT leak a prior payload. Truncated-payload coverage MUST be a unit test against a peer that can write raw bytes and close mid-stream; it MUST NOT depend on live Redis or Dragonfly emitting a lying length. After `readLine` uses `ReadSlice` for the RESP head, the short-read path is still `io.ReadFull` of the announced bulk payload; the unit fake MUST still announce `$100`, write 40 bytes, and close so that payload `ReadFull` fails. Other malformed type bytes, missing CR, unparseable lengths, and illegal array-element heads are specified on `std_go_simpleredis_resp-commands`.
 
@@ -201,7 +246,7 @@ When a command’s reply is a short bulk read (the peer announces more payload b
 ### Requirement: Peer-closed idle socket is retried
 When a pooled idle TCP connection is closed by the Redis or Dragonfly peer while it is still younger than thirty seconds, the next command SHALL treat that failure as a dead connection (not a timeout) and SHALL retry on a new dial under the go-redis-shaped `MaxRetries` policy. An I/O end-of-file on that reused socket MUST map to an error whose `Error()` text is `redis:unreachable`. A timeout MUST NOT be retried. Closing the client-side file descriptor of a pooled socket is a distinct failure and MUST remain a separate proof; that path MUST NOT stand in for peer close. If the retry cannot obtain a connection, the command SHALL return `redis:unreachable`. The dead socket MUST NOT be returned to the idle pool.
 
-Compiled tests MUST close the **accepted** socket from the server after the first reply and MUST NOT close the client. Live tests MUST close the pooled connection with `CLIENT KILL` by `ADDR` or `ID` (not `TYPE` or `SKIPME`) against both Redis and Dragonfly, then the next command SHALL succeed on a new dial. The nested Traefik plugin SHALL keep `simpleredis.New` in Traefik `New`. A recover request (`recover=1`) SHALL run Set and Get only, SHALL set `X-SimpleRedis-Recover: ok` when those succeed after recovery, and MUST NOT Eval. Default `/redis` and `/dragonfly` verb headers MUST stay. Existing Eval on the default path SHALL remain Lua 5.1-safe and SHALL list its keys in `KEYS`. Compose idle `timeout` SHALL stay 0. The SimpleRedis Pester Describe MUST NOT stop `whoami-a` or `whoami-b`.
+Compiled tests MUST close the **accepted** socket from the server after the first reply and MUST NOT close the client. Live tests MUST close the pooled connection with `CLIENT KILL` by `ADDR` or `ID` (not `TYPE` or `SKIPME`) against both Redis and Dragonfly, then the next command SHALL succeed on a new dial. Those live tests MUST skip under `-short` or when both SimpleRedis live addresses are unset, MUST fail when exactly one address is set, and MUST run on the CI `e2e` job. The nested Traefik plugin SHALL keep `simpleredis.New` in Traefik `New`. A recover request (`recover=1`) SHALL run Set and Get only, SHALL set `X-SimpleRedis-Recover: ok` when those succeed after recovery, and MUST NOT Eval. Default `/redis` and `/dragonfly` verb headers MUST stay. Existing Eval on the default path SHALL remain Lua 5.1-safe and SHALL list its keys in `KEYS`. Compose idle `timeout` SHALL stay 0. The SimpleRedis Pester Describe MUST NOT stop `whoami-a` or `whoami-b`.
 
 #### Scenario: Peer-closed idle is retried
 - **WHEN** a compiled fake Redis accepts one connection, answers the first Get, and closes that accepted socket without reading further
@@ -254,7 +299,6 @@ Compiled tests MUST close the **accepted** socket from the server after the firs
 - **WHEN** a request is made on `/redis` or `/dragonfly` without `recover=1`
 - **THEN** the response still includes the existing verb headers
 - **AND** that request's Eval lists its key in `KEYS` and is Lua 5.1-safe
-
 ### Requirement: Lost-reply Incr and Eval are proven on live Redis and Dragonfly
 A request through the nested SimpleRedis Traefik plugin SHALL, in addition to the happy-path verbs, send Incr and Eval through a compose RESP drop-relay in front of that request’s engine (`redis:6379` or `dragonfly:6379`). The drop-relay SHALL drop INCR, INCRBY, or EVAL only after that TCP session has already forwarded at least one command (the probe warms with GET). A retry on a new session whose first command is INCR or EVAL SHALL pass the reply through. Other verbs SHALL pass through. The plugin SHALL set `X-SimpleRedis-DropIncr` to the integer after two applies (`2`), `X-SimpleRedis-DropIncrStored` to the stored value `2` read from the engine (not the drop-relay), `X-SimpleRedis-DropEval` to the integer after two applies of the Kong script (`6` when ARGV INCRBY is `3`), and `X-SimpleRedis-DropEvalStored` to that stored script result. Eval SHALL use a Lua 5.1-safe script that lists its key in KEYS. Happy-path Host stays `redis:6379` / `dragonfly:6379`. The Redis and Dragonfly Pester Describes MUST NOT stop `whoami-a` or `whoami-b`.
 

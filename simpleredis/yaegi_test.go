@@ -65,6 +65,18 @@ func TestYaegi_MSetEXNative(t *testing.T) {
 	}
 }
 
+// TestYaegi_MatchSentinels proves interpreted errors.Is and IsMiss match a wrapped ErrMiss.
+func TestYaegi_MatchSentinels(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, `clientprobe.MatchSentinels()`)
+	if got != "ok" {
+		t.Fatalf("yaegi match sentinels: %q, want ok", got)
+	}
+}
+
 // TestYaegi_MSetEXLua proves interpreted MSetEX falls back to EVAL and a second call skips MSETEX.
 func TestYaegi_MSetEXLua(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
@@ -156,6 +168,7 @@ func writeGopathClientprobe(t testing.TB, goPath string) {
 const clientprobeSrc = `package clientprobe
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
@@ -233,6 +246,50 @@ func MSetEXNative(host string) string {
 	return "ok"
 }
 
+// LiveVerbs runs New plus Get, Set, Del, Incr, Eval, and MSetEX against a live engine.
+func LiveVerbs(host, key string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host})
+	if err := client.Set(key, []byte("ok"), 60); err != nil {
+		return "set:" + err.Error()
+	}
+	got, err := client.Get(key)
+	if err != nil {
+		return "get:" + err.Error()
+	}
+	if string(got) != "ok" {
+		return "get:" + string(got)
+	}
+	if err := client.Del(key); err != nil {
+		return "del:" + err.Error()
+	}
+	n, err := client.Incr(key + "-n")
+	if err != nil {
+		return "incr:" + err.Error()
+	}
+	if n != 1 {
+		return fmt.Sprintf("incr:%d", n)
+	}
+	values, err := client.Eval("return 1", nil, nil)
+	if err != nil {
+		return "eval:" + err.Error()
+	}
+	if len(values) != 1 || string(values[0]) != "1" {
+		return fmt.Sprintf("eval:%q", values)
+	}
+	msetexKey := key + "-m"
+	if err := client.MSetEX([]string{msetexKey}, [][]byte{[]byte("ok")}, 60); err != nil {
+		return "msetex:" + err.Error()
+	}
+	got, err = client.Get(msetexKey)
+	if err != nil {
+		return "msetex-get:" + err.Error()
+	}
+	if string(got) != "ok" {
+		return "msetex-get:" + string(got)
+	}
+	return "ok"
+}
+
 // MSetEXLua calls MSetEX twice so a reject-MSETEX fake can prove the cache.
 func MSetEXLua(host string) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
@@ -248,6 +305,18 @@ func MSetEXLua(host string) string {
 	}
 	if string(got) != "ok" {
 		return "get:" + string(got)
+	}
+	return "ok"
+}
+
+// MatchSentinels proves interpreted errors.Is on an exported sentinel and IsMiss.
+func MatchSentinels() string {
+	wrapped := fmt.Errorf("context: %w", simpleredis.ErrMiss)
+	if !errors.Is(wrapped, simpleredis.ErrMiss) {
+		return "errors.Is"
+	}
+	if !simpleredis.IsMiss(wrapped) {
+		return "IsMiss"
 	}
 	return "ok"
 }

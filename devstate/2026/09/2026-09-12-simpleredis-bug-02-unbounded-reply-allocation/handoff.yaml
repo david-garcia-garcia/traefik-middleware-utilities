@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-bug-02-unbounded-reply-allocation
+jobName: 2026-09-12-simpleredis-bug-02-unbounded-reply-allocation
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 45136778ba06dc033161e5cd936ae1e33242a4353d3746f4e7d349396f272c87
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-reply-alloc-caps
+pr:
+  id: 34
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/34
