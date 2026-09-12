@@ -47,6 +47,8 @@ func TestAllow_CanceledContext(t *testing.T) {
 
 func TestReport_ConsecutiveFailuresTrip(t *testing.T) {
 	gate := newTestGate(t)
+	now := time.Unix(1_700_000_000, 0)
+	gate.SetNowForTest(func() time.Time { return now })
 	ctx := context.Background()
 	for i := 0; i < defaultTripFailures; i++ {
 		allowed, _, err := gate.Allow(ctx, "k")
