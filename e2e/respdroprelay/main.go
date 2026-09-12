@@ -152,9 +152,9 @@ func readRawRESP(reader *bufio.Reader) ([]byte, error) {
 		if _, err := io.ReadFull(reader, payload); err != nil {
 			return nil, err
 		}
-		out := make([]byte, 0, len(line)+len(payload))
-		out = append(out, line...)
-		return append(out, payload...), nil
+		raw := make([]byte, 0, len(line)+len(payload))
+		raw = append(raw, line...)
+		return append(raw, payload...), nil
 	case '*':
 		n, err := strconv.Atoi(strings.TrimSpace(string(line[1:])))
 		if err != nil {

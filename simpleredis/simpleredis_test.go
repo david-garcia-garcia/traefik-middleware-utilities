@@ -193,7 +193,7 @@ func (f *fakeRedis) armCloseBeforeReplyOnceForTest() {
 	f.mu.Unlock()
 }
 
-// armErrorReplyOnceForTest writes reply once (LOADING/CLUSTERDOWN/TRYAGAIN) without mutating the store.
+// armErrorReplyOnceForTest writes reply once (LOADING/READONLY/MASTERDOWN/CLUSTERDOWN/TRYAGAIN/max-clients) without mutating the store.
 func (f *fakeRedis) armErrorReplyOnceForTest(reply string) {
 	f.mu.Lock()
 	f.errorReplyOnce = reply
@@ -581,6 +581,31 @@ func TestCloseDrainsIdleAndDoesNotRepool(t *testing.T) {
 	}
 	if len(redis.idle) != 0 {
 		t.Fatalf("release after Close idle = %d, want 0", len(redis.idle))
+	}
+}
+
+func TestClosedClientUnreachableIsNotRetried(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	redis.Close()
+	redis.MinRetryBackoff = 50 * time.Millisecond
+	redis.MaxRetryBackoff = 50 * time.Millisecond
+
+	started := time.Now()
+	_, err := redis.Get("hit")
+	elapsed := time.Since(started)
+	if err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("Get after Close = %v, want %s", err, RedisUnreachable)
+	}
+	if elapsed >= 50*time.Millisecond {
+		t.Fatalf("Get after Close took %v, want no retry backoff", elapsed)
+	}
+	if fake.connections() != 1 {
+		t.Fatalf("opened %d connections, want 1", fake.connections())
 	}
 }
 
@@ -1015,6 +1040,33 @@ func TestTryAgainReplyIsRetried(t *testing.T) {
 	}
 	if fake.incrCount() != 1 {
 		t.Fatalf("INCR count = %d, want 1", fake.incrCount())
+	}
+}
+
+func TestRetryableRedisRepliesAreRetried(t *testing.T) {
+	cases := []struct {
+		name  string
+		reply string
+	}{
+		{"READONLY", "-READONLY You can only write against a master\r\n"},
+		{"MASTERDOWN", "-MASTERDOWN Link with MASTER is down\r\n"},
+		{"CLUSTERDOWN", "-CLUSTERDOWN The cluster is down\r\n"},
+		{"max-clients", "-ERR max number of clients reached\r\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+			var redis SimpleRedis
+			redis.Init(addr, "", "")
+			fake.armErrorReplyOnceForTest(tc.reply)
+			got, err := redis.Get("hit")
+			if err != nil {
+				t.Fatalf("Get after %s: %v", tc.name, err)
+			}
+			if string(got) != "t" {
+				t.Fatalf("Get after %s = %q, want t", tc.name, got)
+			}
+		})
 	}
 }
 

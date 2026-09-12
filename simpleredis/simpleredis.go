@@ -249,18 +249,18 @@ func retryBackoff(retry int, minBackoff, maxBackoff time.Duration) time.Duration
 	if minBackoff == 0 {
 		return 0
 	}
-	d := minBackoff << uint(retry)
-	if d < minBackoff {
+	backoff := minBackoff << uint(retry)
+	if backoff < minBackoff {
 		return maxBackoff
 	}
-	span := int64(d)
+	span := int64(backoff)
 	if span > 0 {
-		d = minBackoff + time.Duration(rand.Int63n(span))
+		backoff = minBackoff + time.Duration(rand.Int63n(span))
 	}
-	if d > maxBackoff || d < minBackoff {
-		d = maxBackoff
+	if backoff > maxBackoff || backoff < minBackoff {
+		backoff = maxBackoff
 	}
-	return d
+	return backoff
 }
 
 // shouldRetry is go-redis shouldRetry as this client can see it. Timeouts are never retried (documented deviation: ioTimeout is 1s). There is no pool wait, so there is no pool timeout to retry.
