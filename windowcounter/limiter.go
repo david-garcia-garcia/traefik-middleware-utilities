@@ -22,6 +22,9 @@ if exists == 0 then
 end
 return value`
 
+// flushScriptDigest is Redis sha1hex of flushScript, computed once at package init.
+var flushScriptDigest = simpleredis.ScriptSHA1Hex(flushScript)
+
 // Limiter admits hits on opaque keys against a sliding Redis window. Local memory is only the sync_rate buffer.
 type Limiter struct {
 	redis    *simpleredis.SimpleRedis
@@ -376,7 +379,7 @@ func (l *Limiter) flushPending(ctx context.Context) error {
 		if state.localDelta > 0 {
 			delta := state.localDelta
 			expireAt := state.expireAt
-			values, err := l.redis.Eval(ctx, flushScript, []string{redisKey}, []string{
+			values, err := l.redis.Eval(ctx, flushScript, flushScriptDigest, []string{redisKey}, []string{
 				strconv.FormatInt(delta, 10),
 				strconv.FormatInt(expireAt, 10),
 			})
