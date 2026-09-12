@@ -188,6 +188,29 @@ An RESP array (`*`) SHALL accept each element whose head is `$` (bulk, including
 - **AND** a later command is read on the same connection
 - **THEN** those stored slots still equal the original payloads
 
+### Requirement: Probe Config passes password and database to New
+The nested SimpleRedis Traefik plugin Config SHALL include `Password` and `Database` with empty default. Traefik `New` SHALL pass Host, Password, and Database to `simpleredis.New`. Success labels on `/redis` and `/dragonfly` MUST keep host-only settings so New receives an empty password and an empty database. `DropHost` remains for the lost-reply relay.
+
+#### Scenario: Success routes stay host-only
+- **WHEN** Traefik loads the plugin for `/redis` and `/dragonfly`
+- **THEN** those routes call `simpleredis.New` with no password and an empty database
+- **AND** a request on each route still succeeds
+
+### Requirement: Traefik e2e proves handshake AUTH and SELECT failures
+Compose SHALL add sibling Redis and Dragonfly services with requirepass. Compose MUST NOT put requirepass on the existing `redis` and `dragonfly` services that serve `/redis` and `/dragonfly`. Whoami routes SHALL call `simpleredis.New` with a wrong password against those siblings and with database `99` against the existing unpassworded `redis` and `dragonfly`. A request on a wrong-password route SHALL return HTTP 502 whose body is `redis:noauth`. A request on a database-99 route SHALL return HTTP 502 whose body contains `ERR DB index is out of range`. Those tests MUST NOT stop `whoami-a` or `whoami-b`. Eval on the success routes SHALL remain the existing Lua 5.1-safe script that lists its key in KEYS.
+
+#### Scenario: Pester wrong password on Redis and Dragonfly
+- **WHEN** a request is made on the wrong-password whoami route for Redis and for Dragonfly
+- **THEN** each response is HTTP 502
+- **AND** each body is `redis:noauth`
+- **AND** neither test stops `whoami-a` or `whoami-b`
+
+#### Scenario: Pester SELECT 99 on Redis and Dragonfly
+- **WHEN** a request is made on the database-99 whoami route for Redis and for Dragonfly
+- **THEN** each response is HTTP 502
+- **AND** each body contains `ERR DB index is out of range`
+- **AND** neither test stops `whoami-a` or `whoami-b`
+
 ### Requirement: Eval sends EVALSHA then EVAL on NOSCRIPT
 `Eval(script, keys, args)` SHALL keep the public signature `Eval(script string, keys []string, args []string) ([][]byte, error)`. Callers pass the script body; they MUST NOT pass a digest. `Eval` SHALL hash the script body on each call (SHA-1 lowercase hex; cheap; no map, no lock) and send Redis `EVALSHA`, that digest, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. When the error text from that command starts with `NOSCRIPT`, `Eval` SHALL send `EVAL` once with the same script body, `numkeys`, keys, and args. That EVAL is the only place the script body is sent to Redis/Dragonfly so the engine stores it. That `NOSCRIPT` MUST NOT be returned to the caller as the command result. The client MUST NOT send `SCRIPT LOAD` at `Init`. The client MUST NOT export `EvalSha` or `ScriptLoad`. The client MUST NOT keep a digest table or mutex for scripts. The return SHALL keep the same `[][]byte` shape: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or other server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). Scripts that touch keys MUST list those keys in `keys` and MUST NOT use `table.maxn`.
 

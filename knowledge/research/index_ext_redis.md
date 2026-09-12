@@ -20,6 +20,16 @@ priority: normal
 local: ext_redis_evalsha/
 description: Redis EVALSHA SHA-1 digest, volatile script cache, and NOSCRIPT miss wire text.
 
+## AUTH
+priority: normal
+local: ext_redis_auth/
+description: Redis AUTH requirepass/ACL replies (WRONGPASS, nopass AUTH text) on redis:7-alpine.
+
+## SELECT
+priority: normal
+local: ext_redis_select/
+description: Redis SELECT logical-DB indexes and the DB-index-out-of-range error.
+
 ## RESP bulk strings
 priority: normal
 local: ext_redis_resp_bulk-string/

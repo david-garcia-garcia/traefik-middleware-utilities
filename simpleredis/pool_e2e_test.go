@@ -12,6 +12,36 @@ func TestLive_PeerCloseEOFRedial(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", runLivePeerCloseRecovery)
 }
 
+// TestLive_SelectOutOfRange proves SELECT 99 on dest engines is not pooled.
+func TestLive_SelectOutOfRange(t *testing.T) {
+	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+		client := New(Config{Host: addr, Database: "99"})
+		t.Cleanup(client.Close)
+		_, err := client.Get("k")
+		if err == nil || err.Error() != "ERR DB index is out of range" {
+			t.Fatalf("Get = %v, want ERR DB index is out of range", err)
+		}
+		if len(client.idleConns) != 0 {
+			t.Fatalf("idle = %d, want 0", len(client.idleConns))
+		}
+	})
+}
+
+// TestLive_WrongPassword proves WRONGPASS on requirepass engines maps to redis:noauth.
+func TestLive_WrongPassword(t *testing.T) {
+	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS_AUTH", "SIMPLEREDIS_LIVE_DRAGONFLY_AUTH", func(t *testing.T, addr string) {
+		client := New(Config{Host: addr, Pass: "wrong-password"})
+		t.Cleanup(client.Close)
+		_, err := client.Get("k")
+		if err == nil || err.Error() != RedisNoAuth {
+			t.Fatalf("Get = %v, want %s", err, RedisNoAuth)
+		}
+		if len(client.idleConns) != 0 {
+			t.Fatalf("idle = %d, want 0", len(client.idleConns))
+		}
+	})
+}
+
 // runLivePoolBackend builds a live client then holds the only in-use turn
 // so a waiter is redis:unreachable without a Lua BUSY on the shared CI Redis.
 func runLivePoolBackend(t *testing.T, addr string) {
