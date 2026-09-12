@@ -65,7 +65,7 @@ Research indexes (`ext_redis_*`, `ext_dragonfly_container-image`, `ext_dragonfly
 - Window counter: dest live already has N-then-deny, buffered two-client, sliding boundary, Peek-then-Take. Add live: Peek does not increment, Peek denied then slides, buffered Peek, expire-on-first-hit (INCR+EXPIRE).
 - Token bucket: dest live already has burst, two-instance share, memory/Redis agree. Add live: refund when wait exceeds max delay.
 
-Do **not** port: malformed/truncated RESP, garbage lengths, LOADING/TRYAGAIN retry, fake listener peer-close, AUTH/SELECT (CI Redis has no password; extra `--requirepass` would be a second engine), MSetEX native-argv inspection, constructor validation, unreachable-host without a server. Those need a fake peer or a different Redis config. Reclaim stays unit-only (no Redis client).
+Do **not** port: malformed/truncated RESP, garbage lengths, LOADING/TRYAGAIN retry, fake listener peer-close, MSetEX native-argv inspection, constructor validation, unreachable-host without a server. Those need a fake peer. AUTH/SELECT live proof already lives on DestBranch (`SIMPLEREDIS_LIVE_*_AUTH` requirepass siblings + SELECT 99); keep that in `{domain}_e2e_test.go`. Reclaim stays unit-only (no Redis client).
 
 **Yaegi live is part of Go E2E.** `windowcounter/yaegi_test.go` and `tokenbucket/yaegi_test.go` already skip the same way as compiled live. Add `TestYaegiLive_RedisAndDragonfly` on SimpleRedis matching those siblings (compiled test owns start/skip; interpreted probe calls the verbs). Unit `-short` skips them; e2e runs them.
 
@@ -87,8 +87,8 @@ Do **not** port: malformed/truncated RESP, garbage lengths, LOADING/TRYAGAIN ret
 
 - Q: How far does “cover as much as possible” go?
   Rank: additive asked — Desired 4 maximize coverage of behaviour that exists only on fake TCP; Out of scope forbids new product APIs and reclaim live Redis
-  Decision: assumed — live every engine-success path listed in Decisions; keep fake-TCP for peer-abuse, AUTH/SELECT, and constructor checks. Both engines on every live case.
-  By: explore
+  Decision: resolved — live every engine-success path listed in Decisions. DestBranch AUTH/SELECT live (SELECT 99, WRONGPASS on `SIMPLEREDIS_LIVE_*_AUTH`) folds into `pool_e2e_test.go`. Keep fake-TCP for malformed RESP, LOADING retry, constructor checks. Both engines on every live case.
+  By: implement
 
 - Q: Is Yaegi live (`TestYaegiLive_*`) in the e2e suite or the unit job?
   Rank: additive asked — Desired 4 Go tests that need live backends; windowcounter and tokenbucket already skip the same LIVE env; SimpleRedis Yaegi is fake-only
@@ -109,3 +109,8 @@ Do **not** port: malformed/truncated RESP, garbage lengths, LOADING/TRYAGAIN ret
   Rank: bounded asked — Desired 4 every test MUST run against both engines; dest `live_test.go` `continue`s an empty addr (3 files + 2 Yaegi live)
   Decision: assumed — skip only when `-short` or both unset; exactly one addr set → fail that test.
   By: explore
+
+- Q: Live file names — one `live_test.go` vs domain-adjacent `_e2e_test.go`?
+  Rank: additive asked — Desired 4 new e2e suite; human: tests for a domain stay next to that domain file (`limiter`, `limiter_test`, `limiter_e2e_test`, `limiter_yaegi_test`)
+  Decision: resolved — Go `_test.go` suffix. `{domain}_test.go` unit, `{domain}_e2e_test.go` live, `{domain}_yaegi_test.go` interp, `{domain}_yaegi_e2e_test.go` Yaegi live. Shared helpers in `{package}_e2e_test.go` when they are not one domain.
+  By: implement
