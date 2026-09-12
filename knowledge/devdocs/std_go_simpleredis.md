@@ -85,3 +85,4 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - Empty password skips AUTH; empty database skips SELECT. When both are set, AUTH runs before SELECT.
 - `SELECT` out of range is `ERR DB index is out of range`, not `redis:noauth`. A handshake AUTH or SELECT error closes the socket, is not pooled, and is not retried.
 - Probe success labels on `/redis` and `/dragonfly` stay host-only (empty password and database). Failure routes `/redis-wrong-password` `/dragonfly-wrong-password` set `Password`; `/redis-database-99` `/dragonfly-database-99` set `Database`.
+- Probe verb paths (`/<engine>/<verb>`) are terminal: HTTP 200 + Redis body or 502 + `err.Error()`. They do not forward to next. Set `IOTimeout` to 1s on the probe clients so a 500ms TIME-wait Eval survives the 100ms default.
