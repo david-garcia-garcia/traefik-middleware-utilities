@@ -503,11 +503,16 @@ func wantRedisOutage(t *testing.T, err error) {
 	if err == nil {
 		t.Fatal("want Redis outage error")
 	}
-	msg := err.Error()
-	if msg != simpleredis.RedisUnreachable && msg != simpleredis.RedisTimeout &&
-		!strings.Contains(msg, simpleredis.RedisUnreachable) && !strings.Contains(msg, simpleredis.RedisTimeout) {
-		t.Fatalf("err %v want %s or %s", err, simpleredis.RedisUnreachable, simpleredis.RedisTimeout)
+	if isRedisOutageMessage(err.Error()) {
+		return
 	}
+	t.Fatalf("err %v want %s or %s", err, simpleredis.RedisUnreachable, simpleredis.RedisTimeout)
+}
+
+// isRedisOutageMessage is Unreachable or Timeout, exact or as a wrapped substring.
+func isRedisOutageMessage(msg string) bool {
+	return msg == simpleredis.RedisUnreachable || msg == simpleredis.RedisTimeout ||
+		strings.Contains(msg, simpleredis.RedisUnreachable) || strings.Contains(msg, simpleredis.RedisTimeout)
 }
 
 func TestTake_BufferedPendingDeltaOutage(t *testing.T) {
@@ -637,4 +642,46 @@ func TestParseEvalInt_WrapsCause(t *testing.T) {
 	if !errors.Is(err, strconv.ErrSyntax) {
 		t.Fatalf("err %v want wrapped syntax", err)
 	}
+}
+
+func TestTake_BufferedSleepStoresFlushError(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	client := newSimpleRedisForTest(t, addr)
+	limiter, err := New(client, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	fake.Kill()
+	limiter.Sleep()
+	_, _, err = limiter.Take("k", 5, time.Minute)
+	wantRedisOutage(t, err)
+	_, _, err = limiter.Peek("k", 5, time.Minute)
+	wantRedisOutage(t, err)
+}
+
+func TestPeek_BufferedEmptyFlushThenKill(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	client := newSimpleRedisForTest(t, addr)
+	limiter, err := New(client, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	limiter.Sleep()
+	fake.Kill()
+	now = now.Add(time.Hour)
+	limiter.SetNowForTest(func() time.Time { return now })
+	_, _, err = limiter.Peek("k", 5, time.Minute)
+	wantRedisOutage(t, err)
 }
