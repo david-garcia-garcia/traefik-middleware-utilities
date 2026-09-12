@@ -1,6 +1,7 @@
 package windowcounter
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -11,6 +12,20 @@ import (
 func newSimpleRedisForTest(t testing.TB, host string) *simpleredis.SimpleRedis {
 	t.Helper()
 	return simpleredis.New(simpleredis.Config{Host: host})
+}
+
+func TestCountFromRedisGet_WrappedMissIsZero(t *testing.T) {
+	wrapped := fmt.Errorf("context: %w", simpleredis.ErrMiss)
+	if wrapped.Error() == simpleredis.RedisMiss {
+		t.Fatal("wrapped.Error() still equals RedisMiss; test would not catch dest string compare")
+	}
+	n, err := countFromRedisGet(nil, wrapped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("count %d, want 0", n)
+	}
 }
 
 func TestTake_NThenDeny(t *testing.T) {
