@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-build-01-test-binary-does-not-build
+jobName: 2026-09-12-simpleredis-build-01-test-binary-does-not-build
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 7975ca802633088cd93eea3933446a346c4ada8480051905c673f17bca61b81c
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-test-binary-compile
+pr:
+  id: "37"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/37

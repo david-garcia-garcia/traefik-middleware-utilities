@@ -272,6 +272,34 @@ Compose SHALL add sibling Redis and Dragonfly services with requirepass. Compose
 - **AND** the idle pool is empty
 - **AND** the next command on that client dials a new socket
 
+### Requirement: Interpreter tests assert the unsafe conversion matrix
+Tests that import Yaegi SHALL assert which `string`/`[]byte` conversions the interpreter accepts under stdlib-only symbols, stdlib plus unsafe symbols, and unrestricted. Those tests MAY register Yaegi unsafe symbols and MAY import `unsafe` in `_test.go` files. Existing Init/Get/Set/Del/Incr/Eval/MSetEX interpreter tests MUST still use GOPATH with stdlib symbols only and `useunsafe` false. Named copy-versus-unsafe benches SHALL exist so a human can reproduce the measured ns/op; they MUST NOT fail `go test` without `-bench`. Those tests MUST NOT start Traefik.
+
+#### Scenario: Matrix cells match the measured table
+- **WHEN** the unsafe-variant interpreter test runs under stdlib only, stdlib plus unsafe symbols, and unrestricted
+- **THEN** go-redis v9 `unsafe.Slice` / `unsafe.String` is unsupported in every mode
+- **AND** the legacy pointer-cast, struct-header, and `reflect.StringHeader` conversions are unsupported under stdlib only and supported when unsafe symbols are registered
+- **AND** a cell mismatch fails the test
+
+#### Scenario: Named copy versus unsafe benches exist
+- **WHEN** a human runs the named compiled Eval-encode, parse-int, and interpreted convert benches
+- **THEN** those benches measure copy versus unsafe conversions
+- **AND** `go test` without `-bench` still passes
+
+### Requirement: Compiled tests reject production unsafe
+Compiled tests SHALL fail when a non-test file in the SimpleRedis session folder imports `unsafe` or `"C"`, or a non-stdlib dotted path. Compiled tests SHALL fail when the SimpleRedis probe plugin manifest or compose `simpleredisprobe` `useUnsafe` is true. Absent or false on the manifest SHALL pass. Those tests MUST NOT require an explicit `useUnsafe: false` on the manifest. Those tests MUST NOT scan the reclaim probe. Redis and Dragonfly Pester proofs of existing verbs MUST stay. Eval scripts that touch keys MUST list those keys (Dragonfly). Lua MUST stay 5.1-safe.
+
+#### Scenario: Session source import scan
+- **WHEN** compiled tests list imports of non-test files in the SimpleRedis session folder
+- **THEN** the test fails if any import path is `unsafe` or `"C"` or contains a dot
+- **AND** `_test.go` files MAY import `unsafe`
+
+#### Scenario: Probe useUnsafe scan
+- **WHEN** compiled tests read the SimpleRedis probe Traefik manifest and the compose `simpleredisprobe` `useunsafe` setting
+- **THEN** the test passes if the manifest field is absent or false and compose is false
+- **AND** the test fails if either is true
+- **AND** the reclaim probe is not scanned
+
 ### Requirement: Malformed RESP is a protocol issue and is not pooled
 A line that does not end in CR before LF, an empty line, an unparseable `*` count, an `*` count less than 0, a truncated array element or bulk, or a complete bulk payload whose two trailer bytes are not CR then LF SHALL return an error whose `Error()` text is `redis:issue?`, or an I/O error (`redis:unreachable` on EOF, `redis:timeout` on deadline). That connection MUST NOT re-enter the idle pool. A wrong bulk trailer MUST return `redis:issue?` and MUST NOT return `redis:unreachable`. Unknown type bytes, nested arrays, and array elements whose type is not `$`, `:`, or `+` are `redis:unsupported-reply` (requirement Unsupported RESP replies are distinguishable and are not pooled), not `redis:issue?`.
 
@@ -415,7 +443,6 @@ The compiled `go test` suite for SimpleRedis SHALL fail when client-side encode 
 - **AND** Eval uses a Lua 5.1-safe script with KEYS declared
 - **AND** neither engine’s tests are skipped
 
-
 ### Requirement: MSetEX and MSetEXAt write many keys with one shared TTL
 `MSetEX(names, values, seconds)` SHALL send native Redis `MSETEX` with decimal `numkeys` equal to `len(names)`, then each name/value pair in order, then `EX` and that duration as decimal seconds. `MSetEXAt(names, values, unixSeconds)` SHALL send the same argv with `EXAT` and that Unix timestamp. Both SHALL require `len(names) == len(values)`, reject empty or nil `names`, and reject more than 1024 pairs, each with `redis:issue?` and MUST NOT dial. The client MUST send `EX` or `EXAT`; it MUST NOT omit expiration and MUST NOT send NX, XX, PX, PXAT, or KEEPTTL. Integer reply `1` SHALL return no error. Integer reply `0` SHALL return `redis:issue?`. A `:` payload that is not a signed integer, or any integer other than `1` or `0`, SHALL return `redis:issue?`. AUTH-class prefixes still map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text unless they are unknown-command (fallback below). Clustered engines need all keys in one hash slot (hash tags); the client MUST NOT hash-tag, split, or retry cross-slot. Zero or negative TTL values SHALL be passed through, same as `Set`.
 
@@ -456,7 +483,7 @@ Native argv tests SHALL run against the in-process fake only. Those tests MUST N
 - **AND** the body does not contain `unpack`, `table.unpack`, or `table.maxn`
 
 ### Requirement: Live Redis and Dragonfly prove Lua MSetEX TTL landed
-Compiled tests SHALL run `MSetEX` against both Redis 7 and Dragonfly when `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY` are set. Those tests MUST skip under `-short` or when both addresses are unset. When exactly one address is set they MUST fail. After `MSetEX`, `Get` SHALL return the written bytes and `Eval` of `TTL` on a declared KEYS key SHALL return a positive integer. `MSetEXAt` with a past timestamp SHALL then `Get` as a miss. CI `e2e` MUST set both env vars to Redis 7 `:6379` and Dragonfly `:6380`. The unit `test` job MUST NOT set those vars. Pester on `/redis` and `/dragonfly` is not a substitute for this compiled live file.
+Compiled tests SHALL run `MSetEX` against each of Redis 7 and Dragonfly whose live address is set (`SIMPLEREDIS_LIVE_REDIS` / `SIMPLEREDIS_LIVE_DRAGONFLY`). Those tests MUST skip under `-short` or when both addresses are unset. When exactly one address is set they MUST run that engine and MUST NOT fail for the missing engine. After `MSetEX`, `Get` SHALL return the written bytes and `Eval` of `TTL` on a declared KEYS key SHALL return a positive integer. `MSetEXAt` with a past timestamp SHALL then `Get` as a miss. CI `e2e-redis` MUST set `SIMPLEREDIS_LIVE_REDIS` to Redis 7 `:6379` and MUST NOT set `SIMPLEREDIS_LIVE_DRAGONFLY`. CI `e2e-dragonfly` MUST set `SIMPLEREDIS_LIVE_DRAGONFLY` to Dragonfly `:6380` and MUST NOT set `SIMPLEREDIS_LIVE_REDIS`. The unit `test` job MUST NOT set those vars. Pester on `/redis` and `/dragonfly` is not a substitute for this compiled live file.
 
 #### Scenario: Live Redis TTL landed
 - **WHEN** `SIMPLEREDIS_LIVE_REDIS` is set and tests are not `-short`
@@ -471,7 +498,7 @@ Compiled tests SHALL run `MSetEX` against both Redis 7 and Dragonfly when `SIMPL
 - **AND** Eval of TTL for that key in KEYS returns a positive integer
 
 #### Scenario: Live past EXAT is a miss
-- **WHEN** both live addresses are set
+- **WHEN** a live address is set
 - **AND** MSetEXAt is called with a Unix timestamp in the past
 - **THEN** a later Get of that key is `redis:miss`
 
@@ -487,3 +514,10 @@ Each public command (`Get`, `MGet`, `Set`, `Del`, `Incr`, `IncrBy`, `Expire`, `E
 - **WHEN** Get is called with a context that is already cancelled
 - **THEN** the call returns that context's `Err()`
 - **AND** the session MUST NOT send GET
+
+### Requirement: SimpleRedis test package compiles
+`go test ./simpleredis/` SHALL compile as one binary. Tests that write a temp GOPATH for Yaegi, including interpreted-cost measurements, MUST use the same-package helper the interpreter tests already define. The package MUST NOT fail to compile because that helper is missing. CI `go test ./...` MUST keep compiling this package.
+
+#### Scenario: Test binary compiles
+- **WHEN** `go test -c ./simpleredis/` runs
+- **THEN** the compile succeeds
