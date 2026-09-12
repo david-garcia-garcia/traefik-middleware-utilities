@@ -239,13 +239,6 @@ func (f *fakeRedis) incrByCount() int {
 	return f.incrBys
 }
 
-// evalCount is how many EVAL commands the fake has seen.
-func (f *fakeRedis) evalCount() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.evals
-}
-
 // bulk formats a GET/MGET bulk string or a miss.
 func bulk(store map[string]string, name string) string {
 	value, found := store[name]
