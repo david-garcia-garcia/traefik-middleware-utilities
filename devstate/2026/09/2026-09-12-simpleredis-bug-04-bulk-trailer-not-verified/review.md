@@ -29,3 +29,9 @@ phase: codereview
 findings: none
 fixed: none
 skipped: none
+
+## devdocsimpact (2026-09-12)
+phase: devdocsimpact
+findings: stale-usage + language-gap on std_go_simpleredis_resp-decode
+fixed: How-to/Gotchas trailer; Language Bulk trailer
+skipped: none
