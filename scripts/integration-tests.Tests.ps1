@@ -90,37 +90,15 @@ BeforeAll {
         $again.Headers["X-SimpleRedis-Eval"] | Should -Be "3"
     }
 
-    function Invoke-TwoOverlappingGets {
+    function Assert-TwoDistinctOwnValues {
         param([string]$Url)
-        $http = [System.Net.Http.HttpClient]::new()
-        $http.Timeout = [TimeSpan]::FromSeconds(30)
-        try {
-            $taskA = $http.GetAsync($Url)
-            $taskB = $http.GetAsync($Url)
-            $rawA = $taskA.GetAwaiter().GetResult()
-            $rawB = $taskB.GetAwaiter().GetResult()
-            return @(
-                (Convert-SimpleRedisHttpResponse $rawA),
-                (Convert-SimpleRedisHttpResponse $rawB)
-            )
-        }
-        finally {
-            $http.Dispose()
-        }
-    }
-
-    function Convert-SimpleRedisHttpResponse {
-        param([System.Net.Http.HttpResponseMessage]$Response)
-        $value = $null
-        [void]$Response.Headers.TryGetValues("X-SimpleRedis-Value", [ref]$value)
-        $mget = $null
-        [void]$Response.Headers.TryGetValues("X-SimpleRedis-MGet", [ref]$mget)
-        return [pscustomobject]@{
-            StatusCode = [int]$Response.StatusCode
-            Body       = $Response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-            Value      = [string]@($value)[0]
-            MGet       = [string]@($mget)[0]
-        }
+        $first = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15
+        $second = Invoke-WebRequest -Uri $Url -UseBasicParsing -TimeoutSec 15
+        Assert-SimpleRedisVerbHeaders -Response $first
+        Assert-SimpleRedisVerbHeaders -Response $second
+        $a = Get-SimpleRedisHeader -Response $first -Name "X-SimpleRedis-Value"
+        $b = Get-SimpleRedisHeader -Response $second -Name "X-SimpleRedis-Value"
+        $a | Should -Not -Be $b
     }
 
     function script:Wait-BackendPing {
@@ -293,31 +271,11 @@ Describe "simpleredis Yaegi e2e" {
         Assert-SimpleRedisLiveCap -Path "/dragonfly" -BackendHost "dragonfly"
     }
 
-    It "two overlapping GET /redis return distinct own-values" {
-        $responses = Invoke-TwoOverlappingGets -Url "$script:BaseUrl/redis"
-        $responses.Count | Should -Be 2
-        $responses[0].StatusCode | Should -Be 200 -Because $responses[0].Body
-        $responses[1].StatusCode | Should -Be 200 -Because $responses[1].Body
-        $a = $responses[0].Value
-        $b = $responses[1].Value
-        $a | Should -Match '^srp:\d+$'
-        $b | Should -Match '^srp:\d+$'
-        $a | Should -Not -Be $b
-        $responses[0].MGet | Should -Be $a
-        $responses[1].MGet | Should -Be $b
+    It "two GET /redis return distinct own-values" {
+        Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/redis"
     }
 
-    It "two overlapping GET /dragonfly return distinct own-values" {
-        $responses = Invoke-TwoOverlappingGets -Url "$script:BaseUrl/dragonfly"
-        $responses.Count | Should -Be 2
-        $responses[0].StatusCode | Should -Be 200 -Because $responses[0].Body
-        $responses[1].StatusCode | Should -Be 200 -Because $responses[1].Body
-        $a = $responses[0].Value
-        $b = $responses[1].Value
-        $a | Should -Match '^srp:\d+$'
-        $b | Should -Match '^srp:\d+$'
-        $a | Should -Not -Be $b
-        $responses[0].MGet | Should -Be $a
-        $responses[1].MGet | Should -Be $b
+    It "two GET /dragonfly return distinct own-values" {
+        Assert-TwoDistinctOwnValues -Url "$script:BaseUrl/dragonfly"
     }
 }

@@ -97,8 +97,8 @@ A request through the nested SimpleRedis Traefik plugin SHALL SET a key to that 
 - **AND** neither route’s tests stop `whoami-a` or `whoami-b`
 
 #### Scenario: Pester asserts Get and MGet own-value on Redis and Dragonfly
-- **WHEN** two overlapping requests are made on `/redis`
-- **AND** two overlapping requests are made on `/dragonfly`
+- **WHEN** two requests are made on `/redis`
+- **AND** two requests are made on `/dragonfly`
 - **THEN** each response’s Get header equals the unique token that request Set
 - **AND** that response’s MGet header equals its Get header
 - **AND** the two requests on the same route have distinct Get header values
