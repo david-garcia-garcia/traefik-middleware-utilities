@@ -39,3 +39,8 @@ description: Kong Gateway rate-limiting window types and Redis sync_rate behavio
 priority: normal
 local: index_ext_go-redis.md
 description: Official go-redis client pool, option, and proto.Reader.readLine behavior this product copies the shape of, without importing the library.
+
+## leaky-bucket
+priority: normal
+local: index_ext_leaky-bucket.md
+description: Classic leaky-bucket meter named by the leakybucket package, as distinct from token-bucket and window counters.

@@ -14,6 +14,7 @@ Each package is one job. Import the one that matches the middleware; do not mix 
 | SimpleRedis | Current | `simpleredis/` | Stdlib RESP client (GET/MGET/SET/DEL/INCR/EXPIRE/EVAL/MSetEX). Middlewares construct this with `New(Config)` instead of inventing a Redis client. Apache-2.0 (copied from crowdsec-bouncer). |
 | Window counter | Current | `windowcounter/` | Kong-style **sliding-window hit counter** on Redis or Dragonfly. Counts hits in a time window and returns allow/deny plus a sliding estimate. Local memory is only the `sync_rate` flush buffer. |
 | Token bucket | Current | `tokenbucket/` | Traefik **token bucket** (refill + burst). Same math in-process and on Redis/Dragonfly via `Eval`. |
+| Leaky bucket | Current | `leakybucket/` | Classic **leaky-bucket meter** (pour, leak, overflow deny). Same water clock in-process and on Redis/Dragonfly via `Eval`. |
 
 ### What each one does
 
@@ -25,7 +26,9 @@ Each package is one job. Import the one that matches the middleware; do not mix 
 
 **Token bucket** (`tokenbucket/`) is Traefik RateLimit’s clock: `Allow(key)` refills at `rate`, caps at `burst`, and returns allowed plus wait. In-process uses a mutex map; Redis uses `Eval` of the copied Lua (`#rl_source == 4`). Do not mix this clock with `windowcounter/`.
 
-This is **not** Traefik’s HTTP RateLimit middleware. Token bucket and window counter are separate packages; pick the clock the middleware actually uses.
+**Leaky bucket** (`leakybucket/`) is the fill meter: `Add(key, n)` / `Take(key)` pour water, leak at `leak` per second, and deny without pouring when the pour would exceed `capacity`. `Level` leaks only. In-process is exact; Redis `sync_rate=0` EVAL every pour, `>0` buffers and flushes. Pass Redis `Sleep`/`Wake`/`Close` into reclaim. Do not mix this clock with `tokenbucket/` or `windowcounter/`.
+
+This is **not** Traefik’s HTTP RateLimit middleware. Token bucket, window counter, and leaky bucket are separate packages; pick the clock the middleware actually uses.
 
 ## Yaegi
 
@@ -48,6 +51,7 @@ reclaim/         reclaim table
 simpleredis/     stdlib RESP client (Apache-2.0)
 windowcounter/   sliding-window Redis/Dragonfly hit counter
 tokenbucket/     Traefik token bucket (in-process and Redis EVAL)
+leakybucket/     I.371 leaky-bucket meter (in-process and Redis EVAL)
 e2e/             fake Traefik plugins + Pester harness (Yaegi)
 ```
 
@@ -60,12 +64,13 @@ go test ./reclaim/...
 go test ./simpleredis/...
 go test ./windowcounter/...
 go test ./tokenbucket/...
+go test ./leakybucket/...
 ./Test-Integration.ps1
 ```
 
 `Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. The copied SimpleRedis client is Apache-2.0 (`LICENSE`).
 
-Window-counter live tests skip unless `WINDOWCOUNTER_LIVE_REDIS` and/or `WINDOWCOUNTER_LIVE_DRAGONFLY` are set (or under `-short`). Token-bucket live tests skip unless `TOKENBUCKET_LIVE_REDIS` and/or `TOKENBUCKET_LIVE_DRAGONFLY` are set (or under `-short`). SimpleRedis live tests skip unless `SIMPLEREDIS_LIVE_REDIS` and/or `SIMPLEREDIS_LIVE_DRAGONFLY` are set (or under `-short`). CI starts both engines and sets those variables so the suite does not skip.
+Window-counter live tests skip unless `WINDOWCOUNTER_LIVE_REDIS` and/or `WINDOWCOUNTER_LIVE_DRAGONFLY` are set (or under `-short`). Token-bucket live tests skip unless `TOKENBUCKET_LIVE_REDIS` and/or `TOKENBUCKET_LIVE_DRAGONFLY` are set (or under `-short`). Leaky-bucket live tests skip unless `LEAKYBUCKET_LIVE_REDIS` and/or `LEAKYBUCKET_LIVE_DRAGONFLY` are set (or under `-short`). SimpleRedis live tests skip unless `SIMPLEREDIS_LIVE_REDIS` and/or `SIMPLEREDIS_LIVE_DRAGONFLY` are set (or under `-short`). CI starts both engines and sets those variables so the suite does not skip.
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, `go test -v ./...`, and that same Pester harness on every pull request and on pushes to `master`.
 

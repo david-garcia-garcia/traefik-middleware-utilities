@@ -54,6 +54,8 @@ jobs:
       WINDOWCOUNTER_LIVE_DRAGONFLY: 127.0.0.1:6380
       TOKENBUCKET_LIVE_REDIS: 127.0.0.1:6379
       TOKENBUCKET_LIVE_DRAGONFLY: 127.0.0.1:6380
+      LEAKYBUCKET_LIVE_REDIS: 127.0.0.1:6379
+      LEAKYBUCKET_LIVE_DRAGONFLY: 127.0.0.1:6380
       SIMPLEREDIS_LIVE_REDIS: 127.0.0.1:6379
       SIMPLEREDIS_LIVE_DRAGONFLY: 127.0.0.1:6380
     steps:
@@ -64,7 +66,7 @@ jobs:
       with:
         go-version: "1.21"
     - name: Run Tests
-      run: go test -timeout 2m -count=1 -v ./...
+      run: go test -timeout 5m -count=1 -v ./...
 
   integration:
     name: Integration Tests
