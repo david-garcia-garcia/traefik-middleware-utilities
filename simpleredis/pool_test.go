@@ -427,25 +427,22 @@ func TestOverFreeOnFullSemaphoreReturns(t *testing.T) {
 
 // TestOverFreeAccountingStaysBalanced hammers borrow/release exits and asserts a full semaphore with no over-frees.
 func TestOverFreeAccountingStaysBalanced(t *testing.T) {
-	const goroutines = 16
-	const getsPerGoroutine = 8
-
 	// Healthy fake: successful Get/release cycles.
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	healthy := New(Config{Host: addr, MaxRetries: -1})
-	hammerGets(t, healthy, goroutines, getsPerGoroutine)
+	hammerGets(t, healthy)
 	assertTurnsFullAndNoOverFrees(t, healthy)
 
 	// Dead address: dial failure frees the turn before returning.
 	dead := New(Config{Host: "127.0.0.1:1", DialTimeout: 20 * time.Millisecond, MaxRetries: -1})
-	hammerGets(t, dead, goroutines, getsPerGoroutine)
+	hammerGets(t, dead)
 	assertTurnsFullAndNoOverFrees(t, dead)
 
 	// AUTH reject: handshake failure closes the socket and frees the turn.
 	authFake, authAddr := startFakeRedis(t, map[string]string{"hit": "t"})
 	authFake.setHandshakeReplies("-WRONGPASS invalid password\r\n", statusOKReply)
 	authReject := New(Config{Host: authAddr, Pass: "wrong-password", MaxRetries: -1})
-	hammerGets(t, authReject, goroutines, getsPerGoroutine)
+	hammerGets(t, authReject)
 	assertTurnsFullAndNoOverFrees(t, authReject)
 
 	// Starved pool: waiters hit PoolTimeout without taking a turn.
@@ -454,13 +451,15 @@ func TestOverFreeAccountingStaysBalanced(t *testing.T) {
 	starvedFake.getDelay = 80 * time.Millisecond
 	starvedFake.mu.Unlock()
 	starved := New(Config{Host: starvedAddr, PoolSize: 1, PoolTimeout: 15 * time.Millisecond, MaxRetries: -1})
-	hammerGets(t, starved, goroutines, getsPerGoroutine)
+	hammerGets(t, starved)
 	assertTurnsFullAndNoOverFrees(t, starved)
 }
 
-// hammerGets runs goroutines×getsPerGoroutine Get("hit") calls and waits for every goroutine to finish.
-func hammerGets(t *testing.T, sr *SimpleRedis, goroutines, getsPerGoroutine int) {
+// hammerGets runs 16 goroutines × 8 Get("hit") calls and waits for every goroutine to finish.
+func hammerGets(t *testing.T, sr *SimpleRedis) {
 	t.Helper()
+	const goroutines = 16
+	const getsPerGoroutine = 8
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 	for i := 0; i < goroutines; i++ {
