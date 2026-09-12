@@ -1,0 +1,17 @@
+issueKey: 2026-09-12-simpleredis-api-01-sentinels-not-exported
+jobName: 2026-09-12-simpleredis-api-01-sentinels-not-exported
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: df5813055bd0fcd38dae45cfaf1907bbb5f7f5ec838409e59a09f0586118e8bc
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-export-error-sentinels
+pr:
+  id: "38"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/38

@@ -1,7 +1,7 @@
 package tokenbucket
 
 import (
-	"errors"
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -15,63 +15,57 @@ type liveEngineForTest struct {
 	addr string
 }
 
-// errLiveEngineOneAddr is the fail-closed result when exactly one of Redis or Dragonfly is set.
-var errLiveEngineOneAddr = errors.New("exactly one live engine address is set; set both or neither")
-
-// lookupLiveEngineAddrs returns both engines, bothUnset when neither addr is set, or errLiveEngineOneAddr when exactly one is set.
-func lookupLiveEngineAddrs(redisAddr, dragonflyAddr string) (engines []liveEngineForTest, bothUnset bool, err error) {
+// lookupLiveEngineAddrs returns the engines whose addresses are set, or bothUnset when neither is set.
+func lookupLiveEngineAddrs(redisAddr, dragonflyAddr string) (engines []liveEngineForTest, bothUnset bool) {
 	if redisAddr == "" && dragonflyAddr == "" {
-		return nil, true, nil
+		return nil, true
 	}
-	if redisAddr == "" || dragonflyAddr == "" {
-		return nil, false, errLiveEngineOneAddr
+	if redisAddr != "" {
+		engines = append(engines, liveEngineForTest{name: "redis", addr: redisAddr})
 	}
-	return []liveEngineForTest{
-		{name: "redis", addr: redisAddr},
-		{name: "dragonfly", addr: dragonflyAddr},
-	}, false, nil
+	if dragonflyAddr != "" {
+		engines = append(engines, liveEngineForTest{name: "dragonfly", addr: dragonflyAddr})
+	}
+	return engines, false
 }
 
-// liveEngineAddrs skips under -short or both env unset, fails when exactly one addr is set, else returns both engines.
+// liveEngineAddrs skips under -short or both env unset, else returns the engines whose addrs are set.
 func liveEngineAddrs(t *testing.T, redisEnv, dragonflyEnv string) []liveEngineForTest {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("live engines skipped under -short")
 	}
-	engines, bothUnset, err := lookupLiveEngineAddrs(os.Getenv(redisEnv), os.Getenv(dragonflyEnv))
+	engines, bothUnset := lookupLiveEngineAddrs(os.Getenv(redisEnv), os.Getenv(dragonflyEnv))
 	if bothUnset {
 		t.Skip(redisEnv + " and " + dragonflyEnv + " unset")
-	}
-	if err != nil {
-		t.Fatal(err)
 	}
 	return engines
 }
 
-// TestLookupLiveEngineAddrs proves both-or-neither without dialing an engine (runs under -short).
+// TestLookupLiveEngineAddrs proves skip-both and one-or-both engines without dialing (runs under -short).
 func TestLookupLiveEngineAddrs(t *testing.T) {
 	t.Run("bothUnset", func(t *testing.T) {
-		engines, bothUnset, err := lookupLiveEngineAddrs("", "")
-		if err != nil || !bothUnset || len(engines) != 0 {
-			t.Fatalf("lookup(\"\",\"\") = %v unset=%v err=%v", engines, bothUnset, err)
+		engines, bothUnset := lookupLiveEngineAddrs("", "")
+		if !bothUnset || len(engines) != 0 {
+			t.Fatalf("lookup(\"\",\"\") = %v unset=%v", engines, bothUnset)
 		}
 	})
 	t.Run("onlyRedis", func(t *testing.T) {
-		_, bothUnset, err := lookupLiveEngineAddrs("127.0.0.1:6379", "")
-		if bothUnset || !errors.Is(err, errLiveEngineOneAddr) {
-			t.Fatalf("onlyRedis unset=%v err=%v, want errLiveEngineOneAddr", bothUnset, err)
+		engines, bothUnset := lookupLiveEngineAddrs("127.0.0.1:6379", "")
+		if bothUnset || len(engines) != 1 || engines[0].name != "redis" || engines[0].addr != "127.0.0.1:6379" {
+			t.Fatalf("onlyRedis = %+v unset=%v, want redis 127.0.0.1:6379", engines, bothUnset)
 		}
 	})
 	t.Run("onlyDragonfly", func(t *testing.T) {
-		_, bothUnset, err := lookupLiveEngineAddrs("", "127.0.0.1:6380")
-		if bothUnset || !errors.Is(err, errLiveEngineOneAddr) {
-			t.Fatalf("onlyDragonfly unset=%v err=%v, want errLiveEngineOneAddr", bothUnset, err)
+		engines, bothUnset := lookupLiveEngineAddrs("", "127.0.0.1:6380")
+		if bothUnset || len(engines) != 1 || engines[0].name != "dragonfly" || engines[0].addr != "127.0.0.1:6380" {
+			t.Fatalf("onlyDragonfly = %+v unset=%v, want dragonfly 127.0.0.1:6380", engines, bothUnset)
 		}
 	})
 	t.Run("bothSet", func(t *testing.T) {
-		engines, bothUnset, err := lookupLiveEngineAddrs("127.0.0.1:6379", "127.0.0.1:6380")
-		if err != nil || bothUnset || len(engines) != 2 {
-			t.Fatalf("bothSet = %v unset=%v err=%v", engines, bothUnset, err)
+		engines, bothUnset := lookupLiveEngineAddrs("127.0.0.1:6379", "127.0.0.1:6380")
+		if bothUnset || len(engines) != 2 {
+			t.Fatalf("bothSet = %v unset=%v", engines, bothUnset)
 		}
 	})
 }
@@ -105,7 +99,7 @@ func runLiveBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 3; i++ {
-			allowed, _, allowErr := limiter.Allow(key)
+			allowed, _, allowErr := limiter.Allow(context.Background(), key)
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
@@ -113,7 +107,7 @@ func runLiveBackend(t *testing.T, addr string) {
 				t.Fatalf("burst %d denied", i+1)
 			}
 		}
-		allowed, wait, err := limiter.Allow(key)
+		allowed, wait, err := limiter.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -136,7 +130,7 @@ func runLiveBackend(t *testing.T, addr string) {
 		b.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 3; i++ {
-			allowed, _, allowErr := a.Allow(key)
+			allowed, _, allowErr := a.Allow(context.Background(), key)
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
@@ -144,7 +138,7 @@ func runLiveBackend(t *testing.T, addr string) {
 				t.Fatalf("a burst %d denied", i+1)
 			}
 		}
-		allowed, _, err := b.Allow(key)
+		allowed, _, err := b.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -165,11 +159,11 @@ func runLiveBackend(t *testing.T, addr string) {
 		red.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 4; i++ {
-			mAllowed, mWait, mErr := mem.Allow(key)
+			mAllowed, mWait, mErr := mem.Allow(context.Background(), key)
 			if mErr != nil {
 				t.Fatal(mErr)
 			}
-			rAllowed, rWait, rErr := red.Allow(key)
+			rAllowed, rWait, rErr := red.Allow(context.Background(), key)
 			if rErr != nil {
 				t.Fatal(rErr)
 			}
@@ -189,7 +183,7 @@ func runLiveBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 3; i++ {
-			allowed, _, allowErr := limiter.Allow(key)
+			allowed, _, allowErr := limiter.Allow(context.Background(), key)
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
@@ -197,14 +191,14 @@ func runLiveBackend(t *testing.T, addr string) {
 				t.Fatalf("burst %d denied", i+1)
 			}
 		}
-		allowed, wait, err := limiter.Allow(key)
+		allowed, wait, err := limiter.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if allowed || wait <= time.Microsecond {
 			t.Fatalf("want deny wait>maxDelay, got allowed %v wait %v", allowed, wait)
 		}
-		allowedAfterRefund, waitAfterRefund, err := limiter.Allow(key)
+		allowedAfterRefund, waitAfterRefund, err := limiter.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -223,7 +217,7 @@ func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 	client := simpleredis.New(simpleredis.Config{Host: addr})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		_, err := client.Eval("return 1", nil, nil)
+		_, err := client.Eval(context.Background(), "return 1", simpleredis.ScriptSHA1Hex("return 1"), nil, nil)
 		if err == nil {
 			return client
 		}

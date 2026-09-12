@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"context"
 	"testing"
 )
 
@@ -8,7 +9,7 @@ func TestGetHitAndMiss(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
 
-	got, err := redis.Get("hit")
+	got, err := redis.Get(context.Background(), "hit")
 	if err != nil {
 		t.Fatalf("Get hit: %v", err)
 	}
@@ -16,7 +17,7 @@ func TestGetHitAndMiss(t *testing.T) {
 		t.Fatalf("Get hit = %q, want %q", got, "t")
 	}
 
-	if _, err = redis.Get("missing"); err == nil || err.Error() != RedisMiss {
+	if _, err = redis.Get(context.Background(), "missing"); err == nil || err.Error() != RedisMiss {
 		t.Fatalf("Get missing = %v, want %s", err, RedisMiss)
 	}
 }
@@ -24,7 +25,7 @@ func TestGetHitAndMiss(t *testing.T) {
 func TestSetSendsExpire(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
-	if err := redis.Set("k", []byte("v"), 60); err != nil {
+	if err := redis.Set(context.Background(), "k", []byte("v"), 60); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
 	got := fake.lastSetCommand()
@@ -43,7 +44,7 @@ func TestMGetHitsMissesAndEmpty(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"a": "t", "c": "f"})
 	redis := New(Config{Host: addr})
 
-	got, err := redis.MGet([]string{"a", "b", "c"})
+	got, err := redis.MGet(context.Background(), []string{"a", "b", "c"})
 	if err != nil {
 		t.Fatalf("MGet: %v", err)
 	}
@@ -54,7 +55,7 @@ func TestMGetHitsMissesAndEmpty(t *testing.T) {
 		t.Fatalf("MGet = %q, want [t <nil> f]", got)
 	}
 
-	empty, err := redis.MGet(nil)
+	empty, err := redis.MGet(context.Background(), nil)
 	if empty != nil || err != nil {
 		t.Fatalf("MGet(nil) = %v, %v, want nil, nil", empty, err)
 	}
@@ -67,7 +68,7 @@ func TestSetReturnsReplyError(t *testing.T) {
 	addr := startStaticRedis(t, "-ERR value is not an integer or out of range\r\n")
 	redis := New(Config{Host: addr})
 
-	err := redis.Set("k", []byte("v"), -1)
+	err := redis.Set(context.Background(), "k", []byte("v"), -1)
 	if err == nil {
 		t.Fatal("Set swallowed the error reply")
 	}
@@ -80,7 +81,7 @@ func TestDelSucceeds(t *testing.T) {
 	addr := startStaticRedis(t, "+OK\r\n")
 	redis := New(Config{Host: addr})
 
-	if err := redis.Del("k"); err != nil {
+	if err := redis.Del(context.Background(), "k"); err != nil {
 		t.Fatalf("Del = %v", err)
 	}
 }
@@ -88,7 +89,7 @@ func TestDelSucceeds(t *testing.T) {
 func TestDelIntegerReplySucceeds(t *testing.T) {
 	addr := startStaticRedis(t, ":1\r\n")
 	redis := New(Config{Host: addr})
-	if err := redis.Del("k"); err != nil {
+	if err := redis.Del(context.Background(), "k"); err != nil {
 		t.Fatalf("Del against :1 = %v", err)
 	}
 }
@@ -97,14 +98,14 @@ func TestIncrMissingThenPresent(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	first, err := redis.Incr("counter")
+	first, err := redis.Incr(context.Background(), "counter")
 	if err != nil {
 		t.Fatalf("first Incr: %v", err)
 	}
 	if first != 1 {
 		t.Fatalf("first Incr = %d, want 1", first)
 	}
-	second, err := redis.Incr("counter")
+	second, err := redis.Incr(context.Background(), "counter")
 	if err != nil {
 		t.Fatalf("second Incr: %v", err)
 	}
@@ -117,7 +118,7 @@ func TestIncrByMissing(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
 
-	got, err := redis.IncrBy("counter", 5)
+	got, err := redis.IncrBy(context.Background(), "counter", 5)
 	if err != nil {
 		t.Fatalf("IncrBy: %v", err)
 	}
@@ -130,7 +131,7 @@ func TestIncrNonIntegerValue(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"k": "abc"})
 	redis := New(Config{Host: addr})
 
-	_, err := redis.Incr("k")
+	_, err := redis.Incr(context.Background(), "k")
 	if err == nil {
 		t.Fatal("Incr non-integer: want error")
 	}
@@ -143,7 +144,7 @@ func TestExpireAndExpireAtArgv(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"k": "1"})
 	redis := New(Config{Host: addr})
 
-	if err := redis.Expire("k", 60); err != nil {
+	if err := redis.Expire(context.Background(), "k", 60); err != nil {
 		t.Fatalf("Expire: %v", err)
 	}
 	got := fake.lastExpireCommand()
@@ -151,7 +152,7 @@ func TestExpireAndExpireAtArgv(t *testing.T) {
 		t.Fatalf("Expire argv = %v, want EXPIRE k 60", got)
 	}
 
-	if err := redis.ExpireAt("k", 1700000000); err != nil {
+	if err := redis.ExpireAt(context.Background(), "k", 1700000000); err != nil {
 		t.Fatalf("ExpireAt: %v", err)
 	}
 	got = fake.lastExpireCommand()
@@ -163,7 +164,7 @@ func TestExpireAndExpireAtArgv(t *testing.T) {
 func TestExpireZeroReplyIsSuccess(t *testing.T) {
 	addr := startStaticRedis(t, ":0\r\n")
 	redis := New(Config{Host: addr})
-	if err := redis.Expire("missing", 30); err != nil {
+	if err := redis.Expire(context.Background(), "missing", 30); err != nil {
 		t.Fatalf("Expire :0: %v", err)
 	}
 }
@@ -175,15 +176,15 @@ func TestVerbArityMismatchIsIssueAndPooled(t *testing.T) {
 		command func(*SimpleRedis) error
 	}{
 		{"get-empty-array", "*0\r\n", func(redis *SimpleRedis) error {
-			_, err := redis.Get("k")
+			_, err := redis.Get(context.Background(), "k")
 			return err
 		}},
 		{"get-two-bulks", "*2\r\n$1\r\na\r\n$1\r\nb\r\n", func(redis *SimpleRedis) error {
-			_, err := redis.Get("k")
+			_, err := redis.Get(context.Background(), "k")
 			return err
 		}},
 		{"incr-empty-array", "*0\r\n", func(redis *SimpleRedis) error {
-			_, err := redis.Incr("k")
+			_, err := redis.Incr(context.Background(), "k")
 			return err
 		}},
 	}

@@ -1,7 +1,7 @@
 package windowcounter
 
 import (
-	"errors"
+	"context"
 	"os"
 	"strconv"
 	"testing"
@@ -16,63 +16,57 @@ type liveEngineForTest struct {
 	addr string
 }
 
-// errLiveEngineOneAddr is the fail-closed result when exactly one of Redis or Dragonfly is set.
-var errLiveEngineOneAddr = errors.New("exactly one live engine address is set; set both or neither")
-
-// lookupLiveEngineAddrs returns both engines, bothUnset when neither addr is set, or errLiveEngineOneAddr when exactly one is set.
-func lookupLiveEngineAddrs(redisAddr, dragonflyAddr string) (engines []liveEngineForTest, bothUnset bool, err error) {
+// lookupLiveEngineAddrs returns the engines whose addresses are set, or bothUnset when neither is set.
+func lookupLiveEngineAddrs(redisAddr, dragonflyAddr string) (engines []liveEngineForTest, bothUnset bool) {
 	if redisAddr == "" && dragonflyAddr == "" {
-		return nil, true, nil
+		return nil, true
 	}
-	if redisAddr == "" || dragonflyAddr == "" {
-		return nil, false, errLiveEngineOneAddr
+	if redisAddr != "" {
+		engines = append(engines, liveEngineForTest{name: "redis", addr: redisAddr})
 	}
-	return []liveEngineForTest{
-		{name: "redis", addr: redisAddr},
-		{name: "dragonfly", addr: dragonflyAddr},
-	}, false, nil
+	if dragonflyAddr != "" {
+		engines = append(engines, liveEngineForTest{name: "dragonfly", addr: dragonflyAddr})
+	}
+	return engines, false
 }
 
-// liveEngineAddrs skips under -short or both env unset, fails when exactly one addr is set, else returns both engines.
+// liveEngineAddrs skips under -short or both env unset, else returns the engines whose addrs are set.
 func liveEngineAddrs(t *testing.T, redisEnv, dragonflyEnv string) []liveEngineForTest {
 	t.Helper()
 	if testing.Short() {
 		t.Skip("live engines skipped under -short")
 	}
-	engines, bothUnset, err := lookupLiveEngineAddrs(os.Getenv(redisEnv), os.Getenv(dragonflyEnv))
+	engines, bothUnset := lookupLiveEngineAddrs(os.Getenv(redisEnv), os.Getenv(dragonflyEnv))
 	if bothUnset {
 		t.Skip(redisEnv + " and " + dragonflyEnv + " unset")
-	}
-	if err != nil {
-		t.Fatal(err)
 	}
 	return engines
 }
 
-// TestLookupLiveEngineAddrs proves both-or-neither without dialing an engine (runs under -short).
+// TestLookupLiveEngineAddrs proves skip-both and one-or-both engines without dialing (runs under -short).
 func TestLookupLiveEngineAddrs(t *testing.T) {
 	t.Run("bothUnset", func(t *testing.T) {
-		engines, bothUnset, err := lookupLiveEngineAddrs("", "")
-		if err != nil || !bothUnset || len(engines) != 0 {
-			t.Fatalf("lookup(\"\",\"\") = %v unset=%v err=%v", engines, bothUnset, err)
+		engines, bothUnset := lookupLiveEngineAddrs("", "")
+		if !bothUnset || len(engines) != 0 {
+			t.Fatalf("lookup(\"\",\"\") = %v unset=%v", engines, bothUnset)
 		}
 	})
 	t.Run("onlyRedis", func(t *testing.T) {
-		_, bothUnset, err := lookupLiveEngineAddrs("127.0.0.1:6379", "")
-		if bothUnset || !errors.Is(err, errLiveEngineOneAddr) {
-			t.Fatalf("onlyRedis unset=%v err=%v, want errLiveEngineOneAddr", bothUnset, err)
+		engines, bothUnset := lookupLiveEngineAddrs("127.0.0.1:6379", "")
+		if bothUnset || len(engines) != 1 || engines[0].name != "redis" || engines[0].addr != "127.0.0.1:6379" {
+			t.Fatalf("onlyRedis = %+v unset=%v, want redis 127.0.0.1:6379", engines, bothUnset)
 		}
 	})
 	t.Run("onlyDragonfly", func(t *testing.T) {
-		_, bothUnset, err := lookupLiveEngineAddrs("", "127.0.0.1:6380")
-		if bothUnset || !errors.Is(err, errLiveEngineOneAddr) {
-			t.Fatalf("onlyDragonfly unset=%v err=%v, want errLiveEngineOneAddr", bothUnset, err)
+		engines, bothUnset := lookupLiveEngineAddrs("", "127.0.0.1:6380")
+		if bothUnset || len(engines) != 1 || engines[0].name != "dragonfly" || engines[0].addr != "127.0.0.1:6380" {
+			t.Fatalf("onlyDragonfly = %+v unset=%v, want dragonfly 127.0.0.1:6380", engines, bothUnset)
 		}
 	})
 	t.Run("bothSet", func(t *testing.T) {
-		engines, bothUnset, err := lookupLiveEngineAddrs("127.0.0.1:6379", "127.0.0.1:6380")
-		if err != nil || bothUnset || len(engines) != 2 {
-			t.Fatalf("bothSet = %v unset=%v err=%v", engines, bothUnset, err)
+		engines, bothUnset := lookupLiveEngineAddrs("127.0.0.1:6379", "127.0.0.1:6380")
+		if bothUnset || len(engines) != 2 {
+			t.Fatalf("bothSet = %v unset=%v", engines, bothUnset)
 		}
 	})
 }
@@ -97,7 +91,7 @@ func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 	client := simpleredis.New(simpleredis.Config{Host: addr})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		_, err := client.Incr("windowcounter-live-probe")
+		_, err := client.Incr(context.Background(), "windowcounter-live-probe")
 		if err == nil {
 			return client
 		}
@@ -126,7 +120,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		const limit int64 = 3
 		window := time.Minute
 		for i := int64(0); i < limit; i++ {
-			allowed, _, takeErr := limiter.Take(key, limit, window)
+			allowed, _, takeErr := limiter.Take(context.Background(), key, limit, window)
 			if takeErr != nil {
 				t.Fatal(takeErr)
 			}
@@ -134,7 +128,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 				t.Fatalf("take %d denied", i+1)
 			}
 		}
-		allowed, _, err := limiter.Take(key, limit, window)
+		allowed, _, err := limiter.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -157,14 +151,14 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		const limit int64 = 3
 		window := time.Minute
 		for i := 0; i < 2; i++ {
-			allowed, _, takeErr := a.Take(key, limit, window)
+			allowed, _, takeErr := a.Take(context.Background(), key, limit, window)
 			if takeErr != nil {
 				t.Fatal(takeErr)
 			}
 			if !allowed {
 				t.Fatal("a denied early")
 			}
-			allowed, _, takeErr = b.Take(key, limit, window)
+			allowed, _, takeErr = b.Take(context.Background(), key, limit, window)
 			if takeErr != nil {
 				t.Fatal(takeErr)
 			}
@@ -174,7 +168,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		a.Sleep()
 		b.Sleep()
-		allowed, _, err := a.Take(key, limit, window)
+		allowed, _, err := a.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -196,7 +190,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := int64(0); i < limit; i++ {
-			allowed, _, takeErr := limiter.Take(key, limit, window)
+			allowed, _, takeErr := limiter.Take(context.Background(), key, limit, window)
 			if takeErr != nil {
 				t.Fatal(takeErr)
 			}
@@ -206,7 +200,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		now = time.Unix(start, 0).Add(window)
 		limiter.SetNowForTest(func() time.Time { return now })
-		allowed, _, err := limiter.Take(key, limit, window)
+		allowed, _, err := limiter.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -223,7 +217,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		const limit int64 = 5
 		window := time.Minute
 		for i := 0; i < 3; i++ {
-			allowed, estimated, peekErr := limiter.Peek(key, limit, window)
+			allowed, estimated, peekErr := limiter.Peek(context.Background(), key, limit, window)
 			if peekErr != nil {
 				t.Fatal(peekErr)
 			}
@@ -231,7 +225,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 				t.Fatalf("peek %d denied, estimated %v", i+1, estimated)
 			}
 		}
-		allowed, estimated, err := limiter.Take(key, limit, window)
+		allowed, estimated, err := limiter.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -254,11 +248,11 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := int64(0); i < limit+1; i++ {
-			if _, _, takeErr := limiter.Take(key, limit, window); takeErr != nil {
+			if _, _, takeErr := limiter.Take(context.Background(), key, limit, window); takeErr != nil {
 				t.Fatal(takeErr)
 			}
 		}
-		allowed, estimated, err := limiter.Peek(key, limit, window)
+		allowed, estimated, err := limiter.Peek(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -267,7 +261,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		now = start.Add(window)
 		limiter.SetNowForTest(func() time.Time { return now })
-		allowed, estimated, err = limiter.Peek(key, limit, window)
+		allowed, estimated, err = limiter.Peek(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -276,7 +270,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		now = start.Add(window + 4*time.Second)
 		limiter.SetNowForTest(func() time.Time { return now })
-		allowed, estimated, err = limiter.Peek(key, limit, window)
+		allowed, estimated, err = limiter.Peek(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -299,7 +293,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		window := time.Minute
 		key := t.Name()
 		for i := 0; i < 5; i++ {
-			allowed, estimated, peekErr := limiter.Peek(key, limit, window)
+			allowed, estimated, peekErr := limiter.Peek(context.Background(), key, limit, window)
 			if peekErr != nil {
 				t.Fatal(peekErr)
 			}
@@ -310,7 +304,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 				t.Fatalf("peek %d estimated %v want 0", i+1, estimated)
 			}
 		}
-		allowed, estimated, err := limiter.Take(key, limit, window)
+		allowed, estimated, err := limiter.Take(context.Background(), key, limit, window)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -330,12 +324,12 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		now := time.Unix(1_700_000_000, 0)
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
-		if _, _, err := limiter.Take(key, 5, window); err != nil {
+		if _, _, err := limiter.Take(context.Background(), key, 5, window); err != nil {
 			t.Fatal(err)
 		}
 		windowStart := now.Unix() / 10 * 10
 		redisKey := redisWindowKey(key, windowStart)
-		values, err := client.Eval(liveTTLScript, []string{redisKey}, nil)
+		values, err := client.Eval(context.Background(), liveTTLScript, simpleredis.ScriptSHA1Hex(liveTTLScript), []string{redisKey}, nil)
 		if err != nil {
 			t.Fatalf("TTL Eval: %v", err)
 		}

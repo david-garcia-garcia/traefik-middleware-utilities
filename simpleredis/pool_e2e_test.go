@@ -1,6 +1,9 @@
 package simpleredis
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 // TestLive_PoolWait proves a waiter is redis:unreachable when the only in-use turn is held.
 func TestLive_PoolWait(t *testing.T) {
@@ -17,7 +20,7 @@ func TestLive_SelectOutOfRange(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
 		client := New(Config{Host: addr, Database: "99"})
 		t.Cleanup(client.Close)
-		_, err := client.Get("k")
+		_, err := client.Get(context.Background(), "k")
 		if err == nil || err.Error() != "ERR DB index is out of range" {
 			t.Fatalf("Get = %v, want ERR DB index is out of range", err)
 		}
@@ -32,7 +35,7 @@ func TestLive_WrongPassword(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS_AUTH", "SIMPLEREDIS_LIVE_DRAGONFLY_AUTH", func(t *testing.T, addr string) {
 		client := New(Config{Host: addr, Pass: "wrong-password"})
 		t.Cleanup(client.Close)
-		_, err := client.Get("k")
+		_, err := client.Get(context.Background(), "k")
 		if err == nil || err.Error() != RedisNoAuth {
 			t.Fatalf("Get = %v, want %s", err, RedisNoAuth)
 		}
@@ -50,12 +53,12 @@ func runLivePoolBackend(t *testing.T, addr string) {
 	t.Cleanup(client.Close)
 
 	t.Run("waiterIsUnreachable", func(t *testing.T) {
-		conn, err := client.borrow()
+		conn, err := client.borrow(context.Background())
 		if err != nil {
 			t.Fatalf("borrow: %v", err)
 		}
 		defer client.release(conn, true)
-		err = client.Set("simpleredis-live-waiter", []byte("1"), 60)
+		err = client.Set(context.Background(), "simpleredis-live-waiter", []byte("1"), 60)
 		if err == nil || err.Error() != RedisUnreachable {
 			t.Fatalf("waiter Set = %v, want %s", err, RedisUnreachable)
 		}
@@ -69,10 +72,10 @@ func runLivePeerCloseRecovery(t *testing.T, addr string) {
 	t.Cleanup(client.Close)
 
 	key := "simpleredis-live-eof:" + t.Name()
-	if err := client.Set(key, []byte("ok"), 60); err != nil {
+	if err := client.Set(context.Background(), key, []byte("ok"), 60); err != nil {
 		t.Fatal(err)
 	}
-	got, err := client.Get(key)
+	got, err := client.Get(context.Background(), key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +93,7 @@ func runLivePeerCloseRecovery(t *testing.T, addr string) {
 
 	killPooledIdleAddrOrIDForTest(t, client)
 
-	got, err = client.Get(key)
+	got, err = client.Get(context.Background(), key)
 	if err != nil {
 		t.Fatalf("Get after CLIENT KILL: %v", err)
 	}

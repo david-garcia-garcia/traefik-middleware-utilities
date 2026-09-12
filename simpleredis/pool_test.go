@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bytes"
+	"context"
 	"runtime"
 	"sync"
 	"testing"
@@ -16,7 +17,7 @@ func TestConnectionIsReused(t *testing.T) {
 	}
 
 	for i := 0; i < 25; i++ {
-		if _, err := redis.Get("hit"); err != nil {
+		if _, err := redis.Get(context.Background(), "hit"); err != nil {
 			t.Fatalf("Get %d: %v", i, err)
 		}
 	}
@@ -35,7 +36,7 @@ func TestConcurrentCommandsStayWithinPool(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 20; j++ {
-				if _, err := redis.Get("hit"); err != nil {
+				if _, err := redis.Get(context.Background(), "hit"); err != nil {
 					t.Errorf("Get: %v", err)
 					return
 				}
@@ -59,7 +60,7 @@ func TestRejectedAuthIsReturned(t *testing.T) {
 	for _, reply := range replies {
 		addr := startStaticRedis(t, reply)
 		redis := New(Config{Host: addr})
-		if _, err := redis.Get("a"); err == nil || err.Error() != RedisNoAuth {
+		if _, err := redis.Get(context.Background(), "a"); err == nil || err.Error() != RedisNoAuth {
 			t.Fatalf("Get against %q = %v, want %s", reply, err, RedisNoAuth)
 		}
 	}
@@ -70,7 +71,7 @@ func TestStaleConnectionIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
 
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("first Get: %v", err)
 	}
 
@@ -81,7 +82,7 @@ func TestStaleConnectionIsRetried(t *testing.T) {
 	}
 	redis.idleConnsMu.Unlock()
 
-	got, err := redis.Get("hit")
+	got, err := redis.Get(context.Background(), "hit")
 	if err != nil {
 		t.Fatalf("Get on a client-closed pooled connection: %v", err)
 	}
@@ -98,7 +99,7 @@ func TestPeerClosedIdleConnEOFIsRetried(t *testing.T) {
 	fake, addr := startPeerCloseFake(t, map[string]string{"hit": "t"}, true)
 	redis := New(Config{Host: addr})
 
-	got, err := redis.Get("hit")
+	got, err := redis.Get(context.Background(), "hit")
 	if err != nil {
 		t.Fatalf("first Get: %v", err)
 	}
@@ -115,7 +116,7 @@ func TestPeerClosedIdleConnEOFIsRetried(t *testing.T) {
 
 	fake.waitFirstClosed(t)
 
-	got, err = redis.Get("hit")
+	got, err = redis.Get(context.Background(), "hit")
 	if err != nil {
 		t.Fatalf("second Get: %v", err)
 	}
@@ -140,12 +141,12 @@ func TestPeerClosedIdleRetryBorrowFailsUnreachable(t *testing.T) {
 	fake, addr := startPeerCloseFake(t, map[string]string{"hit": "t"}, false)
 	redis := New(Config{Host: addr})
 
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("first Get: %v", err)
 	}
 	fake.waitFirstClosed(t)
 
-	if _, err := redis.Get("hit"); err == nil || err.Error() != RedisUnreachable {
+	if _, err := redis.Get(context.Background(), "hit"); err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("second Get = %v, want %s", err, RedisUnreachable)
 	}
 }
@@ -155,7 +156,7 @@ func TestAuthAndSelectOncePerDial(t *testing.T) {
 	redis := New(Config{Host: addr, Pass: "secret", Database: "2"})
 
 	for i := 0; i < 3; i++ {
-		if _, err := redis.Get("hit"); err != nil {
+		if _, err := redis.Get(context.Background(), "hit"); err != nil {
 			t.Fatalf("Get %d: %v", i, err)
 		}
 	}
@@ -181,7 +182,7 @@ func TestHandshakeAuthRejectedMapsToNoAuthAndIsNotPooled(t *testing.T) {
 			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 			fake.setHandshakeReplies(reply, statusOKReply)
 			redis := New(Config{Host: addr, Pass: "wrong-password"})
-			if _, err := redis.Get("hit"); err == nil || err.Error() != RedisNoAuth {
+			if _, err := redis.Get(context.Background(), "hit"); err == nil || err.Error() != RedisNoAuth {
 				t.Fatalf("Get = %v, want %s", err, RedisNoAuth)
 			}
 			if len(redis.idleConns) != 0 {
@@ -203,7 +204,7 @@ func TestHandshakeSelectRejectedAfterAuthIsNotPooled(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.setHandshakeReplies(statusOKReply, "-ERR DB index is out of range\r\n")
 	redis := New(Config{Host: addr, Pass: "secret", Database: "99"})
-	if _, err := redis.Get("hit"); err == nil || err.Error() != "ERR DB index is out of range" {
+	if _, err := redis.Get(context.Background(), "hit"); err == nil || err.Error() != "ERR DB index is out of range" {
 		t.Fatalf("Get = %v, want ERR DB index is out of range", err)
 	}
 	if len(redis.idleConns) != 0 {
@@ -226,7 +227,7 @@ func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	redis := New(Config{Host: addr})
 
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("first Get: %v", err)
 	}
 	redis.idleConnsMu.Lock()
@@ -237,7 +238,7 @@ func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	redis.idleConns[0].lastUsed = time.Now().Add(-redis.IdleTimeout() - time.Second)
 	redis.idleConnsMu.Unlock()
 
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("Get after idle timeout: %v", err)
 	}
 	if fake.connections() != 2 {
@@ -260,7 +261,7 @@ func TestStaleIdleHeadIsClosedWhileTailStaysHot(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := redis.Get("hit"); err != nil {
+			if _, err := redis.Get(context.Background(), "hit"); err != nil {
 				t.Errorf("Get: %v", err)
 			}
 		}()
@@ -288,7 +289,7 @@ func TestStaleIdleHeadIsClosedWhileTailStaysHot(t *testing.T) {
 	redis.idleConns[0].lastUsed = time.Now().Add(-redis.IdleTimeout() - time.Second)
 	redis.idleConnsMu.Unlock()
 
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("Get after aging head: %v", err)
 	}
 	fake.waitOpenSocketsEqual(t, 1)
@@ -312,7 +313,7 @@ func TestBurstGetsStayWithinLiveCap(t *testing.T) {
 		for i := 0; i < perBurst; i++ {
 			go func() {
 				defer wg.Done()
-				if _, err := redis.Get("hit"); err != nil {
+				if _, err := redis.Get(context.Background(), "hit"); err != nil {
 					t.Errorf("Get: %v", err)
 				}
 			}()
@@ -336,7 +337,7 @@ func TestOverlappingCallersDoNotDialPastLiveCap(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := redis.Get("hit"); err != nil {
+			if _, err := redis.Get(context.Background(), "hit"); err != nil {
 				t.Errorf("Get: %v", err)
 			}
 		}()
@@ -352,7 +353,7 @@ func TestPoolWaitTimesOutWithoutExtraDial(t *testing.T) {
 	fake.mu.Lock()
 	fake.getDelay = 300 * time.Millisecond
 	fake.mu.Unlock()
-	redis := New(Config{Host: addr, PoolSize: 2, PoolTimeout: 50 * time.Millisecond})
+	redis := New(Config{Host: addr, PoolSize: 2, PoolTimeout: 50 * time.Millisecond, IOTimeout: time.Second})
 
 	started := make(chan struct{}, 2)
 	var wg sync.WaitGroup
@@ -361,7 +362,7 @@ func TestPoolWaitTimesOutWithoutExtraDial(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			started <- struct{}{}
-			if _, err := redis.Get("hit"); err != nil {
+			if _, err := redis.Get(context.Background(), "hit"); err != nil {
 				t.Errorf("holder Get: %v", err)
 			}
 		}()
@@ -376,7 +377,7 @@ func TestPoolWaitTimesOutWithoutExtraDial(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	waitStarted := time.Now()
-	_, err := redis.Get("hit")
+	_, err := redis.Get(context.Background(), "hit")
 	waited := time.Since(waitStarted)
 	if err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("waiter Get = %v, want %s", err, RedisUnreachable)
@@ -402,7 +403,7 @@ func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if _, err := redis.Get("hit"); err != nil {
+			if _, err := redis.Get(context.Background(), "hit"); err != nil {
 				t.Errorf("Get: %v", err)
 			}
 		}()
@@ -418,7 +419,7 @@ func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
 		t.Fatalf("opened %d connections, want at most 16", got)
 	}
 	before := fake.connections()
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("reuse Get: %v", err)
 	}
 	if got := fake.connections(); got != before {
@@ -437,7 +438,7 @@ func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
 	// MaxRetries off: default retry would redial and hide the truncated classification.
 	redis := New(Config{Host: addr, MaxRetries: -1})
 
-	_, err := redis.Get("k")
+	_, err := redis.Get(context.Background(), "k")
 	if err == nil {
 		t.Fatal("truncated Get: want error")
 	}
@@ -451,7 +452,7 @@ func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
 		t.Fatalf("idle after truncated Get = %d, want 0", got)
 	}
 
-	got, err := redis.Get("k")
+	got, err := redis.Get(context.Background(), "k")
 	if err != nil {
 		t.Fatalf("second Get: %v", err)
 	}
