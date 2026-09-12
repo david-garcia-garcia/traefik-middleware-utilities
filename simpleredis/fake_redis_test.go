@@ -24,12 +24,15 @@ type fakeRedis struct {
 	incrBys              int
 	evalShaCount         int
 	evals                int
+	msetexSends          int
+	rejectMSetEX         bool
 	closeBeforeReplyOnce bool
 	errorReplyOnce       string
 	getDelay             time.Duration
 	lastSet              []string
 	lastExpire           []string
 	lastEval             []string
+	lastMSetEX           []string
 }
 
 // startFakeRedis listens on a local TCP port and serves an in-process RESP map.
@@ -57,7 +60,7 @@ func startFakeRedis(t testing.TB, store map[string]string) (*fakeRedis, string) 
 	return fake, listener.Addr().String()
 }
 
-// serve answers AUTH/SELECT/GET/MGET/SET/INCR/EVALSHA/EVAL on one accepted socket.
+// serve answers AUTH/SELECT/GET/MGET/SET/INCR/MSETEX/EVALSHA/EVAL on one accepted socket.
 func (f *fakeRedis) serve(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
@@ -134,7 +137,15 @@ func (f *fakeRedis) commandReply(args []string) string {
 		return fmt.Sprintf(":%d\r\n", afterIncr)
 	case "EXPIRE", "EXPIREAT":
 		f.lastExpire = append([]string(nil), args...)
-		return ":1\r\n"
+		return integerOneReply
+	case "MSETEX":
+		f.msetexSends++
+		f.lastMSetEX = append([]string(nil), args...)
+		if f.rejectMSetEX {
+			return "-ERR unknown command 'MSETEX'\r\n"
+		}
+		f.applyMSetEXArgs(args)
+		return integerOneReply
 	case evalShaVerb:
 		f.evalShaCount++
 		digest := args[1]
@@ -182,6 +193,86 @@ func (f *fakeRedis) lastEvalCommand() []string {
 	return append([]string(nil), f.lastEval...)
 }
 
+// lastMSetEXCommand returns the last native MSETEX argv.
+func (f *fakeRedis) lastMSetEXCommand() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.lastMSetEX...)
+}
+
+// msetexSendCount is how many MSETEX commands the fake has seen.
+func (f *fakeRedis) msetexSendCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.msetexSends
+}
+
+// setRejectMSetEX makes later MSETEX commands reply unknown-command.
+func (f *fakeRedis) setRejectMSetEX() {
+	f.mu.Lock()
+	f.rejectMSetEX = true
+	f.mu.Unlock()
+}
+
+// applyMSetEXArgs stores or deletes pairs from a native MSETEX argv. Caller holds mu.
+func (f *fakeRedis) applyMSetEXArgs(args []string) {
+	if len(args) < 4 {
+		return
+	}
+	pairCount, err := strconv.Atoi(args[1])
+	if err != nil || pairCount < 0 {
+		return
+	}
+	tokenIndex := 2 + 2*pairCount
+	if len(args) < tokenIndex+2 {
+		return
+	}
+	names := make([]string, pairCount)
+	values := make([]string, pairCount)
+	for i := 0; i < pairCount; i++ {
+		names[i] = args[2+2*i]
+		values[i] = args[3+2*i]
+	}
+	f.applyMSetPairs(names, values, args[tokenIndex], args[tokenIndex+1])
+}
+
+// applyMSetEXEval stores or deletes pairs from the fallback EVAL or EVALSHA argv. Caller holds mu.
+func (f *fakeRedis) applyMSetEXEval(args []string) {
+	if len(args) < 5 {
+		return
+	}
+	pairCount, err := strconv.Atoi(args[2])
+	if err != nil || pairCount < 0 {
+		return
+	}
+	tokenIndex := 3 + 2*pairCount
+	if len(args) < tokenIndex+2 {
+		return
+	}
+	names := make([]string, pairCount)
+	values := make([]string, pairCount)
+	for i := 0; i < pairCount; i++ {
+		names[i] = args[3+i]
+		values[i] = args[3+pairCount+i]
+	}
+	f.applyMSetPairs(names, values, args[tokenIndex], args[tokenIndex+1])
+}
+
+// applyMSetPairs stores values, or deletes on past EXAT. Caller holds mu.
+func (f *fakeRedis) applyMSetPairs(names, values []string, token, ttlText string) {
+	ttl, err := strconv.ParseInt(ttlText, 10, 64)
+	pastExat := token == "EXAT" && err == nil && ttl < time.Now().Unix()
+	for i, name := range names {
+		if pastExat {
+			delete(f.store, name)
+			continue
+		}
+		if i < len(values) {
+			f.store[name] = values[i]
+		}
+	}
+}
+
 // evalCommandCounts returns how many EVALSHA and EVAL commands the fake has seen.
 func (f *fakeRedis) evalCommandCounts() (evalSha, eval int) {
 	f.mu.Lock()
@@ -192,6 +283,10 @@ func (f *fakeRedis) evalCommandCounts() (evalSha, eval int) {
 // evalScriptReply runs the Kong incrby+expireat path or replies :0. lastEval is that argv.
 func (f *fakeRedis) evalScriptReply(script string, argv []string) string {
 	f.lastEval = append([]string(nil), argv...)
+	if script == msetexFallbackScript {
+		f.applyMSetEXEval(argv)
+		return integerOneReply
+	}
 	if script == kongIncrbyExpireatScript && len(argv) >= 6 {
 		key := argv[3]
 		delta, convErr := strconv.ParseInt(argv[4], 10, 64)
@@ -280,6 +375,9 @@ return value`
 
 // statusOKReply is a RESP simple-string OK.
 const statusOKReply = "+OK\r\n"
+
+// integerOneReply is a RESP integer 1 (EXPIRE/MSETEX success and the MSetEX Lua fallback).
+const integerOneReply = ":1\r\n"
 
 // incrementNotIntegerReply is the Redis error when INCR/INCRBY cannot parse the stored value.
 const incrementNotIntegerReply = "-ERR value is not an integer or out of range\r\n"
