@@ -1,6 +1,6 @@
 ## Purpose
 
-Defines the stdlib TCP session a SimpleRedis client holds: `Init` records host, password, and database without dialing; the first command dials; AUTH and SELECT run once per dial; idle connections are pooled; `Close` drains the pool and blocks further dials. Callers import `simpleredis` from this module. The session loads under Traefik Yaegi from a nested fake plugin that Inits in `New`.
+Defines the stdlib TCP session a SimpleRedis client holds: `New(Config)` copies settings without dialing; the first command dials; AUTH and SELECT run once per dial; idle connections are pooled; `Close` drains the pool and blocks further dials. Callers import `simpleredis` from this module. The session loads under Traefik Yaegi from a nested fake plugin that calls `simpleredis.New` in Traefik `New`.
 
 ## Requirements
 
@@ -18,34 +18,44 @@ The session SHALL live in package `simpleredis` under folder `simpleredis/`. The
 - **WHEN** a caller imports the client from this module
 - **THEN** the import path ends in `/simpleredis`
 
-### Requirement: Init records settings and does not dial
-`Init(host, pass, database)` SHALL store those three values on the client. `Init` MUST NOT open a TCP connection. Callers SHALL call `Init` once before concurrent use.
+### Requirement: New records settings and does not dial
+`New(Config)` SHALL copy `Config` onto a new client (host, password, database, pool knobs, I/O knobs, retry sentinels) and SHALL create the in-use-turn channel sized to `PoolSize` (const default 8 when `PoolSize` is 0). `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, or retry fields.
 
-#### Scenario: Init does not open a socket
-- **WHEN** `Init` is called with a host that refuses connections
-- **THEN** `Init` returns without error
+Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` two seconds, `IOTimeout` one second. Retry fields on `Config` follow go-redis Options sentinels: `0` means the default (3 extra retries, 8ms, 512ms); `-1` means off.
+
+#### Scenario: New does not open a socket
+- **WHEN** `New` is called with a host that refuses connections
+- **THEN** `New` returns a client without error
 - **AND** no TCP connection is opened
 
+#### Scenario: Live cap is frozen at New
+- **WHEN** `Config.PoolSize` is 1 at `New`
+- **AND** `PoolSize` is written to 16 on that Config and on the client after `New`
+- **AND** one command holds the only live turn
+- **AND** another command waits past `PoolTimeout`
+- **THEN** that waiter returns `redis:unreachable`
+- **AND** the fake observes at most one TCP connection
+
 ### Requirement: First command dials TCP
-The first `Get`, `MGet` (with at least one name), `Set`, or `Del` after `Init` SHALL dial `tcp` to the host stored by `Init`. The session MUST NOT dial a Unix socket and MUST NOT use TLS. Dial timeout SHALL be two seconds.
+The first `Get`, `MGet` (with at least one name), `Set`, or `Del` after `New` SHALL dial `tcp` to the host stored by `New`. The session MUST NOT dial a Unix socket and MUST NOT use TLS. Dial timeout SHALL be two seconds.
 
 #### Scenario: Unreachable host
-- **WHEN** a command is issued after `Init` with host `127.0.0.1:1`
+- **WHEN** a command is issued after `New` with host `127.0.0.1:1`
 - **THEN** the command returns an error whose `Error()` text is `redis:unreachable`
 
 ### Requirement: AUTH and SELECT run once per dial
 When `pass` is non-empty, each new dial SHALL send `AUTH` with that password before other commands. When `database` is non-empty, each new dial SHALL send `SELECT` with that database before other commands. Subsequent commands on a reused connection MUST NOT send `AUTH` or `SELECT` again.
 
 #### Scenario: Auth and select once per dial
-- **WHEN** the client is Inited with a password and a database
+- **WHEN** the client is created with `New` with a password and a database
 - **AND** several Gets reuse one connection
 - **THEN** AUTH and SELECT are sent once for that connection
 - **AND** they are not sent again on those Gets
 
 ### Requirement: Idle connections are pooled
-The session SHALL keep unused TCP connections in an idle pool of at most eight (`maxIdleConns`). Live sockets (idle plus checked out) SHALL not exceed `poolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `poolSize`, a caller SHALL wait for a released socket instead of dialing. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `poolSize` connections, including when more callers overlap than `poolSize`. An idle connection older than thirty seconds SHALL not be reused; the next command SHALL dial a new one if live sockets are under `poolSize`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. `release` MUST NOT close a reusable socket solely because the idle list is full while live sockets are under `poolSize`.
+The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdleConns` (const default 8). Live sockets (idle plus checked out) SHALL not exceed `PoolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `PoolSize`, a caller SHALL wait for a released socket instead of dialing. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `PoolSize` connections, including when more callers overlap than `PoolSize`. An idle connection older than `IdleTimeout` (const default thirty seconds) SHALL not be reused; the next command SHALL dial a new one if live sockets are under `PoolSize`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. `release` MUST NOT close a reusable socket solely because the idle list is full while live sockets are under `PoolSize`.
 
-Every command (GET, MGET, SET, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL) SHALL use go-redis-shaped command retry. Exported fields `MaxRetries`, `MinRetryBackoff`, and `MaxRetryBackoff` follow go-redis Options sentinels and MUST NOT be Init arguments: `0` means the default (3 extra retries, 8ms, 512ms); `-1` means off (no extra retries, no backoff sleep). The zero-value client therefore retries like go-redis. The retry loop SHALL be `for attempt := 0; attempt <= maxRetries; attempt++` (default 3 means at most four sends). Backoff SHALL sleep only between retries (`attempt > 0`), using go-redis `RetryBackoff` (`math/rand` `Int63n` jitter). Init stays `Init(host, pass, database)`.
+Every command (GET, MGET, SET, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL) SHALL use go-redis-shaped command retry. `MaxRetries`, `MinRetryBackoff`, and `MaxRetryBackoff` live on `Config` and are copied at `New`. The retry loop SHALL be `for attempt := 0; attempt <= maxRetries; attempt++` (default 3 means at most four sends). Backoff SHALL sleep only between retries (`attempt > 0`), using go-redis `RetryBackoff` (`math/rand` `Int63n` jitter). Construction is `New(Config)`.
 
 A command SHALL retry when the error is `redis:unreachable` (EOF, unexpected EOF, dial failure, and other IO as this client maps them), including a fresh dial, unless the client is `Close`d (`redis:unreachable` from a closed client MUST NOT spin `MaxRetries`). A command SHALL also retry Redis error replies whose text is `ERR max number of clients reached` or has prefix `LOADING `, `READONLY `, `MASTERDOWN `, `CLUSTERDOWN `, or `TRYAGAIN ` (space after the word). A command MUST NOT retry `redis:timeout` (documented deviation from go-redis: `ioTimeout` is one second; retrying would stall a Traefik request for several seconds), `redis:miss`, `redis:noauth`, `redis:issue?`, or other Redis `-ERR` replies. A pool-wait timeout SHALL return `redis:unreachable` and MUST NOT be retried, so `MaxRetries` does not multiply `poolTimeout`.
 
@@ -99,7 +109,7 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **AND** the peer observes a second GET on a new connection
 
 ### Requirement: Full pool wait returns redis:unreachable
-When every live socket is checked out, a further command SHALL wait for a slot. If no slot frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a slot arrives). That timeout MUST NOT be retried.
+When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried.
 
 #### Scenario: Pool wait times out
 - **WHEN** all live sockets at the default `poolSize` (8) are busy
@@ -109,7 +119,7 @@ When every live socket is checked out, a further command SHALL wait for a slot. 
 - **AND** the fake or server observes no additional TCP connection for that command
 
 ### Requirement: Live cap is proven on Redis and Dragonfly
-The session SHALL keep at most `poolSize` live TCP connections (idle plus in use; const default 8) against a real Redis and a real Dragonfly. Fake-server tests MUST NOT be the only proof. Traefik local-plugin Pester on `/redis` and `/dragonfly` SHALL overlap requests long enough to contend for sockets, observe at most `poolSize` clients on that backend (default 8), and observe `redis:unreachable` when a waiter exceeds the pool wait. Compiled tests gated on live addresses SHALL prove pool-wait `redis:unreachable` on both engines; they MAY set unexported `poolSize` so a shared CI Redis is not left in Lua BUSY. Any Lua used to hold a socket MUST be Lua 5.1-safe (no `table.maxn`) and MUST list touched keys in KEYS (zero keys when none are touched). Compose project `reclaim-e2e`, routes `/a` `/b`, and existing verb headers MUST keep their semantics.
+The session SHALL keep at most `poolSize` live TCP connections (idle plus in use; const default 8) against a real Redis and a real Dragonfly. Fake-server tests MUST NOT be the only proof. Traefik local-plugin Pester on `/redis` and `/dragonfly` SHALL overlap requests long enough to contend for sockets, observe at most `poolSize` clients on that backend (default 8), and observe `redis:unreachable` when a waiter exceeds the pool wait. Compiled tests gated on live addresses SHALL prove pool-wait `redis:unreachable` on both engines; they MAY set `Config.PoolSize` so a shared CI Redis is not left in Lua BUSY. Any Lua used to hold a socket MUST be Lua 5.1-safe (no `table.maxn`) and MUST list touched keys in KEYS (zero keys when none are touched). Compose project `reclaim-e2e`, routes `/a` `/b`, and existing verb headers MUST keep their semantics.
 
 #### Scenario: Concurrent holds stay within poolSize on Redis
 - **WHEN** overlapping requests through the Traefik plugin hold sockets against compose Redis
@@ -138,17 +148,17 @@ The session SHALL keep at most `poolSize` live TCP connections (idle plus in use
 - **AND** no new TCP connection is opened
 
 ### Requirement: I/O deadline is timeout, not a net.Error assert
-When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `ioTimeout` is one second). A timeout on a reused connection MUST NOT open a second connection.
+When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `IOTimeout` default is one second). A timeout on a reused connection MUST NOT open a second connection.
 
 #### Scenario: I/O timeout is redis:timeout
 - **WHEN** the Redis peer does not complete a reply before the I/O deadline
 - **THEN** the command returns `redis:timeout`
 
-### Requirement: Library Init loads under Traefik Yaegi
-A Traefik local plugin SHALL import this module’s `simpleredis` package. `New` SHALL call `Init` only (no command, so Traefik still starts if Redis is late). Traefik SHALL start. A request through that plugin SHALL succeed. `useunsafe` MUST be false. That plugin MUST be a nested module, not this repo’s root `plugin.go`. The existing reclaim e2e compose project, Traefik container, ports 8000/8080, and routes `/a` `/b` MUST keep their reclaim semantics.
+### Requirement: Library New loads under Traefik Yaegi
+A Traefik local plugin SHALL import this module’s `simpleredis` package. Traefik `New` SHALL call `simpleredis.New` only (no command, so Traefik still starts if Redis is late). Traefik SHALL start. A request through that plugin SHALL succeed. `useunsafe` MUST be false. That plugin MUST be a nested module, not this repo’s root `plugin.go`. The existing reclaim e2e compose project, Traefik container, ports 8000/8080, and routes `/a` `/b` MUST keep their reclaim semantics.
 
 #### Scenario: Fake plugin starts without dialing
-- **WHEN** Traefik v3.7.11 loads a local plugin whose `New` calls `SimpleRedis.Init`
+- **WHEN** Traefik v3.7.11 loads a local plugin whose `New` calls `simpleredis.New`
 - **AND** Redis is not yet accepting connections
 - **THEN** Traefik’s API is reachable
 

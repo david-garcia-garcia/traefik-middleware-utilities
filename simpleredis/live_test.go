@@ -33,7 +33,7 @@ func TestLive_RedisAndDragonfly(t *testing.T) {
 	}
 }
 
-// runLivePoolBackend Inits against a live engine then holds the only in-use turn
+// runLivePoolBackend builds a live client then holds the only in-use turn
 // so a waiter is redis:unreachable without a Lua BUSY on the shared CI Redis.
 func runLivePoolBackend(t *testing.T, addr string) {
 	t.Helper()
@@ -53,13 +53,10 @@ func runLivePoolBackend(t *testing.T, addr string) {
 	})
 }
 
-// waitLiveSimpleRedis Inits a one-slot client and waits until Set against addr succeeds.
+// waitLiveSimpleRedis builds a one-slot client and waits until Set against addr succeeds.
 func waitLiveSimpleRedis(t *testing.T, addr string) *SimpleRedis {
 	t.Helper()
-	client := &SimpleRedis{}
-	client.poolSize = 1
-	client.poolTimeout = 80 * time.Millisecond
-	client.Init(addr, "", "")
+	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: 80 * time.Millisecond})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		if err := client.Set("simpleredis-live-probe", []byte("1"), 60); err == nil {

@@ -3,26 +3,25 @@
 ## Language
 
 **SimpleRedis**:
-A stdlib pooled TCP RESP client (`Init`, `Get`, `MGet`, `Set` with EX, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `Close`). `Init` stores host, password, and database and does not dial; the first command dials.
+A stdlib pooled TCP RESP client (`New(Config)`, `Get`, `MGet`, `Set` with EX, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `Close`). `New` copies `Config` and does not dial; the first command dials. Pool, timeout, and retry knobs live on `Config` and freeze at `New`.
 _Avoid_: `go-redis`, miniredis, TLS, Unix sockets, renaming the package to `redis`
 
 ## Overview
 
-Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`. Callers match errors by `Error()` text (`redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`). The copied sources are Apache-2.0 (`simpleredis/LICENSE`).
+Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`. Callers match errors by `Error()` text (`redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`). The copied sources are Apache-2.0 (`LICENSE`).
 
 ## How to use
 
-- Allocate `&simpleredis.SimpleRedis{}` and `Init(host, pass, database)` once before concurrent use. Set `MaxRetries` / `MinRetryBackoff` / `MaxRetryBackoff` on the struct when the zero-value defaults are wrong (`-1` turns extra retries or backoff off).
-- Do not dial in Traefik `New`. Call `Init` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, or `Eval`).
+- Call `simpleredis.New(simpleredis.Config{Host: host})` once before concurrent use. Set pool, timeout, and retry knobs on `Config` (`-1` turns extra retries or backoff off). After `New` those knobs do not change.
+- Do not dial in Traefik `New`. Call `simpleredis.New` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, or `Eval`).
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
 - Prove with `go test ./simpleredis/...` (includes Yaegi GOPATH interp). Traefik e2e is `./Test-Integration.ps1` (Redis and Dragonfly).
-- Call `Eval(script, keys, args)` with the Lua body. Eval hashes the body each call (cheap SHA-1; no map, no lock) and sends EVALSHA; on NOSCRIPT it falls back once to EVAL so the engine stores the script. Do not SCRIPT LOAD at Init.
+- Call `Eval(script, keys, args)` with the Lua body. Eval hashes the body each call (cheap SHA-1; no map, no lock) and sends EVALSHA; on NOSCRIPT it falls back once to EVAL so the engine stores the script. Do not SCRIPT LOAD at `New`.
 
 ## Pattern snippet
 
 ```go
-client := &simpleredis.SimpleRedis{}
-client.Init("redis:6379", "", "")
+client := simpleredis.New(simpleredis.Config{Host: "redis:6379"})
 if err := client.Set("k", []byte("v"), 60); err != nil {
 	return err
 }
@@ -38,18 +37,22 @@ if err != nil {
 
 ## Key files
 
-- `simpleredis/simpleredis.go` — session, pool, RESP
-- `simpleredis/yaegi_test.go` — interpreter Init/Get/Set/Del/Incr/Eval
+- `simpleredis/simpleredis.go` — client, New, Close
+- `simpleredis/config.go` — freeze-at-New knobs
+- `simpleredis/pool.go` — in-use turns, unused sockets, dial
+- `simpleredis/commands.go` — verbs, exec, retry
+- `simpleredis/resp.go` — RESP codec
+- `simpleredis/yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`
 
 ## Gotchas
 
-- `Init` does not dial. A refusing host is fine until the first command.
+- `New` does not dial. A refusing host is fine until the first command.
 - After `Close`, commands return `redis:unreachable` and do not redial. Closed-client unreachable is not retried.
-- Live cap is `poolSize` (`liveCap()`, const default 8; idle plus in-flight). A waiter past `poolSize` waits `poolTimeout` (default 200ms), then `redis:unreachable`. Idle trim stays `maxIdleConns` (8). Pool wait is not retried.
+- Live cap is `Config.PoolSize` (`PoolSize()`, const default 8; unused plus in-flight). `New` builds the in-use-turn channel. After `New` a `PoolSize` write does not resize. A waiter past `PoolSize` waits `PoolTimeout` (default 200ms), then `redis:unreachable`. Idle trim is `MaxIdleConns` (default 8). Pool wait is not retried.
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
 - Eval hashes the Lua body on every call and sends EVALSHA. SHA-1 of a limiter script (~470 B) is cheaper than a mutex on the Traefik hot path, and a `map[string]string` of full script bodies would need a lock because Go maps are not concurrent. Do not cache digests. SCRIPT FLUSH or a restart yields NOSCRIPT; Eval then sends EVAL once so the engine stores the script. Callers still pass the body.
-- Every verb uses go-redis-shaped command retry (`MaxRetries` / `MinRetryBackoff` / `MaxRetryBackoff` on the struct; `0` is default 3 extra retries / 8ms / 512ms; `-1` is off). Retry `redis:unreachable` (including a fresh dial) and LOADING/READONLY/MASTERDOWN/CLUSTERDOWN/TRYAGAIN / max-clients replies. Do not retry `redis:timeout` or a pool-wait timeout. INCR/INCRBY/EVAL can double-apply after a lost reply; that is accepted.
+- Every verb uses go-redis-shaped command retry (`MaxRetries` / `MinRetryBackoff` / `MaxRetryBackoff` on `Config`; `0` is default 3 extra retries / 8ms / 512ms; `-1` is off). Retry `redis:unreachable` (including a fresh dial) and LOADING/READONLY/MASTERDOWN/CLUSTERDOWN/TRYAGAIN / max-clients replies. Do not retry `redis:timeout` or a pool-wait timeout. INCR/INCRBY/EVAL can double-apply after a lost reply; that is accepted.

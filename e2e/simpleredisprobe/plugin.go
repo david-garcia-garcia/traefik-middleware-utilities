@@ -77,13 +77,10 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 		host = defaultHost
 	}
 
-	client := &simpleredis.SimpleRedis{}
-	client.Init(host, "", "")
+	client := simpleredis.New(simpleredis.Config{Host: host})
 	mw := &middleware{next: next, client: client}
 	if cfg.DropHost != "" {
-		dropClient := &simpleredis.SimpleRedis{}
-		dropClient.Init(cfg.DropHost, "", "")
-		mw.dropClient = dropClient
+		mw.dropClient = simpleredis.New(simpleredis.Config{Host: cfg.DropHost})
 	}
 	return mw, nil
 }
