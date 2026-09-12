@@ -161,32 +161,36 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	m.next.ServeHTTP(rw, req)
 }
 
-// writeDropHeaders warms the drop-relay pool, then Incr and Eval through it, and reads stored values from the engine client.
+// writeDropHeaders warms the drop-relay pool, then Incr and Eval through it (lost reply is retried; stored values are double-apply), and reads stored values from the engine client.
 func (m *middleware) writeDropHeaders(rw http.ResponseWriter, prefix string) {
 	dropIncrKey := prefix + ":dropincr"
 	dropEvalKey := prefix + ":dropeval"
 
-	// Warm so Incr is a reused socket; GET miss still pools.
+	// Warm so Incr is a reused socket; GET miss still pools. Lost-reply Incr then retries on a new session whose first command is INCR and must succeed (double-apply).
 	_, _ = m.dropClient.Get(prefix + ":dropwarm")
-	_, incrErr := m.dropClient.Incr(dropIncrKey)
-	rw.Header().Set("X-SimpleRedis-DropIncr", errorText(incrErr))
+	incrValue, incrErr := m.dropClient.Incr(dropIncrKey)
+	rw.Header().Set("X-SimpleRedis-DropIncr", dropResultText(incrErr, strconv.FormatInt(incrValue, 10)))
 	incrStored, incrStoredErr := m.client.Get(dropIncrKey)
 	rw.Header().Set("X-SimpleRedis-DropIncrStored", storedText(incrStored, incrStoredErr))
 
 	// Warm again so Eval is also a reused socket (Incr closed the previous one).
 	_, _ = m.dropClient.Get(prefix + ":dropwarm2")
-	_, evalErr := m.dropClient.Eval(kongIncrbyExpireatScript, []string{dropEvalKey}, []string{"3", strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)})
-	rw.Header().Set("X-SimpleRedis-DropEval", errorText(evalErr))
+	evalValues, evalErr := m.dropClient.Eval(kongIncrbyExpireatScript, []string{dropEvalKey}, []string{"3", strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)})
+	evalText := "ok"
+	if len(evalValues) == 1 {
+		evalText = string(evalValues[0])
+	}
+	rw.Header().Set("X-SimpleRedis-DropEval", dropResultText(evalErr, evalText))
 	evalStored, evalStoredErr := m.client.Get(dropEvalKey)
 	rw.Header().Set("X-SimpleRedis-DropEvalStored", storedText(evalStored, evalStoredErr))
 }
 
-// errorText is err.Error, or "ok" when the drop command unexpectedly succeeded.
-func errorText(err error) string {
-	if err == nil {
-		return "ok"
+// dropResultText is the integer reply when the drop command succeeded, or err.Error when it failed.
+func dropResultText(err error, success string) string {
+	if err != nil {
+		return err.Error()
 	}
-	return err.Error()
+	return success
 }
 
 // storedText is the GET payload, or the GET error text when the engine key is missing.

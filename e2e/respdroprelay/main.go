@@ -1,4 +1,4 @@
-// Command respdroprelay forwards RESP to an upstream engine and drops INCR/INCRBY/EVAL replies.
+// Command respdroprelay forwards RESP to an upstream engine and drops INCR/INCRBY/EVAL replies after the session has already forwarded at least one command.
 package main
 
 import (
@@ -43,6 +43,7 @@ func relaySession(client net.Conn, upstreamAddr string) {
 	clientReader := bufio.NewReader(client)
 	upstreamReader := bufio.NewReader(upstream)
 	upstreamWriter := bufio.NewWriter(upstream)
+	hasForwarded := false
 	for {
 		args, err := readCommand(clientReader)
 		if err != nil {
@@ -55,12 +56,14 @@ func relaySession(client net.Conn, upstreamAddr string) {
 		if err != nil {
 			return
 		}
-		if verbDropsReply(args[0]) {
+		// Drop only after this TCP session already forwarded a command (probe warms with GET). A retry on a new session whose first command is INCR/EVAL must pass the reply through.
+		if hasForwarded && verbDropsReply(args[0]) {
 			return
 		}
 		if _, err := client.Write(reply); err != nil {
 			return
 		}
+		hasForwarded = true
 	}
 }
 

@@ -23,6 +23,7 @@ type fakeRedis struct {
 	incrBys              int
 	evals                int
 	closeBeforeReplyOnce bool
+	errorReplyOnce       string
 	lastSet              []string
 	lastExpire           []string
 	lastEval             []string
@@ -63,6 +64,13 @@ func (f *fakeRedis) serve(conn net.Conn) {
 			return
 		}
 		f.mu.Lock()
+		if f.errorReplyOnce != "" {
+			reply := f.errorReplyOnce
+			f.errorReplyOnce = ""
+			f.mu.Unlock()
+			_, _ = io.WriteString(conn, reply)
+			continue
+		}
 		reply := f.commandReply(args)
 		if f.closeBeforeReplyOnce {
 			f.closeBeforeReplyOnce = false
@@ -182,6 +190,13 @@ func (f *fakeRedis) handshakeCounts() (auths, selects, gets int) {
 func (f *fakeRedis) armCloseBeforeReplyOnceForTest() {
 	f.mu.Lock()
 	f.closeBeforeReplyOnce = true
+	f.mu.Unlock()
+}
+
+// armErrorReplyOnceForTest writes reply once (LOADING/CLUSTERDOWN/TRYAGAIN) without mutating the store.
+func (f *fakeRedis) armErrorReplyOnceForTest(reply string) {
+	f.mu.Lock()
+	f.errorReplyOnce = reply
 	f.mu.Unlock()
 }
 
@@ -823,9 +838,106 @@ func TestIncrGarbageIntegerPayload(t *testing.T) {
 	}
 }
 
-func TestLostReplyIncrIsNotRetried(t *testing.T) {
+func TestLostReplyIncrIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("warm Get: %v", err)
+	}
+
+	fake.armCloseBeforeReplyOnceForTest()
+	gotIncr, err := redis.Incr("counter")
+	if err != nil {
+		t.Fatalf("Incr after close-before-reply: %v", err)
+	}
+	if gotIncr != 2 {
+		t.Fatalf("Incr = %d, want 2 (double apply)", gotIncr)
+	}
+	if fake.incrCount() != 2 {
+		t.Fatalf("INCR count = %d, want 2", fake.incrCount())
+	}
+	if fake.connections() != 2 {
+		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+
+	got, err := redis.Get("counter")
+	if err != nil {
+		t.Fatalf("Get after lost-reply Incr: %v", err)
+	}
+	if string(got) != "2" {
+		t.Fatalf("stored = %q, want 2", got)
+	}
+}
+
+func TestLostReplyIncrByIsRetried(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("warm Get: %v", err)
+	}
+
+	fake.armCloseBeforeReplyOnceForTest()
+	gotIncr, err := redis.IncrBy("counter", 5)
+	if err != nil {
+		t.Fatalf("IncrBy after close-before-reply: %v", err)
+	}
+	if gotIncr != 10 {
+		t.Fatalf("IncrBy = %d, want 10 (double apply)", gotIncr)
+	}
+	if fake.incrByCount() != 2 {
+		t.Fatalf("INCRBY count = %d, want 2", fake.incrByCount())
+	}
+	if fake.connections() != 2 {
+		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+
+	got, err := redis.Get("counter")
+	if err != nil {
+		t.Fatalf("Get after lost-reply IncrBy: %v", err)
+	}
+	if string(got) != "10" {
+		t.Fatalf("stored = %q, want 10", got)
+	}
+}
+
+func TestLostReplyEvalIsRetried(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("warm Get: %v", err)
+	}
+
+	fake.armCloseBeforeReplyOnceForTest()
+	values, err := redis.Eval(kongIncrbyExpireatScript, []string{"win"}, []string{"7", "1700000000"})
+	if err != nil {
+		t.Fatalf("Eval after close-before-reply: %v", err)
+	}
+	if len(values) != 1 || string(values[0]) != "14" {
+		t.Fatalf("Eval = %q, want [14] (double apply of INCRBY 7)", values)
+	}
+	if fake.evalCount() != 2 {
+		t.Fatalf("EVAL count = %d, want 2", fake.evalCount())
+	}
+	if fake.connections() != 2 {
+		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+
+	got, err := redis.Get("win")
+	if err != nil {
+		t.Fatalf("Get after lost-reply Eval: %v", err)
+	}
+	if string(got) != "14" {
+		t.Fatalf("stored = %q, want 14", got)
+	}
+}
+
+func TestLostReplyIncrMaxRetriesOff(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	var redis SimpleRedis
+	redis.MaxRetries = -1
 	redis.Init(addr, "", "")
 	if _, err := redis.Get("hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
@@ -852,64 +964,6 @@ func TestLostReplyIncrIsNotRetried(t *testing.T) {
 	}
 }
 
-func TestLostReplyIncrByIsNotRetried(t *testing.T) {
-	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
-	if _, err := redis.Get("hit"); err != nil {
-		t.Fatalf("warm Get: %v", err)
-	}
-
-	fake.armCloseBeforeReplyOnceForTest()
-	_, err := redis.IncrBy("counter", 5)
-	if err == nil || err.Error() != RedisUnreachable {
-		t.Fatalf("IncrBy = %v, want %s", err, RedisUnreachable)
-	}
-	if fake.incrByCount() != 1 {
-		t.Fatalf("INCRBY count = %d, want 1", fake.incrByCount())
-	}
-	if fake.connections() != 1 {
-		t.Fatalf("opened %d connections, want 1", fake.connections())
-	}
-
-	got, err := redis.Get("counter")
-	if err != nil {
-		t.Fatalf("Get after lost-reply IncrBy: %v", err)
-	}
-	if string(got) != "5" {
-		t.Fatalf("stored = %q, want 5", got)
-	}
-}
-
-func TestLostReplyEvalIsNotRetried(t *testing.T) {
-	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	var redis SimpleRedis
-	redis.Init(addr, "", "")
-	if _, err := redis.Get("hit"); err != nil {
-		t.Fatalf("warm Get: %v", err)
-	}
-
-	fake.armCloseBeforeReplyOnceForTest()
-	_, err := redis.Eval(kongIncrbyExpireatScript, []string{"win"}, []string{"7", "1700000000"})
-	if err == nil || err.Error() != RedisUnreachable {
-		t.Fatalf("Eval = %v, want %s", err, RedisUnreachable)
-	}
-	if fake.evalCount() != 1 {
-		t.Fatalf("EVAL count = %d, want 1", fake.evalCount())
-	}
-	if fake.connections() != 1 {
-		t.Fatalf("opened %d connections, want 1", fake.connections())
-	}
-
-	got, err := redis.Get("win")
-	if err != nil {
-		t.Fatalf("Get after lost-reply Eval: %v", err)
-	}
-	if string(got) != "7" {
-		t.Fatalf("stored = %q, want 7", got)
-	}
-}
-
 func TestLostReplyGetIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	var redis SimpleRedis
@@ -928,5 +982,66 @@ func TestLostReplyGetIsRetried(t *testing.T) {
 	}
 	if fake.connections() != 2 {
 		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+}
+
+func TestLoadingReplyIsRetried(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	fake.armErrorReplyOnceForTest("-LOADING Redis is loading the dataset in memory\r\n")
+	got, err := redis.Get("hit")
+	if err != nil {
+		t.Fatalf("Get after LOADING: %v", err)
+	}
+	if string(got) != "t" {
+		t.Fatalf("Get = %q, want t", got)
+	}
+}
+
+func TestTryAgainReplyIsRetried(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	var redis SimpleRedis
+	redis.Init(addr, "", "")
+
+	fake.armErrorReplyOnceForTest("-TRYAGAIN Try again later\r\n")
+	got, err := redis.Incr("counter")
+	if err != nil {
+		t.Fatalf("Incr after TRYAGAIN: %v", err)
+	}
+	if got != 1 {
+		t.Fatalf("Incr = %d, want 1 (TRYAGAIN does not apply)", got)
+	}
+	if fake.incrCount() != 1 {
+		t.Fatalf("INCR count = %d, want 1", fake.incrCount())
+	}
+}
+
+func TestRetryBackoffRangeAndOff(t *testing.T) {
+	minBackoff := 8 * time.Millisecond
+	maxBackoff := 512 * time.Millisecond
+	for i := 0; i < 20; i++ {
+		got := retryBackoff(1, minBackoff, maxBackoff)
+		if got < 8*time.Millisecond || got >= 24*time.Millisecond {
+			t.Fatalf("retryBackoff(1, 8ms, 512ms) = %v, want in [8ms, 24ms)", got)
+		}
+	}
+
+	_, minOff, maxOff := retryLimits(0, -1, -1)
+	if minOff != 0 || maxOff != 0 {
+		t.Fatalf("retryLimits min/max -1 = %v, %v, want 0, 0", minOff, maxOff)
+	}
+	if got := retryBackoff(1, minOff, maxOff); got != 0 {
+		t.Fatalf("retryBackoff with min 0 = %v, want 0", got)
+	}
+
+	maxRetries, _, _ := retryLimits(0, 0, 0)
+	if maxRetries != 3 {
+		t.Fatalf("MaxRetries 0 = %d, want 3", maxRetries)
+	}
+	maxRetries, _, _ = retryLimits(-1, 0, 0)
+	if maxRetries != 0 {
+		t.Fatalf("MaxRetries -1 = %d, want 0", maxRetries)
 	}
 }

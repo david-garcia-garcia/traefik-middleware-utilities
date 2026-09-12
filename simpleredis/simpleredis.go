@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -51,10 +52,18 @@ func (c *pooledConn) close() {
 }
 
 // SimpleRedis is a pooled TCP RESP client. Init stores dial settings; commands dial on first use.
+// MaxRetries, MinRetryBackoff, and MaxRetryBackoff follow go-redis Options sentinels so the zero value matches go-redis defaults: 0 means default (3 extra retries, 8ms, 512ms); -1 means off (no extra retries, no backoff sleep).
 type SimpleRedis struct {
 	host     string
 	pass     string
 	database string
+
+	// MaxRetries is extra retries after the first attempt. 0 means 3; -1 means none (one send).
+	MaxRetries int
+	// MinRetryBackoff is the base backoff between retries. 0 means 8ms; -1 means no sleep.
+	MinRetryBackoff time.Duration
+	// MaxRetryBackoff caps backoff. 0 means 512ms; -1 means 0.
+	MaxRetryBackoff time.Duration
 
 	mu     sync.Mutex
 	idle   []*pooledConn
@@ -77,6 +86,13 @@ func (sr *SimpleRedis) Close() {
 	}
 }
 
+// isClosed is true after Close. Used so a closed-client unreachable does not spin MaxRetries.
+func (sr *SimpleRedis) isClosed() bool {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	return sr.closed
+}
+
 // Init sets host, password, and database. Call once before concurrent use; not mutex-protected.
 func (sr *SimpleRedis) Init(host, pass, database string) {
 	sr.host = host
@@ -86,7 +102,7 @@ func (sr *SimpleRedis) Init(host, pass, database string) {
 
 // Get fetches the value for key name in redis.
 func (sr *SimpleRedis) Get(name string) ([]byte, error) {
-	values, err := sr.exec(true, []byte("GET"), []byte(name))
+	values, err := sr.exec([]byte("GET"), []byte(name))
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +122,7 @@ func (sr *SimpleRedis) MGet(names []string) ([][]byte, error) {
 	for _, name := range names {
 		args = append(args, []byte(name))
 	}
-	values, err := sr.exec(true, args...)
+	values, err := sr.exec(args...)
 	if err != nil {
 		return nil, err
 	}
@@ -118,35 +134,35 @@ func (sr *SimpleRedis) MGet(names []string) ([][]byte, error) {
 
 // Set updates the value for key name in redis with value data for duration.
 func (sr *SimpleRedis) Set(name string, data []byte, duration int64) error {
-	_, err := sr.exec(true, []byte("SET"), []byte(name), data, []byte("EX"), []byte(strconv.FormatInt(duration, 10)))
+	_, err := sr.exec([]byte("SET"), []byte(name), data, []byte("EX"), []byte(strconv.FormatInt(duration, 10)))
 	return err
 }
 
 // Del removes the key name in redis.
 func (sr *SimpleRedis) Del(name string) error {
-	_, err := sr.exec(true, []byte("DEL"), []byte(name))
+	_, err := sr.exec([]byte("DEL"), []byte(name))
 	return err
 }
 
 // Incr adds one to key name and returns the integer after the increment.
 func (sr *SimpleRedis) Incr(name string) (int64, error) {
-	return parseIntegerReply(sr.exec(false, []byte("INCR"), []byte(name)))
+	return parseIntegerReply(sr.exec([]byte("INCR"), []byte(name)))
 }
 
 // IncrBy adds delta to key name and returns the integer after the increment.
 func (sr *SimpleRedis) IncrBy(name string, delta int64) (int64, error) {
-	return parseIntegerReply(sr.exec(false, []byte("INCRBY"), []byte(name), []byte(strconv.FormatInt(delta, 10))))
+	return parseIntegerReply(sr.exec([]byte("INCRBY"), []byte(name), []byte(strconv.FormatInt(delta, 10))))
 }
 
 // Expire sets a TTL in seconds on key name. Integer 0 or 1 is success.
 func (sr *SimpleRedis) Expire(name string, seconds int64) error {
-	_, err := sr.exec(true, []byte("EXPIRE"), []byte(name), []byte(strconv.FormatInt(seconds, 10)))
+	_, err := sr.exec([]byte("EXPIRE"), []byte(name), []byte(strconv.FormatInt(seconds, 10)))
 	return err
 }
 
 // ExpireAt sets an absolute Unix expiry on key name. Integer 0 or 1 is success.
 func (sr *SimpleRedis) ExpireAt(name string, unixSeconds int64) error {
-	_, err := sr.exec(true, []byte("EXPIREAT"), []byte(name), []byte(strconv.FormatInt(unixSeconds, 10)))
+	_, err := sr.exec([]byte("EXPIREAT"), []byte(name), []byte(strconv.FormatInt(unixSeconds, 10)))
 	return err
 }
 
@@ -160,7 +176,7 @@ func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]by
 	for _, arg := range args {
 		wire = append(wire, []byte(arg))
 	}
-	return sr.exec(false, wire...)
+	return sr.exec(wire...)
 }
 
 // parseIntegerReply reads one decimal integer from a : reply. Garbage payload is redis:issue?.
@@ -178,27 +194,111 @@ func parseIntegerReply(values [][]byte, err error) (int64, error) {
 	return n, nil
 }
 
-// exec borrows a connection, runs one RESP command, and retries once when retryDeadPool is set and a reused idle socket is dead.
-func (sr *SimpleRedis) exec(retryDeadPool bool, args ...[]byte) ([][]byte, error) {
-	conn, reused, err := sr.borrow()
-	if err != nil {
-		return nil, err
+// exec borrows a connection, runs one RESP command, and retries retryable failures up to MaxRetries.
+// INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
+func (sr *SimpleRedis) exec(args ...[]byte) ([][]byte, error) {
+	maxRetries, minBackoff, maxBackoff := retryLimits(sr.MaxRetries, sr.MinRetryBackoff, sr.MaxRetryBackoff)
+	var last error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			time.Sleep(retryBackoff(attempt, minBackoff, maxBackoff))
+		}
+		conn, _, err := sr.borrow()
+		if err != nil {
+			if sr.isClosed() || !shouldRetry(err) {
+				return nil, err
+			}
+			last = err
+			continue
+		}
+		values, reusable, err := sr.do(conn, args)
+		sr.release(conn, reusable)
+		if err == nil {
+			return values, nil
+		}
+		if !shouldRetry(err) {
+			return values, err
+		}
+		last = err
 	}
-	values, reusable, err := sr.do(conn, args)
-	sr.release(conn, reusable)
-	// Timeouts are not retried: a stalled peer will stall the next dial too.
-	// INCR/INCRBY/EVAL pass retryDeadPool false so a lost reply cannot double-apply.
-	if err == nil || reusable || !reused || err == errTimeout || !retryDeadPool {
-		return values, err
+	return nil, last
+}
+
+// retryLimits maps 0/-1 sentinels to go-redis Options defaults without mutating the exported fields.
+func retryLimits(maxRetries int, minBackoff, maxBackoff time.Duration) (int, time.Duration, time.Duration) {
+	if maxRetries == -1 {
+		maxRetries = 0
+	} else if maxRetries == 0 {
+		maxRetries = 3
 	}
-	// Dead pooled conn: borrow again so Close cannot skip the closed check.
-	conn, _, err = sr.borrow()
-	if err != nil {
-		return nil, err
+	if minBackoff == -1 {
+		minBackoff = 0
+	} else if minBackoff == 0 {
+		minBackoff = 8 * time.Millisecond
 	}
-	values, reusable, err = sr.do(conn, args)
-	sr.release(conn, reusable)
-	return values, err
+	if maxBackoff == -1 {
+		maxBackoff = 0
+	} else if maxBackoff == 0 {
+		maxBackoff = 512 * time.Millisecond
+	}
+	return maxRetries, minBackoff, maxBackoff
+}
+
+// retryBackoff is go-redis internal.RetryBackoff: exponential from minBackoff, jittered, capped at maxBackoff.
+func retryBackoff(retry int, minBackoff, maxBackoff time.Duration) time.Duration {
+	if minBackoff == 0 {
+		return 0
+	}
+	d := minBackoff << uint(retry)
+	if d < minBackoff {
+		return maxBackoff
+	}
+	span := int64(d)
+	if span > 0 {
+		d = minBackoff + time.Duration(rand.Int63n(span))
+	}
+	if d > maxBackoff || d < minBackoff {
+		d = maxBackoff
+	}
+	return d
+}
+
+// shouldRetry is go-redis shouldRetry as this client can see it. Timeouts are never retried (documented deviation: ioTimeout is 1s). There is no pool wait, so there is no pool timeout to retry.
+func shouldRetry(err error) bool {
+	if err == nil {
+		return false
+	}
+	if isCommandTimeout(err) {
+		return false
+	}
+	if isUnreachable(err) {
+		return true
+	}
+	return isRetryableRedisReply(err)
+}
+
+// isCommandTimeout is redis:timeout from an I/O deadline. Not retryable.
+func isCommandTimeout(err error) bool {
+	return err == errTimeout
+}
+
+// isUnreachable is redis:unreachable (EOF, unexpected EOF, dial failure, and other IO via ioError). Retryable unless the client is closed.
+func isUnreachable(err error) bool {
+	return err == errUnreachable
+}
+
+// isRetryableRedisReply is a Redis error reply go-redis retries: max clients, LOADING, READONLY, MASTERDOWN, CLUSTERDOWN, TRYAGAIN (space after the word).
+func isRetryableRedisReply(err error) bool {
+	text := err.Error()
+	if text == "ERR max number of clients reached" {
+		return true
+	}
+	for _, prefix := range []string{"LOADING ", "READONLY ", "MASTERDOWN ", "CLUSTERDOWN ", "TRYAGAIN "} {
+		if strings.HasPrefix(text, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // borrow takes an idle socket younger than idleTimeout, or dials a new one.
