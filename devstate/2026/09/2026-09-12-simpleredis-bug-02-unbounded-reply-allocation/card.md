@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-12T12:49:51Z
+Developer review: in progress — 2026-09-12T12:56:42Z
 
 ## What this changes
 **Operators.** None.
@@ -30,14 +30,14 @@ sequenceDiagram
 Apply landed locally (`go test ./simpleredis/...` passed). Remote CI is still queued. 1 item remains.
 
 Priority: P1 — a remote peer can size a heap allocation large enough to kill the Traefik process today
-Reviewed head: 5522748
+Reviewed head: 64b96aa
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 3/6 | CI still queued after the apply push |
-| CI proof | 3/6 | Lint, Test, Go E2E, Integration Tests queued — [run 34694740586](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34694740586) |
+| CI proof | 3/6 | Lint, Test, Go E2E, Integration Tests queued — [run 34695046634](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695046634) |
 | Local tests proof | N/A | Remote CI is the proof axis; local `./simpleredis/...` passed |
 | Review resolution | 6/6 | OPEN PR 34; no reviewer comments |
 
@@ -47,7 +47,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-12-simpleredis-bug-02-unbounded-reply-allocation pushed | `git` / GitHub |
 | OpenSpec | simpleredis-reply-alloc-caps | `openspec/changes/simpleredis-reply-alloc-caps/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/34 | pr-host |
-| CI | build 34694740586 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34694740586 | GitHub check runs |
+| CI | build 34695046634 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695046634 | GitHub check runs |
 | Local tests | passed | handoff.yaml localTests; `go test ./simpleredis/...` |
 | PR comments | no comments | no `comments.md` |
 
@@ -76,13 +76,19 @@ Local ticket on branch `2026-09-12-simpleredis-bug-02-unbounded-reply-allocation
 - [x] Stub PR 34 opened
 - [x] Explore recorded package consts and test spelling
 - [x] OpenSpec change `simpleredis-reply-alloc-caps` proposed
-- [ ] Wait for CI on 5522748 and archive the change
+- [ ] Wait for CI on 64b96aa and archive the change
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/devstate/2026/09/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/codereview_standards.md) — 1 total, 0 pending, 1 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/devstate/2026/09/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/devstate/2026/09/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/devstate/2026/09/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/devstate/2026/09/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/devstate/2026/09/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/devstate/2026/09/2026-09-12-simpleredis-bug-02-unbounded-reply-allocation/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -91,7 +97,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 5522748edb787f1f125b7017a4717e0234bfdccb | Card must match the branch you measured |
+| Reviewed head | 64b96aa5aad2bd8921489f9928ea4eb5ac6cd989 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -109,7 +115,8 @@ What I checked:
 - `simpleredis/resp.go` cap before `make`; `errIssue` not retried
 - `knowledge/research/ext_redis_proto_max-bulk-len/` default 512 MiB; reply path uncapped
 - `knowledge/research/ext_go-redis_proto_reader-limit/` no go-redis reader bulk cap
-- PR 34; checks queued (run 34694740586)
+- PR 34; checks queued (run 34695046634)
+- Seven-axis review: Standards 1 hard (block intro on `*` gate) done; other axes none
 
 ### Rank-up moves
 None.

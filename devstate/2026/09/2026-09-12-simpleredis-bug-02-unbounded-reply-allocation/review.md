@@ -28,3 +28,9 @@ findings: none
 fixed: caps and tests
 skipped: none
 localTests: passed
+
+## codereview (2026-09-12)
+phase: codereview
+findings: Standards 1 hard (block intro)
+fixed: `*` over-cap comment
+skipped: none

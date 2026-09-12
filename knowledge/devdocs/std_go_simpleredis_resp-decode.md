@@ -41,7 +41,7 @@ return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 ## Key files
 
 - `simpleredis/resp.go` — `readLine`, `readReply`, `readBulk`, `parseLen`
-- `simpleredis/resp_test.go` — copy-on-escape and `ErrBufferFull` (>4096)
+- `simpleredis/resp_test.go` — copy-on-escape, `ErrBufferFull` (>4096), over-cap `$`/`*` headers
 - `simpleredis/fake_redis_test.go` — `startSequentialRedis` for distinct later-read payloads
 - `simpleredis/bench_test.go` — `BenchmarkDecodeBulk`, `BenchmarkDecodeArray10`, `BenchmarkDecodeInteger`
 - `openspec/specs/std_go_simpleredis_resp-decode/spec.md`
