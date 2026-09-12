@@ -10,6 +10,10 @@ _Avoid_: returning it from `readReply`; storing it in an array slot; treating it
 A `+` or `:` payload that leaves `readReply` (returned to the caller or stored in an array slot). It is a copy of the header bytes, not a ReadSlice view. A `-` error MAY use `string(message)` (that already copies). `$` bulk stays owned by `readBulk`'s allocated buffer.
 _Avoid_: `line[1:]` or `head[1:]` without a copy; copying `$` / `*` headers after the length parse
 
+**Bulk trailer**:
+The two bytes after a RESP2 `$` payload, which must be CR then LF and are not counted in the announced length.
+_Avoid_: treating those two bytes as payload; pooling the socket when they are not CRLF
+
 ## Overview
 
 SimpleRedis reads each RESP line with `ReadSlice('\n')` so short headers do not allocate. Anything that must survive the next read on that connection is copied first.
