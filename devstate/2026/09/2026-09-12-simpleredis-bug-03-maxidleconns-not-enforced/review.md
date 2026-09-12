@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: none
 fixed: none
 skipped: usage rewrite (packet already true)
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: fold std_go_simpleredis_tcp-session; move to archive/2026-09-12-simpleredis-enforce-maxidleconns
+skipped: none
