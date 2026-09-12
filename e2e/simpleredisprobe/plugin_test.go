@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// TestNewDoesNotDial proves New Inits only: a refusing Redis host still returns a handler.
+// TestNewDoesNotDial proves New constructs only: a refusing Redis host still returns a handler.
 func TestNewDoesNotDial(t *testing.T) {
 	next := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
-	handler, err := New(context.Background(), next, &Config{Host: "127.0.0.1:1", Password: "secret", Database: "2"}, "probe")
+	handler, err := New(context.Background(), next, &Config{Host: "127.0.0.1:1", Password: "secret", Database: "2", DropHost: "127.0.0.1:1"}, "probe")
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

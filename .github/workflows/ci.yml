@@ -132,6 +132,10 @@ jobs:
         docker compose logs whoami-redis
         echo "=== Whoami-dragonfly logs ==="
         docker compose logs whoami-dragonfly
+        echo "=== Redis-drop logs ==="
+        docker compose logs redis-drop
+        echo "=== Dragonfly-drop logs ==="
+        docker compose logs dragonfly-drop
         echo "=== Redis-auth logs ==="
         docker compose logs redis-auth
         echo "=== Dragonfly-auth logs ==="
