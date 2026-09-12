@@ -66,9 +66,6 @@ type SimpleRedis struct {
 	mu     sync.Mutex
 	idle   []*pooledConn
 	closed bool
-
-	digestMu sync.Mutex
-	digests  map[string]string
 }
 
 // Close drains idle pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
@@ -160,33 +157,19 @@ func (sr *SimpleRedis) ExpireAt(name string, unixSeconds int64) error {
 	return err
 }
 
-// Eval runs a Lua script with KEYS then ARGV. Sends EVALSHA of a cached SHA-1; on NOSCRIPT falls back once to EVAL.
+// Eval runs a Lua script with KEYS then ARGV. Hashes the body each call and sends EVALSHA; on NOSCRIPT falls back once to EVAL.
 func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]byte, error) {
-	digest := sr.cachedScriptDigest(script)
+	// Hash every call: SHA-1 of a limiter script (~470 B) is cheaper than a mutex, and a map of bodies would need a lock because Go maps are not concurrent.
+	digest := scriptSHA1Hex(script)
 	values, err := sr.exec(evalArgv(evalShaVerb, digest, keys, args)...)
-	// Miss: engine has no matching digest (FLUSH, restart); EVAL loads it.
+	// Miss: engine has no matching digest (FLUSH, restart); EVAL is the only send of the body so the engine stores it.
 	if err != nil && strings.HasPrefix(err.Error(), noScriptPrefix) {
 		return sr.exec(evalArgv(evalVerb, script, keys, args)...)
 	}
 	return values, err
 }
 
-// cachedScriptDigest returns the SHA-1 hex of script, computing it once per distinct body.
-func (sr *SimpleRedis) cachedScriptDigest(script string) string {
-	sr.digestMu.Lock()
-	defer sr.digestMu.Unlock()
-	if sr.digests == nil {
-		sr.digests = make(map[string]string)
-	}
-	if digest, found := sr.digests[script]; found {
-		return digest
-	}
-	digest := scriptSHA1Hex(script)
-	sr.digests[script] = digest
-	return digest
-}
-
-// scriptSHA1Hex is Redis sha1hex of the script bytes (lowercase 40-char hex).
+// scriptSHA1Hex is Redis sha1hex of the script bytes (lowercase 40-char hex). Eval hashes each call; no client digest table.
 func scriptSHA1Hex(script string) string {
 	sum := sha1.Sum([]byte(script)) //nolint:gosec // Redis EVALSHA digest is SHA-1
 	return hex.EncodeToString(sum[:])
