@@ -1,0 +1,15 @@
+issueKey: 2026-09-12-simpleredis-eval-caller-digest
+jobName: 2026-09-12-simpleredis-eval-caller-digest
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 9ed04f82483473685082ffa11570362d79f8aefb56b93bb345697d3c27014aaa
+localTests: none
+requirement: requirement.md
+comments: none
+pr:
+  id: "42"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/42
