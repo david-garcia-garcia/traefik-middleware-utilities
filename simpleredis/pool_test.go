@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"bytes"
 	"sync"
 	"testing"
 	"time"
@@ -363,5 +364,39 @@ func TestIdleEncodeScratchTrimmedPast64KiB(t *testing.T) {
 	}
 	if fake.connections() != 1 {
 		t.Fatalf("dials %d, want 1 (reused after trim)", fake.connections())
+	}
+}
+
+func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
+	// ReadSlice takes the complete `$100` head; io.ReadFull then fails on the 40-byte payload.
+	truncated := append([]byte("$100\r\n"), bytes.Repeat([]byte("x"), 40)...)
+	ownValue := []byte("$5\r\nhello\r\n")
+	addr := startRawReplyRedis(t, []rawReply{
+		{payload: truncated, closeAfter: true},
+		{payload: ownValue, closeAfter: true},
+	})
+	// MaxRetries off: default retry would redial and hide the truncated classification.
+	redis := New(Config{Host: addr, MaxRetries: -1})
+
+	_, err := redis.Get("k")
+	if err == nil {
+		t.Fatal("truncated Get: want error")
+	}
+	if err.Error() == RedisIssue {
+		t.Fatalf("truncated Get = %v, must not be %s", err, RedisIssue)
+	}
+	if err.Error() != RedisUnreachable {
+		t.Fatalf("truncated Get = %v, want %s", err, RedisUnreachable)
+	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after truncated Get = %d, want 0", got)
+	}
+
+	got, err := redis.Get("k")
+	if err != nil {
+		t.Fatalf("second Get: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Fatalf("second Get = %q, want %q", got, "hello")
 	}
 }

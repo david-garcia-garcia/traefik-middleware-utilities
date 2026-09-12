@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"bufio"
 	"net"
 	"strings"
 	"testing"
@@ -186,6 +187,13 @@ func TestAppendRESPMSetEXMatchesDestFraming(t *testing.T) {
 	want := "*8\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\n1\r\n$1\r\nb\r\n$1\r\n2\r\n$2\r\nEX\r\n$2\r\n60\r\n"
 	if string(got) != want {
 		t.Fatalf("appendRESP MSETEX = %q, want %q", got, want)
+	}
+}
+
+func TestReadBulkNonDollarHeadIsIssue(t *testing.T) {
+	_, err := readBulk(bufio.NewReader(strings.NewReader("unused")), []byte(":1"))
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("readBulk non-$ head = %v, want %s", err, RedisIssue)
 	}
 }
 
