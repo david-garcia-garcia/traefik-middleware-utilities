@@ -1,6 +1,9 @@
 package windowcounter
 
 import (
+	"errors"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -492,5 +495,146 @@ func TestPeek_Unreachable(t *testing.T) {
 	_, _, err = limiter.Peek("k", 1, time.Minute)
 	if err == nil || err.Error() != simpleredis.RedisUnreachable {
 		t.Fatalf("err %v want %s", err, simpleredis.RedisUnreachable)
+	}
+}
+
+func wantRedisOutage(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("want Redis outage error")
+	}
+	msg := err.Error()
+	if msg != simpleredis.RedisUnreachable && msg != simpleredis.RedisTimeout &&
+		!strings.Contains(msg, simpleredis.RedisUnreachable) && !strings.Contains(msg, simpleredis.RedisTimeout) {
+		t.Fatalf("err %v want %s or %s", err, simpleredis.RedisUnreachable, simpleredis.RedisTimeout)
+	}
+}
+
+func TestTake_BufferedPendingDeltaOutage(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	client := newSimpleRedisForTest(t, addr)
+	limiter, err := New(client, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	getsAfterSeed := fake.getCallCount()
+	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if fake.getCallCount() != getsAfterSeed {
+		t.Fatal("buffered Take GETs while the delta is still fresh")
+	}
+	fake.Kill()
+	now = now.Add(time.Hour)
+	limiter.SetNowForTest(func() time.Time { return now })
+	_, _, err = limiter.Take("k", 5, time.Minute)
+	wantRedisOutage(t, err)
+	_, _, err = limiter.Peek("k", 5, time.Minute)
+	wantRedisOutage(t, err)
+}
+
+func TestTake_BufferedFlushThenKillFailsClosed(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	client := newSimpleRedisForTest(t, addr)
+	limiter, err := New(client, minSyncRate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	if _, _, err := limiter.Take("k", 5, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		limiter.mu.Lock()
+		delta := int64(0)
+		for _, state := range limiter.windows {
+			delta += state.localDelta
+		}
+		limiter.mu.Unlock()
+		if delta == 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("flush did not clear localDelta")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	fake.Kill()
+	_, _, err = limiter.Take("k", 5, time.Minute)
+	wantRedisOutage(t, err)
+}
+
+func TestTake_BufferedTwoInstancesOutage(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	a, err := New(newSimpleRedisForTest(t, addr), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := New(newSimpleRedisForTest(t, addr), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		a.Close()
+		b.Close()
+	})
+	now := time.Unix(1_700_000_000, 0)
+	a.SetNowForTest(func() time.Time { return now })
+	b.SetNowForTest(func() time.Time { return now })
+	const limit int64 = 5
+	window := time.Minute
+	nilErrorAdmits := 0
+	for _, limiter := range []*Limiter{a, b} {
+		allowed, _, takeErr := limiter.Take("share", limit, window)
+		if takeErr != nil {
+			t.Fatal(takeErr)
+		}
+		if allowed {
+			nilErrorAdmits++
+		}
+	}
+	fake.Kill()
+	now = now.Add(time.Hour)
+	a.SetNowForTest(func() time.Time { return now })
+	b.SetNowForTest(func() time.Time { return now })
+	sawOutage := false
+	for _, limiter := range []*Limiter{a, b} {
+		for i := 0; i < 4; i++ {
+			allowed, _, takeErr := limiter.Take("share", limit, window)
+			if takeErr != nil {
+				wantRedisOutage(t, takeErr)
+				sawOutage = true
+				continue
+			}
+			if allowed {
+				nilErrorAdmits++
+			}
+		}
+	}
+	if !sawOutage {
+		t.Fatal("want a Redis error after kill")
+	}
+	if nilErrorAdmits > int(limit) {
+		t.Fatalf("nil-error admits %d want <= %d", nilErrorAdmits, limit)
+	}
+}
+
+func TestParseEvalInt_WrapsCause(t *testing.T) {
+	_, err := parseEvalInt([][]byte{[]byte("x")})
+	if err == nil {
+		t.Fatal("want error")
+	}
+	if !strings.Contains(err.Error(), simpleredis.RedisIssue) {
+		t.Fatalf("err %v want %s", err, simpleredis.RedisIssue)
+	}
+	if !errors.Is(err, strconv.ErrSyntax) {
+		t.Fatalf("err %v want wrapped syntax", err)
 	}
 }

@@ -21,7 +21,7 @@ Each package is one job. Import the one that matches the middleware; do not mix 
 
 **SimpleRedis** (`simpleredis/`) is the shared Redis/Dragonfly session. `New(Config)` stores host, password, and database; the first command dials. Use it for GET/SET/INCR/EVAL/MSetEX. It does not implement a rate-limit algorithm.
 
-**Window counter** (`windowcounter/`) is a distributed **hit counter**: `Take(key, limit, window)` increments the current window and admits while `current + previous × (1 − elapsed/window)` is still at or under `limit`. Redis (or Dragonfly) holds the integers. `sync_rate=0` talks to Redis on every Take; `sync_rate>0` buffers locally and flushes with EVAL. Pass its `Sleep`/`Wake`/`Close` into reclaim when the counter is the stored value.
+**Window counter** (`windowcounter/`) is a distributed **hit counter**: `Take(key, limit, window)` increments the current window and admits while `current + previous × (1 − elapsed/window)` is still at or under `limit`. Redis (or Dragonfly) holds the integers. `sync_rate=0` talks to Redis on every Take and returns that call's Redis error. `sync_rate>0` buffers locally and flushes with EVAL; a failed flush is retained, and after one missed `sync_rate` Take/Peek return that error instead of a silent nil. Pass its `Sleep`/`Wake`/`Close` into reclaim when the counter is the stored value.
 
 **Token bucket** (`tokenbucket/`) is Traefik RateLimit’s clock: `Allow(key)` refills at `rate`, caps at `burst`, and returns allowed plus wait. In-process uses a mutex map; Redis uses `Eval` of the copied Lua (`#rl_source == 4`). Do not mix this clock with `windowcounter/`.
 
