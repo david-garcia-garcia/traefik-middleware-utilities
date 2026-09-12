@@ -35,3 +35,9 @@ phase: devdocsimpact
 findings: stale-usage + language-gap on std_go_simpleredis_resp-decode
 fixed: How-to/Gotchas trailer; Language Bulk trailer
 skipped: none
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: fold resp-decode and resp-commands; move change to archive
+skipped: none

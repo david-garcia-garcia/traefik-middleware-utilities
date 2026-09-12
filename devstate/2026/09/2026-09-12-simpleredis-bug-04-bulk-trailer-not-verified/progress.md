@@ -10,5 +10,5 @@ JobName: 2026-09-12-simpleredis-bug-04-bulk-trailer-not-verified
 | implement | [x] | [x] | 2026-09-12T12:48:01Z |
 | codereview | [x] | [x] | 2026-09-12T12:53:06Z |
 | devdocsimpact | [x] | [x] | 2026-09-12T12:54:29Z |
-| archive | [x] | [ ] | |
+| archive | [x] | [x] | 2026-09-12T12:56:55Z |
 | pullrequest | [ ] | [ ] | |
