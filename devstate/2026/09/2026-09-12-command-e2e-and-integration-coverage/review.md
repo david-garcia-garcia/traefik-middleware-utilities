@@ -23,3 +23,9 @@ findings: none
 fixed: none
 skipped: none
 taken: HTTP status/body instead of result headers; CI engine jobs instead of duplicate Pester Its
+
+## codereview (2026-09-12)
+phase: codereview
+findings: Expire/ExpireAt Pester and Yaegi LiveVerbs did not prove TTL; New omitted terminal handler; Pester locals `$a`/`$name`
+fixed: Expire TTL vs Set baseline; LiveVerbs TTL Eval; New comment; `$Engine`/`$firstToken`/`$redisKey`
+skipped: Standards 4 reusable workflow (judgement)
