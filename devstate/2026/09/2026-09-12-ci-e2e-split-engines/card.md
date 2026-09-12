@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-12T16:04:58Z
+Developer review: in progress — 2026-09-12T16:09:34Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** OpenSpec change `split-go-e2e-engine-jobs` is apply-ready: two Checks `Go E2E Redis` / `Go E2E Dragonfly`, one-engine skip, six folded specs.
 
 **End users.** None.
 
@@ -24,16 +24,16 @@ flowchart LR
 ```
 
 ## Merge readiness
-Explore recorded assumed job ids, AUTH split, dest ports, and one-engine skip. Product files versus master are unchanged. 6 items remain.
+Proposal and delta specs are on the branch. Apply has not started. 5 items remain.
 
 Priority: P3 — GitHub Checks hide which live engine failed; no production harm today
-Reviewed head: d5d324e
+Reviewed head: 6acaec1
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | Stub CI succeeded; no open PR comments |
+| Overall readiness | 6/6 | Last measured stub CI succeeded; no open PR comments |
 | CI proof | 6/6 | Lint, Unit, Unit race, Go E2E, Integration Tests succeeded — [run 34703992540](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34703992540) |
 | Local tests proof | N/A | `localTests: none`; remote CI is the proof axis |
 | Review resolution | 6/6 | OPEN PR 41; no reviewer comments |
@@ -42,14 +42,19 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-12-ci-e2e-split-engines pushed | `git` / GitHub |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | split-go-e2e-engine-jobs | `openspec/changes/split-go-e2e-engine-jobs/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/41 | GitHub PR 41 |
 | CI | build 34703992540 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34703992540 | pr-host get_check_runs |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-None.
+- [std_go_ci_test-suites](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-ci-e2e-split-engines/openspec/changes/split-go-e2e-engine-jobs/proposal.md) — modified
+- [std_go_simpleredis_live-e2e](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-ci-e2e-split-engines/openspec/changes/split-go-e2e-engine-jobs/proposal.md) — modified
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-ci-e2e-split-engines/openspec/changes/split-go-e2e-engine-jobs/proposal.md) — modified
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-ci-e2e-split-engines/openspec/changes/split-go-e2e-engine-jobs/proposal.md) — modified
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-ci-e2e-split-engines/openspec/changes/split-go-e2e-engine-jobs/proposal.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-ci-e2e-split-engines/openspec/changes/split-go-e2e-engine-jobs/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -58,7 +63,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket on branch `2026-09-12-ci-e2e-split-engines` opened [PR 41](https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/41) against `master`. Explore is on disk. Apply has not started.
+Local ticket on branch `2026-09-12-ci-e2e-split-engines` opened [PR 41](https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/41) against `master`. Change `split-go-e2e-engine-jobs` is apply-ready.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -85,9 +90,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
+| Specs in this PR | 0 added / 6 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | d5d324eb621720b3f2586ce46085ba02d195b323 | Card must match the branch you measured |
+| Reviewed head | 6acaec117dbbbc6424da3e5435263af92d159dcf | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -95,16 +100,15 @@ None.
 ### Technical review
 Best possible solution: two GitHub Checks, each starting one engine, versus master’s single `Go E2E` job that always starts both.
 
-Do we have a high-confidence way to reproduce? Yes — PR 41 Checks list one `Go E2E` item (run 34703992540); `go test -short -run TestLookupLiveEngineAddrs` passed in simpleredis, windowcounter, and tokenbucket, proving `onlyRedis` / `onlyDragonfly` still fail closed.
+Do we have a high-confidence way to reproduce? Yes — dest still has one `Go E2E` check; `openspec validate split-go-e2e-engine-jobs --type change --strict` passed.
 
 Is this the best way to solve the issue? Yes versus master: split the job and allow one-engine skip; keep Lint, Unit, Unit race, and Pester.
 
 ### Evidence
 What I checked:
-- PR 41 check runs: Lint, Unit, Unit race, Go E2E, Integration Tests (run 34703992540, all success; one live-Go name)
-- `go test -short -run TestLookupLiveEngineAddrs` passed in `./simpleredis ./windowcounter ./tokenbucket` (worktree)
-- `.github/workflows/ci.yml` job `e2e` starts Redis and Dragonfly (`origin/master`)
-- `openspec/specs/std_go_ci_test-suites/spec.md` pins one `e2e` job and fail-when-one-addr
+- `openspec validate split-go-e2e-engine-jobs --type change --strict` exit 0
+- `validate_artifact_names` OK
+- proposal + six folded delta specs on disk
 
 ### Rank-up moves
 None.
