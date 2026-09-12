@@ -4,6 +4,8 @@ package simpleredisprobe
 
 import (
 	"context"
+	"crypto/sha1" //nolint:gosec // Redis EVALSHA digest is SHA-1
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -21,6 +23,12 @@ if exists == 0 then
   redis.call("expireat", KEYS[1], ARGV[2])
 end
 return value`
+
+// kongScriptDigest is SHA-1 hex of kongIncrbyExpireatScript (Redis sha1hex).
+func kongScriptDigest() string {
+	sum := sha1.Sum([]byte(kongIncrbyExpireatScript)) //nolint:gosec // Redis EVALSHA digest is SHA-1
+	return hex.EncodeToString(sum[:])
+}
 
 // Config is the dynamic plugin settings Traefik decodes.
 type Config struct {
@@ -66,7 +74,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return mw, nil
 }
 
-// ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval, then copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
+// ServeHTTP runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, and Eval twice, then copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	prefix := fmt.Sprintf("srp:%d", time.Now().UnixNano())
 	setKey := prefix + ":set"
@@ -75,6 +83,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	expireKey := prefix + ":expire"
 	expireAtKey := prefix + ":expireat"
 	evalKey := prefix + ":eval"
+	evalAgainKey := prefix + ":eval2"
 	delKey := prefix + ":del"
 
 	if err := m.client.Set(setKey, []byte("ok"), 60); err != nil {
@@ -143,7 +152,8 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("X-SimpleRedis-ExpireAt", "ok")
 
-	evalValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalKey}, []string{"3", strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)})
+	expireUnix := strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)
+	evalValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalKey}, []string{"3", expireUnix})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -153,6 +163,18 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-Eval", string(evalValues[0]))
+
+	evalAgainValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalAgainKey}, []string{"3", expireUnix})
+	if err != nil {
+		http.Error(rw, err.Error(), http.StatusBadGateway)
+		return
+	}
+	if len(evalAgainValues) != 1 {
+		http.Error(rw, "eval again slots", http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-EvalAgain", string(evalAgainValues[0]))
+	rw.Header().Set("X-SimpleRedis-EvalDigest", kongScriptDigest())
 
 	if m.dropClient != nil {
 		m.writeDropHeaders(rw, prefix)

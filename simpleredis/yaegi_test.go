@@ -39,6 +39,19 @@ func TestYaegi_IncrAndEval(t *testing.T) {
 	}
 }
 
+// TestYaegi_EvalNoScriptFallback proves interpreted Eval recovers from a NOSCRIPT miss. Traefik is not started.
+func TestYaegi_EvalNoScriptFallback(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{})
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.EvalNoScript(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi eval noscript fallback: %q, want ok", got)
+	}
+}
+
 // evalClientprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalClientprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -148,6 +161,20 @@ func IncrAndEval(host string) string {
 		return fmt.Sprintf("incr:%d", afterIncr)
 	}
 	values, err := client.Eval(kongIncrbyExpireatScript, []string{"yaegi-eval"}, []string{"3", "1700000000"})
+	if err != nil {
+		return "eval:" + err.Error()
+	}
+	if len(values) != 1 || string(values[0]) != "3" {
+		return fmt.Sprintf("eval:%q", values)
+	}
+	return "ok"
+}
+
+// EvalNoScript Evals once so the compiled fake's first EVALSHA miss must fall back.
+func EvalNoScript(host string) string {
+	client := &simpleredis.SimpleRedis{}
+	client.Init(host, "", "")
+	values, err := client.Eval(kongIncrbyExpireatScript, []string{"yaegi-noscript"}, []string{"3", "1700000000"})
 	if err != nil {
 		return "eval:" + err.Error()
 	}

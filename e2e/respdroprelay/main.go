@@ -1,4 +1,4 @@
-// Command respdroprelay forwards RESP to an upstream engine and drops INCR/INCRBY/EVAL replies after the session has already forwarded at least one command.
+// Command respdroprelay forwards RESP to an upstream engine and drops INCR/INCRBY/EVAL/EVALSHA replies after the session has already forwarded at least one command.
 package main
 
 import (
@@ -56,7 +56,7 @@ func relaySession(client net.Conn, upstreamAddr string) {
 		if err != nil {
 			return
 		}
-		// Drop only after this TCP session already forwarded a command (probe warms with GET). A retry on a new session whose first command is INCR/EVAL must pass the reply through.
+		// Drop only after this TCP session already forwarded a command (probe warms with GET). A retry on a new session whose first command is INCR/EVAL/EVALSHA must pass the reply through.
 		if hasForwarded && verbDropsReply(args[0]) {
 			return
 		}
@@ -67,10 +67,10 @@ func relaySession(client net.Conn, upstreamAddr string) {
 	}
 }
 
-// verbDropsReply is true for INCR, INCRBY, and EVAL so the engine apply is kept and the client sees a dead socket.
+// verbDropsReply is true for INCR, INCRBY, EVAL, and EVALSHA so the engine apply is kept and the client sees a dead socket.
 func verbDropsReply(verb string) bool {
 	switch strings.ToUpper(verb) {
-	case "INCR", "INCRBY", "EVAL":
+	case "INCR", "INCRBY", "EVAL", "EVALSHA":
 		return true
 	default:
 		return false
