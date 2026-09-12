@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: none
 fixed: none
 skipped: no usage-doc produce; packet already names helper files
+
+## archive (2026-09-12)
+phase: archive
+findings: fold std_go_simpleredis_resp-commands
+fixed: ADDED compile requirement on live spec; change moved to archive/2026-09-12-simpleredis-test-binary-compile
+skipped: none
