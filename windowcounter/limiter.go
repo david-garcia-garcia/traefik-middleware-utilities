@@ -2,6 +2,7 @@
 package windowcounter
 
 import (
+	"context"
 	"errors"
 	"strconv"
 	"sync"
@@ -139,12 +140,12 @@ func (l *Limiter) Allow(key string, limit int64, window time.Duration) (bool, fl
 
 // takeExact INCR the current window, EXPIRE on first hit, GET previous, then compare the estimate.
 func (l *Limiter) takeExact(currentKey, previousKey string, ttlSec int64, weight float64, limit int64) (bool, float64, error) {
-	current, err := l.redis.Incr(currentKey)
+	current, err := l.redis.Incr(context.Background(), currentKey)
 	if err != nil {
 		return false, 0, err
 	}
 	if current == 1 {
-		if expireErr := l.redis.Expire(currentKey, ttlSec); expireErr != nil {
+		if expireErr := l.redis.Expire(context.Background(), currentKey, ttlSec); expireErr != nil {
 			return false, 0, expireErr
 		}
 	}
@@ -266,7 +267,7 @@ func (l *Limiter) bufferedCountLocked(redisKey string) (int64, error) {
 
 // getCount reads a Redis integer. A miss is zero.
 func (l *Limiter) getCount(redisKey string) (int64, error) {
-	raw, err := l.redis.Get(redisKey)
+	raw, err := l.redis.Get(context.Background(), redisKey)
 	return countFromRedisGet(raw, err)
 }
 
@@ -369,7 +370,7 @@ func (l *Limiter) flushPending() error {
 		if state.localDelta > 0 {
 			delta := state.localDelta
 			expireAt := state.expireAt
-			values, err := l.redis.Eval(flushScript, []string{redisKey}, []string{
+			values, err := l.redis.Eval(context.Background(), flushScript, []string{redisKey}, []string{
 				strconv.FormatInt(delta, 10),
 				strconv.FormatInt(expireAt, 10),
 			})

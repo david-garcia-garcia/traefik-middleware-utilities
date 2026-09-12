@@ -36,7 +36,7 @@ func TestBlackHoleGetReturnsWithinOverallDeadline(t *testing.T) {
 	client := New(Config{Host: "203.0.113.1:6379"})
 	budget := time.Duration(client.MaxRetries()+1) * (client.DialTimeout() + client.IOTimeout())
 	start := time.Now()
-	_, err := client.Get("k")
+	_, err := client.Get(context.Background(), "k")
 	elapsed := time.Since(start)
 	if err == nil {
 		t.Fatal("Get against black hole succeeded")
@@ -56,7 +56,7 @@ func TestHandshakeStallIsBoundedByOverallDeadline(t *testing.T) {
 	budget := time.Duration(client.MaxRetries()+1) * (client.DialTimeout() + client.IOTimeout())
 	freshSteps := time.Duration(client.MaxRetries()+1) * (client.DialTimeout() + 2*client.IOTimeout())
 	start := time.Now()
-	_, err := client.Get("k")
+	_, err := client.Get(context.Background(), "k")
 	elapsed := time.Since(start)
 	if err == nil {
 		t.Fatal("Get against stall succeeded")
@@ -69,7 +69,7 @@ func TestHandshakeStallIsBoundedByOverallDeadline(t *testing.T) {
 	}
 }
 
-func TestGetContextCancelFreesTurnAndDoesNotPool(t *testing.T) {
+func TestGetCancelFreesTurnAndDoesNotPool(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	hold := make(chan struct{})
 	fake.mu.Lock()
@@ -81,7 +81,7 @@ func TestGetContextCancelFreesTurnAndDoesNotPool(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		_, err := client.GetContext(ctx, "hit")
+		_, err := client.Get(ctx, "hit")
 		done <- err
 	}()
 	deadline := time.Now().Add(time.Second)
@@ -93,14 +93,14 @@ func TestGetContextCancelFreesTurnAndDoesNotPool(t *testing.T) {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("GetContext never held")
+			t.Fatal("Get never held")
 		}
 		time.Sleep(time.Millisecond)
 	}
 	cancel()
 	err := <-done
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("GetContext = %v, want context.Canceled", err)
+		t.Fatalf("Get = %v, want context.Canceled", err)
 	}
 	client.idleConnsMu.Lock()
 	idleAfter := len(client.idleConns)
@@ -112,12 +112,12 @@ func TestGetContextCancelFreesTurnAndDoesNotPool(t *testing.T) {
 	fake.mu.Lock()
 	fake.holdCh = nil
 	fake.mu.Unlock()
-	if _, err := client.Get("hit"); err != nil {
+	if _, err := client.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("Get after cancel: %v", err)
 	}
 }
 
-func TestGetContextCancelWhileWaitingForTurn(t *testing.T) {
+func TestGetCancelWhileWaitingForTurn(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	hold := make(chan struct{})
 	fake.mu.Lock()
@@ -127,7 +127,7 @@ func TestGetContextCancelWhileWaitingForTurn(t *testing.T) {
 
 	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1})
 	go func() {
-		_, _ = client.Get("hit")
+		_, _ = client.Get(context.Background(), "hit")
 	}()
 	deadline := time.Now().Add(time.Second)
 	for {
@@ -146,14 +146,14 @@ func TestGetContextCancelWhileWaitingForTurn(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	waitErr := make(chan error, 1)
 	go func() {
-		_, err := client.GetContext(ctx, "hit")
+		_, err := client.Get(ctx, "hit")
 		waitErr <- err
 	}()
 	time.Sleep(20 * time.Millisecond)
 	cancel()
 	err := <-waitErr
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("waiter GetContext = %v, want context.Canceled", err)
+		t.Fatalf("waiter Get = %v, want context.Canceled", err)
 	}
 	if fake.connections() != 1 {
 		t.Fatalf("connections = %d, want 1 (waiter must not dial)", fake.connections())
@@ -163,14 +163,14 @@ func TestGetContextCancelWhileWaitingForTurn(t *testing.T) {
 	}
 }
 
-func TestGetContextAlreadyCancelledDoesNotSend(t *testing.T) {
+func TestGetAlreadyCancelledDoesNotSend(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	client := New(Config{Host: addr})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := client.GetContext(ctx, "hit")
+	_, err := client.Get(ctx, "hit")
 	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("GetContext = %v, want context.Canceled", err)
+		t.Fatalf("Get = %v, want context.Canceled", err)
 	}
 	if fake.connections() != 0 {
 		t.Fatalf("connections = %d, want 0", fake.connections())

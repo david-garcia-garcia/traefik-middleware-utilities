@@ -27,22 +27,12 @@ end
 return 1`
 
 // MSetEX writes names and values with one shared TTL in seconds (native MSETEX or Lua fallback).
-func (sr *SimpleRedis) MSetEX(names []string, values [][]byte, seconds int64) error {
-	return sr.MSetEXContext(context.Background(), names, values, seconds)
-}
-
-// MSetEXContext writes names and values with one shared TTL using ctx for cancel and deadline.
-func (sr *SimpleRedis) MSetEXContext(ctx context.Context, names []string, values [][]byte, seconds int64) error {
+func (sr *SimpleRedis) MSetEX(ctx context.Context, names []string, values [][]byte, seconds int64) error {
 	return sr.msetex(ctx, names, values, "EX", seconds)
 }
 
 // MSetEXAt writes names and values with one shared Unix expiry (native MSETEX or Lua fallback).
-func (sr *SimpleRedis) MSetEXAt(names []string, values [][]byte, unixSeconds int64) error {
-	return sr.MSetEXAtContext(context.Background(), names, values, unixSeconds)
-}
-
-// MSetEXAtContext writes names and values with one shared Unix expiry using ctx for cancel and deadline.
-func (sr *SimpleRedis) MSetEXAtContext(ctx context.Context, names []string, values [][]byte, unixSeconds int64) error {
+func (sr *SimpleRedis) MSetEXAt(ctx context.Context, names []string, values [][]byte, unixSeconds int64) error {
 	return sr.msetex(ctx, names, values, "EXAT", unixSeconds)
 }
 
@@ -72,7 +62,7 @@ func (sr *SimpleRedis) msetexEval(ctx context.Context, names []string, values []
 		argv = append(argv, string(value))
 	}
 	argv = append(argv, expireToken, strconv.FormatInt(ttl, 10))
-	return msetexSuccess(parseIntegerReply(sr.EvalContext(ctx, msetexFallbackScript, names, argv)))
+	return msetexSuccess(parseIntegerReply(sr.Eval(ctx, msetexFallbackScript, names, argv)))
 }
 
 // cachedGroupWrite returns the capability cache. Callers must not hold groupWriteMu.

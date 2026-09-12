@@ -79,6 +79,7 @@ func Probe() string {
 		"reflect.StringHeader": `package unsafeprobe
 
 import (
+	"context"
 	"reflect"
 	"unsafe"
 )
@@ -404,6 +405,8 @@ func BenchmarkYaegiGet(b *testing.B) {
 const loopprobeSrc = `package loopprobe
 
 import (
+	"context"
+
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
@@ -411,7 +414,7 @@ import (
 func GetLoop(host string, count int) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
 	for i := 0; i < count; i++ {
-		if _, err := client.Get("hit"); err != nil {
+		if _, err := client.Get(context.Background(), "hit"); err != nil {
 			return "get:" + err.Error()
 		}
 	}

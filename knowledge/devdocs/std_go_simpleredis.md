@@ -3,7 +3,7 @@
 ## Language
 
 **SimpleRedis**:
-A stdlib pooled TCP RESP client (`New(Config)`, `Get` / `GetContext`, `MGet`, `Set` with EX, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `MSetEX`, `MSetEXAt`, `Close`). `New` copies `Config` and does not dial; the first command dials. Pool, timeout, and retry knobs live on `Config` and freeze at `New`. Unadorned verbs wrap `context.Background()`.
+A stdlib pooled TCP RESP client (`New(Config)`, `Get`, `MGet`, `Set` with EX, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `MSetEX`, `MSetEXAt`, `Close`). Every verb takes `context.Context` as its first argument. `New` copies `Config` and does not dial; the first command dials. Pool, timeout, and retry knobs live on `Config` and freeze at `New`. A caller with no deadline passes `context.Background()`.
 _Avoid_: `go-redis`, miniredis, TLS, Unix sockets, renaming the package to `redis`
 
 ## Overview
@@ -12,29 +12,30 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 
 ## How to use
 
-- Call `simpleredis.New(simpleredis.Config{Host: host})` once before concurrent use. Set pool, timeout, and retry knobs on `Config` (`MaxRetries` 0 at New means 1 extra retry; `-1` turns extra retries or backoff off). After `New` those knobs do not change. Set `Pass` and `Database` on `Config` when AUTH or SELECT is needed. Worst-case command wait is `(MaxRetries+1)*(DialTimeout+IOTimeout)` (600ms at zero Config). Use `GetContext` (and the other `*Context` twins) when the caller has a deadline or cancel; unadorned verbs use `context.Background()`.
+- Call `simpleredis.New(simpleredis.Config{Host: host})` once before concurrent use. Set pool, timeout, and retry knobs on `Config` (`MaxRetries` 0 at New means 1 extra retry; `-1` turns extra retries or backoff off). After `New` those knobs do not change. Set `Pass` and `Database` on `Config` when AUTH or SELECT is needed. Worst-case command wait is `(MaxRetries+1)*(DialTimeout+IOTimeout)` (600ms at zero Config). Every verb takes a context first (`Get(ctx, name)`). Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
 - Do not dial in Traefik `New`. Call `simpleredis.New` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, `Eval`, or `MSetEX`).
-- Call `MSetEX(names, values, seconds)` or `MSetEXAt(names, values, unixSeconds)` for many keys with one TTL. Do not MSET then EXPIRE. Match integer `0` as `redis:issue?`.
+- Call `MSetEX(ctx, names, values, seconds)` or `MSetEXAt(ctx, names, values, unixSeconds)` for many keys with one TTL. Do not MSET then EXPIRE. Match integer `0` as `redis:issue?`.
 - Match AUTH-class Redis errors as `redis:noauth` (`ErrNoAuth`). Match miss with `IsMiss`, unreachable with `IsUnreachable`, pool saturation with `IsPoolWait`. Do not type-assert `net.Error` (Yaegi).
 - Prove with `go test -short ./simpleredis/...` (unit + Yaegi fake). Live Redis/Dragonfly is `*_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`): dest engines for pool wait, SELECT 99, and CLIENT KILL; `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` for WRONGPASS. Traefik e2e is `./Test-Integration.ps1`. Allocation guards are `TestAlloc*` functions that call `testing.Benchmark` with `ReportAllocs` and fail on over-budget allocs/op or B/op; they do not need `-bench`. They skip when the race detector is on.
-- Call `Eval(script, keys, args)` with the Lua body. Eval hashes the body each call (cheap SHA-1; no map, no lock) and sends EVALSHA; on NOSCRIPT it falls back once to EVAL so the engine stores the script. Do not SCRIPT LOAD at `New`. Return values are a flat array of bulk strings or integers; wrap each Lua slot with `tostring` (or return numbers). Nested tables and `{err=...}` inside an array are `redis:unsupported-reply` and close the socket.
+- Call `Eval(ctx, script, keys, args)` with the Lua body. Eval hashes the body each call (cheap SHA-1; no map, no lock) and sends EVALSHA; on NOSCRIPT it falls back once to EVAL so the engine stores the script. Do not SCRIPT LOAD at `New`. Return values are a flat array of bulk strings or integers; wrap each Lua slot with `tostring` (or return numbers). Nested tables and `{err=...}` inside an array are `redis:unsupported-reply` and close the socket.
 
 ## Pattern snippet
 
 ```go
 client := simpleredis.New(simpleredis.Config{Host: "redis:6379"})
-if err := client.Set("k", []byte("v"), 60); err != nil {
+ctx := context.Background()
+if err := client.Set(ctx, "k", []byte("v"), 60); err != nil {
 	return err
 }
-got, err := client.Get("k")
+got, err := client.Get(ctx, "k")
 if err != nil {
 	return err
 }
-n, err := client.Incr("counter")
+n, err := client.Incr(ctx, "counter")
 if err != nil {
 	return err
 }
-if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 60); err != nil {
+if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 60); err != nil {
 	return err
 }
 ```

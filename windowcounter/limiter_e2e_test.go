@@ -1,6 +1,7 @@
 package windowcounter
 
 import (
+	"context"
 	"errors"
 	"os"
 	"strconv"
@@ -97,7 +98,7 @@ func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 	client := simpleredis.New(simpleredis.Config{Host: addr})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		_, err := client.Incr("windowcounter-live-probe")
+		_, err := client.Incr(context.Background(), "windowcounter-live-probe")
 		if err == nil {
 			return client
 		}
@@ -335,7 +336,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		windowStart := now.Unix() / 10 * 10
 		redisKey := redisWindowKey(key, windowStart)
-		values, err := client.Eval(liveTTLScript, []string{redisKey}, nil)
+		values, err := client.Eval(context.Background(), liveTTLScript, []string{redisKey}, nil)
 		if err != nil {
 			t.Fatalf("TTL Eval: %v", err)
 		}

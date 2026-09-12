@@ -17,12 +17,7 @@ const (
 
 // Eval runs a Lua script with KEYS then ARGV. Hashes the body each call and sends EVALSHA; on NOSCRIPT falls back once to EVAL.
 // The reply is a flat array of bulk strings or integers; Lua authors wrap each slot with tostring. Nested tables and {err=...} inside an array are redis:unsupported-reply.
-func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]byte, error) {
-	return sr.EvalContext(context.Background(), script, keys, args)
-}
-
-// EvalContext runs a Lua script using ctx for cancel and deadline. EVALSHA then NOSCRIPT→EVAL share ctx.
-func (sr *SimpleRedis) EvalContext(ctx context.Context, script string, keys []string, args []string) ([][]byte, error) {
+func (sr *SimpleRedis) Eval(ctx context.Context, script string, keys []string, args []string) ([][]byte, error) {
 	// Hash every call: SHA-1 of a limiter script (~470 B) is cheaper than a mutex, and a map of bodies would need a lock because Go maps are not concurrent.
 	digest := scriptSHA1Hex(script)
 	values, err := sr.exec(ctx, evalArgv(evalShaVerb, digest, keys, args)...)

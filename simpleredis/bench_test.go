@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"net"
 	"strconv"
@@ -34,14 +35,14 @@ const largeBulkBytes = 100 * 1024
 func BenchmarkGet(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{"hit": "some-cached-value"})
 	redis := New(Config{Host: addr})
-	if _, err := redis.Get("hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		b.Fatal(err)
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := redis.Get("hit"); err != nil {
+		if _, err := redis.Get(context.Background(), "hit"); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -61,7 +62,7 @@ func BenchmarkMGet10(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := redis.MGet(names); err != nil {
+		if _, err := redis.MGet(context.Background(), names); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -75,7 +76,7 @@ func BenchmarkIncr(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := redis.Incr("counter"); err != nil {
+		if _, err := redis.Incr(context.Background(), "counter"); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -91,7 +92,7 @@ func BenchmarkEval(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := redis.Eval(tokenBucketScript, keys, args); err != nil {
+		if _, err := redis.Eval(context.Background(), tokenBucketScript, keys, args); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -226,7 +227,7 @@ func BenchmarkGetParallel(b *testing.B) {
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			if _, err := redis.Get("hit"); err != nil {
+			if _, err := redis.Get(context.Background(), "hit"); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -288,7 +289,7 @@ func TestConnectionChurnUnderLatency(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < perGoroutine; j++ {
-				if _, err := redis.Get("hit"); err != nil {
+				if _, err := redis.Get(context.Background(), "hit"); err != nil {
 					t.Errorf("Get: %v", err)
 					return
 				}
@@ -318,7 +319,7 @@ func TestConnectionChurnAcrossBursts(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if _, err := redis.Get("hit"); err != nil {
+				if _, err := redis.Get(context.Background(), "hit"); err != nil {
 					t.Errorf("Get: %v", err)
 				}
 			}()

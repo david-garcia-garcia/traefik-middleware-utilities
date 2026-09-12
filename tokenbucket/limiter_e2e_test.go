@@ -1,6 +1,7 @@
 package tokenbucket
 
 import (
+	"context"
 	"errors"
 	"os"
 	"testing"
@@ -223,7 +224,7 @@ func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 	client := simpleredis.New(simpleredis.Config{Host: addr})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		_, err := client.Eval("return 1", nil, nil)
+		_, err := client.Eval(context.Background(), "return 1", nil, nil)
 		if err == nil {
 			return client
 		}

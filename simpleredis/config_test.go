@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func TestConfigFrozenAtNew(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		started <- struct{}{}
-		if _, err := redis.Get("hit"); err != nil {
+		if _, err := redis.Get(context.Background(), "hit"); err != nil {
 			t.Errorf("holder Get: %v", err)
 		}
 	}()
@@ -34,7 +35,7 @@ func TestConfigFrozenAtNew(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	_, err := redis.Get("hit")
+	_, err := redis.Get(context.Background(), "hit")
 	if err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("waiter Get = %v, want %s after post-New PoolSize writes", err, RedisUnreachable)
 	}

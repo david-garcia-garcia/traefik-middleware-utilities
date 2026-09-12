@@ -1,6 +1,7 @@
 package windowcounter
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -174,7 +175,7 @@ func TestBuffered_TickerFlushesWithoutSleep(t *testing.T) {
 	redisKey := redisWindowKey("tick-k", windowStart)
 	deadline := time.Now().Add(time.Second)
 	for {
-		raw, getErr := client.Get(redisKey)
+		raw, getErr := client.Get(context.Background(), redisKey)
 		if getErr == nil && string(raw) == "1" {
 			return
 		}
@@ -235,7 +236,7 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 	}
 	limiter.Sleep()
 	limiter.Close()
-	if _, err := client.Incr("still-open"); err != nil {
+	if _, err := client.Incr(context.Background(), "still-open"); err != nil {
 		t.Fatalf("redis closed by limiter: %v", err)
 	}
 	limiter.Wake()
