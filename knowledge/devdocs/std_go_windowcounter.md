@@ -30,7 +30,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounte
 
 - `New(redis, syncRate)` once. `sync_rate == 0` for exact counts; `> 0` to buffer.
 - Call `Peek(key, limit, window)` to observe the sliding estimate without counting a hit. Call `Take` when the hit should occupy the window (for example after a backend failure).
-- Match Redis errors by `Error()` text.
+- Match Redis miss with `simpleredis.IsMiss` (works through wrapping). Other Redis errors still propagate by `Error()` text until those callers convert.
 - Buffered Peek (`sync_rate > 0`) is a memory read after the first sight of a window key. It does not GET Redis on every call while `local_delta` stays 0. Exact Peek (`sync_rate == 0`) GETs current and previous every call.
 - Prove with `go test -short ./windowcounter/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
 

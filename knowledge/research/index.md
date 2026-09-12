@@ -18,7 +18,7 @@ description: Facts about crowdsec-bouncer-traefik-plugin packages this product m
 ## redis
 priority: normal
 local: index_ext_redis.md
-description: Official Redis command wire behavior for INCR, EXPIRE, EVAL, and MSETEX used by rate-limit scripts.
+description: Official Redis command wire behavior and protocol bulk-length limits this product relies on.
 
 ## dragonfly
 priority: normal
@@ -38,4 +38,4 @@ description: Kong Gateway rate-limiting window types and Redis sync_rate behavio
 ## go-redis
 priority: normal
 local: index_ext_go-redis.md
-description: Official go-redis client pool, option, and proto.Reader.readLine behavior this product copies the shape of, without importing the library.
+description: Official go-redis client pool, option, and proto.Reader behavior this product copies the shape of, without importing the library.

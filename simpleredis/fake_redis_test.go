@@ -681,6 +681,50 @@ func startStaticRedis(t *testing.T, reply string) string {
 	return listener.Addr().String()
 }
 
+// startFirstAcceptThenRestRedis writes firstReply on the first accepted socket and restReply on later accepts. accepts() is how many TCP accepts it has seen.
+func startFirstAcceptThenRestRedis(t *testing.T, firstReply, restReply string) (addr string, accepts func() int) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	var mu sync.Mutex
+	acceptCount := 0
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			acceptCount++
+			acceptIndex := acceptCount
+			mu.Unlock()
+			go func(acceptIndex int, conn net.Conn) {
+				defer conn.Close()
+				reader := bufio.NewReader(conn)
+				reply := restReply
+				if acceptIndex == 1 {
+					reply = firstReply
+				}
+				for {
+					if _, err := readCommand(reader); err != nil {
+						return
+					}
+					_, _ = io.WriteString(conn, reply)
+				}
+			}(acceptIndex, conn)
+		}
+	}()
+	return listener.Addr().String(), func() int {
+		mu.Lock()
+		n := acceptCount
+		mu.Unlock()
+		return n
+	}
+}
+
 // startSequentialRedis replies with replies[n] for the n-th command on each accepted socket.
 func startSequentialRedis(t *testing.T, replies []string) string {
 	t.Helper()
@@ -804,7 +848,7 @@ func startRawReplyRedis(t *testing.T, replies []rawReply) string {
 	return listener.Addr().String()
 }
 
-// serveRawReply reads one command on conn, writes replies[index], and closes when closeAfter is set.
+// serveRawReply reads one command on conn, writes replies[index], and keeps the socket until the client disconnects unless closeAfter is set.
 func serveRawReply(conn net.Conn, replies []rawReply, index int) {
 	defer conn.Close()
 	if index < 0 || index >= len(replies) {
@@ -819,6 +863,7 @@ func serveRawReply(conn net.Conn, replies []rawReply, index int) {
 	if reply.closeAfter {
 		return
 	}
+	_, _ = io.Copy(io.Discard, conn)
 }
 
 // pooledIdle is the idle-list length under the client mutex.

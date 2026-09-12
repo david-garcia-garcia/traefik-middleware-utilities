@@ -49,3 +49,8 @@ description: How Redis closes a client TCP socket from the server (idle timeout 
 priority: normal
 local: ext_redis_msetex/
 description: Redis 8.4 MSETEX argv/reply and Redis 7 unknown-command detection for engines that lack it.
+
+## proto-max-bulk-len
+priority: normal
+local: ext_redis_proto_max-bulk-len/
+description: What Redis proto-max-bulk-len defaults to and which protocol sizes it caps.
