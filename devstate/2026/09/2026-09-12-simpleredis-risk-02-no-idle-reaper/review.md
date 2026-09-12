@@ -23,3 +23,11 @@ fixed: none
 skipped: none
 change: simpleredis-idle-borrow-sweep
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
+
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: takeIdleConn full-list sweep; two-age openSockets test; usage gotcha
+skipped: reaper; peel-on-release
+localTests: passed
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
