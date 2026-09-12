@@ -5,7 +5,7 @@ JobName: 2026-09-12-simpleredis-risk-06-zero-value-client-spins-retries
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-12T12:36:37Z |
-| explore | [ ] | [ ] | |
+| explore | [x] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
