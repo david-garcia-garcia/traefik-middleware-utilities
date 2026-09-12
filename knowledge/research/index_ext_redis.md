@@ -29,3 +29,8 @@ description: Redis AUTH requirepass/ACL replies (WRONGPASS, nopass AUTH text) on
 priority: normal
 local: ext_redis_select/
 description: Redis SELECT logical-DB indexes and the DB-index-out-of-range error.
+
+## MSETEX
+priority: normal
+local: ext_redis_msetex/
+description: Redis 8.4 MSETEX argv/reply and Redis 7 unknown-command detection for engines that lack it.
