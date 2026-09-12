@@ -22,3 +22,11 @@ fixed: none
 skipped: none
 change: add-ci-unit-race-detector
 specs: fold std_go_ci_test-suites
+
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: unit test job -race 10m; catalog and README
+skipped: local -race (gcc missing)
+localTests: passed
+ci: 34694576856 queued
