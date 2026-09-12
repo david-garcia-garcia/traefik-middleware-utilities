@@ -42,6 +42,14 @@ findings: none
 fixed: none
 skipped: none
 
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: none
+skipped: none
+archived: openspec/changes/archive/2026-09-12-simpleredis-unsupported-reply/
+
+
 
 
 
