@@ -8,7 +8,7 @@ JobName: 2026-09-12-simpleredis-risk-02-no-idle-reaper
 | explore | [x] | [x] | 2026-09-12T12:41:43Z |
 | propose | [x] | [x] | 2026-09-12T12:44:41Z |
 | implement | [x] | [x] | 2026-09-12T12:47:24Z |
-| codereview | [x] | [ ] | |
+| codereview | [x] | [x] | 2026-09-12T12:51:25Z |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |

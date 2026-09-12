@@ -31,3 +31,10 @@ fixed: takeIdleConn full-list sweep; two-age openSockets test; usage gotcha
 skipped: reaper; peel-on-release
 localTests: passed
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
+
+## codereview (2026-09-12)
+phase: codereview
+findings: none
+fixed: none
+skipped: none
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/33
