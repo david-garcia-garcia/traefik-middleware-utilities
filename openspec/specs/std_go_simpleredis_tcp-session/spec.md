@@ -53,7 +53,7 @@ When `pass` is non-empty, each new dial SHALL send `AUTH` with that password bef
 - **AND** they are not sent again on those Gets
 
 ### Requirement: Idle connections are pooled
-The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdleConns` (const default 8). Live sockets (idle plus checked out) SHALL not exceed `PoolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `PoolSize`, a caller SHALL wait for a released socket instead of dialing. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `PoolSize` connections, including when more callers overlap than `PoolSize`. An idle connection older than `IdleTimeout` (const default thirty seconds) SHALL not be reused; the next command SHALL dial a new one if live sockets are under `PoolSize`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. `release` MUST NOT close a reusable socket solely because the idle list is full while live sockets are under `PoolSize`.
+The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdleConns` (const default 8). Live sockets (idle plus checked out) SHALL not exceed `PoolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `PoolSize`, a caller SHALL wait for a released socket instead of dialing. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `PoolSize` connections, including when more callers overlap than `PoolSize`. An idle connection older than `IdleTimeout` (const default thirty seconds) SHALL not be reused. On the next command that borrows, every idle socket older than `IdleTimeout` SHALL be closed, including those behind a younger tail that is reused. If no younger idle socket remains, the next command SHALL dial a new one if live sockets are under `PoolSize`. `New` MUST NOT start a goroutine to close idle sockets. A client that issues no later command MAY keep idle sockets past `IdleTimeout` until `Close`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. `release` MUST NOT close a reusable socket solely because the idle list is full while live sockets are under `PoolSize`.
 
 Every command (GET, MGET, SET, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL) SHALL use go-redis-shaped command retry. `MaxRetries`, `MinRetryBackoff`, and `MaxRetryBackoff` live on `Config` and are copied at `New`. The retry loop SHALL be `for attempt := 0; attempt <= maxRetries; attempt++` (zero Config means 1 extra retry, at most two sends). Backoff SHALL wait only between retries (`attempt > 0`), using go-redis `RetryBackoff` (`math/rand` `Int63n` jitter), and MUST return when the command context is done or the overall command deadline has passed. Construction is `New(Config)`.
 
@@ -73,6 +73,15 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **WHEN** more concurrent commands than the default `poolSize` (8) overlap against a live fake Redis
 - **THEN** the fake observes at most the default `poolSize` (8) TCP connections
 - **AND** waiters reuse a released socket rather than dialing past `poolSize`
+
+#### Scenario: Stale idle head is closed while the tail stays hot
+- **WHEN** a client has two idle sockets
+- **AND** only the older socket is past `IdleTimeout`
+- **AND** a command is issued
+- **THEN** the fake observes that aged socket closed
+- **AND** the command reuses the younger socket
+- **AND** the fake does not accept a third TCP connection for that command
+- **AND** `New` did not start a goroutine
 
 #### Scenario: Lost-reply Incr is retried
 - **WHEN** a client has an idle pooled connection
