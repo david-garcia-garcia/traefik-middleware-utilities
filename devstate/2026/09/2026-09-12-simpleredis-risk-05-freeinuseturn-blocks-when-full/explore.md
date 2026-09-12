@@ -57,5 +57,5 @@ Reproduced 2026-09-12: `TestThrowawayFreeInUseTurnHang` on a fresh `PoolSize: 2`
 
 - Q: Does this run put `-race` into CI?
   Rank: additive incidental — Out of scope names ci-01 race detector in CI; Desired still wants the invariant run under `-race`
-  Decision: assumed — run the invariant locally with `go test -race`; do not change GitHub workflows.
-  By: explore
+  Decision: assumed — do not change GitHub workflows. Local `go test -race` not-run (CGO gcc not found). `go test -short ./simpleredis/...` passed including the invariant.
+  By: implement
