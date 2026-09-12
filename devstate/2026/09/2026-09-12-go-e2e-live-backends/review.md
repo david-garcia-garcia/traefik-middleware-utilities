@@ -32,3 +32,11 @@ skipped: none
 localTests: passed
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
 ci: 34692351607 in progress
+
+## codereview (2026-09-12)
+phase: codereview
+findings: Standards 1 judgement skipped; Spec 2 wrong done; Coverage 1 hard done
+fixed: live-e2e SHALL AUTH/SELECT; lookupLiveEngineAddrs + TestLookupLiveEngineAddrs
+skipped: shared internal/livee2e helper
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
+ci: 34692650670 in progress

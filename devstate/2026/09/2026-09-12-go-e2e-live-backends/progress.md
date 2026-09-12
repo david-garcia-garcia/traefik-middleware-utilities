@@ -8,7 +8,7 @@ JobName: 2026-09-12-go-e2e-live-backends
 | explore | [x] | [x] | 2026-09-12T11:21:11Z |
 | propose | [x] | [x] | 2026-09-12T11:26:38Z |
 | implement | [x] | [x] | 2026-09-12T11:57:25Z |
-| codereview | [x] | [ ] | |
+| codereview | [x] | [x] | 2026-09-12T12:04:15Z |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
