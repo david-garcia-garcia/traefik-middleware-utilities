@@ -16,6 +16,8 @@ type testFakeRedis struct {
 	store      map[string]string
 	lastExpire []string
 	getCalls   int
+	listener   net.Listener
+	conns      []net.Conn
 }
 
 // startTestFakeRedis listens on a local TCP port and serves an in-process RESP map.
@@ -26,13 +28,16 @@ func startTestFakeRedis(t *testing.T) (*testFakeRedis, string) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	fake := &testFakeRedis{store: map[string]string{}}
+	fake := &testFakeRedis{store: map[string]string{}, listener: listener}
 	go func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
+			fake.mu.Lock()
+			fake.conns = append(fake.conns, conn)
+			fake.mu.Unlock()
 			go fake.serve(conn)
 		}
 	}()
@@ -108,6 +113,20 @@ func (f *testFakeRedis) getCallCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.getCalls
+}
+
+// Kill closes the listener and every accepted socket so later commands fail as unreachable.
+func (f *testFakeRedis) Kill() {
+	f.mu.Lock()
+	listener := f.listener
+	conns := append([]net.Conn(nil), f.conns...)
+	f.mu.Unlock()
+	if listener != nil {
+		_ = listener.Close()
+	}
+	for _, conn := range conns {
+		_ = conn.Close()
+	}
 }
 
 // testBulk formats a GET/MGET bulk string or a miss.

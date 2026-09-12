@@ -23,6 +23,7 @@ function Test-RedisHealth {
     param(
         [string]$BackendHost = "redis",
         [string]$ServiceName = "redis",
+        [string]$Password = "",
         [int]$TimeoutSeconds = 90,
         [int]$RetryIntervalSeconds = 2
     )
@@ -30,7 +31,12 @@ function Test-RedisHealth {
     Write-Step "Waiting for $ServiceName..."
     $elapsed = 0
     do {
-        $pong = docker compose exec -T redis redis-cli -h $BackendHost ping 2>$null
+        if ($Password -ne "") {
+            $pong = docker compose exec -T redis redis-cli -h $BackendHost -a $Password ping 2>$null
+        }
+        else {
+            $pong = docker compose exec -T redis redis-cli -h $BackendHost ping 2>$null
+        }
         if ($LASTEXITCODE -eq 0 -and "$pong".Trim() -eq "PONG") {
             Write-Step "$ServiceName is ready"
             return $true
@@ -93,6 +99,8 @@ try {
             (Test-RedisHealth -BackendHost "dragonfly" -ServiceName "dragonfly"),
             (Test-RedisHealth -BackendHost "redis-drop" -ServiceName "redis-drop"),
             (Test-RedisHealth -BackendHost "dragonfly-drop" -ServiceName "dragonfly-drop"),
+            (Test-RedisHealth -BackendHost "redis-auth" -ServiceName "redis-auth" -Password "secret"),
+            (Test-RedisHealth -BackendHost "dragonfly-auth" -ServiceName "dragonfly-auth" -Password "secret"),
             (Test-ServiceHealth -Url "http://localhost:8000/a" -ServiceName "whoami /a"),
             (Test-ServiceHealth -Url "http://localhost:8000/b" -ServiceName "whoami /b"),
             (Test-ServiceHealth -Url "http://localhost:8000/redis" -ServiceName "whoami /redis"),

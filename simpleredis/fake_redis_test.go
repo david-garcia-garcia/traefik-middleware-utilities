@@ -20,6 +20,10 @@ type fakeRedis struct {
 	auths                int
 	selects              int
 	gets                 int
+	hangups              int
+	authReply            string
+	selectReply          string
+	handshake            []string
 	incrs                int
 	incrBys              int
 	evalShaCount         int
@@ -48,7 +52,7 @@ func startFakeRedis(t testing.TB, store map[string]string) (*fakeRedis, string) 
 	}
 	t.Cleanup(func() { _ = listener.Close() })
 
-	fake := &fakeRedis{store: store, loadedScripts: make(map[string]string)}
+	fake := &fakeRedis{store: store, loadedScripts: make(map[string]string), authReply: statusOKReply, selectReply: statusOKReply}
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -77,6 +81,10 @@ func (f *fakeRedis) serve(conn net.Conn) {
 	for {
 		args, err := readCommand(reader)
 		if err != nil {
+			// Client closed the socket (handshake failure calls conn.close).
+			f.mu.Lock()
+			f.hangups++
+			f.mu.Unlock()
 			return
 		}
 		f.mu.Lock()
@@ -119,10 +127,12 @@ func (f *fakeRedis) commandReply(args []string) string {
 	switch args[0] {
 	case "AUTH":
 		f.auths++
-		return statusOKReply
+		f.handshake = append(f.handshake, "AUTH")
+		return f.authReply
 	case "SELECT":
 		f.selects++
-		return statusOKReply
+		f.handshake = append(f.handshake, "SELECT")
+		return f.selectReply
 	case "GET":
 		f.gets++
 		return bulk(f.store, args[1])
@@ -177,7 +187,7 @@ func (f *fakeRedis) commandReply(args []string) string {
 	case evalVerb:
 		f.evals++
 		script := args[1]
-		f.loadedScripts[scriptSHA1Hex(script)] = script
+		f.loadedScripts[ScriptSHA1Hex(script)] = script
 		return f.evalScriptReply(script, args)
 	default:
 		return statusOKReply
@@ -267,6 +277,13 @@ func (f *fakeRedis) lastExpireCommand() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.lastExpire...)
+}
+
+// loadScriptDigestForTest pretends Redis already compiled script under digest.
+func (f *fakeRedis) loadScriptDigestForTest(digest, script string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.loadedScripts[digest] = script
 }
 
 // lastEvalCommand returns the last EVAL or EVALSHA argv.
@@ -394,6 +411,50 @@ func (f *fakeRedis) handshakeCounts() (auths, selects, gets int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.auths, f.selects, f.gets
+}
+
+// setHandshakeReplies sets AUTH and SELECT RESP replies (full wire including CRLF).
+func (f *fakeRedis) setHandshakeReplies(authReply, selectReply string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.authReply = authReply
+	f.selectReply = selectReply
+}
+
+// hangupCount is how many times serve exited after a read error (peer close).
+func (f *fakeRedis) hangupCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.hangups
+}
+
+// waitHangups waits until serve has observed want peer closes, or fails the test.
+func (f *fakeRedis) waitHangups(t *testing.T, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if f.hangupCount() == want {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("hangups = %d, want %d", f.hangupCount(), want)
+}
+
+// handshakeAuthBeforeSelect is true when AUTH was recorded before SELECT on this fake.
+func (f *fakeRedis) handshakeAuthBeforeSelect() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	authAt, selectAt := -1, -1
+	for i, cmd := range f.handshake {
+		if cmd == "AUTH" && authAt < 0 {
+			authAt = i
+		}
+		if cmd == "SELECT" && selectAt < 0 {
+			selectAt = i
+		}
+	}
+	return authAt >= 0 && selectAt > authAt
 }
 
 // armCloseBeforeReplyOnceForTest makes the next command mutate then close without a reply.
@@ -627,6 +688,50 @@ func startStaticRedis(t *testing.T, reply string) string {
 	return listener.Addr().String()
 }
 
+// startFirstAcceptThenRestRedis writes firstReply on the first accepted socket and restReply on later accepts. accepts() is how many TCP accepts it has seen.
+func startFirstAcceptThenRestRedis(t *testing.T, firstReply, restReply string) (addr string, accepts func() int) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	var mu sync.Mutex
+	acceptCount := 0
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			mu.Lock()
+			acceptCount++
+			acceptIndex := acceptCount
+			mu.Unlock()
+			go func(acceptIndex int, conn net.Conn) {
+				defer conn.Close()
+				reader := bufio.NewReader(conn)
+				reply := restReply
+				if acceptIndex == 1 {
+					reply = firstReply
+				}
+				for {
+					if _, err := readCommand(reader); err != nil {
+						return
+					}
+					_, _ = io.WriteString(conn, reply)
+				}
+			}(acceptIndex, conn)
+		}
+	}()
+	return listener.Addr().String(), func() int {
+		mu.Lock()
+		n := acceptCount
+		mu.Unlock()
+		return n
+	}
+}
+
 // startSequentialRedis replies with replies[n] for the n-th command on each accepted socket.
 func startSequentialRedis(t *testing.T, replies []string) string {
 	t.Helper()
@@ -750,7 +855,7 @@ func startRawReplyRedis(t *testing.T, replies []rawReply) string {
 	return listener.Addr().String()
 }
 
-// serveRawReply reads one command on conn, writes replies[index], and closes when closeAfter is set.
+// serveRawReply reads one command on conn, writes replies[index], and keeps the socket until the client disconnects unless closeAfter is set.
 func serveRawReply(conn net.Conn, replies []rawReply, index int) {
 	defer conn.Close()
 	if index < 0 || index >= len(replies) {
@@ -765,6 +870,7 @@ func serveRawReply(conn net.Conn, replies []rawReply, index int) {
 	if reply.closeAfter {
 		return
 	}
+	_, _ = io.Copy(io.Discard, conn)
 }
 
 // pooledIdle is the idle-list length under the client mutex.

@@ -1,0 +1,8 @@
+host: local
+ref: none
+title: "test-03 — dial's AUTH and SELECT failure branches are untested"
+url: none
+number: none
+sources:
+  - simpleredisfixes/test-03-dial-auth-select-failure.md
+  - simpleredisfixes/README.md

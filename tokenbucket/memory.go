@@ -1,6 +1,7 @@
 package tokenbucket
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -51,7 +52,10 @@ func (m *Memory) SetNowForTest(now func() time.Time) {
 }
 
 // Allow consumes one token for key and returns whether it is allowed plus how long to wait.
-func (m *Memory) Allow(key string) (bool, time.Duration, error) {
+func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, error) {
+	if err := ctx.Err(); err != nil {
+		return false, 0, err
+	}
 	now := m.now()
 	nowMicro := now.UnixMicro()
 	m.mu.Lock()

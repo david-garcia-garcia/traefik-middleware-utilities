@@ -93,3 +93,59 @@ services:
       - "traefik.http.services.simpleredis-dragonfly.loadbalancer.server.port=80"
       - "traefik.http.middlewares.simpleredis-dragonfly.plugin.simpleredisprobe.host=dragonfly:6379"
       - "traefik.http.middlewares.simpleredis-dragonfly.plugin.simpleredisprobe.dropHost=dragonfly-drop:6379"
+
+  redis-auth:
+    image: redis:7-alpine
+    hostname: redis-auth
+    command: ["redis-server", "--requirepass", "secret"]
+
+  dragonfly-auth:
+    image: docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2
+    hostname: dragonfly-auth
+    command: ["--requirepass=secret"]
+    ulimits:
+      memlock: -1
+
+  whoami-redis-wrong-password:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simpleredis-redis-wrong-password.rule=PathPrefix(`/redis-wrong-password`)"
+      - "traefik.http.routers.simpleredis-redis-wrong-password.entrypoints=web"
+      - "traefik.http.routers.simpleredis-redis-wrong-password.middlewares=simpleredis-redis-wrong-password@docker"
+      - "traefik.http.services.simpleredis-redis-wrong-password.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.simpleredis-redis-wrong-password.plugin.simpleredisprobe.host=redis-auth:6379"
+      - "traefik.http.middlewares.simpleredis-redis-wrong-password.plugin.simpleredisprobe.password=wrong"
+
+  whoami-dragonfly-wrong-password:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simpleredis-dragonfly-wrong-password.rule=PathPrefix(`/dragonfly-wrong-password`)"
+      - "traefik.http.routers.simpleredis-dragonfly-wrong-password.entrypoints=web"
+      - "traefik.http.routers.simpleredis-dragonfly-wrong-password.middlewares=simpleredis-dragonfly-wrong-password@docker"
+      - "traefik.http.services.simpleredis-dragonfly-wrong-password.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.simpleredis-dragonfly-wrong-password.plugin.simpleredisprobe.host=dragonfly-auth:6379"
+      - "traefik.http.middlewares.simpleredis-dragonfly-wrong-password.plugin.simpleredisprobe.password=wrong"
+
+  whoami-redis-database-99:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simpleredis-redis-database-99.rule=PathPrefix(`/redis-database-99`)"
+      - "traefik.http.routers.simpleredis-redis-database-99.entrypoints=web"
+      - "traefik.http.routers.simpleredis-redis-database-99.middlewares=simpleredis-redis-database-99@docker"
+      - "traefik.http.services.simpleredis-redis-database-99.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.simpleredis-redis-database-99.plugin.simpleredisprobe.host=redis:6379"
+      - "traefik.http.middlewares.simpleredis-redis-database-99.plugin.simpleredisprobe.database=99"
+
+  whoami-dragonfly-database-99:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simpleredis-dragonfly-database-99.rule=PathPrefix(`/dragonfly-database-99`)"
+      - "traefik.http.routers.simpleredis-dragonfly-database-99.entrypoints=web"
+      - "traefik.http.routers.simpleredis-dragonfly-database-99.middlewares=simpleredis-dragonfly-database-99@docker"
+      - "traefik.http.services.simpleredis-dragonfly-database-99.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.simpleredis-dragonfly-database-99.plugin.simpleredisprobe.host=dragonfly:6379"
+      - "traefik.http.middlewares.simpleredis-dragonfly-database-99.plugin.simpleredisprobe.database=99"
