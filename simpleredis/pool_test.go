@@ -460,3 +460,83 @@ func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
 		t.Fatalf("second Get = %q, want %q", got, "hello")
 	}
 }
+
+// TestOverFreeOnFullSemaphoreReturns proves an extra turn return does not hang and OverFrees counts it.
+func TestOverFreeOnFullSemaphoreReturns(t *testing.T) {
+	sr := New(Config{Host: "127.0.0.1:1", PoolSize: 2})
+	done := make(chan struct{})
+	go func() {
+		sr.freeInUseTurn()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("freeInUseTurn blocked on a full semaphore")
+	}
+	if got := sr.OverFrees(); got != 1 {
+		t.Fatalf("OverFrees = %d, want 1", got)
+	}
+}
+
+// TestOverFreeAccountingStaysBalanced hammers borrow/release exits and asserts a full semaphore with no over-frees.
+func TestOverFreeAccountingStaysBalanced(t *testing.T) {
+	// Healthy fake: successful Get/release cycles.
+	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	healthy := New(Config{Host: addr, MaxRetries: -1})
+	hammerGets(t, healthy)
+	assertTurnsFullAndNoOverFrees(t, healthy)
+
+	// Dead address: dial failure frees the turn before returning.
+	dead := New(Config{Host: "127.0.0.1:1", DialTimeout: 20 * time.Millisecond, MaxRetries: -1})
+	hammerGets(t, dead)
+	assertTurnsFullAndNoOverFrees(t, dead)
+
+	// AUTH reject: handshake failure closes the socket and frees the turn.
+	authFake, authAddr := startFakeRedis(t, map[string]string{"hit": "t"})
+	authFake.setHandshakeReplies("-WRONGPASS invalid password\r\n", statusOKReply)
+	authReject := New(Config{Host: authAddr, Pass: "wrong-password", MaxRetries: -1})
+	hammerGets(t, authReject)
+	assertTurnsFullAndNoOverFrees(t, authReject)
+
+	// Starved pool: waiters hit PoolTimeout without taking a turn.
+	starvedFake, starvedAddr := startFakeRedis(t, map[string]string{"hit": "t"})
+	starvedFake.mu.Lock()
+	starvedFake.getDelay = 80 * time.Millisecond
+	starvedFake.mu.Unlock()
+	starved := New(Config{Host: starvedAddr, PoolSize: 1, PoolTimeout: 15 * time.Millisecond, MaxRetries: -1})
+	hammerGets(t, starved)
+	assertTurnsFullAndNoOverFrees(t, starved)
+}
+
+// hammerGets runs 16 goroutines × 8 Get("hit") calls and waits for every goroutine to finish.
+func hammerGets(t *testing.T, sr *SimpleRedis) {
+	t.Helper()
+	const goroutines = 16
+	const getsPerGoroutine = 8
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := 0; i < goroutines; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < getsPerGoroutine; j++ {
+				_, _ = sr.Get(context.Background(), "hit")
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// assertTurnsFullAndNoOverFrees fails unless the in-use-turn channel is full and OverFrees is 0.
+func assertTurnsFullAndNoOverFrees(t *testing.T, sr *SimpleRedis) {
+	t.Helper()
+	if sr.inUseTurns == nil {
+		t.Fatal("inUseTurns is nil")
+	}
+	if got, want := len(sr.inUseTurns), cap(sr.inUseTurns); got != want {
+		t.Fatalf("inUseTurns len=%d cap=%d, want full", got, want)
+	}
+	if got := sr.OverFrees(); got != 0 {
+		t.Fatalf("OverFrees = %d, want 0", got)
+	}
+}

@@ -328,6 +328,21 @@ A request through the nested SimpleRedis Traefik plugin SHALL, with query `drop=
 - **AND** a Get without `drop=1` of that Eval key is `6`
 - **AND** the Dragonfly Pester Describe does not stop `whoami-a` or `whoami-b`
 
+### Requirement: Extra in-use turn return MUST NOT hang
+When a caller returns an in-use-turn token while the in-use-turn channel is already full (`len` equals `cap` after `New`), that return SHALL complete without waiting. The send that would block MUST be dropped. `OverFrees()` SHALL increment by one for that drop. `OverFrees()` SHALL be readable next to `PoolSize()` and `MaxIdleConns()`. Balanced borrow and release SHALL leave the in-use-turn channel full (`len` equals `cap`) and `OverFrees()` equal to 0. The client MUST NOT panic on an extra return.
+
+#### Scenario: Extra return on a fresh client returns promptly
+- **WHEN** a client is created with `New` so the in-use-turn channel is full
+- **AND** one extra in-use turn is returned without a matching take
+- **THEN** that return completes without waiting
+- **AND** `OverFrees()` is 1
+
+#### Scenario: Hammered borrow and release stay balanced
+- **WHEN** many goroutines hammer borrow and release through a healthy fake, a dead address, an AUTH-rejecting fake, and a starved pool with a short `PoolTimeout`
+- **THEN** those goroutines all finish
+- **AND** the in-use-turn channel `len` equals `cap`
+- **AND** `OverFrees()` is 0
+
 ### Requirement: Whole command has an overall deadline
 Each command SHALL compute one overall deadline at entry equal to `(maxRetries+1)*(DialTimeout+IOTimeout)` unless the caller's context deadline is sooner. When the library instant is sooner, the command SHALL bind it onto the caller's context (`context.WithDeadline`, same shape as `net.Dialer` / `http.Client`). Dial, AUTH, SELECT, and the command SHALL share the remaining time. AUTH and SELECT MUST NOT each add a fresh full `IOTimeout` on top of a completed TCP connect. Per-command socket I/O SHALL still `SetDeadline` to the lesser of `IOTimeout` and time remaining. When that overall library deadline expires, the command SHALL return `redis:timeout` and MUST NOT start another attempt. A sooner caller deadline SHALL return that context's `Err()`.
 
@@ -360,3 +375,4 @@ The SimpleRedis session source SHALL convert command names, scripts, and decimal
 - **WHEN** the session source converts a string key, script, or decimal argument to bytes, or a bulk integer payload to a string
 - **THEN** that conversion is `[]byte(...)` or `string(...)`
 - **AND** session source has no unsafe pointer or header cast that aliases string and `[]byte`
+

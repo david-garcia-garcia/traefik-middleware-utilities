@@ -52,11 +52,17 @@ func (sr *SimpleRedis) ensureInUseTurns() {
 }
 
 // freeInUseTurn returns one in-use-socket token to the pool. No-op before the pool is created.
+// An extra return when the semaphore is already full is dropped and counted on OverFrees so the caller does not hang.
 func (sr *SimpleRedis) freeInUseTurn() {
 	if sr.inUseTurns == nil {
 		return
 	}
-	sr.inUseTurns <- struct{}{}
+	select {
+	case sr.inUseTurns <- struct{}{}:
+	default:
+		// Over-free: some path returned a turn it did not take. Drop so the request does not hang.
+		sr.overFrees.Add(1)
+	}
 }
 
 // borrow waits for an in-use turn, then takes an unused socket younger than idleTimeout, or dials.
