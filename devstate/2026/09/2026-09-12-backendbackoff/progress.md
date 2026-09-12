@@ -5,7 +5,7 @@ JobName: 2026-09-12-backendbackoff
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-12T18:08:01Z |
-| explore | [ ] | [ ] | |
+| explore | [x] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
