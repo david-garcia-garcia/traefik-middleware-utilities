@@ -44,3 +44,10 @@ findings: none
 fixed: none
 skipped: none
 units: Test suites (packet already named -race)
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: none
+skipped: none
+archived: 2026-09-12-add-ci-unit-race-detector

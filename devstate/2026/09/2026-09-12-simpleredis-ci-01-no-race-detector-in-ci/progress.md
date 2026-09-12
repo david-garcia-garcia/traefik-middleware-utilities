@@ -10,5 +10,5 @@ JobName: 2026-09-12-simpleredis-ci-01-no-race-detector-in-ci
 | implement | [x] | [x] | 2026-09-12T12:47:57Z |
 | codereview | [x] | [x] | 2026-09-12T12:51:17Z |
 | devdocsimpact | [x] | [x] | 2026-09-12T12:53:40Z |
-| archive | [x] | [ ] | |
+| archive | [x] | [x] | 2026-09-12T12:55:10Z |
 | pullrequest | [ ] | [ ] | |
