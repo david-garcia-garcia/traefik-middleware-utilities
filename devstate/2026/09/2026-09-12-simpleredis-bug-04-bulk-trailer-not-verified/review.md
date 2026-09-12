@@ -17,3 +17,9 @@ phase: propose
 findings: fold into resp-decode and resp-commands
 fixed: none
 skipped: new spec leaf
+
+## implement (2026-09-12)
+phase: implement
+findings: dest skipped bulk trailer
+fixed: readBulk CRLF check; unit + desync tests; closeAfter false keep-alive
+skipped: length cap (bug-02)
