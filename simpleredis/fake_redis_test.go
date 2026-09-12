@@ -661,3 +661,58 @@ func startSequentialRedis(t *testing.T, replies []string) string {
 	}()
 	return listener.Addr().String()
 }
+
+// startWriteThenCloseRedis reads one command, writes a partial RESP reply, then closes the socket.
+func startWriteThenCloseRedis(t *testing.T, partialReply string) string {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		reader := bufio.NewReader(conn)
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		_, _ = io.WriteString(conn, partialReply)
+	}()
+	return listener.Addr().String()
+}
+
+// startRetryBorrowFailRedis accepts one connection, replies a GET hit, closes the listener, then writes a truncated reply on the reused socket so retry dial fails.
+func startRetryBorrowFailRedis(t *testing.T, truncatedReply string) (addr string, listenerClosed <-chan struct{}) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	closed := make(chan struct{})
+
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
+		}
+		reader := bufio.NewReader(conn)
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		_, _ = io.WriteString(conn, "$1\r\nt\r\n")
+		_ = listener.Close()
+		close(closed)
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		_, _ = io.WriteString(conn, truncatedReply)
+		_ = conn.Close()
+	}()
+	return listener.Addr().String(), closed
+}
