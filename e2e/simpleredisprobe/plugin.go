@@ -88,7 +88,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 	return mw, nil
 }
 
-// ServeHTTP runs Set+Get only when recover=1; otherwise optionally holds via ?hold=, then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval twice, MSetEX, and MSetEXAt, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
+// ServeHTTP runs Set+Get only when recover=1; otherwise optionally holds via ?hold=, then runs Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval twice, a missing-key Get, MSetEX, and MSetEXAt, and copies results into headers. When dropClient is set, it also warms that client and sets DropIncr/DropEval headers.
 func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	if req.URL.Query().Get("recover") == "1" {
 		m.serveRecover(rw, req)
@@ -203,6 +203,13 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("X-SimpleRedis-EvalAgain", string(evalAgainValues[0]))
 	rw.Header().Set("X-SimpleRedis-EvalDigest", kongScriptDigest())
+
+	_, missErr := m.client.Get(prefix + ":missing")
+	if missErr == nil || missErr.Error() != simpleredis.RedisMiss {
+		http.Error(rw, "get miss", http.StatusBadGateway)
+		return
+	}
+	rw.Header().Set("X-SimpleRedis-GetMiss", simpleredis.RedisMiss)
 
 	msetexKey := prefix + ":msetex"
 	msetexAtKey := prefix + ":msetexat"
