@@ -474,3 +474,10 @@ Compiled tests SHALL run `MSetEX` against both Redis 7 and Dragonfly when `SIMPL
 - **WHEN** both live addresses are set
 - **AND** MSetEXAt is called with a Unix timestamp in the past
 - **THEN** a later Get of that key is `redis:miss`
+
+### Requirement: SimpleRedis test package compiles
+`go test ./simpleredis/` SHALL compile as one binary. Tests that write a temp GOPATH for Yaegi, including interpreted-cost measurements, MUST use the same-package helper the interpreter tests already define. The package MUST NOT fail to compile because that helper is missing. CI `go test ./...` MUST keep compiling this package.
+
+#### Scenario: Test binary compiles
+- **WHEN** `go test -c ./simpleredis/` runs
+- **THEN** the compile succeeds
