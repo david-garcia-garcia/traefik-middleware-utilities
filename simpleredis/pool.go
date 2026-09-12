@@ -105,7 +105,7 @@ func (sr *SimpleRedis) borrow() (*pooledConn, error) {
 	return conn, nil
 }
 
-// takeIdleConn pops unused sockets until one is younger than idleTimeout. Stale sockets are returned for close after the lock. closed is true when Close ran.
+// takeIdleConn sweeps unused sockets older than idleTimeout, then pops the newest survivor. Stale sockets are returned for close after the lock. closed is true when Close ran.
 func (sr *SimpleRedis) takeIdleConn() (reused *pooledConn, stale []*pooledConn, closed bool) {
 	sr.idleConnsMu.Lock()
 	defer sr.idleConnsMu.Unlock()
@@ -113,15 +113,22 @@ func (sr *SimpleRedis) takeIdleConn() (reused *pooledConn, stale []*pooledConn, 
 		return nil, nil, true
 	}
 	now := time.Now()
-	for len(sr.idleConns) > 0 {
-		conn := sr.idleConns[len(sr.idleConns)-1]
-		sr.idleConns = sr.idleConns[:len(sr.idleConns)-1]
+	// Keep still-young sockets in place; collect stale for close after unlock.
+	survivors := sr.idleConns[:0]
+	for _, conn := range sr.idleConns {
 		if now.Sub(conn.lastUsed) < sr.idleTimeout {
-			return conn, stale, false
+			survivors = append(survivors, conn)
+			continue
 		}
 		stale = append(stale, conn)
 	}
-	return nil, stale, false
+	sr.idleConns = survivors
+	// LIFO: reuse the newest survivor.
+	if n := len(sr.idleConns); n > 0 {
+		reused = sr.idleConns[n-1]
+		sr.idleConns = sr.idleConns[:n-1]
+	}
+	return reused, stale, false
 }
 
 // release returns a clean conn to idleConns and frees the in-use turn, or closes it when dirty, closed, or idleConns is full at the live cap.

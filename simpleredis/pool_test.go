@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bytes"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -241,6 +242,58 @@ func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	}
 	if fake.connections() != 2 {
 		t.Fatalf("opened %d connections, want 2", fake.connections())
+	}
+}
+
+// TestStaleIdleHeadIsClosedWhileTailStaysHot proves borrow closes an aged head and reuses the young tail.
+func TestStaleIdleHeadIsClosedWhileTailStaysHot(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.holdGetsForTest(t)
+	beforeNew := runtime.NumGoroutine()
+	redis := New(Config{Host: addr, PoolSize: 2, MaxIdleConns: 2})
+	if got := runtime.NumGoroutine(); got != beforeNew {
+		t.Fatalf("New started goroutines: before %d after %d", beforeNew, got)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := redis.Get("hit"); err != nil {
+				t.Errorf("Get: %v", err)
+			}
+		}()
+	}
+	fake.waitHeldGets(t, 2)
+	fake.releaseHeldGetsForTest()
+	wg.Wait()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		redis.idleConnsMu.Lock()
+		idleCount := len(redis.idleConns)
+		redis.idleConnsMu.Unlock()
+		if idleCount == 2 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("idle = %d, want 2", idleCount)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	fake.waitOpenSocketsEqual(t, 2)
+
+	redis.idleConnsMu.Lock()
+	redis.idleConns[0].lastUsed = time.Now().Add(-redis.IdleTimeout() - time.Second)
+	redis.idleConnsMu.Unlock()
+
+	if _, err := redis.Get("hit"); err != nil {
+		t.Fatalf("Get after aging head: %v", err)
+	}
+	fake.waitOpenSocketsEqual(t, 1)
+	if fake.connections() != 2 {
+		t.Fatalf("opened %d connections, want 2 (young tail reused)", fake.connections())
 	}
 }
 

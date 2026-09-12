@@ -66,6 +66,7 @@ if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 
 - `New` does not dial. A refusing host is fine until the first command.
 - After `Close`, later commands return `redis:unreachable` and do not redial. Closed-client unreachable is not retried. Call `Close` while a command is in flight: that command may finish; its socket is closed on release, not returned to idle.
 - Live cap is `Config.PoolSize` (`PoolSize()`, const default 8; unused plus in-flight). `New` builds the in-use-turn channel. After `New` a `PoolSize` write does not resize. A waiter past `PoolSize` waits `PoolTimeout` (default 200ms), then `redis:unreachable`. Idle trim is `MaxIdleConns` (default 8). Pool wait is not retried.
+- Borrow sweeps idle sockets older than `IdleTimeout` (default 30s) and closes them, including a stale head behind a younger tail that is reused. `New` starts no reaper; a fully quiet client keeps those sockets until `Close`.
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`. `MSetEX` / `MSetEXAt` integer `0` (and any integer other than `1`) is `redis:issue?`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
