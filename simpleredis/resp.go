@@ -2,8 +2,10 @@ package simpleredis
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -11,14 +13,33 @@ import (
 )
 
 // do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty.
-func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
-	if err := conn.netConn.SetDeadline(time.Now().Add(sr.ioTimeout)); err != nil {
+func (sr *SimpleRedis) do(ctx context.Context, deadline time.Time, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return nil, false, errTimeout
+	}
+	ioBound := sr.IOTimeout()
+	if remaining < ioBound {
+		ioBound = remaining
+	}
+	if err := conn.netConn.SetDeadline(time.Now().Add(ioBound)); err != nil {
 		return nil, false, errUnreachable
 	}
+	stopWatch := watchConnClose(ctx, conn.netConn)
+	defer stopWatch()
 	if err := writeCommand(conn.writer, args); err != nil {
+		if ctx.Err() != nil {
+			return nil, false, ctx.Err()
+		}
 		return nil, false, ioError(err)
 	}
 	values, clean, err := readReply(conn.reader)
+	if ctx.Err() != nil {
+		return nil, false, ctx.Err()
+	}
 	if err != nil && !clean {
 		if err == errIssue {
 			return nil, false, errIssue
@@ -26,6 +47,19 @@ func (sr *SimpleRedis) do(conn *pooledConn, args [][]byte) ([][]byte, bool, erro
 		return nil, false, ioError(err)
 	}
 	return values, true, err
+}
+
+// watchConnClose closes conn when ctx is done so a blocked read returns. Stop the returned func when I/O finishes.
+func watchConnClose(ctx context.Context, conn net.Conn) func() {
+	stop := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.Close()
+		case <-stop:
+		}
+	}()
+	return func() { close(stop) }
 }
 
 // writeCommand writes one RESP array of bulk strings and flushes.

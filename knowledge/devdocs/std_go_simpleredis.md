@@ -3,7 +3,7 @@
 ## Language
 
 **SimpleRedis**:
-A stdlib pooled TCP RESP client (`New(Config)`, `Get`, `MGet`, `Set` with EX, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `MSetEX`, `MSetEXAt`, `Close`). `New` copies `Config` and does not dial; the first command dials. Pool, timeout, and retry knobs live on `Config` and freeze at `New`.
+A stdlib pooled TCP RESP client (`New(Config)`, `Get` / `GetContext`, `MGet`, `Set` with EX, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `MSetEX`, `MSetEXAt`, `Close`). `New` copies `Config` and does not dial; the first command dials. Pool, timeout, and retry knobs live on `Config` and freeze at `New`. Unadorned verbs wrap `context.Background()`.
 _Avoid_: `go-redis`, miniredis, TLS, Unix sockets, renaming the package to `redis`
 
 ## Overview
@@ -12,7 +12,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 
 ## How to use
 
-- Call `simpleredis.New(simpleredis.Config{Host: host})` once before concurrent use. Set pool, timeout, and retry knobs on `Config` (`-1` turns extra retries or backoff off). After `New` those knobs do not change. Set `Pass` and `Database` on `Config` when AUTH or SELECT is needed.
+- Call `simpleredis.New(simpleredis.Config{Host: host})` once before concurrent use. Set pool, timeout, and retry knobs on `Config` (`MaxRetries` 0 at New means 1 extra retry; `-1` turns extra retries or backoff off). After `New` those knobs do not change. Set `Pass` and `Database` on `Config` when AUTH or SELECT is needed. Worst-case command wait is `(MaxRetries+1)*(DialTimeout+IOTimeout)` (600ms at zero Config). Use `GetContext` (and the other `*Context` twins) when the caller has a deadline or cancel; unadorned verbs use `context.Background()`.
 - Do not dial in Traefik `New`. Call `simpleredis.New` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, `Eval`, or `MSetEX`).
 - Call `MSetEX(names, values, seconds)` or `MSetEXAt(names, values, unixSeconds)` for many keys with one TTL. Do not MSET then EXPIRE. Match integer `0` as `redis:issue?`.
 - Match AUTH-class Redis errors as `redis:noauth`. Do not type-assert `net.Error` (Yaegi).
@@ -72,7 +72,7 @@ if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 
 - `MSetEX` / `MSetEXAt` reject empty or mismatched slices and more than 1024 pairs with `redis:issue?` before dial. Zero or negative TTL is passed through, same as `Set`. Clustered engines need every key in one hash slot (hash tags); the client does not hash-tag or split.
 - Redis 7 and Dragonfly have no native `MSETEX`. The first call sends native, then caches Lua `Eval` (names in KEYS, values then `EX`/`EXAT` then TTL in ARGV). Redis 8.4+ / Valkey 9.1+ stay on native after a successful `MSETEX`. A later `ERR unknown command` recaches Lua and `Eval`s that call. Past `MSetEXAt` may return no error while a later `Get` is `redis:miss`.
 - Eval hashes the Lua body on every call and sends EVALSHA. SHA-1 of a limiter script (~470 B) is cheaper than a mutex on the Traefik hot path, and a `map[string]string` of full script bodies would need a lock because Go maps are not concurrent. Do not cache digests. SCRIPT FLUSH or a restart yields NOSCRIPT; Eval then sends EVAL once so the engine stores the script. Callers still pass the body.
-- Every verb uses go-redis-shaped command retry (`MaxRetries` / `MinRetryBackoff` / `MaxRetryBackoff` on `Config`; `0` is default 3 extra retries / 8ms / 512ms; `-1` is off). Retry `redis:unreachable` (including a fresh dial) and LOADING/READONLY/MASTERDOWN/CLUSTERDOWN/TRYAGAIN / max-clients replies. Do not retry `redis:timeout`, a pool-wait timeout, `redis:noauth`, or other Redis `-ERR` replies including handshake AUTH/SELECT failures. INCR/INCRBY/EVAL can double-apply after a lost reply; that is accepted.
+- Every verb uses go-redis-shaped command retry (`MaxRetries` / `MinRetryBackoff` / `MaxRetryBackoff` on `Config`; `MaxRetries` 0 at New means 1 extra retry; backoff `0` is 8ms / 512ms; `-1` is off). Each command has an overall deadline `(maxRetries+1)*(DialTimeout+IOTimeout)` (600ms at zero Config: 200ms dial, 100ms I/O, two attempts). Remaining time is shared by dial, AUTH, SELECT, and the command. Retry `redis:unreachable` (including a fresh dial) and LOADING/READONLY/MASTERDOWN/CLUSTERDOWN/TRYAGAIN / max-clients replies. Do not retry `redis:timeout`, a pool-wait timeout, a cancelled context, `redis:noauth`, or other Redis `-ERR` replies including handshake AUTH/SELECT failures. INCR/INCRBY/EVAL can double-apply after a lost reply; that is accepted.
 - RESP2 null array `*-1` is `redis:issue?` (this client has no BLPOP/MULTI/EXEC). Null bulk `$-1` is `redis:miss`. Do not treat them as the same.
 - A server-closed idle socket younger than 30s is borrowed and retried as `redis:unreachable` (`io.EOF`). Do not prove peer close by closing the client fd (`SetDeadline` then fails with `os.ErrClosed` and never reaches `ioError`).
 - Match AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) as `redis:noauth`. Redis 7.4 `AUTH` against a nopass default user returns `ERR AUTH <password> called without any password configured…`, which is **not** that prefix — it is a plain error. Dragonfly without `--requirepass` accepts any `AUTH` password (`OK`). Wrong-password live proof needs `requirepass` on both engines.

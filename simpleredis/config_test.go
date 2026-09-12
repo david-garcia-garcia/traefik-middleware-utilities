@@ -11,7 +11,7 @@ func TestConfigFrozenAtNew(t *testing.T) {
 	fake.mu.Lock()
 	fake.getDelay = 300 * time.Millisecond
 	fake.mu.Unlock()
-	cfg := Config{Host: addr, PoolSize: 1, PoolTimeout: 50 * time.Millisecond}
+	cfg := Config{Host: addr, PoolSize: 1, PoolTimeout: 50 * time.Millisecond, IOTimeout: time.Second}
 	redis := New(cfg)
 	cfg.PoolSize = 16
 	redis.poolSize = 16

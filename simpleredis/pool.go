@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"time"
 )
@@ -59,7 +60,7 @@ func (sr *SimpleRedis) freeInUseTurn() {
 }
 
 // borrow waits for an in-use turn, then takes an unused socket younger than idleTimeout, or dials.
-func (sr *SimpleRedis) borrow() (*pooledConn, error) {
+func (sr *SimpleRedis) borrow(ctx context.Context, deadline time.Time) (*pooledConn, error) {
 	// closed is atomic; inUseTurns is written once in New before concurrent use.
 	if sr.closed.Load() {
 		return nil, errUnreachable
@@ -67,19 +68,42 @@ func (sr *SimpleRedis) borrow() (*pooledConn, error) {
 	if sr.inUseTurns == nil {
 		return nil, errUnreachable
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if time.Now().After(deadline) {
+		return nil, errTimeout
+	}
 
 	// Uncontended borrow must not allocate a timer; the wait exists only for a waiter past poolSize.
 	select {
 	case <-sr.inUseTurns:
 	default:
-		// Waiter past poolSize: allocate a stoppable timer (not time.After).
-		timer := time.NewTimer(sr.inUseTurnWait())
+		wait := sr.inUseTurnWait()
+		remaining := time.Until(deadline)
+		budgetExpired := false
+		if remaining <= 0 {
+			return nil, errTimeout
+		}
+		if remaining < wait {
+			wait = remaining
+			budgetExpired = true
+		}
+		timer := time.NewTimer(wait)
 		select {
 		case <-sr.inUseTurns:
 			if !timer.Stop() {
 				<-timer.C
 			}
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, ctx.Err()
 		case <-timer.C:
+			if budgetExpired {
+				return nil, errTimeout
+			}
 			return nil, errPoolWait
 		}
 	}
@@ -97,7 +121,7 @@ func (sr *SimpleRedis) borrow() (*pooledConn, error) {
 		return reused, nil
 	}
 	// Idle miss: dial while still holding the turn.
-	conn, err := sr.dial()
+	conn, err := sr.dial(ctx, deadline)
 	if err != nil {
 		sr.freeInUseTurn()
 		return nil, err
@@ -154,10 +178,27 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 }
 
 // dial opens TCP to host, then AUTH and SELECT when those New fields are set.
-func (sr *SimpleRedis) dial() (*pooledConn, error) {
-	dialer := net.Dialer{Timeout: sr.dialTimeout}
-	netConn, err := dialer.Dial("tcp", sr.host)
+func (sr *SimpleRedis) dial(ctx context.Context, deadline time.Time) (*pooledConn, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return nil, errTimeout
+	}
+	dialTimeout := sr.DialTimeout()
+	if remaining < dialTimeout {
+		dialTimeout = remaining
+	}
+	dialer := net.Dialer{Timeout: dialTimeout}
+	netConn, err := dialer.DialContext(ctx, "tcp", sr.host)
 	if err != nil {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if time.Now().After(deadline) {
+			return nil, errTimeout
+		}
 		return nil, errUnreachable
 	}
 	conn := &pooledConn{
@@ -168,14 +209,20 @@ func (sr *SimpleRedis) dial() (*pooledConn, error) {
 
 	// AUTH before SELECT so a passworded server accepts the session.
 	if sr.pass != "" {
-		if _, _, err = sr.do(conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
+		if _, _, err = sr.do(ctx, deadline, conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
 			conn.close()
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, err
 		}
 	}
 	if sr.database != "" {
-		if _, _, err = sr.do(conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
+		if _, _, err = sr.do(ctx, deadline, conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
 			conn.close()
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, err
 		}
 	}

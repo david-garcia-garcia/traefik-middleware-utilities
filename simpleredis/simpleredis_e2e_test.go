@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"net"
 	"os"
@@ -184,7 +185,7 @@ func clientKillFromSidecarForTest(t *testing.T, host, filter, value string) int 
 // clientIDOnConnForTest sends CLIENT ID on pooled and clears the I/O deadline afterward.
 func clientIDOnConnForTest(t *testing.T, sr *SimpleRedis, pooled *pooledConn) string {
 	t.Helper()
-	values, reusable, err := sr.do(pooled, [][]byte{[]byte("CLIENT"), []byte("ID")})
+	values, reusable, err := sr.do(context.Background(), time.Now().Add(sr.IOTimeout()), pooled, [][]byte{[]byte("CLIENT"), []byte("ID")})
 	_ = pooled.netConn.SetDeadline(time.Time{})
 	if err != nil {
 		t.Fatalf("CLIENT ID: %v", err)

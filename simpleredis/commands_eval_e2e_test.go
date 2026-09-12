@@ -1,6 +1,9 @@
 package simpleredis
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 // TestLive_Eval proves Eval integer, EVALSHA, and NOSCRIPT after SCRIPT FLUSH on live Redis and Dragonfly.
 func TestLive_Eval(t *testing.T) {
@@ -49,7 +52,7 @@ func runLiveEvalBackend(t *testing.T, addr string) {
 		if _, err := client.Eval(script, nil, nil); err != nil {
 			t.Fatalf("seed Eval: %v", err)
 		}
-		if _, err := client.exec([]byte("SCRIPT"), []byte("FLUSH")); err != nil {
+		if _, err := client.exec(context.Background(), []byte("SCRIPT"), []byte("FLUSH")); err != nil {
 			t.Fatalf("SCRIPT FLUSH: %v", err)
 		}
 		values, err := client.Eval(script, nil, nil)

@@ -136,7 +136,7 @@ func (sr *SimpleRedis) IOTimeout() time.Duration {
 	return defaultIOTimeout
 }
 
-// MaxRetries is the retry sentinel New froze (0 default, -1 off).
+// MaxRetries is the extra-retry count New froze (1 after zero Config, -1 off).
 func (sr *SimpleRedis) MaxRetries() int {
 	return sr.maxRetries
 }
