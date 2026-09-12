@@ -1,18 +1,18 @@
-Developer review: in progress — 2026-09-12T11:21:11Z
+Developer review: in progress — 2026-09-12T11:26:38Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** OpenSpec change `add-go-e2e-live-backends` (not applied): fourth CI job `Go E2E`, expanded live Redis/Dragonfly Go tests, `std_go_test-suites` usage packet.
 
 **End users.** None.
 
 ## Motivation
 On DestBranch, compiled Go tests that need a live Redis or Dragonfly sit inside the same CI `test` job as tests that talk only to an in-process fake. Pester (`Test-Integration.ps1`) is a third job: Traefik plus local plugins. There is no usage packet that names those jobs and what each one is for.
 
-The failure is a proof gap, not a production outage. `simpleredis/live_test.go` proves pool wait, MSetEX TTL, past EXAT, and peer-close recovery. The rest of Get/Set/Del/MGet/Incr/Expire/Eval, pool, retry, and malformed RESP stay on fake TCP. Window-counter and token-bucket live files already table-drive both engines; SimpleRedis Yaegi does not. If we do not merge, CI keeps calling that mix “Test”, Dragonfly compatibility of the client stays a thin slice, and `knowledge/devdocs` still has no suite catalog.
+The failure is a proof gap, not a production outage. `simpleredis/live_test.go` proves pool wait, MSetEX TTL, past EXAT, and peer-close recovery. The rest of Get/Set/Del/MGet/Incr/Expire/Eval stay on fake TCP. If we do not merge, CI keeps calling that mix “Test”, Dragonfly compatibility of the client stays a thin slice, and `knowledge/devdocs` still has no suite catalog.
 
 ```mermaid
 flowchart TD
@@ -26,17 +26,17 @@ flowchart TD
 ```
 
 ## Merge readiness
-Explore recorded (`assumed` on every open question). Propose has not started. 3 items remain.
+Propose is apply-ready. Implement has not started. 3 items remain.
 
 Priority: P3 — tests and docs; no current operator or user harm
-Reviewed head: 80649e3
+Reviewed head: 518f9f9
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 3/6 | CI still in progress on the stub PR |
-| CI proof | 3/6 | Lint, Test, and Integration Tests in progress — [run 34690805054](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34690805054) |
+| CI proof | 3/6 | Lint queued; Test and Integration Tests in progress — [run 34691063649](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34691063649) |
 | Local tests proof | N/A | Before implement; remote CI is the proof axis |
 | Review resolution | 6/6 | OPEN PR 26; no reviewer comments |
 
@@ -44,14 +44,19 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-12-go-e2e-live-backends pushed | `git` / GitHub |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | add-go-e2e-live-backends | `openspec/changes/add-go-e2e-live-backends/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26 | pr-host |
-| CI | build 34690805054 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34690805054 | pr-host CI get_check_runs |
+| CI | build 34691063649 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34691063649 | pr-host CI get_check_runs |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no `comments.md` |
 
 ## Specs
-None.
+- [std_go_ci_test-suites](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-go-e2e-live-backends/openspec/changes/add-go-e2e-live-backends/proposal.md) — added
+- [std_go_simpleredis_live-e2e](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-go-e2e-live-backends/openspec/changes/add-go-e2e-live-backends/proposal.md) — added
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-go-e2e-live-backends/openspec/changes/add-go-e2e-live-backends/proposal.md) — modified
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-go-e2e-live-backends/openspec/changes/add-go-e2e-live-backends/proposal.md) — modified
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-go-e2e-live-backends/openspec/changes/add-go-e2e-live-backends/proposal.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-go-e2e-live-backends/openspec/changes/add-go-e2e-live-backends/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -60,7 +65,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket on branch `2026-09-12-go-e2e-live-backends` opened PR 26 against `master`. Explore assumed a fourth `Go E2E` job, dual-engine live expansion, and `std_go_test-suites` docs.
+Local ticket on branch `2026-09-12-go-e2e-live-backends` opened PR 26 against `master`. Propose recorded change `add-go-e2e-live-backends`; apply is next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -79,6 +84,7 @@ Local ticket on branch `2026-09-12-go-e2e-live-backends` opened PR 26 against `m
 - [ ] Document lint, unit `go test`, Pester, and Go E2E in `knowledge/devdocs/std_go_test-suites.md`
 - [x] Stub PR 26 opened
 - [x] Explore decisions recorded
+- [x] OpenSpec change `add-go-e2e-live-backends` apply-ready
 
 ## Findings
 None.
@@ -91,28 +97,25 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | No spec.md vs `master` yet |
+| Specs in this PR | 2 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 80649e3bc244375c9848ab2229bea0c98ebeac4d | Card must match the branch you measured |
+| Reviewed head | 518f9f90c0efbe6696b3c436d8ee2a0f99680034 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not applicable until propose and apply; DestBranch already has dual-engine `live_test.go` files inside the unit job.
+Best possible solution: apply the proposed job split and live expansion; DestBranch still mixes live files into `test`.
 
-Do we have a high-confidence way to reproduce? Yes — `go test ./simpleredis -run TestLive_` skips when LIVE env is unset (measured this explore); `.github/workflows/ci.yml` three jobs plus skip rules on the live files.
+Do we have a high-confidence way to reproduce? Yes — `go test ./simpleredis -run TestLive_` skips when LIVE env is unset; CI `test` still starts engines on DestBranch.
 
-Is this the best way to solve the issue? Yes for the split: a fourth `Go E2E` job matches Desired 2 and 4 without renaming Pester. Coverage stays engine-success paths; fake-TCP keeps peer-abuse.
+Is this the best way to solve the issue? Yes — fourth `Go E2E` job without renaming Pester; env-skip kept.
 
 ### Evidence
 What I checked:
-- `.github/workflows/ci.yml` three jobs and LIVE env (worktree at 80649e3, dest HEAD 05129cf)
-- `go test ./simpleredis ./windowcounter ./tokenbucket ./reclaim` passed with no LIVE env; `TestLive_*` skipped
-- `simpleredis/live_test.go`, `windowcounter/live_test.go`, `tokenbucket/live_test.go` skip and scenarios
-- `simpleredis/yaegi_test.go` fake-only vs `TestYaegiLive_*` on windowcounter and tokenbucket
-- `knowledge/devdocs/index.md` and `index_std_go.md` have no suite-catalog packet
-- PR 26 check runs Lint, Test, Integration Tests in progress (run 34690805054)
+- `openspec/changes/add-go-e2e-live-backends/` 4/4 artifacts; `openspec validate --strict` passed
+- FindSpecHost verdicts on `devstate/.../specs.md`
+- PR 26 check runs Lint queued, Test and Integration Tests in progress (run 34691063649)
 
 ### Rank-up moves
 None.
