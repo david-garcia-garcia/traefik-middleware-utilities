@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis-perf-01-pool-cap
+jobName: 2026-09-11-simpleredis-perf-01-pool-cap
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 72261d64a0e279ed50d8bd6bae4d4c6cc7624701e53ffbdd122b849de122ba10
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-live-pool-cap
+pr:
+  id: 18
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/18
