@@ -11,7 +11,7 @@ Compiled `go test` against in-process fakes (fake TCP Redis, in-memory limiters)
 _Avoid_: starting Redis in the unit job; proving engine compatibility here
 
 **Go E2E**:
-Compiled and Yaegi tests that talk to live Redis 7 and Dragonfly. Every case table-drives both engines. CI job `e2e` (`Go E2E`) starts the engines and sets `*_LIVE_*`. Local `go test` without those env vars skips; exactly one addr set fails.
+Compiled and Yaegi tests that talk to live Redis 7 and Dragonfly. Every case table-drives both engines. CI job `e2e` (`Go E2E`) starts the engines and sets `*_LIVE_*`, plus passworded siblings for WRONGPASS. Local `go test` without those env vars skips; exactly one addr in a pair fails.
 _Avoid_: calling this Pester; proving malformed RESP here; one-engine-only runs
 
 **Pester**:
@@ -26,7 +26,7 @@ Four suites, four jobs. Put a new proof in the suite that matches what it needs 
 
 - Lint: `.github/workflows/ci.yml` job `lint` (`.golangci.yml`).
 - Unit: `go test -short ./...`. Files `{domain}_test.go` (and `{domain}_yaegi_test.go` against a compiled fake).
-- Go E2E: `go test ./...` with both `*_LIVE_REDIS` and `*_LIVE_DRAGONFLY` set. Files `{domain}_e2e_test.go` and `{domain}_yaegi_e2e_test.go` sit next to that domain’s `.go` and `{domain}_test.go`. Shared skip/wait helpers that are not one domain live in `{package}_e2e_test.go` (same job as `fake_redis_test.go` for the fake peer).
+- Go E2E: `go test ./...` with both `*_LIVE_REDIS` and `*_LIVE_DRAGONFLY` set. Files `{domain}_e2e_test.go` and `{domain}_yaegi_e2e_test.go` sit next to that domain’s `.go` and `{domain}_test.go`. Shared skip/wait helpers that are not one domain live in `{package}_e2e_test.go` (same job as `fake_redis_test.go` for the fake peer). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` with the same both-or-neither rule.
 - Pester: `./Test-Integration.ps1`. Docker required.
 - Do not dump every live case into one `live_test.go`. Name the file for the domain it proves (`commands_e2e_test.go` beside `commands.go` / `commands_test.go`).
 - Skip under `-short` or both live addrs unset. Fail if exactly one addr is set.

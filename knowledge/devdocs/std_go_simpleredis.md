@@ -49,7 +49,10 @@ if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 
 - `simpleredis/commands_eval.go` — Eval (EVALSHA, NOSCRIPT → EVAL)
 - `simpleredis/commands_msetex.go` — MSetEX / MSetEXAt, capability cache
 - `simpleredis/resp.go` — RESP codec
-- `simpleredis/live_test.go` — skip-if-unset pool wait, SELECT 99, WRONGPASS, MSetEX TTL, and CLIENT KILL recover
+- `simpleredis/pool_e2e_test.go` — live pool wait, SELECT 99, WRONGPASS, CLIENT KILL recover
+- `simpleredis/commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go` — live verbs
+- `simpleredis/simpleredis_e2e_test.go` — skip/fail harness
+- `simpleredis/yaegi_e2e_test.go` — interpreted live verbs
 - `simpleredis/bench_test.go` — encode/decode benches and CI alloc guards
 - `simpleredis/interpretedcost_test.go` — Yaegi unsafe/encode cost measurements
 - `simpleredis/yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval/MSetEX
