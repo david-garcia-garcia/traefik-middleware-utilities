@@ -48,3 +48,19 @@ fixed: AUTH env How-to; SimpleRedis Key files drop live_test.go
 skipped: none
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
 ci: 34692825310 in progress
+
+## archive (2026-09-12)
+phase: archive
+findings: none
+fixed: synced 2 new + 4 fold specs; moved openspec/changes/archive/2026-09-12-add-go-e2e-live-backends
+skipped: none
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
+ci: 34692878387 success
+
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: none
+fixed: ready title; CI succeeded
+skipped: none
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/26
+ci: 34692878387 success
