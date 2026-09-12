@@ -1,10 +1,12 @@
-. (Join-Path $PSScriptRoot "integration-tests.utils/Import.ps1")
-
 $script:Engine = $env:INTEGRATION_ENGINE
 if ($script:Engine -notin @("redis", "dragonfly")) {
     throw "INTEGRATION_ENGINE must be redis or dragonfly"
 }
 $script:BackendHost = $script:Engine
+
+BeforeAll {
+    . (Join-Path $PSScriptRoot "integration-tests.utils/Import.ps1")
+}
 
 Describe "simpleredis Yaegi e2e ($($script:Engine))" {
     It "Traefik API is reachable" {

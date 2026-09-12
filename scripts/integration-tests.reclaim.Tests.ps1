@@ -1,4 +1,6 @@
-. (Join-Path $PSScriptRoot "integration-tests.utils/Import.ps1")
+BeforeAll {
+    . (Join-Path $PSScriptRoot "integration-tests.utils/Import.ps1")
+}
 
 Describe "reclaim Yaegi e2e" {
     It "Traefik API is reachable" {
