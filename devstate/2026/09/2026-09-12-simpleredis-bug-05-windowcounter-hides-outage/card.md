@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-12T12:56:30.778Z
+Developer review: in progress — 2026-09-12T13:08:27.237Z
 
 ## What this changes
 **Operators.** None.
@@ -29,18 +29,18 @@ flowchart TD
 ```
 
 ## Merge readiness
-The limiter fix is on the branch; CI on this head is still queued. 1 item remains.
+Seven-axis review of the apply is closed (nitpicks and coverage done; unused `flushFailedAt` skipped). CI on this head is still queued. 1 item remains.
 
 Priority: P1 — production is serving a wrong public contract today: buffered Take admits without an error while Redis is down, so the shared limit does not hold.
 
-Reviewed head: 43ce171
+Reviewed head: b0bbb5a
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI queued on the implement commit |
-| CI proof | 3/6 | run 34695038117 in progress |
+| Overall readiness | 3/6 | CI still queued after the review commit |
+| CI proof | 3/6 | run 34695481567 queued / in progress |
 | Local tests proof | N/A | prHost remote; CI covers remote |
 | Review resolution | 6/6 | OPEN PR, no comments |
 
@@ -50,8 +50,8 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-12-simpleredis-bug-05-windowcounter-hides-outage pushed | `git` / origin |
 | OpenSpec | windowcounter-buffered-flush-error | `openspec/changes/windowcounter-buffered-flush-error/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/30 | pr-host List/Create |
-| CI | build 34695038117 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695038117 | Lint queued, Test queued, Go E2E queued, Integration Tests queued |
-| Local tests | passed | handoff.yaml localTests; `go test -short ./windowcounter/...` |
+| CI | build 34695481567 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34695481567 | Lint queued, Test queued, Go E2E queued, Integration Tests in_progress |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | none |
 
 ## Specs
@@ -65,7 +65,7 @@ None.
 None.
 
 ## How this fits together
-Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, PR #30, OpenSpec change `windowcounter-buffered-flush-error`, local `go test -short ./windowcounter/...` passed, CI run 34695038117 queued.
+Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, PR #30, OpenSpec change `windowcounter-buffered-flush-error`, seven-axis review closed, CI run 34695481567 still queued.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -78,16 +78,20 @@ Branch `2026-09-12-simpleredis-bug-05-windowcounter-hides-outage`, PR #30, OpenS
 
 ## Before merge
 - [x] [P1] Land staleness k=1 so buffered Take/Peek return lastFlushErr on Redis outage
+- [x] Seven-axis review (nitpicks done, coverage tests landed, unused flushFailedAt skipped)
 - [ ] Wait for CI success on PR #30
-- [x] OpenSpec change `windowcounter-buffered-flush-error` proposed
-- [x] Explore recorded the surface
-- [x] Stub PR #30 opened
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/devstate/2026/09/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/devstate/2026/09/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/codereview_nitpicks.md) — 1 total, 0 pending, 1 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/devstate/2026/09/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/devstate/2026/09/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/devstate/2026/09/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/devstate/2026/09/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/codereview_dead.md) — 1 total, 0 pending, 0 completed, 1 skipped
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/devstate/2026/09/2026-09-12-simpleredis-bug-05-windowcounter-hides-outage/codereview_coverage.md) — 2 total, 0 pending, 2 completed
 
 ## Agent review details
 
@@ -96,7 +100,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 43ce1719d9a3cb20cce4d9e4ce8e9e0b51d21d9f | Card must match the branch you measured |
+| Reviewed head | b0bbb5ac4f3b60611cc7e2e3b3e9f1eebb83ab39 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -110,8 +114,9 @@ Is this the best way to solve the issue? Yes versus `master`: it matches sliding
 
 ### Evidence
 What I checked:
-- `go test -short ./windowcounter/...` passed
-- PR #30 OPEN; CI run 34695038117 queued (Lint, Test, Go E2E, Integration Tests)
+- Seven-axis files on disk; no Status: open hard/missing/wrong
+- PR #30 OPEN; CI run 34695481567 queued (Lint queued, Test queued, Go E2E queued, Integration Tests in_progress)
+- Reviewed head b0bbb5ac4f3b60611cc7e2e3b3e9f1eebb83ab39
 
 ### Rank-up moves
 None.

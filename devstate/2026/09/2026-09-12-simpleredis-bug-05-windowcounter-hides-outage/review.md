@@ -23,3 +23,9 @@ phase: implement
 findings: buffered Take/Peek return lastFlushErr after k=1; tests passed
 fixed: limiter.go, killable fake, four proofs, docs
 skipped: none
+
+## codereview (2026-09-12)
+phase: codereview
+findings: nitpicks 1 done; coverage 2 done; dead 1 skipped (flushFailedAt)
+fixed: early-return membership; Sleep and Peek probe tests
+skipped: flushFailedAt unused (Desired names the store; LastFlushError out of scope)
