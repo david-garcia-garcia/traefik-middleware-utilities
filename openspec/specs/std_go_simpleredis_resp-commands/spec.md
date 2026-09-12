@@ -301,6 +301,25 @@ A line that does not end in CR before LF, an empty line, an unparseable `*` coun
 - **THEN** the command returns `redis:unreachable`
 - **AND** the idle pool is empty
 
+### Requirement: Over-cap bulk or array header is redis:issue?
+A `$` bulk length greater than `64 << 20` or a `*` array count greater than `1 << 20` SHALL return an error whose `Error()` text is `redis:issue?`. That connection MUST NOT re-enter the idle pool. The command MUST NOT retry that error. A truncated bulk or array whose announced size is at or under those ceilings SHALL still be I/O (`redis:unreachable` on EOF). An over-cap header with no payload MUST NOT take that truncated I/O path.
+
+#### Scenario: Over-cap bulk Get is redis:issue?
+- **WHEN** Get receives a `$` header whose length is greater than `64 << 20` and no payload
+- **THEN** Get returns `redis:issue?`
+- **AND** the idle pool is empty
+- **AND** the error is not `redis:unreachable`
+
+#### Scenario: Over-cap array is redis:issue?
+- **WHEN** the peer replies with a `*` header whose count is greater than `1 << 20`
+- **THEN** the command returns `redis:issue?`
+- **AND** the idle pool is empty
+
+#### Scenario: MGET-shaped over-cap bulk element is redis:issue?
+- **WHEN** MGet receives an array whose `$` element length is greater than `64 << 20`
+- **THEN** MGet returns `redis:issue?`
+- **AND** the idle pool is empty
+
 ### Requirement: Unsupported RESP replies are distinguishable and are not pooled
 A well-framed reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including an HTTP-shaped first line and RESP3 type bytes `_`, `#`, `,`, `(`, `%`, `~`, `=`, `>`), or an array element whose type is not `$`, `:`, or `+` (including a nested array or a `-` error inside an array), SHALL return an error whose `Error()` text is `redis:unsupported-reply`. That error MUST NOT be `redis:issue?` and MUST NOT be `redis:unreachable` solely because the type was unsupported. That connection MUST NOT re-enter the idle pool. A following command on the same client SHALL dial a new socket.
 
