@@ -9,6 +9,6 @@ JobName: 2026-09-12-simpleredis-risk-04-non-basic-resp2-replies-rejected
 | propose | [x] | [x] | 2026-09-12T12:44:55Z |
 | implement | [x] | [x] | 2026-09-12T12:49:43Z |
 | codereview | [x] | [x] | 2026-09-12T12:54:34Z |
-| devdocsimpact | [ ] | [ ] | |
+| devdocsimpact | [x] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
