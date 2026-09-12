@@ -39,3 +39,9 @@ phase: archive
 findings: none
 fixed: none
 skipped: none
+
+## pullrequest (2026-09-12T13:12:18.645Z)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none

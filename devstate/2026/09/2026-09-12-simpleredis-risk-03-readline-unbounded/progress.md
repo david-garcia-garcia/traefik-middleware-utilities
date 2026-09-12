@@ -11,4 +11,4 @@ JobName: 2026-09-12-simpleredis-risk-03-readline-unbounded
 | codereview | [x] | [x] | 2026-09-12T12:53:40.776Z |
 | devdocsimpact | [x] | [x] | 2026-09-12T12:54:54.269Z |
 | archive | [x] | [x] | 2026-09-12T12:57:24.529Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-12T13:12:18.645Z |
