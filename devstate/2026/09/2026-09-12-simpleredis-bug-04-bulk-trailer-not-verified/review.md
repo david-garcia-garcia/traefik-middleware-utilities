@@ -41,3 +41,9 @@ phase: archive
 findings: none
 fixed: fold resp-decode and resp-commands; move change to archive
 skipped: none
+
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
