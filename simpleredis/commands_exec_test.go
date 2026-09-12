@@ -284,6 +284,9 @@ func TestShouldRetryPoolWaitIsFalse(t *testing.T) {
 	if shouldRetry(errPoolWait) {
 		t.Fatal("shouldRetry(errPoolWait) = true, want false so MaxRetries does not multiply PoolTimeout")
 	}
+	if shouldRetry(errNotFromNew) {
+		t.Fatal("shouldRetry(errNotFromNew) = true, want false so MaxRetries does not sleep a client that did not come from New")
+	}
 	if !shouldRetry(errUnreachable) {
 		t.Fatal("shouldRetry(errUnreachable) = false, want true")
 	}

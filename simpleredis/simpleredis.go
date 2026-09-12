@@ -21,6 +21,8 @@ var (
 	errUnreachable = errors.New(RedisUnreachable)
 	// errPoolWait is a waiter past liveCap. Error() is redis:unreachable so callers still match that token. Distinct from errUnreachable so MaxRetries does not multiply poolTimeout.
 	errPoolWait = errors.New(RedisUnreachable)
+	// errNotFromNew is a client that did not come from New (nil in-use-turn channel). Error() is redis:unreachable so callers still match that token. Distinct from errUnreachable so MaxRetries does not sleep a programming error.
+	errNotFromNew = errors.New(RedisUnreachable)
 	errMiss     = errors.New(RedisMiss)
 	errTimeout  = errors.New(RedisTimeout)
 	errNoAuth   = errors.New(RedisNoAuth)

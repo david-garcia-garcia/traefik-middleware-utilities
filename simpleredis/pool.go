@@ -65,7 +65,7 @@ func (sr *SimpleRedis) borrow() (*pooledConn, error) {
 		return nil, errUnreachable
 	}
 	if sr.inUseTurns == nil {
-		return nil, errUnreachable
+		return nil, errNotFromNew
 	}
 
 	// Uncontended borrow must not allocate a timer; the wait exists only for a waiter past poolSize.
