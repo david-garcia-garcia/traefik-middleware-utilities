@@ -92,7 +92,7 @@ func BenchmarkEval(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := redis.Eval(context.Background(), tokenBucketScript, keys, args); err != nil {
+		if _, err := redis.Eval(context.Background(), tokenBucketScript, ScriptSHA1Hex(tokenBucketScript), keys, args); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -26,6 +26,9 @@ for i = 1, #KEYS do
 end
 return 1`
 
+// msetexFallbackDigest is Redis sha1hex of msetexFallbackScript, computed once at package init.
+var msetexFallbackDigest = ScriptSHA1Hex(msetexFallbackScript)
+
 // MSetEX writes names and values with one shared TTL in seconds (native MSETEX or Lua fallback).
 func (sr *SimpleRedis) MSetEX(ctx context.Context, names []string, values [][]byte, seconds int64) error {
 	return sr.msetex(ctx, names, values, "EX", seconds)
@@ -62,7 +65,7 @@ func (sr *SimpleRedis) msetexEval(ctx context.Context, names []string, values []
 		argv = append(argv, string(value))
 	}
 	argv = append(argv, expireToken, strconv.FormatInt(ttl, 10))
-	return msetexSuccess(parseIntegerReply(sr.Eval(ctx, msetexFallbackScript, names, argv)))
+	return msetexSuccess(parseIntegerReply(sr.Eval(ctx, msetexFallbackScript, msetexFallbackDigest, names, argv)))
 }
 
 // cachedGroupWrite returns the capability cache. Callers must not hold groupWriteMu.
