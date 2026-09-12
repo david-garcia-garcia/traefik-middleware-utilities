@@ -11,4 +11,4 @@ JobName: 2026-09-12-simpleredis-build-01-test-binary-does-not-build
 | codereview | [x] | [x] | 2026-09-12T12:54:23.126Z |
 | devdocsimpact | [x] | [x] | 2026-09-12T12:55:17.249Z |
 | archive | [x] | [x] | 2026-09-12T12:58:05.596Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-12T13:09:40.043Z |
