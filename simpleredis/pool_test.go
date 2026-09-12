@@ -208,9 +208,14 @@ func TestPoolWaitTimesOutWithoutExtraDial(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
+	waitStarted := time.Now()
 	_, err := redis.Get("hit")
+	waited := time.Since(waitStarted)
 	if err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("waiter Get = %v, want %s", err, RedisUnreachable)
+	}
+	if waited >= 2*redis.PoolTimeout() {
+		t.Fatalf("waiter Get took %v, want one PoolTimeout (not MaxRetries * PoolTimeout)", waited)
 	}
 	wg.Wait()
 	if got := fake.connections(); got > 2 {

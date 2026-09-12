@@ -555,3 +555,12 @@ func TestRetryBackoffRangeAndOff(t *testing.T) {
 		t.Fatalf("MaxRetries -1 = %d, want 0", maxRetries)
 	}
 }
+
+func TestShouldRetryPoolWaitIsFalse(t *testing.T) {
+	if shouldRetry(errPoolWait) {
+		t.Fatal("shouldRetry(errPoolWait) = true, want false so MaxRetries does not multiply PoolTimeout")
+	}
+	if !shouldRetry(errUnreachable) {
+		t.Fatal("shouldRetry(errUnreachable) = false, want true")
+	}
+}

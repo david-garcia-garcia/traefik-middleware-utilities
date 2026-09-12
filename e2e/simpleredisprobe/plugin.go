@@ -1,5 +1,5 @@
-// Package simpleredisprobe is a Traefik local plugin that Inits SimpleRedis
-// and runs every client verb on each request so Pester can prove the library loads under Yaegi.
+// Package simpleredisprobe is a Traefik local plugin that builds SimpleRedis
+// with simpleredis.New and runs every client verb on each request so Pester can prove the library loads under Yaegi.
 package simpleredisprobe
 
 import (
@@ -55,14 +55,14 @@ func CreateConfig() *Config {
 	return &Config{Host: defaultHost}
 }
 
-// middleware holds the Inited clients and the next handler in the Traefik chain.
+// middleware holds the SimpleRedis clients and the next handler in the Traefik chain.
 type middleware struct {
 	next       http.Handler
 	client     *simpleredis.SimpleRedis
 	dropClient *simpleredis.SimpleRedis
 }
 
-// New Inits SimpleRedis from Config and returns a handler. It does not dial.
+// New constructs SimpleRedis from Config and returns a handler. It does not dial.
 func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http.Handler, error) {
 	_ = ctx
 	_ = name
