@@ -4,8 +4,6 @@ package simpleredisprobe
 
 import (
 	"context"
-	"crypto/sha1" //nolint:gosec // Redis EVALSHA digest is SHA-1
-	"encoding/hex"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -41,11 +39,12 @@ return 1`
 // ttlScript returns TTL for KEYS[1] so Pester can assert MSetEX expiry landed.
 const ttlScript = `return redis.call('TTL', KEYS[1])`
 
-// kongScriptDigest is SHA-1 hex of kongIncrbyExpireatScript (Redis sha1hex).
-func kongScriptDigest() string {
-	sum := sha1.Sum([]byte(kongIncrbyExpireatScript)) //nolint:gosec // Redis EVALSHA digest is SHA-1
-	return hex.EncodeToString(sum[:])
-}
+// Digests of the reused probe scripts, computed once at package init.
+var (
+	kongIncrbyExpireatDigest = simpleredis.ScriptSHA1Hex(kongIncrbyExpireatScript)
+	timeWaitHoldDigest       = simpleredis.ScriptSHA1Hex(timeWaitHoldScript)
+	ttlScriptDigest          = simpleredis.ScriptSHA1Hex(ttlScript)
+)
 
 // Config is the dynamic plugin settings Traefik decodes.
 type Config struct {
@@ -99,7 +98,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 
 	// Hold occupies a live turn so Pester can contend for poolSize.
 	if hold := req.URL.Query().Get("hold"); hold != "" {
-		if _, err := m.client.Eval(timeWaitHoldScript, nil, []string{hold}); err != nil {
+		if _, err := m.client.Eval(timeWaitHoldScript, timeWaitHoldDigest, nil, []string{hold}); err != nil {
 			http.Error(rw, err.Error(), http.StatusBadGateway)
 			return
 		}
@@ -183,7 +182,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	rw.Header().Set("X-SimpleRedis-ExpireAt", "ok")
 
 	expireUnix := strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)
-	evalValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalKey}, []string{"3", expireUnix})
+	evalValues, err := m.client.Eval(kongIncrbyExpireatScript, kongIncrbyExpireatDigest, []string{evalKey}, []string{"3", expireUnix})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -194,7 +193,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("X-SimpleRedis-Eval", string(evalValues[0]))
 
-	evalAgainValues, err := m.client.Eval(kongIncrbyExpireatScript, []string{evalAgainKey}, []string{"3", expireUnix})
+	evalAgainValues, err := m.client.Eval(kongIncrbyExpireatScript, kongIncrbyExpireatDigest, []string{evalAgainKey}, []string{"3", expireUnix})
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -204,7 +203,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-EvalAgain", string(evalAgainValues[0]))
-	rw.Header().Set("X-SimpleRedis-EvalDigest", kongScriptDigest())
+	rw.Header().Set("X-SimpleRedis-EvalDigest", kongIncrbyExpireatDigest)
 
 	_, missErr := m.client.Get(prefix + ":missing")
 	if missErr == nil || missErr.Error() != simpleredis.RedisMiss {
@@ -220,7 +219,7 @@ func (m *middleware) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	rw.Header().Set("X-SimpleRedis-MSetEX", "ok")
-	ttlValues, err := m.client.Eval(ttlScript, []string{msetexKey}, nil)
+	ttlValues, err := m.client.Eval(ttlScript, ttlScriptDigest, []string{msetexKey}, nil)
 	if err != nil {
 		http.Error(rw, err.Error(), http.StatusBadGateway)
 		return
@@ -273,7 +272,7 @@ func (m *middleware) writeDropHeaders(rw http.ResponseWriter, prefix string) {
 
 	// Warm again so Eval is also a reused socket (Incr closed the previous one).
 	_, _ = m.dropClient.Get(prefix + ":dropwarm2")
-	evalValues, evalErr := m.dropClient.Eval(kongIncrbyExpireatScript, []string{dropEvalKey}, []string{"3", strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)})
+	evalValues, evalErr := m.dropClient.Eval(kongIncrbyExpireatScript, kongIncrbyExpireatDigest, []string{dropEvalKey}, []string{"3", strconv.FormatInt(time.Now().Add(60*time.Second).Unix(), 10)})
 	evalText := "ok"
 	if len(evalValues) == 1 {
 		evalText = string(evalValues[0])

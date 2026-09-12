@@ -14,23 +14,21 @@ const (
 	noScriptPrefix = "NOSCRIPT"
 )
 
-// Eval runs a Lua script with KEYS then ARGV. Hashes the body each call and sends EVALSHA; on NOSCRIPT falls back once to EVAL.
+// ScriptSHA1Hex is Redis sha1hex of the script bytes (lowercase 40-char hex). Callers that reuse a script compute this once at init.
+func ScriptSHA1Hex(script string) string {
+	sum := sha1.Sum([]byte(script)) //nolint:gosec // Redis EVALSHA digest is SHA-1
+	return hex.EncodeToString(sum[:])
+}
+
+// Eval runs a Lua script with KEYS then ARGV. Sends EVALSHA of the caller digest; on NOSCRIPT falls back once to EVAL of the body.
 // The reply is a flat array of bulk strings or integers; Lua authors wrap each slot with tostring. Nested tables and {err=...} inside an array are redis:unsupported-reply.
-func (sr *SimpleRedis) Eval(script string, keys []string, args []string) ([][]byte, error) {
-	// Hash every call: SHA-1 of a limiter script (~470 B) is cheaper than a mutex, and a map of bodies would need a lock because Go maps are not concurrent.
-	digest := scriptSHA1Hex(script)
+func (sr *SimpleRedis) Eval(script string, digest string, keys []string, args []string) ([][]byte, error) {
 	values, err := sr.exec(evalArgv(evalShaVerb, digest, keys, args)...)
 	// Miss: engine has no matching digest (FLUSH, restart); EVAL is the only send of the body so the engine stores it.
 	if err != nil && strings.HasPrefix(err.Error(), noScriptPrefix) {
 		return sr.exec(evalArgv(evalVerb, script, keys, args)...)
 	}
 	return values, err
-}
-
-// scriptSHA1Hex is Redis sha1hex of the script bytes (lowercase 40-char hex). Eval hashes each call; no client digest table.
-func scriptSHA1Hex(script string) string {
-	sum := sha1.Sum([]byte(script)) //nolint:gosec // Redis EVALSHA digest is SHA-1
-	return hex.EncodeToString(sum[:])
 }
 
 // evalArgv builds EVAL or EVALSHA argv: verb, script-or-digest, decimal numkeys, keys, then args.

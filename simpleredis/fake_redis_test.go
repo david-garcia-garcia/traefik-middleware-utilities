@@ -187,7 +187,7 @@ func (f *fakeRedis) commandReply(args []string) string {
 	case evalVerb:
 		f.evals++
 		script := args[1]
-		f.loadedScripts[scriptSHA1Hex(script)] = script
+		f.loadedScripts[ScriptSHA1Hex(script)] = script
 		return f.evalScriptReply(script, args)
 	default:
 		return statusOKReply

@@ -7,6 +7,9 @@ import (
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
+// allowScriptDigest is Redis sha1hex of allowScript, computed once at package init.
+var allowScriptDigest = simpleredis.ScriptSHA1Hex(allowScript)
+
 // Redis is a Traefik token bucket stored as a Redis hash via Eval.
 type Redis struct {
 	clock clockConfig
@@ -54,7 +57,7 @@ func (r *Redis) Allow(key string) (bool, time.Duration, error) {
 		strconv.FormatInt(r.clock.maxDelay.Microseconds(), 10),
 	}
 	// Script owns HGETALL/HSET/EXPIRE. Go only maps wait to allowed.
-	values, err := r.redis.Eval(allowScript, []string{key}, args)
+	values, err := r.redis.Eval(allowScript, allowScriptDigest, []string{key}, args)
 	if err != nil {
 		return false, 0, err
 	}

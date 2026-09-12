@@ -364,7 +364,7 @@ func ExpireOnFirstHit(host, key string) string {
 	}
 	windowStart := now.Unix() / 10 * 10
 	redisKey := key + ":" + strconv.FormatInt(windowStart, 10)
-	values, err := client.Eval("return redis.call('TTL', KEYS[1])", []string{redisKey}, nil)
+	values, err := client.Eval("return redis.call('TTL', KEYS[1])", simpleredis.ScriptSHA1Hex("return redis.call('TTL', KEYS[1])"), []string{redisKey}, nil)
 	if err != nil {
 		return "ttl:" + err.Error()
 	}

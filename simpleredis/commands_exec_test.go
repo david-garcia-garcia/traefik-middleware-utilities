@@ -123,7 +123,7 @@ func TestLostReplyEvalIsRetried(t *testing.T) {
 	}
 
 	fake.armCloseBeforeReplyOnceForTest()
-	values, err := redis.Eval(kongIncrbyExpireatScript, []string{"win"}, []string{"7", "1700000000"})
+	values, err := redis.Eval(kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win"}, []string{"7", "1700000000"})
 	if err != nil {
 		t.Fatalf("Eval after close-before-reply: %v", err)
 	}

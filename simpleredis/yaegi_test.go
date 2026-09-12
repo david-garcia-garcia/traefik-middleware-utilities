@@ -207,7 +207,7 @@ func IncrAndEval(host string) string {
 	if afterIncr != 1 {
 		return fmt.Sprintf("incr:%d", afterIncr)
 	}
-	values, err := client.Eval(kongIncrbyExpireatScript, []string{"yaegi-eval"}, []string{"3", "1700000000"})
+	values, err := client.Eval(kongIncrbyExpireatScript, simpleredis.ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"yaegi-eval"}, []string{"3", "1700000000"})
 	if err != nil {
 		return "eval:" + err.Error()
 	}
@@ -220,7 +220,7 @@ func IncrAndEval(host string) string {
 // EvalNoScript Evals once so the compiled fake's first EVALSHA miss must fall back.
 func EvalNoScript(host string) string {
 	client := simpleredis.New(simpleredis.Config{Host: host})
-	values, err := client.Eval(kongIncrbyExpireatScript, []string{"yaegi-noscript"}, []string{"3", "1700000000"})
+	values, err := client.Eval(kongIncrbyExpireatScript, simpleredis.ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"yaegi-noscript"}, []string{"3", "1700000000"})
 	if err != nil {
 		return "eval:" + err.Error()
 	}
@@ -269,7 +269,7 @@ func LiveVerbs(host, key string) string {
 	if n != 1 {
 		return fmt.Sprintf("incr:%d", n)
 	}
-	values, err := client.Eval("return 1", nil, nil)
+	values, err := client.Eval("return 1", simpleredis.ScriptSHA1Hex("return 1"), nil, nil)
 	if err != nil {
 		return "eval:" + err.Error()
 	}

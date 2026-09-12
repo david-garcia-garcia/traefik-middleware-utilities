@@ -100,7 +100,7 @@ const ttlScript = `return redis.call('TTL', KEYS[1])`
 // assertLiveTTLPositive Evals TTL for key and fails unless the remaining seconds are positive.
 func assertLiveTTLPositive(t *testing.T, client *SimpleRedis, key string) {
 	t.Helper()
-	values, err := client.Eval(ttlScript, []string{key}, nil)
+	values, err := client.Eval(ttlScript, ScriptSHA1Hex(ttlScript), []string{key}, nil)
 	if err != nil {
 		t.Fatalf("TTL Eval: %v", err)
 	}

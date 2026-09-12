@@ -335,7 +335,7 @@ func runLiveLimiterBackend(t *testing.T, addr string) {
 		}
 		windowStart := now.Unix() / 10 * 10
 		redisKey := redisWindowKey(key, windowStart)
-		values, err := client.Eval(liveTTLScript, []string{redisKey}, nil)
+		values, err := client.Eval(liveTTLScript, simpleredis.ScriptSHA1Hex(liveTTLScript), []string{redisKey}, nil)
 		if err != nil {
 			t.Fatalf("TTL Eval: %v", err)
 		}
