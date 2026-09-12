@@ -1,5 +1,5 @@
 {
-  "commentId": "none",
+  "commentId": "pr-body",
   "issueKey": "2026-09-12-simpleredis-eval-caller-digest",
   "markerValue": "2026-09-12-simpleredis-eval-caller-digest",
   "issueHost": "local"
