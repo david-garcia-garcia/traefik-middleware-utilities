@@ -7,7 +7,7 @@ JobName: 2026-09-12-command-e2e-and-integration-coverage
 | prepare | [x] | [x] | 2026-09-12T16:49:18Z |
 | explore | [x] | [x] | 2026-09-12T16:58:39Z |
 | propose | [x] | [x] | 2026-09-12T17:02:30Z |
-| implement | [ ] | [ ] | |
+| implement | [x] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
