@@ -51,3 +51,11 @@ findings: none
 fixed: none
 skipped: none
 archived: 2026-09-12-add-ci-unit-race-detector
+
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: none
+fixed: skip TestAlloc* under -race
+skipped: none
+ci: 34695489954 success
+title: 💚 ci(go): run unit tests with the race detector
