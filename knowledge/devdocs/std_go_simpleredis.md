@@ -54,7 +54,7 @@ if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 
 - `simpleredis/simpleredis_e2e_test.go` — skip/fail harness
 - `simpleredis/yaegi_e2e_test.go` — interpreted live verbs
 - `simpleredis/bench_test.go` — encode/decode benches and CI alloc guards
-- `simpleredis/interpretedcost_test.go` — Yaegi unsafe/encode cost measurements
+- `simpleredis/interpretedcost_test.go` — asserting Yaegi conversion matrix, copy-vs-unsafe benches, and Yaegi encode cost
 - `simpleredis/yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval/MSetEX
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin (`Host`, optional `Password`, `Database`, `DropHost`)
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`
@@ -67,6 +67,10 @@ if err := client.MSetEX([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, 
 - After `Close`, later commands return `redis:unreachable` and do not redial. Closed-client unreachable is not retried. Call `Close` while a command is in flight: that command may finish; its socket is closed on release, not returned to idle.
 - Live cap is `Config.PoolSize` (`PoolSize()`, const default 8; unused plus in-flight). `New` builds the in-use-turn channel. After `New` a `PoolSize` write does not resize. A waiter past `PoolSize` waits `PoolTimeout` (default 200ms), then `redis:unreachable`. Idle trim is `MaxIdleConns` (default 8). Pool wait is not retried.
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
+- Do not adopt `unsafe` zero-copy between `string` and `[]byte`. Compiled it saves a little on Eval encode; under Yaegi (the Traefik plugin path) the legacy struct-header trick is a net loss versus inline `[]byte(s)`. Keep `[]byte(...)` / `string(...)` in session source.
+- Do not import `unsafe` in session source. Do not set `useUnsafe` on the plugin manifest or compose `settings.useunsafe`. Traefik registers unsafe symbols only when **both** the manifest and operator settings are true; manifest true and settings false refuses to load the plugin (`knowledge/research/ext_traefik_plugins_useunsafe/`).
+- CI fails if the Yaegi conversion matrix cells change, if a non-test session file imports `unsafe` or `"C"`, or if probe/compose `useUnsafe` becomes true. Named copy-vs-unsafe benches reproduce ns/op (`go test -run XXX -bench`); they do not fail `go test` without `-bench`.
+- Yaegi v0.16.1 does not export `unsafe.Slice` / `unsafe.String` / `StringData` / `SliceData` even when unsafe symbols are registered (`knowledge/research/ext_traefik_plugins_yaegi-unsafe/`).
 - `Incr` / `IncrBy` do not refresh TTL. `Expire` / `ExpireAt` integer `0` is success, not `redis:miss`. `MSetEX` / `MSetEXAt` integer `0` (and any integer other than `1`) is `redis:issue?`.
 - Eval scripts that touch keys must list those keys in `keys` (Dragonfly rejects undeclared keys). Do not use `table.maxn` (Dragonfly Lua 5.4).
 - `MSetEX` / `MSetEXAt` reject empty or mismatched slices and more than 1024 pairs with `redis:issue?` before dial. Zero or negative TTL is passed through, same as `Set`. Clustered engines need every key in one hash slot (hash tags); the client does not hash-tag or split.
