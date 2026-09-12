@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"bufio"
 	"net"
 	"strings"
 	"testing"
@@ -173,6 +174,13 @@ func TestIncrGarbageIntegerPayload(t *testing.T) {
 	}
 }
 
+func TestReadBulkNonDollarHeadIsIssue(t *testing.T) {
+	_, err := readBulk(bufio.NewReader(strings.NewReader("unused")), []byte(":1"))
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("readBulk non-$ head = %v, want %s", err, RedisIssue)
+	}
+}
+
 func TestHeldIntegerSliceSurvivesLaterRead(t *testing.T) {
 	addr := startSequentialRedis(t, []string{":111\r\n", ":222\r\n"})
 	redis := New(Config{Host: addr})
@@ -247,6 +255,9 @@ func TestGarbageBulkLengthIsIssue(t *testing.T) {
 	_, err := redis.Get("k")
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("garbage bulk = %v, want %s", err, RedisIssue)
+	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after garbage bulk = %d, want 0", got)
 	}
 }
 
