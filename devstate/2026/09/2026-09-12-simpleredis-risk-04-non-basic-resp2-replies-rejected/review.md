@@ -22,4 +22,12 @@ fixed: none
 skipped: none
 change: simpleredis-unsupported-reply
 
+## implement (2026-09-12)
+phase: implement
+findings: none
+fixed: redis:unsupported-reply for nested/unknown types; Eval tostring docs; *-1 stays issue?
+skipped: none
+localTests: passed
+
+
 
