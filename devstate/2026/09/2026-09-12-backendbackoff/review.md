@@ -41,3 +41,9 @@ phase: archive
 findings: none
 fixed: live specs std_go_backendbackoff_allow and std_go_backendbackoff_cooldown; change moved to archive/2026-09-12-backendbackoff-gate
 skipped: none
+
+## pullrequest (2026-09-12)
+phase: pullrequest
+findings: Unit race flake in reclaim TestYaegi_OpenHooksRunSleepWakeClose after Sync
+fixed: skip that Yaegi hooks proof under -race; Unit without -race still runs it
+skipped: none

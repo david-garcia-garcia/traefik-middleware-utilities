@@ -11,4 +11,4 @@ JobName: 2026-09-12-backendbackoff
 | codereview | [x] | [x] | 2026-09-12T18:44:42Z |
 | devdocsimpact | [x] | [x] | 2026-09-12T18:44:42Z |
 | archive | [x] | [x] | 2026-09-12T18:44:42Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-12T18:55:58Z |
