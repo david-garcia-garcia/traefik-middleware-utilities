@@ -85,8 +85,18 @@ When `sync_rate` is zero and Redis is unreachable or times out, Take and Peek SH
 - **THEN** Peek returns `redis:unreachable`
 - **AND** MUST NOT admit or deny as a silent fallback
 
+### Requirement: Buffered Take does not wait on another key's Redis GET
+When `sync_rate` is greater than zero, a Take on one opaque key MUST NOT wait for an in-flight Redis GET that belongs to a different opaque key on the same limiter. Redis GET and EVAL for the local window buffer MUST NOT run while the limiter mutex that serializes that buffer is held. Exact mode (`sync_rate` zero) is unchanged.
+
+#### Scenario: Fast Take during a delayed GET on another key
+- **WHEN** `sync_rate` is greater than zero
+- **AND** a Take on opaque key `slow` is blocked in Redis GET
+- **AND** a Take on a different opaque key `fast` is issued on the same limiter
+- **THEN** the Take on `fast` returns before that GET on `slow` finishes
+- **AND** the wait is well under the GET delay
+
 ### Requirement: Unit and interpreter tests prove Take without Traefik
-Compiled unit tests SHALL prove encoder and window math against an in-process fake TCP Redis (no Docker), including Peek-does-not-increment, Peek-agrees-with-Take, and sliding cooldown via the formula. That fake SHALL be able to close its listener and every live socket on demand so a pending-delta outage can be proven. Interpreter tests that import Yaegi SHALL run live Take and Peek scenarios against GOPATH copies of non-test `windowcounter` and `simpleredis` sources, stdlib symbols only, `useunsafe` false. Those interpreter tests MUST NOT start Traefik. The compiled test owns process start and skip.
+Compiled unit tests SHALL prove encoder and window math against an in-process fake TCP Redis (no Docker), including Peek-does-not-increment, Peek-agrees-with-Take, sliding cooldown via the formula, and that a buffered Take on one opaque key does not wait for a delayed GET on a different opaque key. That fake SHALL be able to close its listener and every live socket on demand so a pending-delta outage can be proven. That fake SHALL be able to hold a GET whose Redis key matches a prefix until release or a hold duration, without holding the fake's own mutex during that hold. Interpreter tests that import Yaegi SHALL run live Take and Peek scenarios against GOPATH copies of non-test `windowcounter` and `simpleredis` sources, stdlib symbols only, `useunsafe` false. Those interpreter tests MUST NOT start Traefik. The compiled test owns process start and skip.
 
 #### Scenario: Yaegi Take against a fake
 - **WHEN** interpreted code constructs a limiter on a compiled fake Redis
@@ -129,3 +139,11 @@ When `sync_rate` is greater than zero and Redis is unreachable or times out, Tak
 - **AND** Take is called
 - **THEN** Take returns a nil error
 - **AND** allowed follows this instance's remaining room to `limit`
+
+#### Scenario: Fast Take while GET on another key is held
+- **WHEN** `sync_rate` is greater than zero
+- **AND** the fake holds GET for Redis keys with prefix `slow:`
+- **AND** a Take on opaque key `slow` has entered that hold
+- **AND** a Take on opaque key `fast` is issued on the same limiter
+- **THEN** the Take on `fast` returns well under the GET hold duration
+- **AND** it MUST NOT wait for the held GET to finish

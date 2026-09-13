@@ -49,6 +49,7 @@ type windowState struct {
 	redisKnown int64
 	localDelta int64
 	expireAt   int64
+	flushDelta int64 // amount copied for an in-flight EVAL; 0 means none
 }
 
 // New builds a limiter on a SimpleRedis from simpleredis.New. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (INCR every Take, Redis errors on that call). Positive syncRate buffers locally; a Redis outage keeps this instance's limit with a nil error.
@@ -180,8 +181,14 @@ func (l *Limiter) takeBuffered(ctx context.Context, currentKey, previousKey stri
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	currentState := l.windowLocked(ctx, currentKey, expireAt)
-	previous := l.bufferedCountLocked(ctx, previousKey)
+	currentState, err := l.windowLocked(ctx, currentKey, expireAt)
+	if err != nil {
+		return false, 0, err
+	}
+	previous, err := l.bufferedCountLocked(ctx, previousKey)
+	if err != nil {
+		return false, 0, err
+	}
 	currentState.localDelta++
 	current := currentState.redisKnown + currentState.localDelta
 	estimated := float64(current) + float64(previous)*weight
@@ -207,101 +214,103 @@ func (l *Limiter) peekBuffered(ctx context.Context, currentKey, previousKey stri
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	current := l.peekCountLocked(ctx, currentKey, expireAt)
-	previous := l.bufferedCountLocked(ctx, previousKey)
+	current, err := l.peekCountLocked(ctx, currentKey, expireAt)
+	if err != nil {
+		return false, 0, err
+	}
+	previous, err := l.bufferedCountLocked(ctx, previousKey)
+	if err != nil {
+		return false, 0, err
+	}
 	estimated := float64(current) + float64(previous)*weight
 	return estimated <= float64(limit), estimated, nil
 }
 
 // peekCountLocked returns redis_known + local_delta without incrementing. GET only on first sight of redisKey.
-func (l *Limiter) peekCountLocked(ctx context.Context, redisKey string, expireAt int64) int64 {
+func (l *Limiter) peekCountLocked(ctx context.Context, redisKey string, expireAt int64) (int64, error) {
 	state := l.windows[redisKey]
 	if state != nil {
 		// Already in the buffer: do not GET just because localDelta is 0.
 		if expireAt > state.expireAt {
 			state.expireAt = expireAt
 		}
-		return state.redisKnown + state.localDelta
+		return state.redisKnown + state.localDelta, nil
 	}
 	if l.skipRedisContactLocked() {
-		return l.seedEmptyWindowLocked(redisKey, expireAt).redisKnown
+		return l.seedEmptyWindowLocked(redisKey, expireAt).redisKnown, nil
 	}
-	// Seed redis_known from Redis on first sight of this window key.
-	known, err := l.getCount(ctx, redisKey)
+	known, err := l.getCountUnlocked(ctx, redisKey)
 	if err != nil {
 		l.rememberOutageLocked(err)
-		return l.seedEmptyWindowLocked(redisKey, expireAt).redisKnown
+		return l.seedEmptyWindowLocked(redisKey, expireAt).redisKnown, nil
 	}
-	l.windows[redisKey] = &windowState{redisKnown: known, expireAt: expireAt}
-	return known
+	state = l.applyGetLocked(redisKey, known, expireAt)
+	return state.redisKnown + state.localDelta, nil
 }
 
 // windowLocked returns the buffer for a Redis key, seeding redis_known from GET on first sight.
-func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt int64) *windowState {
+func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt int64) (*windowState, error) {
 	state := l.windows[redisKey]
 	if state != nil {
 		if expireAt > state.expireAt {
 			state.expireAt = expireAt
 		}
-		// Share-refresh GET when this node has no pending delta and Redis is not already known down.
-		if state.localDelta == 0 && !l.skipRedisContactLocked() {
-			known, err := l.getCount(ctx, redisKey)
-			if err != nil {
-				l.rememberOutageLocked(err)
-				return state
-			}
-			state.redisKnown = known
+		if state.localDelta != 0 || l.skipRedisContactLocked() {
+			return state, nil
 		}
-		return state
+	} else if l.skipRedisContactLocked() {
+		return l.seedEmptyWindowLocked(redisKey, expireAt), nil
 	}
-	// First sight of this window key: seed 0 when Redis is down, else GET.
-	if l.skipRedisContactLocked() {
-		return l.seedEmptyWindowLocked(redisKey, expireAt)
-	}
-	known, err := l.getCount(ctx, redisKey)
+	known, err := l.getCountUnlocked(ctx, redisKey)
 	if err != nil {
 		l.rememberOutageLocked(err)
-		return l.seedEmptyWindowLocked(redisKey, expireAt)
+		if state != nil {
+			return state, nil
+		}
+		return l.seedEmptyWindowLocked(redisKey, expireAt), nil
 	}
-	state = &windowState{redisKnown: known, expireAt: expireAt}
-	l.windows[redisKey] = state
-	return state
+	return l.applyGetLocked(redisKey, known, expireAt), nil
 }
 
 // bufferedCountLocked is redis_known + local_delta, GET-seeding a key the limiter has not seen.
-func (l *Limiter) bufferedCountLocked(ctx context.Context, redisKey string) int64 {
+func (l *Limiter) bufferedCountLocked(ctx context.Context, redisKey string) (int64, error) {
 	state := l.windows[redisKey]
 	if state != nil {
-		return state.redisKnown + state.localDelta
+		return state.redisKnown + state.localDelta, nil
 	}
-	// First sight of a previous-window key: seed 0 when Redis is down, else GET.
 	if l.skipRedisContactLocked() {
-		return l.seedEmptyWindowLocked(redisKey, 0).redisKnown
+		return l.seedEmptyWindowLocked(redisKey, 0).redisKnown, nil
 	}
-	known, err := l.getCount(ctx, redisKey)
+	known, err := l.getCountUnlocked(ctx, redisKey)
 	if err != nil {
 		l.rememberOutageLocked(err)
-		return l.seedEmptyWindowLocked(redisKey, 0).redisKnown
+		return l.seedEmptyWindowLocked(redisKey, 0).redisKnown, nil
 	}
-	l.windows[redisKey] = &windowState{redisKnown: known}
-	return known
+	state = l.applyGetLocked(redisKey, known, 0)
+	return state.redisKnown + state.localDelta, nil
 }
 
-// skipRedisContactLocked is true when a stored flush or GET failure means Take/Peek must not GET Redis.
-func (l *Limiter) skipRedisContactLocked() bool {
-	return l.lastOutageErr != nil
+// getCountUnlocked drops l.mu for Redis GET then re-locks. Caller holds l.mu.
+func (l *Limiter) getCountUnlocked(ctx context.Context, redisKey string) (int64, error) {
+	l.mu.Unlock()
+	defer l.mu.Lock()
+	return l.getCount(ctx, redisKey)
 }
 
-// rememberOutageLocked stores err so later buffered Take/Peek skip Redis instead of retrying GET.
-func (l *Limiter) rememberOutageLocked(err error) {
-	l.lastOutageErr = err
-	l.lastOutageAt = l.now()
-}
-
-// seedEmptyWindowLocked stores a zero redisKnown buffer for redisKey.
-func (l *Limiter) seedEmptyWindowLocked(redisKey string, expireAt int64) *windowState {
-	state := &windowState{expireAt: expireAt}
-	l.windows[redisKey] = state
+// applyGetLocked stores a GET count. Caller holds l.mu. A concurrent Take's localDelta is kept.
+func (l *Limiter) applyGetLocked(redisKey string, known, expireAt int64) *windowState {
+	state := l.windows[redisKey]
+	if state == nil {
+		state = &windowState{redisKnown: known, expireAt: expireAt}
+		l.windows[redisKey] = state
+		return state
+	}
+	if expireAt > state.expireAt {
+		state.expireAt = expireAt
+	}
+	if state.localDelta == 0 {
+		state.redisKnown = known
+	}
 	return state
 }
 
@@ -413,36 +422,62 @@ func (l *Limiter) flushPending(ctx context.Context) error {
 	return l.flushPendingLocked(ctx)
 }
 
-// flushPendingLocked is flushPending while the caller already holds l.mu.
+// flushPendingLocked copies in-flight deltas, EVAL without l.mu, then subtracts flushed amount. Caller holds l.mu. A second flusher skips a key whose flushDelta is set.
 func (l *Limiter) flushPendingLocked(ctx context.Context) error {
-	var firstErr error
+	// pendingFlush is one window's EVAL snapshot copied under l.mu.
+	type pendingFlush struct {
+		redisKey string
+		delta    int64
+		expireAt int64
+	}
+	// Copy (key, delta, expireAt) and mark in-flight so a second flusher skips this snapshot.
+	var pending []pendingFlush
 	nowUnix := l.now().Unix()
 	for redisKey, state := range l.windows {
-		if state.localDelta > 0 {
-			delta := state.localDelta
-			expireAt := state.expireAt
-			values, err := l.redis.Eval(ctx, flushScript, flushScriptDigest, []string{redisKey}, []string{
-				strconv.FormatInt(delta, 10),
-				strconv.FormatInt(expireAt, 10),
+		if state.localDelta > 0 && state.flushDelta == 0 {
+			state.flushDelta = state.localDelta
+			pending = append(pending, pendingFlush{
+				redisKey: redisKey,
+				delta:    state.flushDelta,
+				expireAt: state.expireAt,
 			})
-			if err != nil {
-				if firstErr == nil {
-					firstErr = err
-				}
-			} else {
-				n, convErr := parseEvalInt(values)
-				if convErr != nil {
-					if firstErr == nil {
-						firstErr = convErr
-					}
-				} else {
-					state.redisKnown = n
-					state.localDelta = 0
-					l.lastOutageErr = nil
-				}
-			}
 		}
-		if state.localDelta == 0 && (state.expireAt == 0 || nowUnix >= state.expireAt) {
+	}
+	var firstErr error
+	// EVAL each snapshot unlocked; on success redisKnown = n and localDelta -= flushedDelta.
+	for _, job := range pending {
+		values, err := l.flushEvalUnlocked(ctx, job.redisKey, job.delta, job.expireAt)
+		state := l.windows[job.redisKey]
+		if err != nil {
+			if state != nil {
+				state.flushDelta = 0
+			}
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		n, convErr := parseEvalInt(values)
+		if convErr != nil {
+			if state != nil {
+				state.flushDelta = 0
+			}
+			if firstErr == nil {
+				firstErr = convErr
+			}
+			continue
+		}
+		if state == nil {
+			continue
+		}
+		state.redisKnown = n
+		state.localDelta -= job.delta
+		state.flushDelta = 0
+		l.lastOutageErr = nil
+	}
+	// Drop windows whose TTL has passed and that have no local or in-flight delta.
+	for redisKey, state := range l.windows {
+		if state.localDelta == 0 && state.flushDelta == 0 && (state.expireAt == 0 || nowUnix >= state.expireAt) {
 			delete(l.windows, redisKey)
 		}
 	}
@@ -451,6 +486,34 @@ func (l *Limiter) flushPendingLocked(ctx context.Context) error {
 		l.lastOutageAt = l.now()
 	}
 	return firstErr
+}
+
+// flushEvalUnlocked drops l.mu for flush EVAL then re-locks. Caller holds l.mu.
+func (l *Limiter) flushEvalUnlocked(ctx context.Context, redisKey string, delta, expireAt int64) ([][]byte, error) {
+	l.mu.Unlock()
+	defer l.mu.Lock()
+	return l.redis.Eval(ctx, flushScript, flushScriptDigest, []string{redisKey}, []string{
+		strconv.FormatInt(delta, 10),
+		strconv.FormatInt(expireAt, 10),
+	})
+}
+
+// skipRedisContactLocked is true when a stored flush or GET failure means Take/Peek must not GET Redis.
+func (l *Limiter) skipRedisContactLocked() bool {
+	return l.lastOutageErr != nil
+}
+
+// rememberOutageLocked stores err so later buffered Take/Peek skip Redis instead of retrying GET.
+func (l *Limiter) rememberOutageLocked(err error) {
+	l.lastOutageErr = err
+	l.lastOutageAt = l.now()
+}
+
+// seedEmptyWindowLocked stores a zero redisKnown buffer for redisKey.
+func (l *Limiter) seedEmptyWindowLocked(redisKey string, expireAt int64) *windowState {
+	state := &windowState{expireAt: expireAt}
+	l.windows[redisKey] = state
+	return state
 }
 
 // parseEvalInt reads one integer from an EVAL reply.

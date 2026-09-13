@@ -64,4 +64,6 @@ _, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 - Denied Takes still increment. Peek does not.
 - `Sleep` flushes pending deltas then stops the ticker. Concurrent `Wake` during Sleep does not start a ticker and Sleep still returns. After Sleep returns, `Wake` starts the ticker again when `sync_rate` is greater than zero. After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's.
 - EVAL scripts must list keys in `KEYS` (Dragonfly).
+- EVAL scripts must list keys in `KEYS` (Dragonfly).
 - Buffered Take/Peek during a Redis outage return a nil error and admit until this instance's `limit`. Exact mode still returns Redis errors. Do not check `err` to fail closed on the buffered path.
+- Buffered GET and flush EVAL run without the limiter mutex. A slow Redis round trip on one opaque key must not stall Take on another key.
