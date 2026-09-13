@@ -23,3 +23,10 @@ fixed: Close-before-unmap in drop/expire; overlap tests fail-then-pass
 skipped: Reset Close-before-unmap
 localTests: passed
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/50
+
+## codereview (2026-09-13)
+phase: codereview
+findings: P1 0, hard 3, wrong 1
+fixed: unmapAfterClose; dispose-before-ready; delete dispose; test trail comments
+skipped: none
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/50
