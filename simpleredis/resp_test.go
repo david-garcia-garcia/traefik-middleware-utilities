@@ -295,22 +295,35 @@ func TestStrayExtraReplyIsNotPooled(t *testing.T) {
 }
 
 func TestAuthLeftoverIsNotParsedAsSelect(t *testing.T) {
-	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	fake.setHandshakeReplies("+OK\r\n$5\r\nSTRAY\r\n", statusOKReply)
-	redis := New(Config{Host: addr, Pass: "secret", Database: "2", MaxRetries: -1})
-	_, err := redis.Get(context.Background(), "hit")
-	if err == nil || err.Error() != RedisIssue {
-		t.Fatalf("Get = %v, want %s", err, RedisIssue)
-	}
-	if got := pooledIdle(redis); got != 0 {
-		t.Fatalf("idle = %d, want 0", got)
-	}
-	auths, selects, gets := fake.handshakeCounts()
-	if auths != 1 || selects != 0 || gets != 0 {
-		t.Fatalf("AUTH=%d SELECT=%d GET=%d, want 1, 0, 0", auths, selects, gets)
-	}
-	if got := redis.OverFrees(); got != 0 {
-		t.Fatalf("OverFrees after AUTH leftover = %d, want 0", got)
+	for _, maxRetries := range []int{-1, 1} {
+		t.Run("MaxRetries="+strconv.Itoa(maxRetries), func(t *testing.T) {
+			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+			fake.setHandshakeReplies("+OK\r\n$5\r\nSTRAY\r\n", statusOKReply)
+			redis := New(Config{Host: addr, Pass: "secret", Database: "2", MaxRetries: maxRetries})
+			_, err := redis.Get(context.Background(), "hit")
+			if err == nil || err.Error() != RedisUnreachable {
+				t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
+			}
+			if shouldRetry(err, true) {
+				t.Fatal("shouldRetry(AUTH leftover, handshakeFailed) = true, want false")
+			}
+			if !shouldRetry(err, false) {
+				t.Fatal("shouldRetry(AUTH leftover, not handshake) = false, want true (sentinel itself is retryable)")
+			}
+			if got := pooledIdle(redis); got != 0 {
+				t.Fatalf("idle = %d, want 0", got)
+			}
+			auths, selects, gets := fake.handshakeCounts()
+			if auths != 1 || selects != 0 || gets != 0 {
+				t.Fatalf("AUTH=%d SELECT=%d GET=%d, want 1, 0, 0 (handshake leftover must not retry)", auths, selects, gets)
+			}
+			if fake.connections() != 1 {
+				t.Fatalf("accepts = %d, want 1", fake.connections())
+			}
+			if got := redis.OverFrees(); got != 0 {
+				t.Fatalf("OverFrees after AUTH leftover = %d, want 0", got)
+			}
+		})
 	}
 }
 

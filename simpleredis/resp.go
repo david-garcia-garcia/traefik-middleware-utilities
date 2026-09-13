@@ -33,9 +33,12 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	stopWatch := watchConnClose(ctx, conn.netConn)
 	defer stopWatch()
 	// Unread leftover from a prior command on this socket must not be parsed as this command's reply.
+	// errUnreachable, not errIssue: the socket is unusable but the command is not, so this must stay
+	// retryable — a retry gets a fresh dial whose reader is empty by construction. Same call the spec
+	// makes for a short bulk read, which MUST NOT surface as redis:issue?.
 	// Buffered() covers leftover already in the reader, not a stray that arrives while the socket is idle: it does not see the kernel receive buffer.
 	if conn.reader.Buffered() != 0 {
-		return nil, false, errIssue
+		return nil, false, errUnreachable
 	}
 	if err := writeCommand(conn.writer, args); err != nil {
 		return nil, false, ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
