@@ -138,7 +138,7 @@ func warmPeerDropAllIdle(t *testing.T, fake *peerDropAllFake, sr *SimpleRedis, n
 func TestPeerDropAllSequentialGetsSucceedAfterPeerDrop(t *testing.T) {
 	const poolSize = 8
 	fake, addr := startPeerDropAllFake(t, map[string]string{"hit": "t"})
-	sr := New(Config{Host: addr, PoolSize: poolSize, MaxIdleConns: poolSize,
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: poolSize, MaxIdleConns: poolSize,
 		MinRetryBackoff: -1, MaxRetryBackoff: -1})
 	t.Cleanup(sr.Close)
 
