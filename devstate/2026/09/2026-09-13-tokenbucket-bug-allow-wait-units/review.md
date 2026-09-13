@@ -32,3 +32,17 @@ phase: codereview
 findings: coverage hard 1
 fixed: TestRedis_MaxDelayTruncationFailOpen
 skipped: none
+
+## devdocsimpact (2026-09-13)
+
+phase: devdocsimpact
+findings: none
+fixed: none
+skipped: Language already present
+
+## archive (2026-09-13)
+
+phase: archive
+findings: none
+fixed: synced std_go_tokenbucket_allow; archived change
+skipped: none
