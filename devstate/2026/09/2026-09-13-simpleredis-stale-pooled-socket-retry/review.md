@@ -33,3 +33,9 @@ phase: devdocsimpact
 findings: stale-usage on std_go_simpleredis idle-socket gotcha
 fixed: skip-idle sequential recovery on the SimpleRedis usage packet
 skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: none
+fixed: folded Peer-closed idle vintage into std_go_simpleredis_tcp-session; moved change to archive
+skipped: none
