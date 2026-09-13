@@ -278,6 +278,9 @@ func TestStrayExtraReplyIsNotPooled(t *testing.T) {
 	if fake.connections() != 1 {
 		t.Fatalf("accepts after stray extra = %d, want 1", fake.connections())
 	}
+	if got := redis.OverFrees(); got != 0 {
+		t.Fatalf("OverFrees after leftover destroy = %d, want 0", got)
+	}
 
 	got, err := redis.Get(context.Background(), "k5")
 	if err != nil {
@@ -305,6 +308,9 @@ func TestAuthLeftoverIsNotParsedAsSelect(t *testing.T) {
 	auths, selects, gets := fake.handshakeCounts()
 	if auths != 1 || selects != 0 || gets != 0 {
 		t.Fatalf("AUTH=%d SELECT=%d GET=%d, want 1, 0, 0", auths, selects, gets)
+	}
+	if got := redis.OverFrees(); got != 0 {
+		t.Fatalf("OverFrees after AUTH leftover = %d, want 0", got)
 	}
 }
 
