@@ -27,14 +27,14 @@ flowchart LR
 Prepare is grounded (`qualified-with-gaps`). Product apply has not started. Explore is next.
 
 Priority: P3 — spec and internal API clarity, no current operator or end-user harm
-Reviewed head: 3d692f6
+Reviewed head: 771d804
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | New HEAD not yet on CI; no product apply |
-| CI proof | 1/6 | Start-commit checks succeeded; prepare bus HEAD not seen |
+| Overall readiness | 3/6 | CI in progress; no product apply yet |
+| CI proof | 3/6 | Checks in progress on the stub PR |
 | Local tests proof | N/A | Before implement (`localTests: none`) |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
@@ -44,7 +44,7 @@ Owner decision: None.
 | Branch | 2026-09-13-reclaim-owned-table pushed | `git push` |
 | OpenSpec | none | no change folder |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/65 | pr-host Create |
-| CI | build 34746615300 succeeded on `950cb96` https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34746615300 ; prepare bus HEAD not seen | pr-host CI |
+| CI | build 34746772807 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34746772807 | pr-host CI |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | inventory empty |
 
@@ -80,7 +80,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 3d692f613c0e71e7b056ccce3bde224aa6e0093e | Card must match the branch you measured |
+| Reviewed head | 771d804260d2115ba7e93a15e83ba233d0b18f88 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -97,7 +97,7 @@ What I checked:
 - `git ls-tree origin/master reclaim` exists; `origin/initial` has no `reclaim/`
 - `reclaim/default.go`, `reclaim/table.go` `NewTable`, spec `std_go_reclaim_context-lease`, `e2e/reclaimprobe/plugin.go`, usage docs (`git`, dest `24a6852`)
 - OPEN PR #65, empty comment inventory (GitHub MCP)
-- CI run 34746615300 succeeded on start commit `950cb96`
+- CI run 34746772807 in progress on `771d804` (start commit `950cb96` had succeeded as 34746615300)
 
 ### Rank-up moves
 None.
