@@ -7,7 +7,7 @@ JobName: 2026-09-13-reclaim-bug-nildone-watcher-leak
 | prepare | [x] | [x] | 2026-09-13T16:15:07Z |
 | explore | [x] | [x] | 2026-09-13T16:21:34Z |
 | propose | [x] | [x] | 2026-09-13T16:24:47Z |
-| implement | [x] | [ ] | |
+| implement | [x] | [x] | 2026-09-13T16:30:07Z |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |

@@ -18,3 +18,9 @@ findings: fold std_go_reclaim_context-lease; change reclaim-nildone-watcher-exit
 fixed: proposal, design, tasks, delta spec, specs.md
 skipped: product apply
 
+## implement (2026-09-13)
+phase: implement
+findings: shape 1 landed; TestRepro failed then passed; go test ./reclaim ok; go test ./... -short ok
+fixed: table.go finished channel; verbatim reproducer; test-only NewTable; usage gotcha
+skipped: Sleep-panic and Wake-panic bodies; reclaim/BUGS.md
+
