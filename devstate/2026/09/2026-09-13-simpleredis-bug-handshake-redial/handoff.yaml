@@ -1,0 +1,18 @@
+issueKey: 2026-09-13-simpleredis-bug-handshake-redial
+jobName: 2026-09-13-simpleredis-bug-handshake-redial
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: e8abe2c134330d0b8a745dc372e1d7f5f14c44ce7cf2a3d6315c4b6b59dcb58f
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-handshake-no-redial
+pr:
+  id: 48
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/48
+

@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: Non-finite tokenbucket rate is accepted (NaN / Inf)
+url: none
+number: none

@@ -170,6 +170,24 @@ The session SHALL keep at most `poolSize` live TCP connections (idle plus in use
 - **AND** a later Get returns `redis:unreachable`
 - **AND** no new TCP connection is opened
 
+### Requirement: Client not from New fails immediately
+A command on a `SimpleRedis` that did not come from `New` SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT be retried (MUST NOT sleep retry backoff). `New` remains the only constructor of the in-use-turn channel. `Close` on that client SHALL be idempotent and MUST NOT panic. Empty `MGet` and empty or mismatched `MSetEX` / `MSetEXAt` stay pre-dial validation and MUST NOT panic.
+
+#### Scenario: Zero-value Get does not retry
+- **WHEN** `Get` is called on `&SimpleRedis{}`
+- **THEN** the command returns `redis:unreachable`
+- **AND** it returns in under the default minimum retry backoff (8 milliseconds)
+
+#### Scenario: Zero-value exported methods do not panic
+- **WHEN** every exported command and `Close` is called on `&SimpleRedis{}` (non-empty `MGet` / `MSetEX` / `MSetEXAt` so they reach the session)
+- **AND** `Close` is called a second time
+- **THEN** no call panics
+- **AND** each command that reaches the session returns `redis:unreachable`
+
+#### Scenario: New remains the only in-use-turn constructor
+- **WHEN** a client is `&SimpleRedis{}` and `New` has not run
+- **THEN** that client has no in-use-turn channel
+
 ### Requirement: I/O deadline is timeout, not a net.Error assert
 When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `IOTimeout` default is 100 milliseconds). A timeout on a reused connection MUST NOT open a second connection.
 
@@ -197,7 +215,7 @@ A Traefik local plugin SHALL import this module’s `simpleredis` package. Traef
 - **THEN** it does not stop `whoami-a` or `whoami-b`
 
 ### Requirement: Handshake AUTH or SELECT failure closes and is not pooled
-When AUTH on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool. AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. When SELECT on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool, and SHALL return that error text. `ERR DB index is out of range` MUST NOT map to `redis:noauth`. AUTH SHALL run before SELECT when both password and database are non-empty. A handshake failure SHALL surface one error to the caller and MUST NOT open a second TCP connection for that command. In-process handshake-failure tests SHALL use a fake whose AUTH and SELECT replies are configurable (default success so existing success tests stay). Live Redis and Dragonfly tests SHALL prove the cases each dest engine supports and SHALL skip when those engines are unset.
+When AUTH on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool. AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. When SELECT on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool, and SHALL return that error text. `ERR DB index is out of range` MUST NOT map to `redis:noauth`. AUTH SHALL run before SELECT when both password and database are non-empty. A handshake failure SHALL surface one error to the caller and MUST NOT open a second TCP connection for that command. That MUST NOT-redial rule includes AUTH or SELECT peer close with no reply, AUTH `-LOADING Redis is loading the dataset in memory`, and AUTH `-ERR max number of clients reached`. TCP dial refuse before AUTH/SELECT MAY still retry. A command that receives `LOADING ` after a successful handshake MAY still retry. In-process handshake-failure tests SHALL use a fake whose AUTH and SELECT replies are configurable (default success so existing success tests stay). Live Redis and Dragonfly tests SHALL prove the cases each dest engine supports and SHALL skip when those engines are unset.
 
 #### Scenario: Fake AUTH rejected maps to redis:noauth and is not pooled
 - **WHEN** the client is created with `New` with a non-empty password and an empty database
@@ -216,6 +234,34 @@ When AUTH on a new dial returns an error, the session SHALL close that socket an
 - **AND** the command returns `ERR DB index is out of range`
 - **AND** the idle pool is empty
 - **AND** the fake observes that the client closed the socket
+- **AND** the fake accepted one TCP connection
+
+#### Scenario: Fake AUTH close without reply is not redialed
+- **WHEN** the client is created with `New` with a non-empty password, `MaxRetries: 1`, and MinRetryBackoff off
+- **AND** the peer accepts TCP, reads AUTH, and closes with no reply
+- **AND** a command is issued
+- **THEN** the command returns an error
+- **AND** the peer accepted one TCP connection
+
+#### Scenario: Fake SELECT close without reply after AUTH is not redialed
+- **WHEN** the client is created with `New` with a password, a database, `MaxRetries: 1`, and MinRetryBackoff off
+- **AND** the peer accepts TCP, replies `+OK` to AUTH, reads SELECT, and closes with no reply
+- **AND** a command is issued
+- **THEN** the command returns an error
+- **AND** the peer accepted one TCP connection
+
+#### Scenario: Fake AUTH LOADING is not redialed
+- **WHEN** the client is created with `New` with a non-empty password, `MaxRetries: 1`, and MinRetryBackoff off
+- **AND** the fake replies to AUTH with `-LOADING Redis is loading the dataset in memory`
+- **AND** a command is issued
+- **THEN** the command returns an error whose text is `LOADING Redis is loading the dataset in memory`
+- **AND** the fake accepted one TCP connection
+
+#### Scenario: Fake AUTH max-clients is not redialed
+- **WHEN** the client is created with `New` with a non-empty password, `MaxRetries: 1`, and MinRetryBackoff off
+- **AND** the fake replies to AUTH with `-ERR max number of clients reached`
+- **AND** a command is issued
+- **THEN** the command returns an error whose text is `ERR max number of clients reached`
 - **AND** the fake accepted one TCP connection
 
 #### Scenario: Live SELECT 99 on Redis and Dragonfly
