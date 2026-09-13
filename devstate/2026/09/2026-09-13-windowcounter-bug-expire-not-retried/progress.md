@@ -5,7 +5,7 @@ JobName: 2026-09-13-windowcounter-bug-expire-not-retried
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T07:03:25Z |
-| explore | [x] | [ ] | |
+| explore | [x] | [x] | 2026-09-13T07:09:42Z |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
