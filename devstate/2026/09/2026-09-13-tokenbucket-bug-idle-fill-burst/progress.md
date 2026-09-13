@@ -6,7 +6,7 @@ JobName: 2026-09-13-tokenbucket-bug-idle-fill-burst
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T06:12:12Z |
 | explore | [x] | [x] | 2026-09-13T06:17:21Z |
-| propose | [x] | [ ] | |
+| propose | [x] | [x] | 2026-09-13T06:21:19Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |

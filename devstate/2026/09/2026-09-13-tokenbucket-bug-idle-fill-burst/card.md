@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T06:17:21Z
+Developer review: in progress — 2026-09-13T06:21:19Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** OpenSpec change `fill-new-key-to-burst` folds idle-fill into `std_go_tokenbucket_allow` and `std_go_tokenbucket_lua-eval`. Dest still seeds missing state as `tokens=0` `last=0` until apply.
 
 **End users.** None.
 
@@ -32,17 +32,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore reproduced dest under-grant and recorded proceed policy. Product apply has not started. 5 items remain.
+Propose is apply-ready. Product fill has not landed. 5 items remain.
 
 Priority: P2 — real under-grant on new keys when elapsed-from-epoch cannot cover burst; typical small burst at wall-clock now coincidentally fills
-Reviewed head: 24bb998
+Reviewed head: 52ab848
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Explore done; CI in progress; no product apply |
-| CI proof | 3/6 | Checks queued on run 34742375672 |
+| Overall readiness | 3/6 | Propose complete; CI in progress; no product apply |
+| CI proof | 3/6 | Checks queued on run 34742430174 |
 | Local tests proof | N/A | Before implement |
 | Review resolution | 6/6 | OPEN PR; no review comments |
 
@@ -50,14 +50,15 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-13-tokenbucket-bug-idle-fill-burst pushed | `git` origin/2026-09-13-tokenbucket-bug-idle-fill-burst |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | fill-new-key-to-burst | `openspec/changes/fill-new-key-to-burst/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/56 | pr-host List |
-| CI | build 34742375672 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742375672 | pr-host CI |
+| CI | build 34742430174 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742430174 | pr-host CI |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-None.
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/openspec/changes/fill-new-key-to-burst/proposal.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/openspec/changes/fill-new-key-to-burst/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -66,7 +67,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from origin/master. Stub PR 56 is the durable card host. Explore reproduced dest Memory and fake Redis; propose is next.
+Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from origin/master. Stub PR 56 is the durable card host. Propose folded idle-fill into the existing tokenbucket specs; implement is next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -81,6 +82,7 @@ Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from or
 - [x] Stub PR open
 - [x] Requirement grounded on dest Lua and Memory
 - [x] Dest failure reproduced (Memory epoch/huge; fake Redis epoch)
+- [x] OpenSpec change `fill-new-key-to-burst` apply-ready
 
 ## Findings
 None.
@@ -93,9 +95,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 24bb99819bf953a5108f204dc2cef946c492e91f | Card must match the branch you measured |
+| Reviewed head | 52ab8489acf4d24d4e6e008b861aaaf6affc1703 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -103,19 +105,16 @@ None.
 ### Technical review
 Best possible solution: dest still uses Traefik `last=0` elapsed-from-epoch; the agreed fill is missing state = full burst then consume 1 on both stores.
 
-Do we have a high-confidence way to reproduce? Yes — throwaway dest `Allow(ctx, key)` at `Unix(0,0)` burst 5 left `tokens=-1 last=0`; huge burst `1e12` at `Unix(1_700_000_000)` left `1.699999999e9`; fake Redis missing hash matched (`last=0 tokens=-1`).
+Do we have a high-confidence way to reproduce? Yes — dest `Allow` at epoch burst 5 leaves `tokens=-1`; huge burst `1e12` leaves `1.7e9`.
 
 Is this the best way to solve the issue? Yes — seed Lua empty hash and Memory new `memEntry` full, keep `consumeOne` as consume math, match fake missing hash to Lua.
 
 ### Evidence
 What I checked:
-- dest `tokenbucket/lua.go` empty HGETALL leaves tokens=0 last=0
-- dest `tokenbucket/memory.go` `entry = &memEntry{}` then `consumeOne`
-- dest `tokenbucket/fake_redis_test.go` missing hash seeds zeros then `consumeOne`
-- throwaway `TestExploreMeasure_*` FAIL then deleted (Memory epoch/huge; fake Redis epoch)
-- spec `openspec/specs/std_go_tokenbucket_allow/spec.md` Idle fills to burst
-- research `knowledge/research/ext_traefik_ratelimiter_token-bucket/notes.md` Traefik Redis last=0
-- OPEN PR 56; CI run 34742375672 queued
+- `openspec validate fill-new-key-to-burst --strict` valid
+- FindSpecHost fold `std_go_tokenbucket_allow` and `std_go_tokenbucket_lua-eval`
+- `validate_artifact_names` OK
+- OPEN PR 56; CI run 34742430174 queued
 
 ### Rank-up moves
 None.

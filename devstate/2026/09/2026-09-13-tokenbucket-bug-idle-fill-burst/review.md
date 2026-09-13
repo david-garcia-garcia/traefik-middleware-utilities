@@ -9,3 +9,9 @@ phase: explore
 findings: dest Memory epoch tokens=-1 last=0; huge burst 1.7e9 not burst-1; fake Redis missing hash same
 fixed: none
 skipped: wait mapping, NaN rate, ttl truncation, last rewind, x/time/rate
+
+## propose (2026-09-13T06:21:19Z)
+phase: propose
+findings: none
+fixed: none
+skipped: wait mapping, NaN rate, ttl truncation, last rewind, x/time/rate
