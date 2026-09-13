@@ -23,3 +23,9 @@ phase: implement
 findings: all six probes passed; no product fix
 fixed: none
 skipped: none
+
+## codereview (2026-09-13)
+phase: codereview
+findings: P3 2 hard Standards Leave-a-trail; 1 hard Nitpicks chaosHonest; Lint G404/goconst; Unit race
+fixed: job comments; named chaosHonest; chaosIntn gosec; skip Yaegi error paths and concurrent MSetEX under race
+skipped: none

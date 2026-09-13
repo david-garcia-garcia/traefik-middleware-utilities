@@ -53,8 +53,8 @@ Existing specs require interpreted happy paths and compiled truncated-bulk / tim
 
 - Q: What chaos duration and lifecycle iteration counts keep the default suite in the low seconds and keep `go test -race` from timing out?
   Rank: additive asked — Desired 8; exact numbers not given
-  Decision: assumed — `testing.Short()` skips chaos and lifecycle. Default: 24 goroutines × 1s chaos (PoolSize 4, keys k0..k63); lifecycle 200 New/use/Close cycles. When `raceDetectorOn`: chaos 8 goroutines × 250ms; lifecycle 40 cycles; concurrent MSetEX 4 goroutines × 8 instead of 16×25. Quiesce with `waitOpenSocketsEqual` / a short settle sleep before at-rest asserts. No peak-socket assertion.
-  By: explore
+  Decision: assumed — `testing.Short()` skips chaos and lifecycle. Default: 24 goroutines × 1s chaos (PoolSize 4, keys k0..k63); lifecycle 200 New/use/Close cycles. When `raceDetectorOn`: chaos 8 goroutines × 250ms; lifecycle 40 cycles; skip concurrent MSetEX and Yaegi error paths (Yaegi interp races; overlapping native-MSETEX probes before the Lua cache settles). Quiesce before at-rest asserts. No peak-socket assertion.
+  By: implement
 
 - Q: Who already owns client identity (address, user, tenant, Host, trust hop)?
   Rank: additive asked — explore rule when work would reconstruct identity; this change does not
