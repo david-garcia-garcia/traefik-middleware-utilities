@@ -22,3 +22,11 @@ fixed: none
 skipped: none
 change: simpleredis-handshake-no-redial
 fold: std_go_simpleredis_tcp-session
+
+## implement (2026-09-13)
+phase: implement
+findings: none
+fixed: handshakeFailure at dial; shouldRetry type-assert; four pool_test repros
+skipped: none
+localTests: passed
+ci: in progress 34741831363
