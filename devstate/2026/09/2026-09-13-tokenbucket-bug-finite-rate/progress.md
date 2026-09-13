@@ -9,6 +9,6 @@ JobName: 2026-09-13-tokenbucket-bug-finite-rate
 | propose | [x] | [x] | 2026-09-13T06:17:32Z |
 | implement | [x] | [x] | 2026-09-13T06:20:57Z |
 | codereview | [x] | [x] | 2026-09-13T06:28:15Z |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
-| pullrequest | [ ] | [ ] | |
+| devdocsimpact | [x] | [x] | 2026-09-13T06:47:46Z |
+| archive | [x] | [x] | 2026-09-13T06:47:46Z |
+| pullrequest | [x] | [x] | 2026-09-13T06:47:46Z |

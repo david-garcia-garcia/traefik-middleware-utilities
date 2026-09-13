@@ -30,4 +30,22 @@ findings: P2 0, hard 2 (rename Inf test/file), 1 skipped (errRate string)
 fixed: `repro_inf_rate_test.go` / `TestRepro_InfRateRejected`
 skipped: errRate Error() text
 
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage Token bucket gotcha already produced in implement
+fixed: none this phase
+skipped: none remaining
+
+## archive (2026-09-13)
+phase: archive
+findings: fold std_go_tokenbucket_allow into live catalog
+fixed: live spec construction fail names NaN/Inf; archive move
+skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: CI 8/8 success run 34742922116
+fixed: ready title; final card
+skipped: no PR comments to reply
+
 

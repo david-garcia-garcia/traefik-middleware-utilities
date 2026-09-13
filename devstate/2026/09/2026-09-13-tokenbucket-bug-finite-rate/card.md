@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T06:28:15Z
+Developer review: ready for review — 2026-09-13T06:47:46Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** `validateClock` rejects NaN and Inf as `errRate`. Unit tests `TestRepro_NaNRateRejected` and `TestRepro_InfRateRejected` prove dest used to accept those rates; `TestRepro_NaNRateAllowFailOpen` skips after New rejects.
+**Developers.** `validateClock` rejects NaN and Inf as `errRate`. Unit tests `TestRepro_NaNRateRejected` and `TestRepro_InfRateRejected` prove dest used to accept those rates; `TestRepro_NaNRateAllowFailOpen` skips after New rejects. Live spec `std_go_tokenbucket_allow` construction fail now names non-finite rate.
 
 **End users.** None.
 
@@ -34,32 +34,32 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Seven-axis review applied the Inf test rename. Remote CI still queued.
+Apply, archive, and CI succeeded. Ready for review.
 
 Priority: P1 — serving a wrong public contract today
-Reviewed head: 9c94dc7
+Reviewed head: 6956f05
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI still queued |
-| CI proof | 3/6 | Checks queued after the review rename |
+| Overall readiness | 6/6 | CI succeeded; no open review comments |
+| CI proof | 6/6 | All 8 checks succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742922116 |
 | Local tests proof | N/A | prHost remote; CI proof covers remote |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-tokenbucket-bug-finite-rate pushed | `git push` `9c94dc7` |
-| OpenSpec | tokenbucket-reject-nonfinite-rate | `openspec/changes/tokenbucket-reject-nonfinite-rate/` |
+| Branch | 2026-09-13-tokenbucket-bug-finite-rate pushed | `git push` `6956f05` |
+| OpenSpec | tokenbucket-reject-nonfinite-rate | `openspec/changes/archive/2026-09-13-tokenbucket-reject-nonfinite-rate/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/52 | pr-host List |
-| CI | build 34742817732 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742817732 | pr-host CI |
-| Local tests | passed | `go test -short ./tokenbucket` after rename |
+| CI | build 34742922116 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742922116 | pr-host CI |
+| Local tests | passed | `go test -short ./...` |
 | PR comments | no comments | inventory empty |
 
 ## Specs
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/openspec/changes/tokenbucket-reject-nonfinite-rate/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/openspec/changes/archive/2026-09-13-tokenbucket-reject-nonfinite-rate/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -68,7 +68,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-finite-rate` from `origin/master`. Stub PR #52 is the durable card. Code review done; archive next after usage-doc impact.
+Local ticket, branch `2026-09-13-tokenbucket-bug-finite-rate` from `origin/master`. PR #52 is the durable card. CI run 34742922116 succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -79,9 +79,7 @@ Local ticket, branch `2026-09-13-tokenbucket-bug-finite-rate` from `origin/maste
 | Should `errRate` text change from "greater than 0" to mention finite? | additive incidental | assumed — keep the existing string; callers match `errors.Is` | explore |
 
 ## Before merge
-- [x] Land tokenbucket tests that fail on dest for NaN and Inf at `New`, then reject non-finite rate in `validateClock` as `errRate`
-- [ ] Archive the allow spec so the live catalog names non-finite rate
-- [ ] Wait for CI on PR #52
+None.
 
 ## Findings
 - [Standards 1](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_standards.md) — FIX — Inf test file renamed to `repro_inf_rate_test.go`. Path: `tokenbucket/repro_inf_rate_test.go`. Reply none.
@@ -103,23 +101,24 @@ Local ticket, branch `2026-09-13-tokenbucket-bug-finite-rate` from `origin/maste
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 9c94dc716c6ace547d08e25416139e166cdde84d | Card must match the branch you measured |
+| Reviewed head | 6956f0593900e162ee8be998ec1b8da4c816e3da | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: `validateClock` rejects NaN and Inf as `errRate`; Inf tests named for constructor reject, not dest Inf*0 fail-open.
+Best possible solution: `validateClock` rejects NaN and Inf as `errRate`; Inf tests named for constructor reject; live catalog names non-finite construction fail.
 
-Do we have a high-confidence way to reproduce? Yes — fail-then-pass on dest then the gate; rename kept the same assertions.
+Do we have a high-confidence way to reproduce? Yes — fail-then-pass: dest tests failed for NaN and +Inf New and NaN Allow fail-open; after the gate the same command passed; `go test -short ./...` passed; CI run 34742922116 succeeded.
 
 Is this the best way to solve the issue? Yes — the shared constructor gate is the owner. `errRate` string left as dest (public Error() text).
 
 ### Evidence
 What I checked:
-- FAIL then PASS on NaN/+Inf New (implement)
-- Standards 2 / Nitpicks 1 applied or skipped; Spec/Security/Performance/Dead/Coverage none
-- CI run 34742817732 queued on `9c94dc7`
+- FAIL `go test -short -count=1 -timeout 60s -run 'TestRepro_NaNRate|TestRepro_InfRate' ./tokenbucket` before the gate
+- PASS same command after `rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0)`
+- `go test -short ./...` passed
+- CI Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly all success on run 34742922116
 
 ### Rank-up moves
 None.
