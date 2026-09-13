@@ -1,7 +1,7 @@
 ## 1. Tests that fail on dest
 
-- [ ] 1.1 Copy `reclaim/repro_enforce_panic_close_test.go` from the caller tree; replace only `NewTable(graceNoRace)` with `New(Config{Grace: graceNoRace})` at both call sites
-- [ ] 1.2 Run `go test ./reclaim -run TestRepro_ -count=1 -v` and confirm both tests FAIL with `create of incarnation 2 ran while Close of 1 was blocked` (do not weaken them)
+- [x] 1.1 Copy `reclaim/repro_enforce_panic_close_test.go` from the caller tree; replace only `NewTable(graceNoRace)` with `New(Config{Grace: graceNoRace})` at both call sites
+- [x] 1.2 Run `go test ./reclaim -run TestRepro_ -count=1 -v` and confirm both tests FAIL with `create of incarnation 2 ran while Close of 1 was blocked` (do not weaken them)
 
 ## 2. Shared panic ending helper
 
