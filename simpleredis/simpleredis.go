@@ -4,6 +4,7 @@ package simpleredis
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -70,6 +71,7 @@ type SimpleRedis struct {
 	idleTimeout  time.Duration
 	dialTimeout  time.Duration
 	ioTimeout    time.Duration
+	logger       *slog.Logger
 
 	// idleConnsMu guards idleConns (the unused sockets waiting for reuse).
 	idleConnsMu sync.Mutex
@@ -101,8 +103,10 @@ func New(cfg Config) *SimpleRedis {
 		idleTimeout:     cfg.IdleTimeout,
 		dialTimeout:     cfg.DialTimeout,
 		ioTimeout:       cfg.IOTimeout,
+		logger:          cfg.Logger,
 	}
 	sr.ensureInUseTurns()
+	sr.logDebugOpen()
 	return sr
 }
 
@@ -115,9 +119,11 @@ func (sr *SimpleRedis) Close() {
 	idleConns := sr.idleConns
 	sr.idleConns = nil
 	sr.idleConnsMu.Unlock()
+	idleClosed := len(idleConns)
 	for _, conn := range idleConns {
 		conn.close()
 	}
+	sr.logDebugClose(idleClosed)
 }
 
 // isClosed is true after Close. Used so a closed-client unreachable does not spin MaxRetries.

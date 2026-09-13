@@ -1,6 +1,9 @@
 package simpleredis
 
-import "time"
+import (
+	"log/slog"
+	"time"
+)
 
 const (
 	defaultMaxIdleConns = 8
@@ -43,6 +46,8 @@ type Config struct {
 	MinRetryBackoff time.Duration
 	// MaxRetryBackoff caps backoff. 0 means 512ms; -1 means 0.
 	MaxRetryBackoff time.Duration
+	// Logger is optional slog. Nil (zero Config) means the client emits nothing. New does not install a discard handler. Never log Pass.
+	Logger *slog.Logger
 }
 
 // applyDefaults fills zero pool, timeout, and MaxRetries knobs. Min/max backoff sentinels stay 0/-1 for retryLimits.

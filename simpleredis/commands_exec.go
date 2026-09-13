@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -18,6 +19,9 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
+		if errorsIsCanceled(err) {
+			sr.logDebugCanceled(ctx)
+		}
 		return nil, err
 	}
 	maxRetries, minBackoff, maxBackoff := retryLimits(sr.maxRetries, sr.minRetryBackoff, sr.maxRetryBackoff)
@@ -27,17 +31,19 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 	var last error
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if err := contextStop(ctx); err != nil {
-			return nil, libraryTimeout(err, libraryOwnsDeadline)
+			return nil, sr.commandError(ctx, err, libraryOwnsDeadline)
 		}
 		if attempt > 0 {
-			if err := waitUntil(ctx, retryBackoff(attempt, minBackoff, maxBackoff)); err != nil {
-				return nil, libraryTimeout(err, libraryOwnsDeadline)
+			backoff := retryBackoff(attempt, minBackoff, maxBackoff)
+			sr.logDebugRetry(ctx, attempt, backoff, last)
+			if err := waitUntil(ctx, backoff); err != nil {
+				return nil, sr.commandError(ctx, err, libraryOwnsDeadline)
 			}
 		}
 		conn, err, handshakeFailed := sr.borrow(ctx)
 		if err != nil {
 			if sr.isClosed() || !shouldRetry(err, handshakeFailed) {
-				return nil, libraryTimeout(err, libraryOwnsDeadline)
+				return nil, sr.commandError(ctx, err, libraryOwnsDeadline)
 			}
 			last = err
 			continue
@@ -47,14 +53,14 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 			return values, nil
 		}
 		if !shouldRetry(err, false) {
-			return values, libraryTimeout(err, libraryOwnsDeadline)
+			return values, sr.commandError(ctx, err, libraryOwnsDeadline)
 		}
 		last = err
 	}
 	if last != nil {
-		return nil, libraryTimeout(last, libraryOwnsDeadline)
+		return nil, sr.commandError(ctx, last, libraryOwnsDeadline)
 	}
-	return nil, errTimeout
+	return nil, sr.commandError(ctx, errTimeout, libraryOwnsDeadline)
 }
 
 // runOnConn runs one command on conn and always releases it, including when do panics.
@@ -63,9 +69,21 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 func (sr *SimpleRedis) runOnConn(ctx context.Context, conn *pooledConn, args [][]byte) (values [][]byte, err error) {
 	reusable := false
 	defer func() { sr.release(conn, reusable) }()
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			return
+		}
+		sr.logError(MsgPanic, "panic", recovered, "stack", string(debug.Stack()), "host", sr.host)
+		panic(recovered)
+	}()
 	values, reusable, err = sr.do(ctx, conn, args)
 	if stop := contextStop(ctx); stop != nil {
 		reusable = false
+		if errorsIsCanceled(stop) {
+			sr.logDebugCanceled(ctx)
+			sr.logDebugSocketClosed(ctx, closedReasonCancel)
+		}
 		return nil, stop
 	}
 	return values, err

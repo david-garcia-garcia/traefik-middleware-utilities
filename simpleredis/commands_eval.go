@@ -29,6 +29,7 @@ func (sr *SimpleRedis) Eval(ctx context.Context, script string, digest string, k
 	values, err := sr.exec(ctx, evalArgv(evalShaVerb, digest, keys, args)...)
 	// Miss: engine has no matching digest (FLUSH, restart); EVAL is the only send of the body so the engine stores it.
 	if err != nil && strings.HasPrefix(err.Error(), noScriptPrefix) {
+		sr.logDebugNoScript(ctx)
 		return sr.exec(ctx, evalArgv(evalVerb, script, keys, args)...)
 	}
 	return values, err
