@@ -77,16 +77,15 @@ func (sr *SimpleRedis) msetexEval(ctx context.Context, names []string, values []
 // cachedGroupWrite returns the capability cache. Callers must not hold groupWriteMu.
 func (sr *SimpleRedis) cachedGroupWrite() groupWritePath {
 	sr.groupWriteMu.Lock()
-	path := sr.groupWrite
-	sr.groupWriteMu.Unlock()
-	return path
+	defer sr.groupWriteMu.Unlock()
+	return sr.groupWrite
 }
 
 // storeGroupWrite records native or lua for this client. Callers must not hold groupWriteMu.
 func (sr *SimpleRedis) storeGroupWrite(path groupWritePath) {
 	sr.groupWriteMu.Lock()
+	defer sr.groupWriteMu.Unlock()
 	sr.groupWrite = path
-	sr.groupWriteMu.Unlock()
 }
 
 // msetexArgs is native MSETEX: numkeys, pairs in order, then EX or EXAT, then the decimal TTL.
