@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-tokenbucket-bug-ttl-whole-seconds
+jobName: 2026-09-13-tokenbucket-bug-ttl-whole-seconds
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 018cb1341cf124ab7f55cf6d541db9f18fe77981946e5ebabcdb6f48c35d96e5
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
