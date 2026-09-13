@@ -2016,6 +2016,36 @@ func TestTable_ClosePanicAfterFuncDoesNotCrash(t *testing.T) {
 	}
 }
 
+func TestTable_ClosePanicAfterFuncDoesNotCrashEnforce(t *testing.T) {
+	if os.Getenv("RECLAIM_CLOSE_PANIC_ENFORCE_CHILD") == "1" {
+		h := &recHandler{}
+		tab := NewTable(0)
+		ctx, cancel := context.WithCancel(context.Background())
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
+			return "v", nil
+		}, Hooks{Close: func() { panic("close boom") }, EnforceCloseBeforeOpen: true}); err != nil {
+			os.Exit(2)
+		}
+		cancel()
+		deadline := time.Now().Add(waitBudget)
+		for time.Now().Before(deadline) && mappedKeys(tab) != 0 {
+			time.Sleep(time.Millisecond)
+		}
+		if _, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			return unstuckValue, nil
+		}, Hooks{}); err != nil {
+			os.Exit(4)
+		}
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_ClosePanicAfterFuncDoesNotCrashEnforce$") //nolint:gosec // G204: re-exec this test binary
+	cmd.Env = append(os.Environ(), "RECLAIM_CLOSE_PANIC_ENFORCE_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("AfterFunc Close panic crashed the process: %v\n%s", err, out)
+	}
+}
+
 func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 	h := &recHandler{}
 	tab := NewTable(graceNoRace)
@@ -2089,6 +2119,33 @@ func TestTable_ClosePanicIsReportedAtErrorAndStillDisposes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
 		Close: func() { panic("close boom") },
+	}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgHookPanic, "a")
+	waitKeyMsg(t, h, MsgDispose, "a")
+
+	lines := h.hookPanics()
+	if len(lines) != 1 {
+		t.Fatalf("%d hook panic lines, want 1", len(lines))
+	}
+	got := lines[0]
+	if got.level != slog.LevelError {
+		t.Errorf("hook panic logged at %v, want error", got.level)
+	}
+	if got.hook != "close" || got.panic != "close boom" {
+		t.Errorf("hook panic line %+v, want hook close panic close boom", got)
+	}
+}
+
+func TestTable_ClosePanicIsReportedAtErrorAndStillDisposesEnforce(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(0)
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
+		Close:                  func() { panic("close boom") },
+		EnforceCloseBeforeOpen: true,
 	}); err != nil {
 		t.Fatalf("open: %v", err)
 	}
