@@ -2,9 +2,13 @@ package simpleredis
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
+// TestEvalArgvAndIntegerReply is dest NOSCRIPT success: EVALSHA miss then EVAL of the body.
+// Those are two exec hops. Each hop binds its own overall deadline on purpose so EVAL still has a full command budget after EVALSHA.
+// Do not assert elapsed against one public-command budget; sharing remaining time can starve EVAL.
 func TestEvalArgvAndIntegerReply(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
@@ -23,6 +27,20 @@ func TestEvalArgvAndIntegerReply(t *testing.T) {
 	evalSha, eval := fake.evalCommandCounts()
 	if evalSha != 1 || eval != 1 {
 		t.Fatalf("after first Eval EVALSHA=%d EVAL=%d, want 1, 1", evalSha, eval)
+	}
+}
+
+// TestEvalNoscriptFallbackIsOwnExec documents the intended per-hop budget: EVALSHA then EVAL both run, and Eval succeeds.
+// Do not add a first-hop delay then stall, and do not fail because elapsed exceeds one public-command budget.
+func TestEvalNoscriptFallbackIsOwnExec(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	redis := New(Config{Host: addr})
+	if _, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
+		t.Fatalf("Eval NOSCRIPT fallback: %v", err)
+	}
+	evalSha, eval := fake.evalCommandCounts()
+	if evalSha != 1 || eval != 1 {
+		t.Fatalf("EVALSHA=%d EVAL=%d, want 1, 1", evalSha, eval)
 	}
 }
 
@@ -147,5 +165,21 @@ func TestEvalUsesCallerDigest(t *testing.T) {
 	}
 	if got[1] == ScriptSHA1Hex(script) {
 		t.Fatalf("EVALSHA used ScriptSHA1Hex(script), Eval hashed")
+	}
+}
+
+func TestEvalNullBulkIsNotMiss(t *testing.T) {
+	addr := startStaticRedis(t, "$-1\r\n")
+	client := New(Config{Host: addr, MaxRetries: -1})
+	script := "return false"
+	values, err := client.Eval(context.Background(), script, ScriptSHA1Hex(script), nil, nil)
+	if errors.Is(err, ErrMiss) {
+		t.Fatalf("Eval $-1: values=%q err=%v, want a result slot not redis:miss", values, err)
+	}
+	if err != nil {
+		t.Fatalf("Eval $-1: err=%v, want nil error", err)
+	}
+	if len(values) != 1 || values[0] != nil {
+		t.Fatalf("Eval $-1: values=%q, want one nil slot", values)
 	}
 }

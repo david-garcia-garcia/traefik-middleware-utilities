@@ -14,6 +14,9 @@ func (sr *SimpleRedis) Get(ctx context.Context, name string) ([]byte, error) {
 	if len(values) != 1 {
 		return nil, errIssue
 	}
+	if values[0] == nil {
+		return nil, errMiss
+	}
 	return values[0], nil
 }
 

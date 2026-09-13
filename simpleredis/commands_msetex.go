@@ -30,16 +30,22 @@ return 1`
 var msetexFallbackDigest = ScriptSHA1Hex(msetexFallbackScript)
 
 // MSetEX writes names and values with one shared TTL in seconds (native MSETEX or Lua fallback).
+// Native MSETEX is its own exec. Unknown-command then Eval starts with a full command budget (one or two further hops).
+// Each hop binds its own overall deadline on purpose; do not share remaining time across hops (that can starve EVAL).
 func (sr *SimpleRedis) MSetEX(ctx context.Context, names []string, values [][]byte, seconds int64) error {
 	return sr.msetex(ctx, names, values, "EX", seconds)
 }
 
 // MSetEXAt writes names and values with one shared Unix expiry (native MSETEX or Lua fallback).
+// Native MSETEX is its own exec. Unknown-command then Eval starts with a full command budget (one or two further hops).
+// Each hop binds its own overall deadline on purpose; do not share remaining time across hops (that can starve EVAL).
 func (sr *SimpleRedis) MSetEXAt(ctx context.Context, names []string, values [][]byte, unixSeconds int64) error {
 	return sr.msetex(ctx, names, values, "EXAT", unixSeconds)
 }
 
 // msetex validates the pair lists then sends native MSETEX, falling back to Eval on unknown-command.
+// Native MSETEX is its own exec. The Eval fallback must still have a full command budget after unknown-command.
+// Do not share remaining time across hops (that can starve EVAL).
 func (sr *SimpleRedis) msetex(ctx context.Context, names []string, values [][]byte, expireToken string, ttl int64) error {
 	if len(names) == 0 || len(names) != len(values) || len(names) > maxMSetEXPairs {
 		return errIssue

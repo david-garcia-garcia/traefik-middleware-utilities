@@ -3,9 +3,12 @@ package reclaim
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go/parser"
 	"go/token"
 	"log/slog"
+	"os"
+	"os/exec"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -18,6 +21,9 @@ import (
 
 // waitBudget guards a condition that should already be true. It is not a timing assertion.
 const waitBudget = 10 * time.Second
+
+// unstuckValue is what a later Open creates after a panicking hook unstuck the key.
+const unstuckValue = "next"
 
 // graceNoRace is long enough that a test asserting the reclaim branch cannot lose the grace race.
 const graceNoRace = 5 * time.Second
@@ -176,6 +182,40 @@ func (h *recHandler) events() [][2]string {
 	return out
 }
 
+// hookPanicLine is one recorded reclaim_hook_panic: its level and the attrs a reader needs.
+type hookPanicLine struct {
+	level slog.Level
+	key   string
+	hook  string
+	panic string
+}
+
+// hookPanics is every recorded reclaim_hook_panic line, in order.
+func (h *recHandler) hookPanics() []hookPanicLine {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []hookPanicLine
+	for _, r := range h.recs {
+		if r.Message != MsgHookPanic {
+			continue
+		}
+		line := hookPanicLine{level: r.Level}
+		r.Attrs(func(a slog.Attr) bool {
+			switch a.Key {
+			case "key":
+				line.key = a.Value.String()
+			case "hook":
+				line.hook = a.Value.String()
+			case "panic":
+				line.panic = a.Value.String()
+			}
+			return true
+		})
+		out = append(out, line)
+	}
+	return out
+}
+
 // requireLevels fails if any of the five reclaim messages was not logged at debug.
 func (h *recHandler) requireLevels(t *testing.T) {
 	t.Helper()
@@ -244,6 +284,27 @@ func waitUntil(t *testing.T, cond func() bool) {
 		time.Sleep(time.Millisecond)
 	}
 	t.Fatal("timeout waiting for condition")
+}
+
+// openReturned is Open that must come back. A leftover busy slot hangs until waitBudget, then the test fails.
+func openReturned(t *testing.T, tab *Table, ctx context.Context, key string, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
+	t.Helper()
+	type finished struct {
+		value any
+		err   error
+	}
+	done := make(chan finished, 1)
+	go func() {
+		value, err := tab.Open(ctx, key, logger, create, hooks)
+		done <- finished{value, err}
+	}()
+	select {
+	case got := <-done:
+		return got.value, got.err
+	case <-time.After(waitBudget):
+		t.Fatal("Open did not return; key left busy")
+		return nil, nil
+	}
 }
 
 // waitKeyMsg waits until msg is logged for key.
@@ -1837,5 +1898,238 @@ func TestTable_OpenLoggerLevelGatesPutDispose(t *testing.T) {
 	waitKeyMsg(t, &loud.recHandler, MsgDispose, "loud")
 	if got := countKeyMsg(loud.events(), MsgPut, "loud"); got != 1 {
 		t.Fatalf("%d put lines through a debug logger, want 1", got)
+	}
+}
+
+func TestTable_CreatePanicUnsticksKey(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	func() {
+		defer func() { _ = recover() }()
+		_, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			panic("create boom")
+		}, Hooks{})
+		want := fmt.Sprintf("reclaim: create %q: panic: %v", "a", "create boom")
+		if err == nil || err.Error() != want {
+			t.Fatalf("create panic: err %v, want %s", err, want)
+		}
+	}()
+	created := 0
+	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+		created++
+		return unstuckValue, nil
+	}, Hooks{})
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	if value != unstuckValue || created != 1 {
+		t.Fatalf("second open value %v created %d, want next created once", value, created)
+	}
+}
+
+func TestTable_NilCreateUnsticksKey(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	func() {
+		defer func() { _ = recover() }()
+		_, err := tab.Open(context.Background(), "a", recLogger(h), nil, Hooks{})
+		want := fmt.Sprintf("reclaim: create %q: nil create", "a")
+		if err == nil || err.Error() != want {
+			t.Fatalf("nil create: err %v, want %s", err, want)
+		}
+	}()
+	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+		return unstuckValue, nil
+	}, Hooks{})
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	if value != unstuckValue {
+		t.Fatalf("second open value %v, want next", value)
+	}
+}
+
+func TestTable_SleepPanicAfterFuncDoesNotCrash(t *testing.T) {
+	if os.Getenv("RECLAIM_SLEEP_PANIC_CHILD") == "1" {
+		var closed atomic.Int32
+		h := &recHandler{}
+		tab := NewTable(graceNoRace)
+		ctx, cancel := context.WithCancel(context.Background())
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
+			return "v", nil
+		}, Hooks{
+			Sleep: func() { panic("sleep boom") },
+			Close: func() { closed.Add(1) },
+		}); err != nil {
+			os.Exit(2)
+		}
+		cancel()
+		deadline := time.Now().Add(waitBudget)
+		for time.Now().Before(deadline) && closed.Load() == 0 {
+			time.Sleep(time.Millisecond)
+		}
+		if closed.Load() != 1 {
+			os.Exit(3)
+		}
+		if _, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			return unstuckValue, nil
+		}, Hooks{}); err != nil {
+			os.Exit(4)
+		}
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_SleepPanicAfterFuncDoesNotCrash$") //nolint:gosec // G204: re-exec this test binary
+	cmd.Env = append(os.Environ(), "RECLAIM_SLEEP_PANIC_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("AfterFunc Sleep panic crashed the process: %v\n%s", err, out)
+	}
+}
+
+func TestTable_ClosePanicAfterFuncDoesNotCrash(t *testing.T) {
+	if os.Getenv("RECLAIM_CLOSE_PANIC_CHILD") == "1" {
+		h := &recHandler{}
+		tab := NewTable(0)
+		ctx, cancel := context.WithCancel(context.Background())
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
+			return "v", nil
+		}, Hooks{Close: func() { panic("close boom") }}); err != nil {
+			os.Exit(2)
+		}
+		cancel()
+		deadline := time.Now().Add(waitBudget)
+		for time.Now().Before(deadline) && mappedKeys(tab) != 0 {
+			time.Sleep(time.Millisecond)
+		}
+		if _, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			return unstuckValue, nil
+		}, Hooks{}); err != nil {
+			os.Exit(4)
+		}
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_ClosePanicAfterFuncDoesNotCrash$") //nolint:gosec // G204: re-exec this test binary
+	cmd.Env = append(os.Environ(), "RECLAIM_CLOSE_PANIC_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("AfterFunc Close panic crashed the process: %v\n%s", err, out)
+	}
+}
+
+func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	var closed atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
+		return "v", nil
+	}, Hooks{
+		Wake:  func() { panic("wake boom") },
+		Close: func() { closed.Add(1) },
+	}); err != nil {
+		t.Fatalf("first open: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgOrphan, "a")
+	func() {
+		defer func() { _ = recover() }()
+		_, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			return "ignored", nil
+		}, Hooks{})
+		want := fmt.Sprintf("reclaim: wake %q: panic: %v", "a", "wake boom")
+		if err == nil || err.Error() != want {
+			t.Fatalf("wake panic: err %v, want %s", err, want)
+		}
+	}()
+	waitUntil(t, func() bool { return closed.Load() == 1 })
+	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+		return unstuckValue, nil
+	}, Hooks{})
+	if err != nil {
+		t.Fatalf("third open: %v", err)
+	}
+	if value != unstuckValue {
+		t.Fatalf("third open value %v, want next", value)
+	}
+}
+
+func TestTable_SleepPanicIsReportedAtError(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
+		Sleep: func() { panic("sleep boom") },
+		Close: func() {},
+	}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgHookPanic, "a")
+
+	lines := h.hookPanics()
+	if len(lines) != 1 {
+		t.Fatalf("%d hook panic lines, want 1", len(lines))
+	}
+	got := lines[0]
+	if got.level != slog.LevelError {
+		t.Errorf("hook panic logged at %v, want error", got.level)
+	}
+	if got.hook != "sleep" || got.panic != "sleep boom" || got.key != "a" {
+		t.Errorf("hook panic line %+v, want key a hook sleep panic sleep boom", got)
+	}
+	// Sleep never returned, so the incarnation was not parked asleep.
+	if n := countKeyMsg(h.events(), MsgOrphan, "a"); n != 0 {
+		t.Errorf("%d orphan lines after a Sleep panic, want 0", n)
+	}
+}
+
+func TestTable_ClosePanicIsReportedAtErrorAndStillDisposes(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(0)
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
+		Close: func() { panic("close boom") },
+	}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgHookPanic, "a")
+	waitKeyMsg(t, h, MsgDispose, "a")
+
+	lines := h.hookPanics()
+	if len(lines) != 1 {
+		t.Fatalf("%d hook panic lines, want 1", len(lines))
+	}
+	got := lines[0]
+	if got.level != slog.LevelError {
+		t.Errorf("hook panic logged at %v, want error", got.level)
+	}
+	if got.hook != "close" || got.panic != "close boom" {
+		t.Errorf("hook panic line %+v, want hook close panic close boom", got)
+	}
+}
+
+func TestTable_WakePanicIsReportedAsErrorNotLogged(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
+		Wake:  func() { panic("wake boom") },
+		Close: func() {},
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgOrphan, "a")
+
+	_, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+		return unstuckValue, nil
+	}, Hooks{})
+	if err == nil {
+		t.Fatal("wake panic did not surface as an Open error")
+	}
+	// Wake had a caller to answer, so the panic travels as that error and is not logged twice.
+	if n := len(h.hookPanics()); n != 0 {
+		t.Errorf("%d hook panic lines for a Wake panic, want 0 (it is the Open error)", n)
 	}
 }

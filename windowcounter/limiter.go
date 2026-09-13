@@ -32,12 +32,13 @@ type Limiter struct {
 	syncRate time.Duration
 	now      func() time.Time
 
-	mu      sync.Mutex
-	windows map[string]*windowState
-	closed  bool
-	ticker  *time.Ticker
-	stop    chan struct{}
-	wg      sync.WaitGroup
+	mu       sync.Mutex
+	windows  map[string]*windowState
+	closed   bool
+	stopping bool // true while stopFlushAndWait has cleared stop and is waiting for flushLoop
+	ticker   *time.Ticker
+	stop     chan struct{}
+	wg       sync.WaitGroup
 
 	lastFlushErr  error     // last failed flush, returned by buffered Take/Peek
 	flushFailedAt time.Time // when lastFlushErr was stored
@@ -94,16 +95,20 @@ type slidingWindow struct {
 
 // slidingAt builds the current and previous window keys and the previous-window weight.
 func (l *Limiter) slidingAt(key string, window time.Duration) (slidingWindow, error) {
-	windowSec := int64(window / time.Second)
-	if windowSec < 1 {
+	// Reject sub-second and fractional-second windows; do not truncate into buckets.
+	if window < time.Second {
 		return slidingWindow{}, errors.New("windowcounter: window must be at least one second")
 	}
+	if window%time.Second != 0 {
+		return slidingWindow{}, errors.New("windowcounter: window must be a whole number of seconds")
+	}
+	windowSec := int64(window / time.Second)
 	// Keys and previous-window weight at the caller's clock (whole seconds).
 	now := l.now()
 	windowStart := now.Unix() / windowSec * windowSec
 	previousStart := windowStart - windowSec
 	elapsed := time.Duration(now.Unix()-windowStart) * time.Second
-	weight := 1 - float64(elapsed)/float64(window)
+	weight := 1 - float64(elapsed)/(float64(windowSec)*float64(time.Second))
 	if weight < 0 {
 		weight = 0
 	}
@@ -311,11 +316,11 @@ func (l *Limiter) Sleep() {
 	l.stopFlushAndWait()
 }
 
-// Wake starts the flush ticker when sync_rate is positive and the limiter is not closed.
+// Wake starts the flush ticker when sync_rate is positive, the limiter is not closed, and Sleep or Close is not waiting for flushLoop.
 func (l *Limiter) Wake() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.closed || l.syncRate == 0 || l.stop != nil {
+	if l.closed || l.syncRate == 0 || l.stop != nil || l.stopping {
 		return
 	}
 	l.startFlushLocked()
@@ -357,13 +362,19 @@ func (l *Limiter) takeFlushTickerLocked() *time.Ticker {
 // stopFlushAndWait stops the ticker then waits for flushLoop. Caller must not hold l.mu.
 func (l *Limiter) stopFlushAndWait() {
 	l.mu.Lock()
+	l.stopping = true
 	ticker := l.takeFlushTickerLocked()
-	l.mu.Unlock()
 	if ticker == nil {
+		l.stopping = false
+		l.mu.Unlock()
 		return
 	}
+	l.mu.Unlock()
 	l.wg.Wait()
 	ticker.Stop()
+	l.mu.Lock()
+	l.stopping = false
+	l.mu.Unlock()
 }
 
 // flushLoop EVAL-flushes on each tick until stop.
