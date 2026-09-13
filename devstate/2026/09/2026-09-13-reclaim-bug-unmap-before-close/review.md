@@ -31,9 +31,19 @@ fixed: unmapAfterClose; dispose-before-ready; delete dispose; test trail comment
 skipped: none
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/50
 
-## devdocsimpact (2026-09-13)
-phase: devdocsimpact
+## archive (2026-09-13)
+phase: archive
 findings: none
 fixed: none
 skipped: none
+archived: openspec/changes/archive/2026-09-13-reclaim-close-before-unmap/
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/50
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+localTests: passed
+ci: 34743483895 succeeded
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/50
