@@ -98,8 +98,8 @@ func TestYaegi_HandshakeAuthEOFMatchesUnreachable(t *testing.T) {
 	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.HandshakeAuthEOFUnreachable(%q)`, addr))
-	if got != "true" {
-		t.Fatalf("interpreted IsUnreachable(handshake AUTH EOF) = %s, want true", got)
+	if got != "ok" {
+		t.Fatalf("interpreted IsUnreachable(handshake AUTH EOF) = %s, want ok", got)
 	}
 }
 
@@ -119,8 +119,8 @@ func TestYaegi_HandshakeAuthWrongPassMatchesNoAuth(t *testing.T) {
 	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.HandshakeAuthRejectNoAuth(%q)`, addr))
-	if got != "true" {
-		t.Fatalf("interpreted errors.Is(handshake WRONGPASS, ErrNoAuth) = %s, want true", got)
+	if got != "ok" {
+		t.Fatalf("interpreted errors.Is(handshake WRONGPASS, ErrNoAuth) = %s, want ok", got)
 	}
 }
 
@@ -132,12 +132,12 @@ func TestYaegi_MatchPackageUnreachableAndMiss(t *testing.T) {
 	writeGopathClientprobe(t, goPath)
 
 	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.DeadPortIsUnreachable(%q)`, "127.0.0.1:1"))
-	if got != "true" {
-		t.Fatalf("interpreted IsUnreachable(dead port) = %s, want true", got)
+	if got != "ok" {
+		t.Fatalf("interpreted IsUnreachable(dead port) = %s, want ok", got)
 	}
 	got = evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.MissingKeyIsMiss(%q)`, missAddr))
-	if got != "true" {
-		t.Fatalf("interpreted IsMiss(missing key) = %s, want true", got)
+	if got != "ok" {
+		t.Fatalf("interpreted IsMiss(missing key) = %s, want ok", got)
 	}
 }
 
@@ -467,7 +467,10 @@ func HandshakeAuthEOFUnreachable(host string) string {
 	if err.Error() != simpleredis.RedisUnreachable {
 		return "text:" + err.Error()
 	}
-	return strconv.FormatBool(simpleredis.IsUnreachable(err))
+	if !simpleredis.IsUnreachable(err) {
+		return "IsUnreachable"
+	}
+	return "ok"
 }
 
 // HandshakeAuthRejectNoAuth reports errors.Is(err, ErrNoAuth) for a WRONGPASS handshake failure.
@@ -480,7 +483,10 @@ func HandshakeAuthRejectNoAuth(host string) string {
 	if err.Error() != simpleredis.RedisNoAuth {
 		return "text:" + err.Error()
 	}
-	return strconv.FormatBool(errors.Is(err, simpleredis.ErrNoAuth))
+	if !errors.Is(err, simpleredis.ErrNoAuth) {
+		return "errors.Is"
+	}
+	return "ok"
 }
 
 // DeadPortIsUnreachable reports IsUnreachable for a TCP refuse before handshake.
@@ -490,7 +496,10 @@ func DeadPortIsUnreachable(host string) string {
 	if err == nil {
 		return "no-error"
 	}
-	return strconv.FormatBool(simpleredis.IsUnreachable(err))
+	if !simpleredis.IsUnreachable(err) {
+		return "IsUnreachable"
+	}
+	return "ok"
 }
 
 // MissingKeyIsMiss reports IsMiss for a GET of a missing key.
@@ -500,6 +509,9 @@ func MissingKeyIsMiss(host string) string {
 	if err == nil {
 		return "no-error"
 	}
-	return strconv.FormatBool(simpleredis.IsMiss(err))
+	if !simpleredis.IsMiss(err) {
+		return "IsMiss"
+	}
+	return "ok"
 }
 `
