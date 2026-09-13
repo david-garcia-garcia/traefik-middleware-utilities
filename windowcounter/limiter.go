@@ -94,16 +94,20 @@ type slidingWindow struct {
 
 // slidingAt builds the current and previous window keys and the previous-window weight.
 func (l *Limiter) slidingAt(key string, window time.Duration) (slidingWindow, error) {
-	windowSec := int64(window / time.Second)
-	if windowSec < 1 {
+	// Reject sub-second and fractional-second windows; do not truncate into buckets.
+	if window < time.Second {
 		return slidingWindow{}, errors.New("windowcounter: window must be at least one second")
 	}
+	if window%time.Second != 0 {
+		return slidingWindow{}, errors.New("windowcounter: window must be a whole number of seconds")
+	}
+	windowSec := int64(window / time.Second)
 	// Keys and previous-window weight at the caller's clock (whole seconds).
 	now := l.now()
 	windowStart := now.Unix() / windowSec * windowSec
 	previousStart := windowStart - windowSec
 	elapsed := time.Duration(now.Unix()-windowStart) * time.Second
-	weight := 1 - float64(elapsed)/float64(window)
+	weight := 1 - float64(elapsed)/(float64(windowSec)*float64(time.Second))
 	if weight < 0 {
 		weight = 0
 	}

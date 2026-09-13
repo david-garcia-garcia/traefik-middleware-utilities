@@ -10,6 +10,9 @@ import (
 	"testing"
 )
 
+// redisExpireCommand is the Redis EXPIRE verb the fake records for TTL assertions.
+const redisExpireCommand = "EXPIRE"
+
 // testFakeRedis is an in-process RESP server for limiter unit tests.
 type testFakeRedis struct {
 	mu         sync.Mutex
@@ -67,7 +70,7 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				break
 			}
 			_, _ = fmt.Fprintf(conn, ":%d\r\n", afterIncr)
-		case "EXPIRE", "EXPIREAT":
+		case redisExpireCommand, "EXPIREAT":
 			f.lastExpire = append([]string(nil), args...)
 			_, _ = io.WriteString(conn, ":1\r\n")
 		case "EVALSHA":
