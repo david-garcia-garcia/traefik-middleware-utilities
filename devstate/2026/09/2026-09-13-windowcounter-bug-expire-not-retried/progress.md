@@ -8,7 +8,7 @@ JobName: 2026-09-13-windowcounter-bug-expire-not-retried
 | explore | [x] | [x] | 2026-09-13T07:09:42Z |
 | propose | [x] | [x] | 2026-09-13T07:13:12Z |
 | implement | [x] | [x] | 2026-09-13T07:17:26Z |
-| codereview | [x] | [ ] | |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-13T07:24:38Z |
+| devdocsimpact | [x] | [x] | 2026-09-13T07:24:38Z |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
