@@ -298,6 +298,26 @@ When a command’s reply is a short bulk read (the peer announces more payload b
 - **THEN** that Get returns those bytes
 - **AND** the idle pool was empty after the truncated call
 
+### Requirement: Leftover unread reply is not returned to the idle pool
+When a command’s reply is one complete RESP value and unread bytes remain on that connection, the session SHALL return that decoded value to the caller and SHALL NOT return that socket to the idle pool. The session MUST NOT drain leftover bytes to resynchronise. A later command on the same client SHALL dial a new connection when the idle pool is empty after that discard. A sequential burst of Gets against a peer that writes exactly one complete reply per command SHALL still reuse one connection. When unread bytes remain before the next command is written on the same connection (AUTH then SELECT on a newly dialed socket), the session SHALL NOT write that next command on that socket.
+
+#### Scenario: Stray extra bulk is not pooled
+- **WHEN** `MaxRetries` is `-1`
+- **AND** `PoolSize` is `1`
+- **AND** a Get receives a complete bulk for its own key plus one extra well-formed bulk
+- **THEN** that Get returns the bytes for its own key
+- **AND** the idle pool is empty after that call
+
+#### Scenario: Next command after leftover dials a new connection
+- **WHEN** that leftover Get has returned
+- **AND** a later Get is issued for another key against a peer that writes one complete bulk per command
+- **THEN** that Get returns the bytes for its own key
+- **AND** the peer accepted a new TCP connection for that later Get
+
+#### Scenario: Compliant sequential Gets reuse one connection
+- **WHEN** a client issues 25 sequential Gets against a peer that writes exactly one complete reply per command
+- **THEN** the peer accepted exactly one TCP connection
+
 ### Requirement: Peer-closed idle socket is retried
 When a pooled idle TCP connection is closed by the Redis or Dragonfly peer while it is still younger than thirty seconds, the next command SHALL treat that failure as a dead connection (not a timeout) and SHALL retry on a new dial under the go-redis-shaped `MaxRetries` policy. An I/O end-of-file on that reused socket MUST map to an error whose `Error()` text is `redis:unreachable`. A timeout MUST NOT be retried. Closing the client-side file descriptor of a pooled socket is a distinct failure and MUST remain a separate proof; that path MUST NOT stand in for peer close. If the retry cannot obtain a connection, the command SHALL return `redis:unreachable`. The dead socket MUST NOT be returned to the idle pool.
 
