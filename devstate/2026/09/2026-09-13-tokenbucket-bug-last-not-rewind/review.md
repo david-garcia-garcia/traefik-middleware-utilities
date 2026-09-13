@@ -12,3 +12,9 @@ findings: dest FAIL sequential + goroutines_stale_samples_before_fresh_lock (las
 fixed: explore.md with Rank/Decision on three open questions
 skipped: product apply
 
+## propose (2026-09-13)
+phase: propose
+findings: FindSpecHost fold allow + lua-eval; change tokenbucket-last-not-rewind valid
+fixed: proposal, specs, design, tasks
+skipped: product apply
+
