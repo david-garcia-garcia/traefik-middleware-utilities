@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T06:28:40Z
+Developer review: ready for review — 2026-09-13T06:47:44Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** `Redis.Allow` returns `errEvalWait` (`tokenbucket: eval wait is not a number`) when the 3-field Eval wait is `nan`, `+Inf`, `-Inf`, or `inf`. `TestRepro_EvalWaitNaNFailOpen` proves it. Usage Gotcha on `std_go_tokenbucket.md`.
+**Developers.** `Redis.Allow` returns `errEvalWait` (`tokenbucket: eval wait is not a number`) when the 3-field Eval wait is `nan`, `+Inf`, `-Inf`, or `inf`. `TestRepro_EvalWaitNaNFailOpen` proves it. Usage Gotcha on `std_go_tokenbucket.md`. Live spec `std_go_tokenbucket_allow` has the finite-wait rule.
 
 **End users.** None.
 
@@ -33,17 +33,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Implement landed the finite check. Seven-axis review of `origin/master...HEAD` is clean.
+Ready for review. 0 items remain.
 
 Priority: P1 — serving a wrong public contract today
-Reviewed head: 99cabd4
+Reviewed head: 1f9e458
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Remote CI still queued |
-| CI proof | 3/6 | Checks queued on the implement push |
+| Overall readiness | 6/6 | CI succeeded; no open comments |
+| CI proof | 6/6 | build 34742879232 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742879232 |
 | Local tests proof | N/A | `prHost` remote; CI proof covers remote |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
@@ -53,7 +53,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-13-tokenbucket-bug-eval-finite-wait pushed | `git` / pr-host |
 | OpenSpec | tokenbucket-eval-finite-wait (archived) | `openspec/changes/archive/2026-09-13-tokenbucket-eval-finite-wait/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/53 | pr-host List |
-| CI | build 34742576798 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742576798 | pr-host check_runs |
+| CI | build 34742879232 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742879232 | pr-host check_runs (head `1f9e458`) |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | pr-host get_comments empty |
 
@@ -67,7 +67,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait`, stub PR #53. Usage impact: none (Gotcha already in `std_go_tokenbucket.md`). Finite-wait rule is in live `std_go_tokenbucket_allow`. Next is pullrequest (drop WIP, wait for CI).
+Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait`, PR #53 against `master`. CI on HEAD succeeded. Finite Eval wait is `errEvalWait` on dest’s three-return `Allow`.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -97,7 +97,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 99cabd4714bef5f5abc230d18684679f88fe4cbe | Card must match the branch you measured |
+| Reviewed head | 1f9e4586f7528bb6eae74dfdf89468822f34dfb2 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -111,11 +111,11 @@ Is this the best way to solve the issue? Yes vs dest: one finite check, same sen
 
 ### Evidence
 What I checked:
-- Seven-axis review: all `none.`
-- FAIL then PASS: `go test -short -count=1 -timeout 60s -run TestRepro_EvalWaitNaNFailOpen ./tokenbucket`
+- FAIL then PASS: `go test -short -count=1 -timeout 60s -run TestRepro_EvalWaitNaNFailOpen ./tokenbucket` — FAIL all four fail-open, then PASS
 - `go test -short -count=1 ./tokenbucket` passed after the fix
 - `tokenbucket/redis.go` finite check (`8f38739`)
-- CI run 34742576798 queued (pr-host check_runs)
+- Archive fold into `openspec/specs/std_go_tokenbucket_allow/spec.md`
+- CI build 34742879232 success (Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly)
 
 ### Rank-up moves
 None.

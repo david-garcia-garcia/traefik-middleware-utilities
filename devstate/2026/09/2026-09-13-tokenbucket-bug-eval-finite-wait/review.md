@@ -39,3 +39,9 @@ phase: archive
 findings: fold std_go_tokenbucket_allow
 fixed: live spec + archive move
 skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: CI succeeded on HEAD 1f9e458
+fixed: none
+skipped: none
