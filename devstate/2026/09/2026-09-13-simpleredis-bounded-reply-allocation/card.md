@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T17:06:40Z
+Developer review: in progress — 2026-09-13T17:12:03Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None yet versus DestBranch. Prepare only: this branch will stop the RESP decoder from sizing `make` off an in-cap `$` or `*` header before any payload byte arrives.
+**Developers.** None yet versus DestBranch. Explore recorded a chunked `readBulk` and append-on-array-decode shape; product code is unchanged.
 
 **End users.** None.
 
@@ -26,17 +26,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Prepare is qualified. Product allocation change is not on this branch yet. Explore is next.
+Explore is written. Product allocation change is not on this branch yet. Propose is next. Simplicity gate: the recorded shape is small enough to implement.
 
 Priority: P2 — real operator pain (Traefik OOM from a handful of header bytes), limited blast until a hostile or buggy peer (or a desynced socket)
-Reviewed head: 834c38a
+Reviewed head: 33ce43f
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 2/6 | Stub PR is open; Unit already failed on the empty start commit; product fix not landed |
-| CI proof | 2/6 | Unit failed on start commit `e15020f` ([Unit](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34770502038/job/103759104644)); head `834c38a` not seen |
+| Overall readiness | 3/6 | Explore landed; CI on this head is still running; product fix not landed |
+| CI proof | 3/6 | build 34770862044 in progress ([Unit](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34770862044/job/103760084138)) |
 | Local tests proof | N/A | Before implement (`localTests: none`) |
 | Review resolution | 6/6 | OPEN PR, no reviewer comments |
 
@@ -45,8 +45,8 @@ Owner decision: None.
 | --- | --- | --- |
 | Branch | 2026-09-13-simpleredis-bounded-reply-allocation pushed | `git` |
 | OpenSpec | none | `openspec/` |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/86 | pr-host List/Create |
-| CI | build 34770502038 Unit failure (empty start commit) https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34770502038/job/103759104644 | pr-host CI |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/86 | pr-host List |
+| CI | build 34770862044 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34770862044 | pr-host CI |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -60,10 +60,15 @@ None.
 None.
 
 ## How this fits together
-Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → stub PR 86 against `master`. CI on the empty start commit already reported a Unit failure; the product decoder change is not in the diff yet.
+Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → stub PR 86 against `master`. Explore recorded the decode shape; propose will write the spec delta.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| What first-chunk size keeps dest decode alloc ceilings while stopping header-only 64 MiB `make`? | bounded asked | assumed — `bulkReadChunk = 128 << 10` so 100 KB stays one-shot; a 64 MiB header with no payload allocates 128 KiB then short-reads | explore |
+| What array start cap keeps `TestAllocDecodeArray10` while stopping a 1 Mi slot `make`? | bounded asked | assumed — `arrayGrowChunk = 16` so ten elements keep `cap == count`; `make([][]byte, 0, count)` is the same 24 MiB attack | explore |
+| Does replacing the accepted-length make+ReadFull SHALL count as stopping at the simplicity gate? | bounded asked | assumed — no; updating the three contract files is the job. A common-path alloc/ns regression at implement is the remaining stop signal | explore |
+| Who already owns client identity (address, user, tenant, Host, trust hop) for this change? | additive incidental | assumed — none. The decoder classifies a RESP header; it does not set or rebuild a host fact | explore |
 
 ## Before merge
 - [ ] Keep SimpleRedis reply memory proportional to bytes the peer actually sent, not the declared in-cap `$` or `*` length
@@ -83,26 +88,27 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 834c38a7db5b7d0d945d42a1dbacf9787e2167cc | Card must match the branch you measured |
+| Reviewed head | 33ce43f240a0d1978f2e7116393a831667f981d3 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not on DestBranch yet. Dest still `make`s from the declared in-cap length before reading payload.
+Best possible solution: not on DestBranch yet. Dest still `make`s from the declared in-cap length before reading payload. Explore's shape is chunked `ReadFull` with first allocation `min(need, 128 KiB)` and array append with start cap 16.
 
-Do we have a high-confidence way to reproduce? Yes, `readBulk` `make([]byte, length+2)` and `readReply` `make([][]byte, count)` on dest `simpleredis/resp.go`; caller-only tagged test `TestBugPeerControlledAllocationAmplification` measured the amplification.
+Do we have a high-confidence way to reproduce? Yes. Tagged `TestBugPeerControlledAllocationAmplification` failed on dest: 11 bytes → 67,144,992 allocated; 10 bytes → 25,188,272 (`go test -tags simpleredis_bugs`).
 
-Is this the best way to solve the issue? Not decided. Ticket asks grow-as-you-go; live spec requires make+ReadFull for accepted lengths. Explore/propose must weigh that against the common-path alloc ceilings.
+Is this the best way to solve the issue? Yes versus DestBranch: do not `make` the announced size before bytes arrive; keep the common-path one-shot so `$17` and `$102400` benches stay. `io.CopyN` would add a 32 KiB scratch and miss `decodeBulkBytes`.
 
 ### Evidence
 What I checked:
-- Dest `simpleredis/resp.go` `readBulk` / `readReply` `*` case (`origin/master` `a239a9e`, worktree `834c38a`)
+- Dest `simpleredis/resp.go` `readBulk` / `readReply` `*` case (`origin/master` `a239a9e`, worktree `33ce43f`)
+- Tagged reproduction failed as claimed (`TestBugPeerControlledAllocationAmplification`)
 - Decode spec SHALL make+ReadFull (`openspec/specs/std_go_simpleredis_resp-decode/spec.md`)
-- tcp-session short-read still `io.ReadFull` (`openspec/specs/std_go_simpleredis_tcp-session/spec.md`)
+- Alloc ceilings in `simpleredis/bench_test.go` (`decodeBulkBytes = 112`, `decode100KBBytes = 127843`, `decodeArrayBytes = 344`)
 - Research: `knowledge/research/ext_redis_resp_bulk-string/`, `ext_redis_proto_max-bulk-len/`, `ext_go-redis_proto_reader-limit/`
-- OPEN PR 86, no comments (GitHub MCP)
-- CI Unit failed on `e15020f` (run 34770502038)
+- OPEN PR 86, no comments
+- CI build 34770862044 in progress on `33ce43f`
 
 ### Rank-up moves
 None.
