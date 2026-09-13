@@ -54,6 +54,7 @@ func (c clockConfig) ttlSeconds() int64 {
 
 // consumeOne applies one Traefik Lua consume. last and now are Unix microseconds.
 func consumeOne(tokens float64, last int64, limitPerMicro, burst float64, nowMicro, maxDelayMicro int64) (newTokens float64, newLast int64, waitMicro float64) {
+	previousLast := last
 	// Clamp last so a clock jump backward does not invent negative elapsed.
 	if nowMicro < last {
 		last = nowMicro
@@ -75,7 +76,12 @@ func consumeOne(tokens float64, last int64, limitPerMicro, burst float64, nowMic
 			}
 		}
 	}
-	return tokens, nowMicro, waitMicro
+	// Persist the later of previous last and now so a backward clock does not rewind last.
+	persistLast := nowMicro
+	if previousLast > persistLast {
+		persistLast = previousLast
+	}
+	return tokens, persistLast, waitMicro
 }
 
 // waitDuration converts Lua wait microseconds to a Go duration.
