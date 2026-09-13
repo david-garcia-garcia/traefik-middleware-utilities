@@ -8,7 +8,7 @@ JobName: 2026-09-13-simpleredis-structured-logging
 | explore | [x] | [x] | 2026-09-13T16:03:02Z |
 | propose | [x] | [x] | 2026-09-13T16:32:10Z |
 | implement | [x] | [x] | 2026-09-13T16:32:10Z |
-| codereview | [ ] | [ ] | |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
+| codereview | [x] | [ ] | |
+| devdocsimpact | [x] | [ ] | |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
