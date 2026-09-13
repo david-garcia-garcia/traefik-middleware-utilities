@@ -12,3 +12,9 @@ findings: dest accepts NaN and +Inf at New; Allow fail-open; -Inf already errRat
 fixed: none (think-only)
 skipped: product apply
 
+## propose (2026-09-13)
+phase: propose
+findings: fold std_go_tokenbucket_allow; tests-first tasks
+fixed: OpenSpec change tokenbucket-reject-nonfinite-rate
+skipped: product apply
+

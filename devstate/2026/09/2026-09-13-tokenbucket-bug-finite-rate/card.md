@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T06:14:31Z
+Developer review: in progress — 2026-09-13T06:17:32Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** OpenSpec change `tokenbucket-reject-nonfinite-rate` folds construction fail for NaN and Inf into `std_go_tokenbucket_allow`. Product apply not landed.
 
 **End users.** None.
 
@@ -34,10 +34,10 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore reproduced the dest fail-open; product apply has not started. Propose is next.
+Propose artifacts are apply-ready; product apply has not started.
 
 Priority: P1 — serving a wrong public contract today
-Reviewed head: c2a691c
+Reviewed head: f1f97cf
 Owner decision: None.
 
 ## Review scores
@@ -51,15 +51,15 @@ Owner decision: None.
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-tokenbucket-bug-finite-rate pushed | `git push` `c2a691c` |
-| OpenSpec | none | no change folder |
+| Branch | 2026-09-13-tokenbucket-bug-finite-rate pushed | `git push` `f1f97cf` |
+| OpenSpec | tokenbucket-reject-nonfinite-rate | `openspec/changes/tokenbucket-reject-nonfinite-rate/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/52 | pr-host List |
-| CI | build 34742230790 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742230790 | pr-host CI |
+| CI | build 34742382649 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742382649 | pr-host CI |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | inventory empty |
 
 ## Specs
-None.
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/openspec/changes/tokenbucket-reject-nonfinite-rate/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -68,7 +68,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-finite-rate` from `origin/master`. Stub PR #52 is the durable card. Explore reproduced NaN/+Inf constructor accept; propose next.
+Local ticket, branch `2026-09-13-tokenbucket-bug-finite-rate` from `origin/master`. Stub PR #52 is the durable card. Propose is apply-ready; implement next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -93,9 +93,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | c2a691cbe8a0fcf07d60ef75e9ef6736c0455800 | Card must match the branch you measured |
+| Reviewed head | f1f97cfefda71fc0c6d67af66f1bc0b0cdd29da1 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -103,19 +103,15 @@ None.
 ### Technical review
 Best possible solution: Dest still accepts NaN and Inf at `New`; the ticket’s `validateClock` finite-rate gate is the how.
 
-Do we have a high-confidence way to reproduce? Yes — throwaway `go test` on dest: `NewMemory(NaN)` and `NewRedis(NaN)` return a limiter; five frozen-clock Allows all `true, 0, nil`; `NewMemory(+Inf)` then second Allow at elapsed=0 also admits; `-Inf` already returns `errRate`.
+Do we have a high-confidence way to reproduce? Yes — throwaway `go test` on dest: NaN and +Inf constructors succeed and Allow fail-opens; `-Inf` already `errRate`.
 
-Is this the best way to solve the issue? Yes — special-casing `Allow` or `consumeOne` for NaN tokens would paper over a constructor that should have failed, and +Inf is not an unlimited-rate constructor.
+Is this the best way to solve the issue? Yes — special-casing `Allow` or `consumeOne` would paper over a constructor that should have failed.
 
 ### Evidence
 What I checked:
-- `NaN <= 0` false; `+Inf > 0` true; `-Inf <= 0` true (`go test` throwaway, then deleted)
-- `NewMemory(NaN)` limiter=true err=nil; five Allows all allowed=true wait=0
-- `NewMemory(+Inf)` limiter=true; Allow[0] and Allow[1] at frozen now both true
-- `NewMemory(-Inf)` err=`tokenbucket: rate must be greater than 0`
-- `NewRedis(NaN)` limiter=true err=nil
-- `validateClock` rate `<= 0` only (`tokenbucket/clock.go`)
-- CI run 34742230790 queued after explore push
+- OpenSpec change `tokenbucket-reject-nonfinite-rate` validates strict
+- FindSpecHost fold `std_go_tokenbucket_allow` (high)
+- CI run 34742382649 queued after propose push
 
 ### Rank-up moves
 None.
