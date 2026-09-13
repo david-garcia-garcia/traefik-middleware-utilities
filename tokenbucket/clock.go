@@ -3,6 +3,7 @@ package tokenbucket
 
 import (
 	"errors"
+	"math"
 	"time"
 )
 
@@ -24,9 +25,9 @@ type clockConfig struct {
 	ttl      time.Duration
 }
 
-// validateClock rejects rate, burst, maxDelay, and ttl that would divide by zero, expire immediately, or disagree with Redis EXPIRE seconds.
+// validateClock rejects non-positive or non-finite rate, burst below 1, negative maxDelay, and ttl that would expire immediately or disagree with Redis EXPIRE seconds.
 func validateClock(rate float64, burst int64, maxDelay, ttl time.Duration) error {
-	if rate <= 0 {
+	if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
 		return errRate
 	}
 	if burst < 1 {
