@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T15:28:18Z
+Developer review: in progress — 2026-09-13T15:33:18Z
 
 ## What this changes
 **Operators.** None.
@@ -29,29 +29,29 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Prepare grounded the ticket and opened stacked stub PR #73. Product apply is not on this branch yet. 5 items remain.
+Explore recorded the extract shape and the four frozen semantics. Product apply is not on this branch yet. 5 items remain.
 
 Priority: P1 — a recovered panic inside `release` deadlocks the idle mutex for the process lifetime
-Reviewed head: 23bfdaf
+Reviewed head: e8c39e5
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI in progress; product apply not started |
-| CI proof | 3/6 | in progress [CI run 34765685325](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34765685325) |
+| Overall readiness | 1/6 | Explore committed; CI on that commit not seen yet |
+| CI proof | 1/6 | not seen on e8c39e5; prior stub run 34765760774 succeeded |
 | Local tests proof | N/A | `localTests: none` (before implement) |
 | Review resolution | 6/6 | OPEN PR #73, no reviewer comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-simpleredis-idle-mutex-defer pushed | `git` / GitHub |
+| Branch | 2026-09-13-simpleredis-idle-mutex-defer pushed | `git` HEAD e8c39e5 |
 | OpenSpec | none | `openspec/` |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/73 | pr-host Create |
-| CI | build 34765685325 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34765685325 | GitHub check runs |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/73 | GitHub |
+| CI | not seen | GitHub check runs after explore push |
 | Local tests | none | handoff.yaml localTests |
-| PR comments | no comments | inventory empty |
+| PR comments | no comments | comments: none |
 
 ## Specs
 None.
@@ -63,10 +63,12 @@ None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-13-simpleredis-idle-mutex-defer` from `origin/2026-09-13-simpleredis-panic-safe-release` → GitHub PR #73 (base that dest, stacked on #71, must merge after it) → CI run 34765685325 in progress.
+Local spec → branch `2026-09-13-simpleredis-idle-mutex-defer` from `origin/2026-09-13-simpleredis-panic-safe-release` → GitHub PR #73 (base that dest, stacked on #71, must merge after it) → explore recorded.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| Can a panic-inside-`parkIdleConn` test be written with no production API change? | additive asked | assumed — no. Existing pool reuse, live-under-cap, OverFrees, cancel-close, and panic-in-`do` tests cover the four semantics. A panic inside the locked section would need a production hook, which the requirement forbids. | explore |
 
 ## Before merge
 - [ ] [P1] Extract `parkIdleConn` so `release` unlocks `idleConnsMu` via defer without holding the lock across close or `freeInUseTurn`
@@ -75,6 +77,7 @@ None.
 - [ ] Full local suite including Yaegi tests, `go vet`, pool/release tests `-count=5`, measured CI green
 - [ ] Merge after #71 (`2026-09-13-simpleredis-panic-safe-release`)
 - [x] Stub PR #73 opened with base `2026-09-13-simpleredis-panic-safe-release`
+- [x] Explore: extract `parkIdleConn`; no panic-inside-lock test; fold tcp-session delta; leave Close / takeIdleConn / AfterFunc / OverFrees
 
 ## Findings
 None.
@@ -87,30 +90,30 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
+| Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 23bfdafedb60598149531e0a0fdfc31146f58710 | Card must match the branch you measured |
+| Reviewed head | e8c39e58d0b3be4944c10e1be3f7cc02266545dd | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not applied versus dest yet; dest still hand-unlocks `idleConnsMu` in `release`.
+Best possible solution: not applied versus dest yet; dest still hand-unlocks `idleConnsMu` in `release`. Explore keeps the extract: `parkIdleConn` owns the lock and defer, `release` closes and frees the turn after it returns.
 
-Do we have a high-confidence way to reproduce? Yes, dest `release` has two manual unlocks after `idleConnsMu.Lock()` with close and `freeInUseTurn` after unlock (`simpleredis/pool.go`).
+Do we have a high-confidence way to reproduce? Not as a live panic (no seam without a production hook). Dest `release` has two manual unlocks after `idleConnsMu.Lock()` with close and `freeInUseTurn` after unlock (`simpleredis/pool.go`). That is Go mutex semantics.
 
 Is this the best way to solve the issue? Yes — extract the locked decision so defer owns the unlock, then close and free the turn after return. A top-of-`release` `defer Unlock()` is a regression.
 
 ### Evidence
 What I checked:
-- Dest HEAD `b5d241cb12b8b28afe43cb92f42ebf50b38eda36` (`origin/2026-09-13-simpleredis-panic-safe-release`)
-- `simpleredis/pool.go` `release` two manual unlocks (path, SHA `b5d241c`)
-- `simpleredis/commands_msetex.go` two manual `groupWriteMu` unlocks (path, SHA `b5d241c`)
-- `simpleredis/BUGS.md` section 2 still says exec releases without defer; ticket quote not found (path, SHA `b5d241c`)
-- `simpleredis/yaegi_defer_test.go` and `knowledge/devdocs/std_go_simpleredis.md` already record defer-on-panic (SHA `b5d241c`)
-- `simpleredis/resp.go` / `commands_exec.go` stale #29 comments gone (SHA `b5d241c`)
-- PR #73 comments empty (GitHub MCP)
-- CI run 34765685325 in progress (GitHub check runs)
+- Dest `simpleredis/pool.go` `release` two manual unlocks; `takeIdleConn` already defers unlock; `Close` already closes sockets outside the lock
+- One `release` call site: `commands_exec.go` `runOnConn`
+- `simpleredis/commands_msetex.go` two manual `groupWriteMu` unlocks
+- `simpleredis/BUGS.md` section 2 still says exec releases without defer; ticket quote not found
+- `knowledge/devdocs/std_go_simpleredis.md` and `openspec/specs/std_go_simpleredis_tcp-session/spec.md` already have the Yaegi-defer finding; no stale claim
+- `simpleredis/resp.go` / `commands_exec.go` stale #29 comments gone
+- In-flight `2026-09-13-simpleredis-close-abandoned-socket` `release` adds `deregisterCheckout` then dest's body
+- Prior stub CI run 34765760774 all 8 checks success (before this explore commit)
 
 ### Rank-up moves
 None.
