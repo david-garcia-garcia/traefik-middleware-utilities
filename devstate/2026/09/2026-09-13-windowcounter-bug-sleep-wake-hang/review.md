@@ -42,3 +42,9 @@ findings: fold std_go_windowcounter_sync-flush; moved archive/2026-09-13-windowc
 fixed: live spec Sleep Wake Close; folder move
 skipped: none
 
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: CI run 34745139716 all 8 checks success; title 🐛 fix(windowcounter): Sleep wins concurrent Wake
+fixed: PR summary ready for review
+skipped: none
+
