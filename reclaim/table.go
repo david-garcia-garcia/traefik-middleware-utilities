@@ -60,7 +60,7 @@ type Hooks struct {
 //
 // The last-holder drop sleeps the value and writes reclaim_orphan, then either expires at zero
 // grace or starts waitGraceOrWake. Close and reclaim_dispose stay after orphan, in that order.
-// A Sleep panic aborts instead: Close and unmap, no orphan. Those lines cannot be reordered,
+// A Sleep panic aborts instead: Close and unmap (order follows stored EnforceCloseBeforeOpen), no orphan. Those lines cannot be reordered,
 // because one goroutine writes them in that order.
 type Table struct {
 	mu    sync.Mutex
@@ -195,6 +195,32 @@ func (t *Table) endMappedClose(key string, incarnation *slot, storedHooks Hooks,
 	t.unmapAfterClose(key, incarnation)
 }
 
+// endBusyAfterPanic ends a busy slot after a recovered Sleep or Wake panic. createErr is what
+// waiters already parked on this transition replay after ready closes (nil means they create).
+// When the stored EnforceCloseBeforeOpen is set, the key stays mapped slotBusy across Close so a
+// later Open waits, then creates. Wake waiters still hold this incarnation and replay createErr;
+// a later Open parks on a closer that occupies the key until Close returns. Otherwise dest order:
+// unmap first, then Close. Close never runs under t.mu.
+func (t *Table) endBusyAfterPanic(key string, incarnation *slot, storedHooks Hooks, logger *slog.Logger, createErr error) {
+	if storedHooks.EnforceCloseBeforeOpen {
+		t.mu.Lock()
+		incarnation.createErr = createErr
+		incarnation.state = slotGone
+		oldReady := incarnation.ready
+		// Occupy the key for the Close window. Waiters already parked on oldReady replay
+		// createErr from this incarnation; a later Open finds closer and creates after Close.
+		closer := &slot{state: slotBusy, ready: make(chan struct{}), logger: logger}
+		t.items[key] = closer
+		t.mu.Unlock()
+		close(oldReady)
+		dispose(key, storedHooks, logger)
+		t.unmapAfterClose(key, closer)
+		return
+	}
+	t.endBusySlot(key, incarnation, createErr)
+	dispose(key, storedHooks, logger)
+}
+
 // Open returns the stored value for key, creating it once, and tracks ctx until it is done.
 // create takes no arguments: Yaegi cannot call func(context.Context) (any, error).
 // logger is required; it is the only logger for this Open and is stored on the slot for orphan
@@ -309,8 +335,7 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 		// This Open has a caller to answer, so it reports the panic as its error. A waiter parked
 		// on ready replays it from createErr rather than resuming a value Wake left half-done.
 		err := fmt.Errorf("reclaim: wake %q: panic: %v", key, recovered)
-		t.endBusySlot(key, incarnation, err)
-		dispose(key, storedHooks, logger)
+		t.endBusyAfterPanic(key, incarnation, storedHooks, logger, err)
 		return nil, err
 	}
 
@@ -353,7 +378,8 @@ func (t *Table) watch(ctx context.Context, key string, incarnation *slot) {
 
 // drop removes one holder. When it was the last one, this goroutine sleeps the value and writes
 // reclaim_orphan. Zero grace expires on this stack. Positive grace continues in waitGraceOrWake.
-// Orphan still precedes dispose. A Sleep panic aborts: Close, unmap, no orphan. When the stored
+// Orphan still precedes dispose. A Sleep panic aborts: Close, unmap (order follows stored
+// EnforceCloseBeforeOpen), no orphan. When the stored
 // EnforceCloseBeforeOpen is set, Close runs while the key is still mapped slotBusy. A watcher
 // whose incarnation is already gone finds slotGone and returns.
 func (t *Table) drop(key string, incarnation *slot) {
@@ -382,10 +408,10 @@ func (t *Table) drop(key string, incarnation *slot) {
 
 	if recovered := runHook(storedHooks.Sleep); recovered != nil {
 		// Nobody is waiting on a return value here, so createErr stays nil: a later Open creates a
-		// fresh incarnation instead of inheriting one whose Sleep never finished.
+		// fresh incarnation instead of inheriting one whose Sleep never finished. Stored
+		// EnforceCloseBeforeOpen still keeps the key mapped across Close.
 		logger.Error(MsgHookPanic, "key", key, "hook", "sleep", "panic", recovered)
-		t.endBusySlot(key, incarnation, nil)
-		dispose(key, storedHooks, logger)
+		t.endBusyAfterPanic(key, incarnation, storedHooks, logger, nil)
 		return
 	}
 	// Orphan is written while the slot is still busy. Reset leaves a busy slot to the goroutine
