@@ -41,3 +41,9 @@ phase: archive
 findings: fold std_go_windowcounter_sliding-take; map/names OK
 fixed: live spec occupancy; archive 2026-09-13-windowcounter-peek-occupancy
 skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: CI 34745106422 succeeded; title ready
+fixed: PR #64 ready for review
+skipped: none
