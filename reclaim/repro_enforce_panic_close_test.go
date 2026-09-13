@@ -21,9 +21,8 @@ func releaseOnce(t *testing.T, ch chan struct{}) {
 }
 
 // TestRepro_SleepPanicUnmapsBeforeCloseWithEnforce checks whether the Sleep-panic ending path
-// honours the stored EnforceCloseBeforeOpen. drop recovers that panic through endBusySlot, which
-// unmaps the key and closes ready before dispose runs Close, so a racing Open creates a second
-// incarnation while the first one's Close still holds the exclusive resource the flag exists for.
+// honours the stored EnforceCloseBeforeOpen. A racing Open must stay parked for the whole Close
+// instead of creating a second incarnation while Close still holds the exclusive resource.
 func TestRepro_SleepPanicUnmapsBeforeCloseWithEnforce(t *testing.T) {
 	h := &recHandler{}
 	tab := New(Config{Grace: graceNoRace})
@@ -87,8 +86,9 @@ func TestRepro_SleepPanicUnmapsBeforeCloseWithEnforce(t *testing.T) {
 }
 
 // TestRepro_WakePanicUnmapsBeforeCloseWithEnforce is the same gap on the Wake-panic ending path.
-// reclaimLocked recovers the panic through endBusySlot (unmap, close ready) and only then runs
-// dispose, so the key is already free for a new create while Close is in flight.
+// The reclaiming Open still returns the wrapping Wake error and not the stored pointer. A later
+// Open that arrives while Close is in flight must wait, then create, instead of holding the
+// exclusive resource twice.
 func TestRepro_WakePanicUnmapsBeforeCloseWithEnforce(t *testing.T) {
 	h := &recHandler{}
 	tab := New(Config{Grace: graceNoRace})
