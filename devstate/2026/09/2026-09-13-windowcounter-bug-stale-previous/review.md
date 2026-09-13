@@ -30,3 +30,22 @@ findings: coverage hard unflushed previous GET; others none
 fixed: TestTake_BufferedUnflushedPreviousNotGet (6a4f015)
 skipped: none
 
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage How-to missing unflushed previous keep-memory
+fixed: How-to on std_go_windowcounter.md
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: fold both windowcounter leaves
+fixed: live specs + openspec/changes/archive/2026-09-13-windowcounter-stale-previous
+skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: CI succeeded on 3c47bc2; title dropped WIP
+fixed: PR #63 ready for review
+skipped: none
+
+
