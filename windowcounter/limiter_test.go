@@ -646,6 +646,8 @@ func TestTake_BufferedTwoInstancesOutage(t *testing.T) {
 	b.SetNowForTest(func() time.Time { return now })
 	takeUntilLocalDeny(t, a, "share", 1, limit, window)
 	takeUntilLocalDeny(t, b, "share", 1, limit, window)
+	peekNilError(t, a, "share", limit, window)
+	peekNilError(t, b, "share", limit, window)
 }
 
 func TestParseEvalInt_WrapsCause(t *testing.T) {
