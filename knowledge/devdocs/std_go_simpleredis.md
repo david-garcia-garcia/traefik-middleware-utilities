@@ -57,6 +57,8 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `simpleredis/bench_test.go` — encode/decode benches and CI alloc guards
 - `simpleredis/interpretedcost_test.go` — asserting Yaegi conversion matrix, copy-vs-unsafe benches, and Yaegi encode cost
 - `simpleredis/yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval/MSetEX; live LiveVerbs is the full public set
+- `simpleredis/yaegi_defer_test.go` — interpreted defer runs on panic (evidence that overturns PR #29)
+- `simpleredis/panic_safety_test.go` — recovered panic inside `do` returns the turn and closes the socket
 - `simpleredis/yaegi_errorpath_test.go` — interpreted dial-retry, stall timeout, cancel-mid-command, pool wait, truncated bulk
 - `simpleredis/chaos_pool_test.go` — chaos mix: no cross-key Get, at-rest turns, `OverFrees() == 0`, settled open sockets
 - `simpleredis/lifecycle_test.go` — New/use/Close cycles and Close during held Gets
@@ -95,3 +97,5 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `SELECT` out of range is `ERR DB index is out of range`, not `redis:noauth`. A handshake AUTH or SELECT error closes the socket, is not pooled, and is not retried. Peer-close is the unreachable sentinel; AUTH-class is `ErrNoAuth`. Those values match `errors.Is` / `IsUnreachable` under Yaegi (the session does not wrap them in a package-local type).
 - Probe success labels on `/redis` and `/dragonfly` stay host-only (empty password and database). Failure routes `/redis-wrong-password` `/dragonfly-wrong-password` set `Password`; `/redis-database-99` `/dragonfly-database-99` set `Database`.
 - Probe verb paths (`/<engine>/<verb>`) are terminal: HTTP 200 + Redis body or 502 + `err.Error()`. They do not forward to next. Set `IOTimeout` to 1s on the probe clients so a 500ms TIME-wait Eval survives the 100ms default.
+- Interpreted `defer` runs under Yaegi v0.16.1 (this module's pin, and Traefik v3.7.11's pin) when the panic is an explicit interpreted panic, the interpreter's own `errors.As` panic on a package-local struct, or a nil-map write. Yaegi converts that panic into an `Eval` error rather than propagating a Go panic outward, but it still unwinds interpreted frames and runs their defers. Do not re-derive PR #29's assumption that a deferred `release` cannot save an in-use turn. Proof: `simpleredis/yaegi_defer_test.go`.
+
