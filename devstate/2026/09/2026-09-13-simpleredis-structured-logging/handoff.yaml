@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-simpleredis-structured-logging
+jobName: 2026-09-13-simpleredis-structured-logging
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 2f05887cf15e7d145de4201a899bb68a21287b6cd18bd1bacc1a3e11f5b0b2fa
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
