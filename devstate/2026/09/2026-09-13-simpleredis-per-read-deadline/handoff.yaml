@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-simpleredis-per-read-deadline
+jobName: 2026-09-13-simpleredis-per-read-deadline
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 0bf8970473fd2e68bb9391189ece943e34214c668c0327005c199aea992f2266
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 84
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/84
