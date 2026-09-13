@@ -10,7 +10,7 @@ var (
 	errRate     = errors.New("tokenbucket: rate must be greater than 0")
 	errBurst    = errors.New("tokenbucket: burst must be at least 1")
 	errDelay    = errors.New("tokenbucket: maxDelay must not be negative")
-	errTTL      = errors.New("tokenbucket: ttl must be at least 1s")
+	errTTL      = errors.New("tokenbucket: ttl must be a whole number of seconds (at least 1s)")
 	errRedis    = errors.New("tokenbucket: redis is required")
 	errEvalLen  = errors.New("tokenbucket: eval reply must have 3 fields")
 	errEvalWait = errors.New("tokenbucket: eval wait is not a number")
@@ -24,7 +24,7 @@ type clockConfig struct {
 	ttl      time.Duration
 }
 
-// validateClock rejects rate, burst, maxDelay, and ttl that would divide by zero or expire immediately.
+// validateClock rejects rate, burst, maxDelay, and ttl that would divide by zero, expire immediately, or disagree with Redis EXPIRE seconds.
 func validateClock(rate float64, burst int64, maxDelay, ttl time.Duration) error {
 	if rate <= 0 {
 		return errRate
@@ -35,7 +35,7 @@ func validateClock(rate float64, burst int64, maxDelay, ttl time.Duration) error
 	if maxDelay < 0 {
 		return errDelay
 	}
-	if ttl < time.Second {
+	if ttl < time.Second || ttl%time.Second != 0 {
 		return errTTL
 	}
 	return nil
