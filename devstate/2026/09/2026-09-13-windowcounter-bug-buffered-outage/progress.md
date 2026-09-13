@@ -6,7 +6,7 @@ JobName: 2026-09-13-windowcounter-bug-buffered-outage
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T07:05:50Z |
 | explore | [x] | [x] | 2026-09-13T07:14:21Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [x] | 2026-09-13T07:24:10Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
