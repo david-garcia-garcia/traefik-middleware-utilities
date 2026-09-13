@@ -12,3 +12,10 @@ findings: dest New(1500ms) accepted; Redis ARGV ttl 1; Memory still live at +120
 fixed: explore.md proceed policies (errTTL text, ttl_truncation_test.go, both constructors)
 skipped: product apply; PEXPIRE; Lua rewrite
 
+## propose (2026-09-13)
+phase: propose
+findings: fold std_go_tokenbucket_allow and std_go_tokenbucket_lua-eval
+fixed: change tokenbucket-ttl-whole-seconds (proposal, deltas, design, tasks)
+skipped: product apply
+
+

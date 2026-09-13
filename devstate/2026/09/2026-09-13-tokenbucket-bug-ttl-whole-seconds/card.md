@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T06:16:37Z
+Developer review: in progress — 2026-09-13T06:20:48Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** OpenSpec change `tokenbucket-ttl-whole-seconds` folds whole-second `ttl` into `std_go_tokenbucket_allow` and `std_go_tokenbucket_lua-eval`. Product constructors are still dest until implement.
 
 **End users.** None.
 
@@ -29,10 +29,10 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore recorded proceed policies; product apply has not started.
+Propose is apply-ready; product apply has not started.
 
 Priority: P2 — stores can expire the same key at different times when ttl is not a whole second
-Reviewed head: cf734e6
+Reviewed head: fa2605f
 Owner decision: None.
 
 ## Review scores
@@ -46,15 +46,16 @@ Owner decision: None.
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-tokenbucket-bug-ttl-whole-seconds pushed | `git push` `cf734e6` |
-| OpenSpec | none | no change folder |
+| Branch | 2026-09-13-tokenbucket-bug-ttl-whole-seconds pushed | `git push` `fa2605f` |
+| OpenSpec | tokenbucket-ttl-whole-seconds | `openspec/changes/tokenbucket-ttl-whole-seconds/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/57 | pr-host Create |
-| CI | build 34742332834 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742332834 | pr-host CI (head `cf734e6`) |
+| CI | build 34742515584 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742515584 | pr-host CI (head `fa2605f`) |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | inventory empty |
 
 ## Specs
-None.
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/openspec/changes/tokenbucket-ttl-whole-seconds/proposal.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/openspec/changes/tokenbucket-ttl-whole-seconds/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -63,7 +64,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-ttl-whole-seconds` from `origin/master`. Stub PR #57 is the durable card. Explore is written; propose is next.
+Local ticket, branch `2026-09-13-tokenbucket-bug-ttl-whole-seconds`, stub PR #57. Propose folded two existing spec leaves. Implement is next (tests first).
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -87,9 +88,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | cf734e6369b928628f5bae88cbef84989d23dc5a | Card must match the branch you measured |
+| Reviewed head | fa2605fde1cbff53f6e70932cb446865c72ddf16 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -97,17 +98,16 @@ None.
 ### Technical review
 Best possible solution: Dest still accepts 1500ms then disagrees on lifetime; the ticket’s whole-second `validateClock` (same `errTTL`) is the how.
 
-Do we have a high-confidence way to reproduce? Yes — dest NewMemory/NewRedis with 1500ms succeed; Redis EVAL ARGV ttl is `"1"`; Memory still admits at +1200ms (throwaway probe, deleted, not committed).
+Do we have a high-confidence way to reproduce? Yes — dest NewMemory/NewRedis with 1500ms succeed; Redis EVAL ARGV ttl is `"1"`; Memory still admits at +1200ms.
 
 Is this the best way to solve the issue? Yes — PEXPIRE or flooring Memory while New succeeds would leave Redis unable to represent the Duration New accepted.
 
 ### Evidence
 What I checked:
-- `validateClock` / `ttlSeconds` (`tokenbucket/clock.go`); `expireAt = now.Add(ttl)` (`tokenbucket/memory.go`); Redis ARGV (`tokenbucket/redis.go`); Lua `expire` (`tokenbucket/lua.go`)
-- Dest probe: NewMemory/NewRedis accept 1500ms; ARGV index 6 is `"1"`; Memory admits at +1200ms (`go test -short -run TestExploreProbe_DestAcceptsFractionalTTL`, then deleted)
-- Usage `knowledge/devdocs/std_go_tokenbucket.md` still documents `ttl < 1s` only (true on dest)
-- Research `ext_redis_expire` / `ext_traefik_ratelimiter_token-bucket`: EXPIRE integer seconds; Traefik ttl is 2s or `1+int(1/rtl)`
-- Stub PR #57, CI run 34742332834 queued
+- FindSpecHost fold `std_go_tokenbucket_allow` and `std_go_tokenbucket_lua-eval` (high)
+- `openspec validate tokenbucket-ttl-whole-seconds --type change --strict` valid
+- validate_artifact_names OK
+- Stub PR #57, CI run 34742515584 queued on `fa2605f`
 
 ### Rank-up moves
 None.
