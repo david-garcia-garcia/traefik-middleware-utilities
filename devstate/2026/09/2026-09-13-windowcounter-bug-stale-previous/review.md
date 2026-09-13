@@ -17,3 +17,9 @@ phase: propose
 findings: fold sync-flush and sliding-take; Take-only GET; repro first
 fixed: openspec/changes/windowcounter-stale-previous
 skipped: product apply
+
+## implement (2026-09-13)
+phase: implement
+findings: repro failed dest estimated=2; GET previous when expireAt>0; outage test kept
+fixed: takeBufferedPreviousLocked, repro_stale_previous_test.go
+skipped: live e2e; GET previous on every in-memory localDelta==0
