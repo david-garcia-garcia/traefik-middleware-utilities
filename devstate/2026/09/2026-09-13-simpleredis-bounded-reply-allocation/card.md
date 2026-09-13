@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T17:16:15Z
+Developer review: in progress — 2026-09-13T17:21:59Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** OpenSpec change `simpleredis-bounded-reply-allocation` records that an in-cap `$` or `*` header MUST NOT size `make` before payload or elements arrive. Product `readBulk` is still DestBranch.
+**Developers.** `readBulk` grows a `$` payload in 128 KiB `ReadFull` chunks instead of `make(length+2)` up front. The `*` decoder appends from a start cap of 16 instead of `make(count)`. `TestAllocAmpInCapHeaderDoesNotAllocateAnnouncedSize` locks both header-only cases.
 
 **End users.** None.
 
@@ -26,18 +26,18 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Propose is written and valid. Simplicity gate passed: chunked `ReadFull` with a 128 KiB first chunk and array append with start cap 16 is small enough to implement. Product decoder change is next.
+Implement landed. Local tests passed. CI on this head is still queued. Code review is next.
 
 Priority: P2 — real operator pain (Traefik OOM from a handful of header bytes), limited blast until a hostile or buggy peer (or a desynced socket)
-Reviewed head: 0336427
+Reviewed head: df93dfa
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Propose landed; CI on this head is queued; product fix not landed |
-| CI proof | 3/6 | build 34771076427 queued ([Unit](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771076427/job/103760662365)) |
-| Local tests proof | N/A | Before implement (`localTests: none`) |
+| Overall readiness | 3/6 | Fix landed locally; CI on this head is queued |
+| CI proof | 3/6 | build 34771368092 queued ([Unit](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771368092/job/103761454585)) |
+| Local tests proof | N/A | Remote PR; CI is the proof axis (`localTests: passed`) |
 | Review resolution | 6/6 | OPEN PR, no reviewer comments |
 
 ## Verification
@@ -46,8 +46,8 @@ Owner decision: None.
 | Branch | 2026-09-13-simpleredis-bounded-reply-allocation pushed | `git` |
 | OpenSpec | simpleredis-bounded-reply-allocation | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/86 | pr-host List |
-| CI | build 34771076427 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771076427 | pr-host CI |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 34771368092 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771368092 | pr-host CI |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
@@ -60,7 +60,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → stub PR 86 against `master`. Propose is apply-ready; implement next.
+Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → stub PR 86 against `master`. Implement grew bulk/array buffers from arrived bytes; seven-axis review is next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -71,8 +71,8 @@ Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → st
 | Who already owns client identity (address, user, tenant, Host, trust hop) for this change? | additive incidental | assumed — none. The decoder classifies a RESP header; it does not set or rebuild a host fact | explore |
 
 ## Before merge
-- [ ] Keep SimpleRedis reply memory proportional to bytes the peer actually sent, not the declared in-cap `$` or `*` length
-- [ ] Untagged `TotalAlloc` proof for a header-only oversized `$` and `*`
+- [x] Keep SimpleRedis reply memory proportional to bytes the peer actually sent, not the declared in-cap `$` or `*` length
+- [x] Untagged `TotalAlloc` proof for a header-only oversized `$` and `*`
 - [x] Honour the simplicity gate: the recorded shape is small enough to implement
 
 ## Findings
@@ -88,25 +88,28 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 0336427711e927cd60873d683249bc58dab1daa3 | Card must match the branch you measured |
+| Reviewed head | df93dfa03f8255e53961dbae2697e1bcb8257484 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not on DestBranch yet. Propose's shape is chunked `ReadFull` with first allocation `min(need, 128 KiB)` and array append with start cap 16.
+Best possible solution: chunked `ReadFull` with first allocation `min(need, 128 KiB)` and array append with start cap 16. Dest `make`s the announced size before any payload byte.
 
-Do we have a high-confidence way to reproduce? Yes. Tagged `TestBugPeerControlledAllocationAmplification` failed on dest: 11 bytes → 67,144,992 allocated; 10 bytes → 25,188,272.
+Do we have a high-confidence way to reproduce? Yes. Tagged `TestBugPeerControlledAllocationAmplification` failed on dest (11 bytes → 67,144,992; 10 bytes → 25,188,272) and passed after (148,928 and 17,760; still `redis:unreachable`).
 
-Is this the best way to solve the issue? Yes versus DestBranch. `openspec validate simpleredis-bounded-reply-allocation --strict` is valid. Simplicity gate: implement.
+Is this the best way to solve the issue? Yes versus DestBranch. Common-path decode benches stayed 2 allocs / 48 B (`$17`) and 2 allocs / 106520 B (`$102400`). `io.CopyN` would have missed those ceilings.
 
 ### Evidence
 What I checked:
-- Change artifacts under `openspec/changes/simpleredis-bounded-reply-allocation/`
-- `openspec validate simpleredis-bounded-reply-allocation --strict` valid
-- FindSpecHost fold `std_go_simpleredis_resp-decode` (high)
+- `go vet ./simpleredis/` ok
+- `go test ./simpleredis/ -count=1` passed
+- `go test ./... -count=1 -short` passed
+- Fuzz seeds `FuzzReadReply` / `FuzzParseLen` passed
+- Alloc ceilings unchanged vs dest (`TestAllocDecodeBulk` 2/48, `TestAllocDecodeArray10` 11/272, `TestAllocDecodeBulk100KB` 2/106521)
+- Tagged reproduction passed after the fix
 - OPEN PR 86, no comments
-- CI build 34771076427 queued on `0336427`
+- CI build 34771368092 queued on `df93dfa`
 
 ### Rank-up moves
 None.
