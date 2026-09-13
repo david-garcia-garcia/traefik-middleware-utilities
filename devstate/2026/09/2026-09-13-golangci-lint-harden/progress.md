@@ -6,8 +6,8 @@ JobName: 2026-09-13-golangci-lint-harden
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T15:17:48Z |
 | explore | [x] | [x] | 2026-09-13T15:27:45Z |
-| propose | [x] | [ ] | |
-| implement | [ ] | [ ] | |
+| propose | [x] | [x] | 2026-09-13T15:31:23Z |
+| implement | [x] | [x] | 2026-09-13T15:48:49Z |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
