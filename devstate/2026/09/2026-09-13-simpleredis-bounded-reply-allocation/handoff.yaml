@@ -10,6 +10,7 @@ src: 3dcb60fbf9b668ef3f21f25ef9aad5827a8576f0bbd2099a61b205ec6b70470c
 localTests: none
 requirement: requirement.md
 comments: none
+explore: explore.md
 pr:
   id: 86
   url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/86

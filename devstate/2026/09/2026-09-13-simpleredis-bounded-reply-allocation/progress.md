@@ -5,7 +5,7 @@ JobName: 2026-09-13-simpleredis-bounded-reply-allocation
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T17:06:40Z |
-| explore | [ ] | [ ] | |
+| explore | [x] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
