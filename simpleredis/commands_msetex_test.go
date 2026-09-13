@@ -88,6 +88,9 @@ func TestMSetEXRejectsEmptyMismatchAndCap(t *testing.T) {
 	}
 }
 
+// TestMSetEXUnknownCommandFallsBackAndCaches is dest unknown-command success: native MSETEX then Eval.
+// Those are separate exec hops (Eval may be EVALSHA then EVAL). Each hop binds its own overall deadline on purpose so the fallback still has a full command budget.
+// Do not assert elapsed against one public-command budget; sharing remaining time can starve EVAL.
 func TestMSetEXUnknownCommandFallsBackAndCaches(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	fake.setRejectMSetEX()
