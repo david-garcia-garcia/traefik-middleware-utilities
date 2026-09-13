@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T06:22:20Z
+Developer review: in progress — 2026-09-13T06:26:11Z
 
 ## What this changes
 **Operators.** None.
@@ -33,10 +33,10 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Implement landed the finite check and the repro test (FAIL then PASS locally). Remote CI is still queued.
+Implement landed the finite check. Seven-axis review of `origin/master...HEAD` is clean.
 
 Priority: P1 — serving a wrong public contract today
-Reviewed head: 5ca6d4a
+Reviewed head: 99cabd4
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -67,7 +67,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait`, stub PR #53. Implement applied `tokenbucket-eval-finite-wait`. Next is code review.
+Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait`, stub PR #53. Code review of the apply diff is clean. Next is usage-doc impact.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -83,7 +83,13 @@ Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait`, stub PR #53.
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-eval-finite-wait/devstate/2026/09/2026-09-13-tokenbucket-bug-eval-finite-wait/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-eval-finite-wait/devstate/2026/09/2026-09-13-tokenbucket-bug-eval-finite-wait/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-eval-finite-wait/devstate/2026/09/2026-09-13-tokenbucket-bug-eval-finite-wait/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-eval-finite-wait/devstate/2026/09/2026-09-13-tokenbucket-bug-eval-finite-wait/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-eval-finite-wait/devstate/2026/09/2026-09-13-tokenbucket-bug-eval-finite-wait/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-eval-finite-wait/devstate/2026/09/2026-09-13-tokenbucket-bug-eval-finite-wait/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-eval-finite-wait/devstate/2026/09/2026-09-13-tokenbucket-bug-eval-finite-wait/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -92,7 +98,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 5ca6d4ad2297a4a7d83be1f08649a3a33dc4fb8c | Card must match the branch you measured |
+| Reviewed head | 99cabd4714bef5f5abc230d18684679f88fe4cbe | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -106,7 +112,8 @@ Is this the best way to solve the issue? Yes vs dest: one finite check, same sen
 
 ### Evidence
 What I checked:
-- FAIL then PASS: `go test -short -count=1 -timeout 60s -run TestRepro_EvalWaitNaNFailOpen ./tokenbucket` (FAIL all four fail-open; then PASS)
+- Seven-axis review: all `none.`
+- FAIL then PASS: `go test -short -count=1 -timeout 60s -run TestRepro_EvalWaitNaNFailOpen ./tokenbucket`
 - `go test -short -count=1 ./tokenbucket` passed after the fix
 - `tokenbucket/redis.go` finite check (`8f38739`)
 - CI run 34742576798 queued (pr-host check_runs)

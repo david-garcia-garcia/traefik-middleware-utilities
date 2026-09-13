@@ -21,3 +21,9 @@ phase: implement
 findings: dest fail-open on nan/+Inf/-Inf/inf; finite check + repro test
 fixed: Redis.Allow errEvalWait on non-finite wait (8f38739)
 skipped: none
+
+## codereview (2026-09-13)
+phase: codereview
+findings: 0
+fixed: none
+skipped: none

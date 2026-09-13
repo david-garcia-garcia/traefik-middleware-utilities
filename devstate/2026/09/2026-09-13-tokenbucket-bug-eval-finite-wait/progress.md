@@ -8,7 +8,7 @@ JobName: 2026-09-13-tokenbucket-bug-eval-finite-wait
 | explore | [x] | [x] | 2026-09-13T06:15:55Z |
 | propose | [x] | [x] | 2026-09-13T06:19:27Z |
 | implement | [x] | [x] | 2026-09-13T06:22:20Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-13T06:26:11Z |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
