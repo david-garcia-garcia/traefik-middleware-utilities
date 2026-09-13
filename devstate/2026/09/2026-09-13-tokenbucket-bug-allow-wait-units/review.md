@@ -58,5 +58,5 @@ skipped: none
 
 phase: pullrequest
 findings: mermaid `;` and `µ` blanked the GitHub PR conversation
-fixed: merged origin/master; ASCII mermaid on the delivery card
+fixed: merged origin/master (including #56 idle fill and #64 Peek occupancy); ASCII mermaid on the delivery card
 skipped: none
