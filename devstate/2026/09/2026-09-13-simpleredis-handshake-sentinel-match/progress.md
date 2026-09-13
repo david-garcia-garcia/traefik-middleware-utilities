@@ -6,7 +6,7 @@ JobName: 2026-09-13-simpleredis-handshake-sentinel-match
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T08:51:44Z |
 | explore | [x] | [x] | 2026-09-13T09:02:24Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
