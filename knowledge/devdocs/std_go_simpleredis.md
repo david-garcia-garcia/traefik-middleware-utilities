@@ -57,6 +57,8 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `simpleredis/bench_test.go` — encode/decode benches and CI alloc guards
 - `simpleredis/interpretedcost_test.go` — asserting Yaegi conversion matrix, copy-vs-unsafe benches, and Yaegi encode cost
 - `simpleredis/yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval/MSetEX; live LiveVerbs is the full public set
+- `simpleredis/yaegi_defer_test.go` — interpreted defer runs on panic (evidence that overturns PR #29)
+- `simpleredis/panic_safety_test.go` — recovered panic inside `do` returns the turn and closes the socket
 - `simpleredis/yaegi_errorpath_test.go` — interpreted dial-retry, stall timeout, cancel-mid-command, pool wait, truncated bulk
 - `simpleredis/chaos_pool_test.go` — chaos mix: no cross-key Get, at-rest turns, `OverFrees() == 0`, settled open sockets
 - `simpleredis/lifecycle_test.go` — New/use/Close cycles and Close during held Gets
