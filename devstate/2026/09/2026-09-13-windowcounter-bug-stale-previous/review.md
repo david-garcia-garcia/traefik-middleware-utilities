@@ -11,3 +11,9 @@ phase: explore
 findings: Take-only previous GET; Peek stays skip-storm; unit fake Redis; Peek may lag previous until Take
 fixed: explore.md with ranked decisions
 skipped: product apply; live e2e case
+
+## propose (2026-09-13)
+phase: propose
+findings: fold sync-flush and sliding-take; Take-only GET; repro first
+fixed: openspec/changes/windowcounter-stale-previous
+skipped: product apply
