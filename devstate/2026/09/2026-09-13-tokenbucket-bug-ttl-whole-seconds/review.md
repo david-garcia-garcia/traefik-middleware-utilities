@@ -18,4 +18,10 @@ findings: fold std_go_tokenbucket_allow and std_go_tokenbucket_lua-eval
 fixed: change tokenbucket-ttl-whole-seconds (proposal, deltas, design, tasks)
 skipped: product apply
 
+## implement (2026-09-13)
+phase: implement
+findings: dest FAIL then whole-second validateClock PASS
+fixed: errTTL whole seconds; ttl_truncation_test.go reshaped; usage gotcha
+skipped: PEXPIRE; Lua rewrite
+
 
