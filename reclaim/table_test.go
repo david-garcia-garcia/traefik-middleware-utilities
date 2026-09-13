@@ -198,7 +198,7 @@ type hookPanicLine struct {
 func (h *recHandler) hookPanics() []hookPanicLine {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	var out []hookPanicLine
+	out := make([]hookPanicLine, 0, len(h.recs))
 	for _, r := range h.recs {
 		if r.Message != MsgHookPanic {
 			continue
@@ -291,7 +291,7 @@ func waitUntil(t *testing.T, cond func() bool) {
 }
 
 // openReturned is Open that must come back. A leftover busy slot hangs until waitBudget, then the test fails.
-func openReturned(t *testing.T, tab *Table, ctx context.Context, key string, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
+func openReturned(ctx context.Context, t *testing.T, tab *Table, key string, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
 	t.Helper()
 	type finished struct {
 		value any
@@ -1866,7 +1866,7 @@ func TestTable_GoroutinesReturnToBaseline(t *testing.T) {
 	waitUntil(t, func() bool { return runtime.NumGoroutine() <= base+slack })
 }
 
-func TestTable_ResetNil(t *testing.T) {
+func TestTable_ResetNil(_ *testing.T) {
 	var tab *Table
 	tab.Reset()
 }
@@ -1913,7 +1913,7 @@ func TestTable_CreatePanicUnsticksKey(t *testing.T) {
 		}
 	}()
 	created := 0
-	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+	value, err := openReturned(context.Background(), t, tab, "a", recLogger(h), func() (any, error) {
 		created++
 		return unstuckValue, nil
 	}, Hooks{})
@@ -1936,7 +1936,7 @@ func TestTable_NilCreateUnsticksKey(t *testing.T) {
 			t.Fatalf("nil create: err %v, want %s", err, want)
 		}
 	}()
-	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+	value, err := openReturned(context.Background(), t, tab, "a", recLogger(h), func() (any, error) {
 		return unstuckValue, nil
 	}, Hooks{})
 	if err != nil {
@@ -2070,7 +2070,7 @@ func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 		}
 	}()
 	waitUntil(t, func() bool { return closed.Load() == 1 })
-	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+	value, err := openReturned(context.Background(), t, tab, "a", recLogger(h), func() (any, error) {
 		return unstuckValue, nil
 	}, Hooks{})
 	if err != nil {

@@ -136,7 +136,7 @@ func waitUntil(ctx context.Context, delay time.Duration) error {
 }
 
 // retryLimits maps 0/-1 sentinels to go-redis Options defaults without mutating the exported fields.
-func retryLimits(maxRetries int, minBackoff, maxBackoff time.Duration) (int, time.Duration, time.Duration) {
+func retryLimits(maxRetries int, minBackoff, maxBackoff time.Duration) (retries int, retryMinBackoff, retryMaxBackoff time.Duration) {
 	if maxRetries == -1 {
 		maxRetries = 0
 	} else if maxRetries == 0 {
@@ -201,12 +201,12 @@ func shouldRetry(err error, handshakeFailed bool) bool {
 
 // isCommandTimeout is redis:timeout from an I/O deadline or the overall command budget. Not retryable.
 func isCommandTimeout(err error) bool {
-	return err == errTimeout
+	return err == errTimeout //nolint:errorlint // session returns the timeout sentinel itself; wrapping is not used on this path
 }
 
 // isUnreachable is redis:unreachable (EOF, unexpected EOF, dial failure, and other IO via ioError). Retryable unless the client is closed.
 func isUnreachable(err error) bool {
-	return err == errUnreachable
+	return err == errUnreachable //nolint:errorlint // identity so ErrPoolWait and errNotFromNew (both wrap Unreachable) are not retried
 }
 
 // isRetryableRedisReply is a Redis error reply go-redis retries: max clients, LOADING, READONLY, MASTERDOWN, CLUSTERDOWN, TRYAGAIN (space after the word).

@@ -331,22 +331,22 @@ func (t *Table) finishBind(ctx context.Context, key string, incarnation *slot, v
 		t.drop(key, incarnation)
 		return nil, err
 	}
-	t.dropWhenDone(key, incarnation, ctx)
+	t.dropWhenDone(ctx, key, incarnation)
 	return value, nil
 }
 
 // dropWhenDone runs drop when ctx is done. A holder with a Done channel uses AfterFunc so the
 // hold does not park a waiter. A holder whose Done is nil still needs watch to poll Err.
-func (t *Table) dropWhenDone(key string, incarnation *slot, ctx context.Context) {
+func (t *Table) dropWhenDone(ctx context.Context, key string, incarnation *slot) {
 	if ctx.Done() != nil {
 		context.AfterFunc(ctx, func() { t.drop(key, incarnation) })
 		return
 	}
-	go t.watch(key, incarnation, ctx)
+	go t.watch(ctx, key, incarnation)
 }
 
 // watch waits until ctx is done, then drops that holder from this slot.
-func (t *Table) watch(key string, incarnation *slot, ctx context.Context) {
+func (t *Table) watch(ctx context.Context, key string, incarnation *slot) {
 	waitCtx(ctx)
 	t.drop(key, incarnation)
 }

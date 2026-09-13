@@ -9,7 +9,7 @@ import (
 )
 
 // assertCanceledBind fails unless Open returned ctx.Err() and no pointer.
-func assertCanceledBind(t *testing.T, value any, err error, ctx context.Context) {
+func assertCanceledBind(ctx context.Context, t *testing.T, value any, err error) {
 	t.Helper()
 	if !errors.Is(err, ctx.Err()) {
 		t.Fatalf("Open err %v, want %v", err, ctx.Err())
@@ -33,7 +33,7 @@ func TestTable_OpenCanceledDuringCreateReturnsCtxErr(t *testing.T) {
 			<-ctx.Done()
 			return item, nil
 		}, Hooks{Close: item.Close})
-		assertCanceledBind(t, value, err, ctx)
+		assertCanceledBind(ctx, t, value, err)
 		tab.Reset()
 	}
 }
@@ -55,7 +55,7 @@ func TestTable_OpenAlreadyDoneAwakeBindReturnsCtxErr(t *testing.T) {
 		t.Fatal("create ran on awake bind")
 		return nil, nil
 	}, Hooks{})
-	assertCanceledBind(t, value, err, done)
+	assertCanceledBind(done, t, value, err)
 	if item.closes.Load() != 0 {
 		t.Fatal("Close ran while a live holder still had the value")
 	}
@@ -94,7 +94,7 @@ func TestTable_OpenAlreadyDoneReclaimReturnsCtxErr(t *testing.T) {
 		t.Fatal("create ran on reclaim")
 		return nil, nil
 	}, Hooks{})
-	assertCanceledBind(t, value, err, done)
+	assertCanceledBind(done, t, value, err)
 	if life.count("wake") != 1 {
 		t.Fatalf("wake ran %d times, want 1", life.count("wake"))
 	}
@@ -141,7 +141,7 @@ func TestTable_OpenCanceledCreatorWaiterKeepsLiveValue(t *testing.T) {
 	}, Hooks{Close: item.Close})
 	wg.Wait()
 
-	assertCanceledBind(t, creatorValue, creatorErr, creator)
+	assertCanceledBind(creator, t, creatorValue, creatorErr)
 	if waiterErr != nil {
 		t.Fatalf("waiter Open: %v", waiterErr)
 	}

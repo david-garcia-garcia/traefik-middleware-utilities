@@ -18,6 +18,7 @@ func TestLive_PeerCloseEOFRedial(t *testing.T) {
 // TestLive_SelectOutOfRange proves SELECT 99 on dest engines is not pooled.
 func TestLive_SelectOutOfRange(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+		t.Helper()
 		client := New(Config{Host: addr, Database: "99"})
 		t.Cleanup(client.Close)
 		_, err := client.Get(context.Background(), "k")
@@ -33,6 +34,7 @@ func TestLive_SelectOutOfRange(t *testing.T) {
 // TestLive_WrongPassword proves WRONGPASS on requirepass engines maps to redis:noauth.
 func TestLive_WrongPassword(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS_AUTH", "SIMPLEREDIS_LIVE_DRAGONFLY_AUTH", func(t *testing.T, addr string) {
+		t.Helper()
 		client := New(Config{Host: addr, Pass: "wrong-password"})
 		t.Cleanup(client.Close)
 		_, err := client.Get(context.Background(), "k")

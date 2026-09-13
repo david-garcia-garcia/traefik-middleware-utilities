@@ -44,13 +44,13 @@ type fakeRedis struct {
 }
 
 // startFakeRedis listens on a local TCP port and serves an in-process RESP map.
-func startFakeRedis(t testing.TB, store map[string]string) (*fakeRedis, string) {
-	t.Helper()
+func startFakeRedis(tb testing.TB, store map[string]string) (server *fakeRedis, listenAddr string) {
+	tb.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
-	t.Cleanup(func() { _ = listener.Close() })
+	tb.Cleanup(func() { _ = listener.Close() })
 
 	fake := &fakeRedis{store: store, loadedScripts: make(map[string]string), authReply: statusOKReply, selectReply: statusOKReply}
 	go func() {
@@ -565,7 +565,7 @@ type peerCloseFake struct {
 
 // startPeerCloseFake listens, answers the first command, then Close()s that accepted socket (not the client).
 // When acceptRetry is true, later accepts are served until read error. When false, the listener is closed after the first accept so a retry dial fails.
-func startPeerCloseFake(t *testing.T, store map[string]string, acceptRetry bool) (*peerCloseFake, string) {
+func startPeerCloseFake(t *testing.T, store map[string]string, acceptRetry bool) (server *peerCloseFake, listenAddr string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

@@ -189,20 +189,20 @@ func evalClientprobe(t *testing.T, goPath, expr string) string {
 }
 
 // writeGopathSimpleredis copies non-test simpleredis sources into a GOPATH module tree.
-func writeGopathSimpleredis(t testing.TB, goPath string) {
-	t.Helper()
+func writeGopathSimpleredis(tb testing.TB, goPath string) {
+	tb.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatal("no caller path")
+		tb.Fatal("no caller path")
 	}
 	srcDir := filepath.Dir(thisFile)
 	destDir := filepath.Join(goPath, "src", "github.com", "david-garcia-garcia", "traefik-middleware-utilities", "simpleredis")
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	copied := 0
 	for _, entry := range entries {
@@ -212,34 +212,34 @@ func writeGopathSimpleredis(t testing.TB, goPath string) {
 		}
 		body, err := os.ReadFile(filepath.Join(srcDir, name))
 		if err != nil {
-			t.Fatal(err)
+			tb.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(destDir, name), body, 0o600); err != nil {
-			t.Fatal(err)
+			tb.Fatal(err)
 		}
 		copied++
 	}
 	if copied == 0 {
-		t.Fatal("no simpleredis sources copied into GOPATH")
+		tb.Fatal("no simpleredis sources copied into GOPATH")
 	}
 }
 
 // writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
-func writeGopathFile(t testing.TB, goPath, pkg, name, src string) {
-	t.Helper()
+func writeGopathFile(tb testing.TB, goPath, pkg, name, src string) {
+	tb.Helper()
 	dir := filepath.Join(goPath, "src", pkg)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 }
 
 // writeGopathClientprobe writes the interpreted probe package under GOPATH/src/clientprobe.
-func writeGopathClientprobe(t testing.TB, goPath string) {
-	t.Helper()
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+func writeGopathClientprobe(tb testing.TB, goPath string) {
+	tb.Helper()
+	writeGopathFile(tb, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
 }
 
 const clientprobeSrc = `package clientprobe

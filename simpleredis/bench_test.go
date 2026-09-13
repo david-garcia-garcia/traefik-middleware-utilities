@@ -100,6 +100,7 @@ func BenchmarkEval(b *testing.B) {
 
 // encodeGet encodes a GET argv to Discard so CI can gate encode allocs/op and B/op.
 func encodeGet(b *testing.B) {
+	b.Helper()
 	writer := bufio.NewWriter(io.Discard)
 	const name = "session:9f2c1ab4-user-token"
 
@@ -114,6 +115,7 @@ func encodeGet(b *testing.B) {
 
 // encodeEval rebuilds and encodes an EVAL argv each op (KEYS declared, script copied).
 func encodeEval(b *testing.B) {
+	b.Helper()
 	writer := bufio.NewWriter(io.Discard)
 	keys := []string{"bucket:1.2.3.4"}
 	args := []string{"10", "10", "1", "1700000000"}
@@ -177,6 +179,7 @@ func benchDecode(b *testing.B, resp []byte) {
 
 // encodeSet100KB encodes a 100 KiB SET argv to Discard so buffer growth is gated.
 func encodeSet100KB(b *testing.B) {
+	b.Helper()
 	writer := bufio.NewWriter(io.Discard)
 	value := make([]byte, largeBulkBytes)
 
@@ -238,13 +241,13 @@ func BenchmarkGetParallel(b *testing.B) {
 
 // startSlowRedis answers every command with a canned bulk after latency, so
 // concurrent callers actually overlap the way they do against a real server.
-func startSlowRedis(t testing.TB, latency time.Duration) (*fakeRedis, string) {
-	t.Helper()
+func startSlowRedis(tb testing.TB, latency time.Duration) (server *fakeRedis, listenAddr string) {
+	tb.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
-	t.Cleanup(func() { _ = listener.Close() })
+	tb.Cleanup(func() { _ = listener.Close() })
 
 	fake := &fakeRedis{store: map[string]string{}}
 	go func() {
