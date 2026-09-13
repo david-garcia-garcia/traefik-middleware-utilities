@@ -24,3 +24,10 @@ fixed: none
 skipped: none
 change: simpleredis-eval-fallback-hop-comments
 fold: std_go_simpleredis_resp-commands
+
+## implement (2026-09-13)
+phase: implement
+findings: none
+fixed: comments on Eval, MSetEX, MSetEXAt, msetex; tests document per-hop budget
+skipped: none
+localTests: passed
