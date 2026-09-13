@@ -1,8 +1,8 @@
 ## 1. Tests first (must fail on dest)
 
-- [ ] 1.1 Add `tokenbucket/repro_epoch_idle_burst_test.go` `TestRepro_NewKeyFillsToBurstAtEpoch` with dest `Allow(ctx, key)`: `epoch_clock` burst 5; `huge_burst_elapsed_below_burst` burst `1e12`
-- [ ] 1.2 Add Redis/fake cases for those same clocks plus an `allowScript` assertion that empty `#rl_source ~= 4` seeds `tokens = burst` and `last = t`
-- [ ] 1.3 Run `go test -short -count=1 -timeout 60s -run TestRepro_NewKeyFillsToBurstAtEpoch ./tokenbucket` and confirm FAIL (do not fix yet)
+- [x] 1.1 Add `tokenbucket/repro_epoch_idle_burst_test.go` `TestRepro_NewKeyFillsToBurstAtEpoch` with dest `Allow(ctx, key)`: `epoch_clock` burst 5; `huge_burst_elapsed_below_burst` burst `1e12`
+- [x] 1.2 Add Redis/fake cases for those same clocks plus an `allowScript` assertion that empty `#rl_source ~= 4` seeds `tokens = burst` and `last = t`
+- [x] 1.3 Run `go test -short -count=1 -timeout 60s -run TestRepro_NewKeyFillsToBurstAtEpoch ./tokenbucket` and confirm FAIL (do not fix yet)
 
 ## 2. Fill missing state
 
