@@ -15,3 +15,9 @@ phase: propose
 findings: none
 fixed: none
 skipped: product apply deferred to implement
+
+## implement (2026-09-13)
+phase: implement
+findings: none
+fixed: runOnConn deferred release, borrow handedOff, panic_safety_test.go, yaegi_defer_test.go
+skipped: none
