@@ -23,7 +23,7 @@ func TestTable_OpenCanceledDuringCreateReturnsCtxErr(t *testing.T) {
 	const rounds = 50
 	h := &recHandler{}
 	for round := 0; round < rounds; round++ {
-		tab := NewTable(0)
+		tab := New(Config{Grace: 0})
 		ctx, cancel := context.WithCancel(context.Background())
 		item := &counterClose{}
 		started := make(chan struct{})
@@ -40,7 +40,7 @@ func TestTable_OpenCanceledDuringCreateReturnsCtxErr(t *testing.T) {
 
 func TestTable_OpenAlreadyDoneAwakeBindReturnsCtxErr(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(0)
+	tab := New(Config{Grace: 0})
 	item := &counterClose{}
 	live, cancelLive := context.WithCancel(context.Background())
 	defer cancelLive()
@@ -74,7 +74,7 @@ func TestTable_OpenAlreadyDoneAwakeBindReturnsCtxErr(t *testing.T) {
 
 func TestTable_OpenAlreadyDoneReclaimReturnsCtxErr(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	life := &lifecycle{}
 	first, cancelFirst := context.WithCancel(context.Background())
 	stored, err := tab.Open(first, "k", recLogger(h), func() (any, error) { return life, nil }, Hooks{
@@ -108,7 +108,7 @@ func TestTable_OpenAlreadyDoneReclaimReturnsCtxErr(t *testing.T) {
 
 func TestTable_OpenCanceledCreatorWaiterKeepsLiveValue(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	item := &counterClose{}
 	creating := make(chan struct{})
 	waiterStarted := make(chan struct{})

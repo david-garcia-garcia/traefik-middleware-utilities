@@ -283,10 +283,10 @@ func TestRetryBackoffRangeAndOff(t *testing.T) {
 }
 
 func TestShouldRetryPoolWaitIsFalse(t *testing.T) {
-	if shouldRetry(errPoolWait) {
+	if shouldRetry(errPoolWait, false) {
 		t.Fatal("shouldRetry(errPoolWait) = true, want false so MaxRetries does not multiply PoolTimeout")
 	}
-	if shouldRetry(errNotFromNew) {
+	if shouldRetry(errNotFromNew, false) {
 		t.Fatal("shouldRetry(errNotFromNew) = true, want false so MaxRetries does not sleep a client that did not come from New")
 	}
 	if !IsUnreachable(errNotFromNew) {
@@ -295,22 +295,22 @@ func TestShouldRetryPoolWaitIsFalse(t *testing.T) {
 	if IsPoolWait(errNotFromNew) {
 		t.Fatal("IsPoolWait(errNotFromNew) = true, want false so pool wait stays a different job")
 	}
-	if !shouldRetry(errUnreachable) {
+	if !shouldRetry(errUnreachable, false) {
 		t.Fatal("shouldRetry(errUnreachable) = false, want true")
 	}
 }
 
 func TestShouldRetryHandshakeFailureIsFalse(t *testing.T) {
-	if shouldRetry(handshakeFailure{err: errUnreachable}) {
-		t.Fatal("shouldRetry(handshakeFailure(unreachable)) = true, want false")
+	if shouldRetry(errUnreachable, true) {
+		t.Fatal("shouldRetry(unreachable, handshakeFailed) = true, want false")
 	}
-	if shouldRetry(handshakeFailure{err: errors.New("LOADING Redis is loading the dataset in memory")}) {
-		t.Fatal("shouldRetry(handshakeFailure(LOADING)) = true, want false")
+	if shouldRetry(errors.New("LOADING Redis is loading the dataset in memory"), true) {
+		t.Fatal("shouldRetry(LOADING, handshakeFailed) = true, want false")
 	}
-	if !shouldRetry(errUnreachable) {
+	if !shouldRetry(errUnreachable, false) {
 		t.Fatal("shouldRetry(errUnreachable) = false, want true")
 	}
-	if !shouldRetry(errors.New("LOADING Redis is loading the dataset in memory")) {
+	if !shouldRetry(errors.New("LOADING Redis is loading the dataset in memory"), false) {
 		t.Fatal("shouldRetry(LOADING) = false, want true")
 	}
 }

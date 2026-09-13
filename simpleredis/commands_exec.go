@@ -34,26 +34,19 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 				return nil, libraryTimeout(err, libraryOwnsDeadline)
 			}
 		}
-		conn, err := sr.borrow(ctx)
+		conn, err, handshakeFailed := sr.borrow(ctx)
 		if err != nil {
-			if sr.isClosed() || !shouldRetry(err) {
+			if sr.isClosed() || !shouldRetry(err, handshakeFailed) {
 				return nil, libraryTimeout(err, libraryOwnsDeadline)
 			}
 			last = err
 			continue
 		}
-		// If do panics under Yaegi, the process does not crash and this in-use-turn is lost.
-		// Not deferred-release: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/29
-		values, reusable, err := sr.do(ctx, conn, args)
-		if stop := contextStop(ctx); stop != nil {
-			sr.release(conn, false)
-			return nil, libraryTimeout(stop, libraryOwnsDeadline)
-		}
-		sr.release(conn, reusable)
+		values, err := sr.runOnConn(ctx, conn, args)
 		if err == nil {
 			return values, nil
 		}
-		if !shouldRetry(err) {
+		if !shouldRetry(err, false) {
 			return values, libraryTimeout(err, libraryOwnsDeadline)
 		}
 		last = err
@@ -62,6 +55,20 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		return nil, libraryTimeout(last, libraryOwnsDeadline)
 	}
 	return nil, errTimeout
+}
+
+// runOnConn runs one command on conn and always releases it, including when do panics.
+// reusable starts false because a panic proves nothing about the socket's protocol position:
+// the release then closes the socket and returns the in-use turn instead of leaking both.
+func (sr *SimpleRedis) runOnConn(ctx context.Context, conn *pooledConn, args [][]byte) (values [][]byte, err error) {
+	reusable := false
+	defer func() { sr.release(conn, reusable) }()
+	values, reusable, err = sr.do(ctx, conn, args)
+	if stop := contextStop(ctx); stop != nil {
+		reusable = false
+		return nil, stop
+	}
+	return values, err
 }
 
 // bindCommandDeadline wraps ctx with (maxRetries+1)*(DialTimeout+IOTimeout) when that instant is sooner than the parent.
@@ -173,7 +180,7 @@ func retryBackoff(retry int, minBackoff, maxBackoff time.Duration) time.Duration
 }
 
 // shouldRetry is go-redis shouldRetry as this client can see it. Timeouts and cancelled contexts are never retried. Pool wait elapsed is errPoolWait (same Error() text, not retried) so MaxRetries does not multiply PoolTimeout. Handshake AUTH or SELECT failures marked at dial are not retried.
-func shouldRetry(err error) bool {
+func shouldRetry(err error, handshakeFailed bool) bool {
 	if err == nil {
 		return false
 	}
@@ -183,20 +190,13 @@ func shouldRetry(err error) bool {
 	if isCommandTimeout(err) {
 		return false
 	}
-	if isHandshakeFailure(err) {
+	if handshakeFailed {
 		return false
 	}
 	if isUnreachable(err) {
 		return true
 	}
 	return isRetryableRedisReply(err)
-}
-
-// isHandshakeFailure is an AUTH or SELECT error marked at dial. Not retryable.
-// Type assert, not errors.As: Yaegi panics on As for this struct (*target must implement error).
-func isHandshakeFailure(err error) bool {
-	_, ok := err.(handshakeFailure)
-	return ok
 }
 
 // isCommandTimeout is redis:timeout from an I/O deadline or the overall command budget. Not retryable.

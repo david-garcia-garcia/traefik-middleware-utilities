@@ -151,7 +151,7 @@ import (
 // RunHooks drives one incarnation through sleep, wake, and close via Open Hooks.
 func RunHooks() string {
 	var sleeps, wakes, closes atomic.Int32
-	tab := reclaim.NewTable(20 * time.Millisecond)
+	tab := reclaim.New(reclaim.Config{Grace: 20 * time.Millisecond})
 	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
 	ctx, cancel := context.WithCancel(context.Background())
 	_, err := tab.Open(ctx, "k", logger, func() (any, error) {

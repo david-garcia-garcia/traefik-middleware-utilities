@@ -7,17 +7,6 @@ import (
 	"time"
 )
 
-// handshakeFailure is an AUTH or SELECT error from dial. exec must not retry it.
-type handshakeFailure struct {
-	err error
-}
-
-// Error is the inner AUTH or SELECT failure text (redis:unreachable, LOADING …, redis:noauth).
-func (e handshakeFailure) Error() string { return e.err.Error() }
-
-// Unwrap is the inner AUTH or SELECT failure.
-func (e handshakeFailure) Unwrap() error { return e.err }
-
 // pooledConn is one TCP socket plus RESP reader/writer kept in idleConns.
 type pooledConn struct {
 	netConn  net.Conn
@@ -77,16 +66,17 @@ func (sr *SimpleRedis) freeInUseTurn() {
 }
 
 // borrow waits for an in-use turn, then takes an unused socket younger than idleTimeout, or dials.
-func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error) {
+// The bool is handshakeFailed: true only when a new dial's AUTH or SELECT failed after TCP succeeded.
+func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error, bool) {
 	// closed is atomic; inUseTurns is written once in New before concurrent use.
 	if sr.closed.Load() {
-		return nil, errUnreachable
+		return nil, errUnreachable, false
 	}
 	if sr.inUseTurns == nil {
-		return nil, errNotFromNew
+		return nil, errNotFromNew, false
 	}
 	if err := contextStop(ctx); err != nil {
-		return nil, err
+		return nil, err, false
 	}
 
 	// Uncontended borrow must not allocate a timer; the wait exists only for a waiter past poolSize.
@@ -104,34 +94,43 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error) {
 			if !timer.Stop() {
 				<-timer.C
 			}
-			return nil, ctx.Err()
+			return nil, ctx.Err(), false
 		case <-timer.C:
 			if err := contextStop(ctx); err != nil {
-				return nil, err
+				return nil, err, false
 			}
-			return nil, errPoolWait
+			return nil, errPoolWait, false
 		}
 	}
+
+	// The turn is held from here. Return it on every path that does not hand a socket to the
+	// caller, including a panic in takeIdleConn or dial.
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			sr.freeInUseTurn()
+		}
+	}()
 
 	// Prefer a young unused socket over a new dial.
 	reused, stale, closed := sr.takeIdleConn()
 	if closed {
-		sr.freeInUseTurn()
-		return nil, errUnreachable
+		return nil, errUnreachable, false
 	}
 	for _, conn := range stale {
 		conn.close()
 	}
 	if reused != nil {
-		return reused, nil
+		handedOff = true
+		return reused, nil, false
 	}
 	// Idle miss: dial while still holding the turn.
-	conn, err := sr.dial(ctx)
+	conn, err, handshakeFailed := sr.dial(ctx)
 	if err != nil {
-		sr.freeInUseTurn()
-		return nil, err
+		return nil, err, handshakeFailed
 	}
-	return conn, nil
+	handedOff = true
+	return conn, nil, false
 }
 
 // takeIdleConn sweeps unused sockets older than idleTimeout, then pops the newest survivor. Stale sockets are returned for close after the lock. closed is true when Close ran.
@@ -191,17 +190,18 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 
 // dial opens TCP to host, then AUTH and SELECT when those New fields are set.
 // Dialer.Timeout is the per-attempt cap; DialContext also honors ctx (overall budget or caller).
-func (sr *SimpleRedis) dial(ctx context.Context) (*pooledConn, error) {
+// handshakeFailed is true when TCP succeeded and AUTH or SELECT then failed; exec must not retry that error.
+func (sr *SimpleRedis) dial(ctx context.Context) (*pooledConn, error, bool) {
 	if err := contextStop(ctx); err != nil {
-		return nil, err
+		return nil, err, false
 	}
 	dialer := net.Dialer{Timeout: sr.DialTimeout()}
 	netConn, err := dialer.DialContext(ctx, "tcp", sr.host)
 	if err != nil {
 		if stop := contextStop(ctx); stop != nil {
-			return nil, stop
+			return nil, stop, false
 		}
-		return nil, errUnreachable
+		return nil, errUnreachable, false
 	}
 	conn := &pooledConn{
 		netConn: netConn,
@@ -213,14 +213,14 @@ func (sr *SimpleRedis) dial(ctx context.Context) (*pooledConn, error) {
 	if sr.pass != "" {
 		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
 			conn.close()
-			return nil, handshakeFailure{err: err}
+			return nil, err, true
 		}
 	}
 	if sr.database != "" {
 		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
 			conn.close()
-			return nil, handshakeFailure{err: err}
+			return nil, err, true
 		}
 	}
-	return conn, nil
+	return conn, nil, false
 }

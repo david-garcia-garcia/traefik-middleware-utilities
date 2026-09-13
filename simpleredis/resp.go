@@ -14,7 +14,7 @@ import (
 
 // do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty,
 // leftover bytes remain after a complete value, or unread bytes were already in the reader before the write.
-// Any panic here loses the in-use-turn when this client runs in a Traefik middleware: Traefik recovers the request and release never runs.
+// exec calls do from runOnConn, which defers release so a panic still returns the in-use turn and closes the socket.
 func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
 	if err := contextStop(ctx); err != nil {
 		return nil, false, err

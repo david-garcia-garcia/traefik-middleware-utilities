@@ -66,7 +66,7 @@ Defines the RESP commands a SimpleRedis client speaks after it holds a session: 
 - **THEN** Del returns no error
 
 ### Requirement: Exported error strings are stable
-Callers SHALL match errors by `errors.Is` against the exported sentinel values (`ErrUnreachable`, `ErrMiss`, `ErrTimeout`, `ErrNoAuth`, `ErrIssue`, `ErrPoolWait`, `ErrUnsupportedReply`) or the predicates `IsMiss`, `IsUnreachable`, and `IsPoolWait`. The session SHALL still export these exact strings for display and legacy text matching: `redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`, `redis:unsupported-reply`. AUTH-class Redis error prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text. `ErrPoolWait` SHALL wrap `ErrUnreachable` so `errors.Is` on the unreachable sentinel matches pool wait, while `IsPoolWait` still distinguishes pool saturation. A wrapped sentinel SHALL still match `errors.Is` and the corresponding predicate; `err.Error() ==` the token MUST NOT be the only supported match.
+Callers SHALL match errors by `errors.Is` against the exported sentinel values (`ErrUnreachable`, `ErrMiss`, `ErrTimeout`, `ErrNoAuth`, `ErrIssue`, `ErrPoolWait`, `ErrUnsupportedReply`) or the predicates `IsMiss`, `IsUnreachable`, and `IsPoolWait`. The session SHALL still export these exact strings for display and legacy text matching: `redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`, `redis:unsupported-reply`. AUTH-class Redis error prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text. `ErrPoolWait` SHALL wrap `ErrUnreachable` so `errors.Is` on the unreachable sentinel matches pool wait, while `IsPoolWait` still distinguishes pool saturation. A wrapped sentinel SHALL still match `errors.Is` and the corresponding predicate; `err.Error() ==` the token MUST NOT be the only supported match. Handshake AUTH or SELECT failures that are those sentinels SHALL match the same way for compiled callers and for Yaegi-interpreted callers. The session MUST NOT return a package-local wrapper whose `Unwrap` compiled `errors.Is` cannot see under Yaegi.
 
 #### Scenario: Rejected auth is redis:noauth
 - **WHEN** Redis replies `-NOAUTH`
@@ -87,8 +87,22 @@ Callers SHALL match errors by `errors.Is` against the exported sentinel values (
 - **THEN** the command returns `redis:unsupported-reply`
 - **AND** the error is not `redis:issue?`
 
+#### Scenario: Handshake AUTH close matches unreachable compiled and interpreted
+- **WHEN** a compiled caller issues a command against a peer that accepts TCP, reads AUTH, and closes with no reply
+- **THEN** `IsUnreachable` is true
+- **WHEN** Yaegi-interpreted code issues that same command against the same kind of peer
+- **THEN** `IsUnreachable` is true
+- **AND** `Error()` is `redis:unreachable`
+
+#### Scenario: Handshake AUTH WRONGPASS matches ErrNoAuth compiled and interpreted
+- **WHEN** a compiled caller issues a command against a fake that replies `-WRONGPASS` to AUTH
+- **THEN** `errors.Is` matches `ErrNoAuth`
+- **WHEN** Yaegi-interpreted code issues that same command against the same kind of fake
+- **THEN** `errors.Is` matches `ErrNoAuth`
+- **AND** `Error()` is `redis:noauth`
+
 ### Requirement: Interpreter tests observe Init Get Set Del
-Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`. Interpreted `clientprobe` SHALL also observe `errors.Is` against an exported sentinel and one of `IsMiss`, `IsUnreachable`, or `IsPoolWait`.
+Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`. Interpreted `clientprobe` SHALL also observe `errors.Is` against an exported sentinel and one of `IsMiss`, `IsUnreachable`, or `IsPoolWait`. Those tests SHALL also prove interpreted matchers on errors the package returns: handshake AUTH peer-close (`IsUnreachable`) and handshake AUTH-class (`errors.Is` against `ErrNoAuth`). A `%w` wrap of a sentinel alone MUST NOT be the only interpreted matcher coverage.
 
 #### Scenario: Yaegi Init Get Set Del
 - **WHEN** interpreted code Inits a client to a compiled fake Redis listener
@@ -125,6 +139,16 @@ Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `
 #### Scenario: Yaegi matches an exported sentinel
 - **WHEN** interpreted code calls `errors.Is` on an exported SimpleRedis sentinel and one predicate
 - **THEN** both matches succeed
+
+#### Scenario: Yaegi matches handshake AUTH unreachable
+- **WHEN** interpreted code constructs a client with New with a password against a compiled fake that accepts TCP, reads AUTH, and closes with no reply
+- **THEN** `IsUnreachable` is true
+- **AND** a compiled control against the same kind of peer also matches `IsUnreachable`
+
+#### Scenario: Yaegi matches handshake AUTH noauth
+- **WHEN** interpreted code constructs a client with New with a password against a compiled fake that replies `-WRONGPASS` to AUTH
+- **THEN** `errors.Is` matches `ErrNoAuth`
+- **AND** a compiled control against the same kind of fake also matches `ErrNoAuth`
 
 ### Requirement: Traefik probe maps each SimpleRedis verb to an HTTP path
 The nested SimpleRedis Traefik plugin SHALL dispatch on the last path segment after the engine mount. Exact `/redis` and `/dragonfly` SHALL run Set then Get of a unique per-request token (not a shared constant such as `"ok"`) so compose health can wait on those URLs. Each public verb SHALL be one path (`/get`, `/mget`, `/set`, `/del`, `/incr`, `/incrby`, `/expire`, `/expireat`, `/eval`, `/msetex`, `/msetexat`) that runs only that client method. Query `key` (repeatable), `arg` (repeatable), `ex`, `at`, `delta`, and `digest` SHALL be the method arguments. Set, Eval, MSetEX, and MSetEXAt SHALL take the request body as the value or Lua script. Eval SHALL pass query `digest` through as the SimpleRedis digest and MUST NOT hash the body. Query `drop=1` SHALL use `DropHost`. Success SHALL be HTTP 200 with the Redis payload in the body (empty when the method returns no payload). A command error SHALL be HTTP 502 with `err.Error()` in the body. The plugin MUST NOT copy results into `X-SimpleRedis-*` headers and MUST NOT forward a successful verb to whoami.
@@ -580,3 +604,39 @@ Each public command (`Get`, `MGet`, `Set`, `Del`, `Incr`, `IncrBy`, `Expire`, `E
 #### Scenario: Test binary compiles
 - **WHEN** `go test -c ./simpleredis/` runs
 - **THEN** the compile succeeds
+
+### Requirement: Keys and values with CRLF are data, not commands
+The encoder SHALL write every argument as a length-prefixed RESP bulk string. A key and a value that each contain CRLF and an inline `PING` command payload MUST round-trip as stored data. A peer that parses strict RESP MUST treat those bytes as one argument and MUST NOT execute an injected command.
+
+#### Scenario: CRLF and inline PING round-trip as data
+- **WHEN** Set stores a key and a value that each contain CRLF and an inline PING payload
+- **AND** Get reads that key from a strict-RESP fake
+- **THEN** Get returns the same value bytes
+- **AND** the fake did not treat the payload as a second command
+
+### Requirement: Concurrent MSetEX unknown-command fallback stays balanced
+Compiled unit tests SHALL run many overlapping MSetEX calls against a fake that rejects MSETEX. Those calls MUST succeed. After they finish, the in-use-turn channel SHALL be full and extra turn returns SHALL be zero.
+
+#### Scenario: Sixteen overlapping MSetEX fallbacks
+- **WHEN** many goroutines each call MSetEX repeatedly against a reject-MSETEX fake
+- **THEN** every call returns no error
+- **AND** the in-use-turn channel is full
+- **AND** extra turn returns are zero
+
+### Requirement: Interpreter tests observe error paths
+Tests that import Yaegi v0.16.1 SHALL prove interpreted code can run the dial-failure retry loop (including backoff), map an I/O timeout against a stalling peer, cancel a command in flight, wait on a full pool, and handle a truncated bulk, using GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. They MUST NOT panic in the interpreter. They MUST NOT assert `IsUnreachable` or `errors.Is` on AUTH or SELECT handshake failures. They MUST live in a test file that is not the existing happy-path Yaegi file.
+
+#### Scenario: Interpreted dial failure retries without panic
+- **WHEN** interpreted code Gets against a host that refuses the first dials
+- **THEN** the interpreter does not panic
+- **AND** the call returns an error the compiled tests already classify for that path
+
+#### Scenario: Interpreted stall maps to timeout
+- **WHEN** interpreted code Gets against a peer that accepts TCP and never replies
+- **THEN** the interpreter does not panic
+- **AND** the error text is `redis:timeout`
+
+#### Scenario: Interpreted cancel, pool wait, and truncated bulk
+- **WHEN** interpreted code cancels a command, waits on a full pool, or reads a truncated bulk
+- **THEN** the interpreter does not panic
+- **AND** each path returns the same classification the compiled suite already asserts
