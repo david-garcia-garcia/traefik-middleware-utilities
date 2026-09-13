@@ -56,10 +56,10 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 	if err := ctx.Err(); err != nil {
 		return false, 0, err
 	}
-	now := m.now()
-	nowMicro := now.UnixMicro()
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	now := m.now()
+	nowMicro := now.UnixMicro()
 	// Idle longer than ttl is a new bucket (Traefik TTL map). Drop expired keys so the map cannot grow without bound.
 	entry := m.buckets[key]
 	if entry != nil && !now.Before(entry.expireAt) {

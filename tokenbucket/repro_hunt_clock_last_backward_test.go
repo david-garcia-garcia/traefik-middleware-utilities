@@ -45,31 +45,33 @@ func TestRepro_StaleNowRewindsLastDoubleRefill(t *testing.T) {
 		limiter.SetNowForTest(func() time.Time { return t0 })
 		mustAllow(t, limiter, "k", true, "init at t0")
 
-		staleSampled := make(chan struct{})
-		freshFinished := make(chan struct{})
+		// Dest sampled now before mu, so a wait inside now() let a later
+		// consume finish first and then stored t1. After now() runs under
+		// mu, that wait deadlocks. Overlap two Allows without parking in now();
+		// persist-max plus lock-order keep last at the later sample.
+		started := make(chan struct{})
+		var startedOnce sync.Once
 		var nowCalls atomic.Int64
 		limiter.SetNowForTest(func() time.Time {
+			startedOnce.Do(func() { close(started) })
 			if nowCalls.Add(1) == 1 {
-				close(staleSampled)
-				<-freshFinished
 				return t1
 			}
 			return t2
 		})
 
-		var wg sync.WaitGroup
-		wg.Add(2)
+		staleDone := make(chan struct{})
 		go func() {
-			defer wg.Done()
+			defer close(staleDone)
 			_, _, _ = limiter.Allow(context.Background(), "k")
 		}()
-		<-staleSampled
-		go func() {
-			defer wg.Done()
-			_, _, _ = limiter.Allow(context.Background(), "k")
-			close(freshFinished)
-		}()
-		wg.Wait()
+		<-started
+		_, _, _ = limiter.Allow(context.Background(), "k")
+		select {
+		case <-staleDone:
+		case <-time.After(2 * time.Second):
+			t.Fatal("Allow deadlock: now() must not wait while holding mu")
+		}
 
 		limiter.SetNowForTest(func() time.Time { return t2 })
 		allowed, _, err := limiter.Allow(context.Background(), "k")
@@ -93,7 +95,7 @@ func TestRepro_StaleNowRewindsLastDoubleRefill(t *testing.T) {
 
 func newBurst1Delay0(t *testing.T) *Memory {
 	t.Helper()
-	limiter, err := NewMemory(1, 1, 0, testTTL)
+	limiter, err := NewMemory(1, 1, 0, time.Hour)
 	if err != nil {
 		t.Fatal(err)
 	}
