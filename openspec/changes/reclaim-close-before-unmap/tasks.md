@@ -1,8 +1,8 @@
 ## 1. Failing overlap tests (dest)
 
-- [ ] 1.1 Add `TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns` in `reclaim/table_test.go`: `NewTable(0)`, Close hook signals then blocks, cancel last holder, concurrent `Open` of the same key. `t.Fatal` if create of incarnation 2 runs while Close of 1 is blocked (200ms wait). Then release Close and require the second Open to create after Close returns.
-- [ ] 1.2 Add `TestTable_ExpireCreateWaitsUntilPreviousCloseReturns` for expire after a positive grace: same blocked-Close overlap, `t.Fatal` if create starts during Close. Wait for Close to enter (grace elapsed) before the second Open.
-- [ ] 1.3 Run `go test ./reclaim/ -count=1 -run 'TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns|TestTable_ExpireCreateWaitsUntilPreviousCloseReturns'` and record that both FAIL on dest (overlap). Do not change `table.go` yet.
+- [x] 1.1 Add `TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns` in `reclaim/table_test.go`: `NewTable(0)`, Close hook signals then blocks, cancel last holder, concurrent `Open` of the same key. `t.Fatal` if create of incarnation 2 runs while Close of 1 is blocked (200ms wait). Then release Close and require the second Open to create after Close returns.
+- [x] 1.2 Add `TestTable_ExpireCreateWaitsUntilPreviousCloseReturns` for expire after a positive grace: same blocked-Close overlap, `t.Fatal` if create starts during Close. Wait for Close to enter (grace elapsed) before the second Open.
+- [x] 1.3 Run `go test ./reclaim/ -count=1 -run 'TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns|TestTable_ExpireCreateWaitsUntilPreviousCloseReturns'` and record that both FAIL on dest (overlap). Do not change `table.go` yet.
 
 ## 2. Close-before-unmap
 

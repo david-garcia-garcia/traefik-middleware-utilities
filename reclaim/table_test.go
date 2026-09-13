@@ -813,6 +813,127 @@ func TestTable_ZeroGraceRacingOpenIsPlainBind(t *testing.T) {
 	}
 }
 
+// TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns fails if a later Open starts create
+// while the previous incarnation's Close is still blocked.
+func TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(0)
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	var createWhileCloseBlocked atomic.Bool
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return "first", nil }, Hooks{
+		Close: func() { close(closeEntered); <-releaseClose },
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	<-closeEntered
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	opened := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
+			createWhileCloseBlocked.Store(true)
+			return "second", nil
+		}, Hooks{})
+		opened <- err
+	}()
+	select {
+	case err := <-opened:
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+		t.Fatalf("second Open returned before Close returned: %v", err)
+	case <-time.After(200 * time.Millisecond):
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+	}
+	close(releaseClose)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("open 2: %v", err)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("second Open did not return after Close returned")
+	}
+	if !createWhileCloseBlocked.Load() {
+		t.Fatal("second Open did not create after Close returned")
+	}
+}
+
+// TestTable_ExpireCreateWaitsUntilPreviousCloseReturns is the same overlap after grace elapsed.
+func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(time.Millisecond)
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	var createWhileCloseBlocked atomic.Bool
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return "first", nil }, Hooks{
+		Close: func() { close(closeEntered); <-releaseClose },
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	select {
+	case <-closeEntered:
+	case <-time.After(waitBudget):
+		t.Fatal("Close did not run after grace elapsed")
+	}
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	opened := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
+			createWhileCloseBlocked.Store(true)
+			return "second", nil
+		}, Hooks{})
+		opened <- err
+	}()
+	select {
+	case err := <-opened:
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+		t.Fatalf("second Open returned before Close returned: %v", err)
+	case <-time.After(200 * time.Millisecond):
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+	}
+	close(releaseClose)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("open 2: %v", err)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("second Open did not return after Close returned")
+	}
+	if !createWhileCloseBlocked.Load() {
+		t.Fatal("second Open did not create after Close returned")
+	}
+}
+
 func TestTable_ResetDuringSleepStillOrphansBeforeDispose(t *testing.T) {
 	h := &recHandler{}
 	tab := NewTable(graceNoRace)
