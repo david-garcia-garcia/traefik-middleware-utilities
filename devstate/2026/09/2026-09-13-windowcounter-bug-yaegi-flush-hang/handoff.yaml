@@ -7,11 +7,11 @@ repoSlug: traefik-middleware-utilities
 destBranch: master
 qualify: qualified
 src: 577de66c7cd7a89632f016fdda20d2bb5dbd14891dedc583d217a3b7afb9f7fe
-localTests: none
+localTests: passed
 requirement: requirement.md
 comments: none
-explore: none
-change: none
+explore: explore.md
+change: windowcounter-afterfunc-flush
 pr:
   id: 75
   url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/75
