@@ -73,7 +73,7 @@ func TestBug3StreamingBulkBeyondIOTimeoutReturnsIntact(t *testing.T) {
 	const payloadLen = 1 << 20 // 1 MiB; chunk pauses make transfer > IOTimeout
 	const fill byte = 0x5A
 	addr := startBug3ChunkedBulkRedis(t, payloadLen, 32<<10, fill, 4*time.Millisecond, -1)
-	client := New(Config{Host: addr, PoolSize: 1, IOTimeout: 40 * time.Millisecond,
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 40 * time.Millisecond,
 		MaxRetries: -1, MinRetryBackoff: -1, MaxRetryBackoff: -1})
 	t.Cleanup(client.Close)
 
@@ -90,7 +90,7 @@ func TestBug3StreamingBulkBeyondIOTimeoutReturnsIntact(t *testing.T) {
 
 func TestBug3SilentMidReplyTimesOutOnStall(t *testing.T) {
 	addr := startBug3ChunkedBulkRedis(t, 4096, 16, 0x11, 0, 16)
-	client := New(Config{Host: addr, PoolSize: 1, IOTimeout: 40 * time.Millisecond,
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 40 * time.Millisecond,
 		MaxRetries: -1, MinRetryBackoff: -1, MaxRetryBackoff: -1, DialTimeout: 200 * time.Millisecond})
 	t.Cleanup(client.Close)
 
@@ -114,7 +114,7 @@ func TestBug3SilentMidReplyTimesOutOnStall(t *testing.T) {
 func TestBug3DripPeerCannotPinTurnPastOverallBudget(t *testing.T) {
 	// 1-byte chunks every 20ms stay inside IOTimeout 50ms, so stall refresh alone would never fire.
 	addr := startBug3ChunkedBulkRedis(t, 1<<20, 1, 0x22, 20*time.Millisecond, -1)
-	client := New(Config{Host: addr, PoolSize: 1, IOTimeout: 50 * time.Millisecond, DialTimeout: 50 * time.Millisecond,
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 50 * time.Millisecond, DialTimeout: 50 * time.Millisecond,
 		MaxRetries: -1, MinRetryBackoff: -1, MaxRetryBackoff: -1, PoolTimeout: 80 * time.Millisecond})
 	t.Cleanup(client.Close)
 
