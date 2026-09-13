@@ -6,9 +6,9 @@ JobName: 2026-09-13-reclaim-bug-yaegi-grace-select
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T16:35:40Z |
 | explore | [x] | [x] | 2026-09-13T16:41:46Z |
-| propose | [ ] | [ ] | |
-| implement | [ ] | [ ] | |
-| codereview | [ ] | [ ] | |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
-| pullrequest | [ ] | [ ] | |
+| propose | [x] | [x] | 2026-09-13T16:49:11Z |
+| implement | [x] | [x] | 2026-09-13T16:49:11Z |
+| codereview | [x] | [x] | 2026-09-13T16:49:11Z |
+| devdocsimpact | [x] | [x] | 2026-09-13T16:49:11Z |
+| archive | [x] | [x] | 2026-09-13T16:49:11Z |
+| pullrequest | [x] | [x] | 2026-09-13T16:49:11Z |
