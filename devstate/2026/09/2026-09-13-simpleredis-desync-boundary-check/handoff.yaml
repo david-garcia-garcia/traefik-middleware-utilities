@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-simpleredis-desync-boundary-check
+jobName: 2026-09-13-simpleredis-desync-boundary-check
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: b6cdea4c370dfa9958bfcf212ce9c9e504d106441567618c5f6d5a997612f4d5
+localTests: none
+requirement: requirement.md
+comments: none
+pr:
+  id: 69
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/69
