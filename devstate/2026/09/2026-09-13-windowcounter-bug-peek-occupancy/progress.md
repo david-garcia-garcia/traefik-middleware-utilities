@@ -6,7 +6,7 @@ JobName: 2026-09-13-windowcounter-bug-peek-occupancy
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T07:04:48Z |
 | explore | [x] | [x] | 2026-09-13T07:09:20Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
