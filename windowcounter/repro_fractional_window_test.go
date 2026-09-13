@@ -53,7 +53,7 @@ func TestRepro_FractionalWindowAccepted(t *testing.T) {
 		if twoSecCount != 0 {
 			t.Fatalf("2-second bucket %q count %d, want 0 (keys should not use 2s alignment)", twoSecKey, twoSecCount)
 		}
-		if len(expireArgv) < 3 || expireArgv[0] != "EXPIRE" || expireArgv[2] != "2" {
+		if len(expireArgv) < 3 || expireArgv[0] != redisExpireCommand || expireArgv[2] != "2" {
 			t.Fatalf("expire argv %v want EXPIRE … 2 (ttlSec=2*windowSec with windowSec=1)", expireArgv)
 		}
 

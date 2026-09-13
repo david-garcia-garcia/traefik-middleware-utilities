@@ -76,7 +76,7 @@ func TestTake_ExpireOnFirstHit(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := fake.lastExpireCommand()
-	if len(got) < 3 || got[0] != "EXPIRE" || got[2] != "20" {
+	if len(got) < 3 || got[0] != redisExpireCommand || got[2] != "20" {
 		t.Fatalf("expire argv %v want EXPIRE … 20", got)
 	}
 }
