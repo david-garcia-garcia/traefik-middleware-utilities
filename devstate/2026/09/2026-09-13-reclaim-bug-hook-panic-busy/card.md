@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T06:25:51Z
+Developer review: ready for review — 2026-09-13T06:45:55Z
 
 ## What this changes
 **Operators.** None.
@@ -30,17 +30,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Recover, tests, spec archive, and usage packet are on the branch. Waiting on CI for this head.
+Ready for review. All eight CI jobs succeeded on this head.
 
 Priority: P1 — Production is unsafe, or serving a wrong public contract today
-Reviewed head: pending-after-archive-commit
+Reviewed head: 469fe7f
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI in progress after archive |
-| CI proof | 3/6 | in progress — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742665563 |
+| Overall readiness | 6/6 | CI succeeded; no open PR comments |
+| CI proof | 6/6 | success — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743230001 |
 | Local tests proof | N/A | prHost github; CI covers it |
 | Review resolution | 6/6 | OPEN PR; no reviewer comments |
 
@@ -50,7 +50,7 @@ Owner decision: None.
 | Branch | 2026-09-13-reclaim-bug-hook-panic-busy pushed | `git` / GitHub |
 | OpenSpec | reclaim-hook-panic-recovery (archived) | `openspec/changes/archive/2026-09-13-reclaim-hook-panic-recovery/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/49 | GitHub MCP |
-| CI | in progress | GitHub MCP |
+| CI | build 34743230001 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743230001 | Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly |
 | Local tests | passed | `go test -short -timeout 2m -count=1 ./...` |
 | PR comments | no comments | comments none |
 
@@ -76,11 +76,7 @@ Local ticket `devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/` on branc
 | After a Sleep panic, emit `reclaim_orphan` / `reclaim_dispose`? | additive incidental | assumed — skip orphan (Sleep did not return); still Close then dispose | explore |
 
 ## Before merge
-- [x] [P1] Recover nil `create` and panics in create/Sleep/Wake/Close so a key is not left `slotBusy` and AfterFunc cannot crash the process
-- [x] Land product tests that fail on current master, then implement, then they pass
-- [ ] CI green on this head
-- [x] Archive `reclaim-hook-panic-recovery`
-- [x] Seven-axis review; hard findings applied
+None.
 
 ## Findings
 None.
@@ -101,7 +97,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | pending-after-archive-commit | Card must match the branch you measured |
+| Reviewed head | 469fe7f0488a9480d573281b8ae451a238dbd639 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -109,15 +105,15 @@ None.
 ### Technical review
 Best possible solution: Recover at `put` / `drop` / `reclaimLocked` / `dispose` / `Reset` via `endBusySlot`. `runSleep` / `runWake` / `runClose` stay thin.
 
-Do we have a high-confidence way to reproduce? Yes. Fail-then-pass on 2a–2d (hang / leftover busy / AfterFunc child `exit status 2`); Close AfterFunc panic covered after review.
+Do we have a high-confidence way to reproduce? Yes. Fail-then-pass: 2a/2b hung (`Open did not return; key left busy`); 2c AfterFunc child `exit status 2`; 2d Close never ran. After the recover those tests pass; Close AfterFunc panic is covered.
 
 Is this the best way to solve the issue? Yes versus `origin/master`. The table owns `slotBusy`/`ready`.
 
 ### Evidence
 What I checked:
-- Fail on `1baff53` (tests only): 4 FAIL. Pass after `2e24a03`. Close AfterFunc test added in `c4146ad`.
-- `go test -short -timeout 2m -count=1 ./...` passed
-- Archive: `openspec archive` → `2026-09-13-reclaim-hook-panic-recovery`
+- Fail on `1baff53` (tests only): 4 FAIL in 30s. Pass after `2e24a03` in 0.19s. `go test -short ./...` passed.
+- CI run 34743230001: all eight jobs success (GitHub MCP)
+- Qualify: qualified-with-gaps (prepare)
 
 ### Rank-up moves
 None.

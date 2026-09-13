@@ -39,3 +39,10 @@ phase: archive
 findings: none
 fixed: folded into std_go_reclaim_context-lease and std_go_reclaim_value-lifecycle; archived 2026-09-13-reclaim-hook-panic-recovery
 skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+CI: https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743230001 success
