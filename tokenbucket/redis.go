@@ -72,6 +72,11 @@ func (r *Redis) Allow(ctx context.Context, key string) (bool, time.Duration, err
 	if convErr != nil {
 		return false, 0, errEvalWait
 	}
-	wait := waitDuration(waitMicro)
-	return allowedFromWait(wait, r.clock.maxDelay), wait, nil
+	// Admit uses whole microseconds, same units as Lua refund (ARGV maxDelay.Microseconds()).
+	allowed := waitMicro <= float64(r.clock.maxDelay.Microseconds())
+	wait := time.Duration(0)
+	if waitMicro > 0 {
+		wait = time.Duration(waitMicro * float64(time.Microsecond))
+	}
+	return allowed, wait, nil
 }
