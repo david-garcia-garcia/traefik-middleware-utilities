@@ -11,3 +11,10 @@ fixed: none
 skipped: none
 reproduced: TestBugInterpretedHandshakeFailureDefeatsUnreachableMatching and TestBugInterpretedHandshakeFailureDefeatsNoAuthMatching both FAIL on this worktree (interpreted false, compiled controls passed)
 decisions: 4 assumed (triple return named handshakeFailed; fold tcp-session + resp-commands; tests in yaegi_test.go; no Yaegi Unwrap research packet)
+
+## propose (2026-09-13T09:05:48Z)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: simpleredis-handshake-sentinel-match (strict valid)
