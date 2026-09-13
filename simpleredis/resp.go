@@ -12,7 +12,8 @@ import (
 	"time"
 )
 
-// do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty or leftover bytes remain after a complete value.
+// do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty,
+// leftover bytes remain after a complete value, or unread bytes were already in the reader before the write.
 // Any panic here loses the in-use-turn when this client runs in a Traefik middleware: Traefik recovers the request and release never runs.
 func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
 	if err := contextStop(ctx); err != nil {
@@ -31,6 +32,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before SetDeadline.
 	stopWatch := watchConnClose(ctx, conn.netConn)
 	defer stopWatch()
+	// Unread leftover from a prior command on this socket must not be parsed as this command's reply.
 	if conn.reader.Buffered() != 0 {
 		return nil, false, errIssue
 	}
@@ -47,6 +49,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		}
 		return nil, false, ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
 	}
+	// Extra well-formed RESP after this reply means the peer is ahead; return the value and destroy the socket.
 	if conn.reader.Buffered() != 0 {
 		return values, false, err
 	}

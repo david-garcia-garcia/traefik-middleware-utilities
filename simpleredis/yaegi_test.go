@@ -12,8 +12,7 @@ import (
 	"github.com/traefik/yaegi/stdlib"
 )
 
-// TestYaegi_NewGetSetDel proves interpreted code can New, Set, Get, and Del
-// against a compiled fake TCP Redis. Traefik is not started.
+// TestYaegi_StrayExtraReplyOwnKey proves interpreted Get against a compiled stray-extra fake. Traefik is not started.
 func TestYaegi_StrayExtraReplyOwnKey(t *testing.T) {
 	_, addr := startStrayExtraReplyFake(t, 5)
 	goPath := t.TempDir()
@@ -26,6 +25,8 @@ func TestYaegi_StrayExtraReplyOwnKey(t *testing.T) {
 	}
 }
 
+// TestYaegi_NewGetSetDel proves interpreted code can New, Set, Get, and Del
+// against a compiled fake TCP Redis. Traefik is not started.
 func TestYaegi_NewGetSetDel(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()

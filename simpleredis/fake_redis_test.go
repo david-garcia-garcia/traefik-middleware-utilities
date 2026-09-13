@@ -879,11 +879,11 @@ type strayExtraReplyFake struct {
 	conns int
 }
 
-func (fake *strayExtraReplyFake) connections() int {
-	fake.mu.Lock()
-	n := fake.conns
-	fake.mu.Unlock()
-	return n
+// connections is how many TCP accepts the fake has seen.
+func (f *strayExtraReplyFake) connections() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.conns
 }
 
 // startStrayExtraReplyFake answers GET kN with vN and, every nth command, appends one extra bulk.
