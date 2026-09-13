@@ -122,7 +122,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 	case '$':
 		data, bulkErr := readBulk(reader, line)
 		if bulkErr == errMiss {
-			return nil, true, errMiss
+			return [][]byte{nil}, true, nil
 		}
 		if bulkErr != nil {
 			return nil, false, bulkErr

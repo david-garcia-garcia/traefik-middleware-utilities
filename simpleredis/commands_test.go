@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -19,6 +20,30 @@ func TestGetHitAndMiss(t *testing.T) {
 
 	if _, err = redis.Get(context.Background(), "missing"); err == nil || err.Error() != RedisMiss {
 		t.Fatalf("Get missing = %v, want %s", err, RedisMiss)
+	}
+}
+
+func TestGetNullBulkIsMiss(t *testing.T) {
+	addr := startStaticRedis(t, "$-1\r\n")
+	client := New(Config{Host: addr, MaxRetries: -1})
+	got, err := client.Get(context.Background(), "missing")
+	if !errors.Is(err, ErrMiss) {
+		t.Fatalf("Get $-1: got=%q err=%v, want redis:miss", got, err)
+	}
+}
+
+func TestGetEmptyBulkIsNotMiss(t *testing.T) {
+	addr := startStaticRedis(t, "$0\r\n\r\n")
+	client := New(Config{Host: addr, MaxRetries: -1})
+	got, err := client.Get(context.Background(), "empty")
+	if errors.Is(err, ErrMiss) {
+		t.Fatalf("Get $0: got=%q err=%v, want empty bytes not redis:miss", got, err)
+	}
+	if err != nil {
+		t.Fatalf("Get $0: err=%v, want nil error", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Fatalf("Get $0: got=%q, want non-nil empty slice", got)
 	}
 }
 
