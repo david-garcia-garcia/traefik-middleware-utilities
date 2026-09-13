@@ -16,12 +16,15 @@ func TestRepro_BufferedTakeHoldsLockDuringRedisGet(t *testing.T) {
 	const getDelay = 400 * time.Millisecond
 	fake.blockGetPrefix("slow:", getDelay)
 
-	client := simpleredis.New(simpleredis.Config{
+	client, err := simpleredis.New(simpleredis.Config{
 		Host:        addr,
 		MaxRetries:  -1,
 		IOTimeout:   5 * time.Second,
 		DialTimeout: time.Second,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	limiter, err := New(client, time.Hour)
 	if err != nil {
 		t.Fatal(err)

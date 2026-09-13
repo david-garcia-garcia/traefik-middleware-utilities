@@ -3,7 +3,7 @@
 ## Language
 
 **SimpleRedis**:
-A stdlib pooled TCP RESP client (`New(Config)`, `Get`, `MGet`, `Set` with EX, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `MSetEX`, `MSetEXAt`, `Close`). Every verb takes `context.Context` as its first argument. `New` copies `Config` and does not dial; the first command dials. Pool, timeout, and retry knobs live on `Config` and freeze at `New`. A caller with no deadline passes `context.Background()`.
+A stdlib pooled TCP RESP client (`New(Config)`, `Get`, `MGet`, `Set` with EX, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `MSetEX`, `MSetEXAt`, `Close`). Every verb takes `context.Context` as its first argument. `New` copies `Config` and does not dial; the first command dials. `New` returns `ErrMaxIdleConnsAbovePoolSize` and no client when, after defaults, `MaxIdleConns` is above `PoolSize`. Pool, timeout, and retry knobs live on `Config` and freeze at `New`. A caller with no deadline passes `context.Background()`.
 _Avoid_: `go-redis`, miniredis, TLS, Unix sockets, renaming the package to `redis`
 
 **Reply boundary**:
@@ -16,7 +16,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 
 ## How to use
 
-- Call `simpleredis.New(simpleredis.Config{Host: host})` once before concurrent use. Set pool, timeout, and retry knobs on `Config` (`MaxRetries` 0 at New means 1 extra retry; `-1` turns extra retries or backoff off). After `New` those knobs do not change. Set `Pass` and `Database` on `Config` when AUTH or SELECT is needed. One hop’s worst-case wait is `(MaxRetries+1)*(DialTimeout+IOTimeout)` (600ms at zero Config). Eval NOSCRIPT (EVALSHA then EVAL) and MSetEX unknown-command (native then Eval) are separate hops, each with that budget; do not treat one public verb as one stacked deadline. Every verb takes a context first (`Get(ctx, name)`). Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
+- Call `simpleredis.New(simpleredis.Config{Host: host})` once before concurrent use and handle the error. After defaults, `MaxIdleConns` above `PoolSize` (including default idle 8 against a smaller `PoolSize`) is `ErrMaxIdleConnsAbovePoolSize` and no client. A trim below `PoolSize` is valid. Set pool, timeout, and retry knobs on `Config` (`MaxRetries` 0 at New means 1 extra retry; `-1` turns extra retries or backoff off). After `New` those knobs do not change. Set `Pass` and `Database` on `Config` when AUTH or SELECT is needed. One hop’s worst-case wait is `(MaxRetries+1)*(DialTimeout+IOTimeout)` (600ms at zero Config). Eval NOSCRIPT (EVALSHA then EVAL) and MSetEX unknown-command (native then Eval) are separate hops, each with that budget; do not treat one public verb as one stacked deadline. Every verb takes a context first (`Get(ctx, name)`). Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
 - Do not dial in Traefik `New`. Call `simpleredis.New` there; first command in `ServeHTTP` after Redis is up (`Set`, `Get`, `Incr`, `Eval`, or `MSetEX`).
 - Call `MSetEX(ctx, names, values, seconds)` or `MSetEXAt(ctx, names, values, unixSeconds)` for many keys with one TTL. Do not MSET then EXPIRE. Match integer `0` as `redis:issue?`.
 - Match AUTH-class Redis errors as `redis:noauth` (`ErrNoAuth`). Match miss with `IsMiss`, unreachable with `IsUnreachable`, pool saturation with `IsPoolWait`. Do not type-assert `net.Error` (Yaegi).
@@ -26,7 +26,10 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis`
 ## Pattern snippet
 
 ```go
-client := simpleredis.New(simpleredis.Config{Host: "redis:6379"})
+client, err := simpleredis.New(simpleredis.Config{Host: "redis:6379"})
+if err != nil {
+	return err
+}
 ctx := context.Background()
 if err := client.Set(ctx, "k", []byte("v"), 60); err != nil {
 	return err

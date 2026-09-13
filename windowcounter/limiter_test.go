@@ -15,7 +15,11 @@ import (
 // newSimpleRedisForTest returns a New client for tests.
 func newSimpleRedisForTest(tb testing.TB, host string) *simpleredis.SimpleRedis {
 	tb.Helper()
-	return simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		tb.Fatal(err)
+	}
+	return client
 }
 
 func TestCountFromRedisGet_WrappedMissIsZero(t *testing.T) {
@@ -126,7 +130,7 @@ func TestTake_Unreachable(t *testing.T) {
 }
 
 func TestNew_NegativeSyncRate(t *testing.T) {
-	client := simpleredis.New(simpleredis.Config{})
+	client := newSimpleRedisForTest(t, "")
 	if _, err := New(client, -time.Second); err == nil {
 		t.Fatal("want error")
 	}

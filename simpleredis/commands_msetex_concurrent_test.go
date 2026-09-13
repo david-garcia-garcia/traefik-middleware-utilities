@@ -19,7 +19,7 @@ func TestConcurrentMSetEXUnknownCommandFallback(t *testing.T) {
 	}
 	fake, addr := startFakeRedis(t, map[string]string{})
 	fake.setRejectMSetEX()
-	client := New(Config{Host: addr, PoolSize: 8})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 8})
 	t.Cleanup(client.Close)
 
 	var wg sync.WaitGroup

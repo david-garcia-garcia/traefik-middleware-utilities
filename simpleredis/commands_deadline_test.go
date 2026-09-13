@@ -33,7 +33,7 @@ func startStallRedis(t *testing.T) string {
 }
 
 func TestBlackHoleGetReturnsWithinOverallDeadline(t *testing.T) {
-	client := New(Config{Host: "203.0.113.1:6379"})
+	client := newTestRedis(t, Config{Host: "203.0.113.1:6379"})
 	budget := time.Duration(client.MaxRetries()+1) * (client.DialTimeout() + client.IOTimeout())
 	start := time.Now()
 	_, err := client.Get(context.Background(), "k")
@@ -52,7 +52,7 @@ func TestBlackHoleGetReturnsWithinOverallDeadline(t *testing.T) {
 
 func TestHandshakeStallIsBoundedByOverallDeadline(t *testing.T) {
 	addr := startStallRedis(t)
-	client := New(Config{Host: addr, Pass: "p", Database: "1"})
+	client := newTestRedis(t, Config{Host: addr, Pass: "p", Database: "1"})
 	budget := time.Duration(client.MaxRetries()+1) * (client.DialTimeout() + client.IOTimeout())
 	freshSteps := time.Duration(client.MaxRetries()+1) * (client.DialTimeout() + 2*client.IOTimeout())
 	start := time.Now()
@@ -77,7 +77,7 @@ func TestGetCancelFreesTurnAndDoesNotPool(t *testing.T) {
 	fake.mu.Unlock()
 	t.Cleanup(func() { close(hold) })
 
-	client := New(Config{Host: addr, PoolSize: 1, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 5 * time.Second, MaxRetries: -1})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
@@ -125,7 +125,7 @@ func TestGetCancelWhileWaitingForTurn(t *testing.T) {
 	fake.mu.Unlock()
 	t.Cleanup(func() { close(hold) })
 
-	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1})
 	go func() {
 		_, _ = client.Get(context.Background(), "hit")
 	}()
@@ -165,7 +165,7 @@ func TestGetCancelWhileWaitingForTurn(t *testing.T) {
 
 func TestGetAlreadyCancelledDoesNotSend(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	client := New(Config{Host: addr})
+	client := newTestRedis(t, Config{Host: addr})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := client.Get(ctx, "hit")
@@ -178,7 +178,7 @@ func TestGetAlreadyCancelledDoesNotSend(t *testing.T) {
 }
 
 func TestZeroConfigMaxRetriesIsOneExtra(t *testing.T) {
-	client := New(Config{Host: "127.0.0.1:1"})
+	client := newTestRedis(t, Config{Host: "127.0.0.1:1"})
 	if client.MaxRetries() != 1 {
 		t.Fatalf("MaxRetries() = %d, want 1", client.MaxRetries())
 	}
@@ -192,7 +192,7 @@ func TestZeroConfigMaxRetriesIsOneExtra(t *testing.T) {
 
 func TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout(t *testing.T) {
 	addr := startStallRedis(t)
-	client := New(Config{Host: addr, MaxRetries: -1, DialTimeout: time.Second, IOTimeout: time.Second})
+	client := newTestRedis(t, Config{Host: addr, MaxRetries: -1, DialTimeout: time.Second, IOTimeout: time.Second})
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
 	defer cancel()
 	_, err := client.Get(ctx, "k")
@@ -209,7 +209,7 @@ func TestGetCallerDeadlineWhileWaitingForTurn(t *testing.T) {
 	fake.mu.Unlock()
 	t.Cleanup(func() { close(hold) })
 
-	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1})
 	go func() {
 		_, _ = client.Get(context.Background(), "hit")
 	}()
