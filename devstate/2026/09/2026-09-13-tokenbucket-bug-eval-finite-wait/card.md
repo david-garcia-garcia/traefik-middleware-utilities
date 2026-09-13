@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T06:11:16Z
+Developer review: in progress — 2026-09-13T06:15:55Z
 
 ## What this changes
 **Operators.** None.
@@ -12,9 +12,9 @@ Developer review: in progress — 2026-09-13T06:11:16Z
 ## Motivation
 On dest, `Redis.Allow` maps a 3-field Eval wait with `strconv.ParseFloat`. A garbage string becomes `errEvalWait`. `nan`, `+Inf`, `-Inf`, and `inf` parse with `err == nil`, skip that sentinel, and go through `waitDuration` then `allowedFromWait`.
 
-That path admits. `-Inf` becomes wait `0` (`<= 0`) so `0 <= maxDelay` is true. `NaN` / `+Inf` still compare as allowed after the Duration cast. The existing unit test only covers wait `"xyz"`. A fake 3-field reply with a non-finite wait is treated as a successful consume.
+That path admits. Measured on dest: wait `"nan"` / `"+Inf"` / `"inf"` returned `allowed=true`, wait `MinInt64` Duration, `err=nil`. `"-Inf"` returned `allowed=true`, wait `0`, `err=nil`. `-Inf <= maxDelayMicro` is true, so bug 1’s microsecond compare would still admit `-Inf`.
 
-If this stays unmerged, a Redis/Dragonfly script that returns a non-finite wait (or a 3-field override) fail-opens instead of returning `errEvalWait`. Bug 1’s microsecond compare does not close this: `-Inf <= maxDelayMicro` is still true, and `NaN` / `+Inf` would deny with `err=nil`, which this ticket forbids.
+If this stays unmerged, a 3-field Eval wait that is not a finite number fail-opens instead of `errEvalWait`. Callers treat that as a successful consume.
 
 ```mermaid
 sequenceDiagram
@@ -33,29 +33,29 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Prepare is grounded; product apply has not started. Explore is next.
+Explore is written; product apply has not started.
 
 Priority: P1 — serving a wrong public contract today
-Reviewed head: fab924b
-Owner decision: None.
+Reviewed head: ecb420a
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI still queued; no product apply yet |
-| CI proof | 3/6 | Checks queued/in progress on the stub PR |
+| Overall readiness | 3/6 | CI still in progress; no product apply yet |
+| CI proof | 3/6 | Lint succeeded; other checks queued on the stub PR |
 | Local tests proof | N/A | Before implement (`localTests: none`) |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-tokenbucket-bug-eval-finite-wait pushed | `git push` `fab924b` |
+| Branch | 2026-09-13-tokenbucket-bug-eval-finite-wait pushed | `git` / pr-host |
 | OpenSpec | none | no change folder |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/53 | pr-host Create |
-| CI | build 34742104376 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742104376 | pr-host CI (head `fab924b`) |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/53 | pr-host List |
+| CI | build 34742165109 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742165109 | pr-host check_runs (head `385b7e9`) |
 | Local tests | none | handoff.yaml localTests |
-| PR comments | no comments | inventory empty |
+| PR comments | no comments | pr-host get_comments empty |
 
 ## Specs
 None.
@@ -67,10 +67,13 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait` from `origin/master` (`tokenbucket/` present; `origin/HEAD` is stale `initial`). Stub PR #53 is the durable card. Next is explore.
+Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait` from `origin/master`. Stub PR #53 is the durable card. Explore reproduced dest fail-open. Next is propose.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| Must the errEvalWait cases also assert wait is 0? | additive incidental | assumed — assert wait 0 and `errors.Is(err, errEvalWait)` like `TestRedis_EvalBadReply`. Do not give non-finite wait a Duration meaning. | explore |
+| Can live Lua `tostring(wait_duration)` emit `nan` / `inf`, or only a fake 3-field override? | additive asked | assumed — still require finite after ParseFloat. Proof is the fake override. Do not wait for a live Lua nan path. Do not change Lua in this ticket. | explore |
 
 ## Before merge
 - [ ] Land tokenbucket tests that fail on dest for Eval wait `nan` / `+Inf` / `-Inf` / `inf`, then require finite `ParseFloat` or `errEvalWait`
@@ -89,7 +92,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | fab924b1f368c2a6c6699a33f2521fea92797553 | Card must match the branch you measured |
+| Reviewed head | ecb420ac7846afccb4f0e329772b44cc9558b03f | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -97,18 +100,19 @@ None.
 ### Technical review
 Best possible solution: dest still admits a non-finite Eval wait; the agreed fix is `errEvalWait` after `ParseFloat` when the number is not finite.
 
-Do we have a high-confidence way to reproduce? Yes, fake Redis 3-field reply via `startTestFakeRedis` / `setEvalReply` / `arrayBulks` already in `tokenbucket/` tests. Dest has no nan/Inf case yet (`TestRedis_EvalBadReply` covers `"xyz"` only). Fail-then-pass is implement (tests first).
+Do we have a high-confidence way to reproduce? Yes. Throwaway `TestThrowaway_EvalWaitNaNFailOpen` on dest (deleted, not committed): all four waits `nan` / `+Inf` / `-Inf` / `inf` returned `allowed=true`, `err=nil`. ParseFloat `err` was nil; `IsNaN`/`IsInf` true.
 
 Is this the best way to solve the issue? Yes vs dest: one finite check, same sentinel as a garbage string, no second error type, no deny-with-nil.
 
 ### Evidence
 What I checked:
-- `tokenbucket/redis.go` ParseFloat then only `convErr` (`fab924b`, dest `d69f89d`)
-- `tokenbucket/clock.go` `waitDuration` / `allowedFromWait` / `errEvalWait` (`d69f89d`)
-- `tokenbucket/limiter_test.go` `TestRedis_EvalBadReply` (`d69f89d`)
-- Specs `std_go_tokenbucket_allow` / `std_go_tokenbucket_lua-eval` (`d69f89d`)
-- Stub PR #53 OPEN, comments empty (pr-host List)
-- CI run 34742104376 queued (pr-host check_runs)
+- Throwaway dest test FAIL: `Allow` wait `nan`/`+Inf`/`inf` → `(true, MinInt64 Duration, nil)`; `-Inf` → `(true, 0, nil)` (`go test -run TestThrowaway_EvalWaitNaNFailOpen ./tokenbucket`, dest `d69f89d` code)
+- `strconv.ParseFloat` of those four strings: `err=<nil>`
+- `-Inf <= float64(time.Second.Microseconds())` is true
+- `tokenbucket/redis.go` ParseFloat then only `convErr`
+- `tokenbucket/clock.go` `waitDuration` / `allowedFromWait` / `errEvalWait`
+- `tokenbucket/limiter_test.go` `TestRedis_EvalBadReply` (`"xyz"` only)
+- CI run 34742165109 in progress (pr-host check_runs on `385b7e9`)
 
 ### Rank-up moves
 None.
