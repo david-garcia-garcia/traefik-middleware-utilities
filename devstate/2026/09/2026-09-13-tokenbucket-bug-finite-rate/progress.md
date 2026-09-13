@@ -5,7 +5,7 @@ JobName: 2026-09-13-tokenbucket-bug-finite-rate
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T06:10:14Z |
-| explore | [x] | [ ] | |
+| explore | [x] | [x] | 2026-09-13T06:14:31Z |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
