@@ -28,7 +28,7 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 	}
 
 	for i := 0; i < poolSize; i++ {
-		conn, err := sr.borrow(context.Background())
+		conn, err, _ := sr.borrow(context.Background())
 		if err != nil {
 			t.Fatalf("borrow %d: %v", i, err)
 		}
