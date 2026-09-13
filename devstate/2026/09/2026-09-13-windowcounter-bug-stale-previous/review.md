@@ -23,3 +23,10 @@ phase: implement
 findings: repro failed dest estimated=2; GET previous when expireAt>0; outage test kept
 fixed: takeBufferedPreviousLocked, repro_stale_previous_test.go
 skipped: live e2e; GET previous on every in-memory localDelta==0
+
+## codereview (2026-09-13)
+phase: codereview
+findings: coverage hard unflushed previous GET; others none
+fixed: TestTake_BufferedUnflushedPreviousNotGet (6a4f015)
+skipped: none
+
