@@ -24,4 +24,22 @@ findings: TestRepro_* failed on dest then passed; full ./reclaim green
 fixed: endBusyAfterPanic; closer slot on enforced path; usage packet
 skipped: nil-Done watcher leak; reclaim/BUGS.md
 
+## codereview (2026-09-13)
+phase: codereview
+findings: P1 0, P2 0; Standards 2 hard Leave-a-trail comments; Coverage 1 Wake waiter
+fixed: reproducer comments (b8b5341); TestTable_WakePanicWaiterReceivesErrorWithEnforce
+skipped: none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage Sleep/Wake panic sentences — already produced in implement
+fixed: none needed this phase
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: fold std_go_reclaim_value-lifecycle and std_go_reclaim_context-lease; map and names OK
+fixed: main specs synced; change archived as 2026-09-13-reclaim-panic-enforce-close
+skipped: none
+
 
