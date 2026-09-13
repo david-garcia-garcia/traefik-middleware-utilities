@@ -111,14 +111,6 @@ func writeGopathErrorpath(t *testing.T, goPath string) {
 	writeGopathFile(t, goPath, "errorpathprobe", "errorpath.go", errorpathprobeSrc)
 }
 
-// skipYaegiErrorpathUnderRace skips interpreted error-path tests under -race (Yaegi interp races).
-func skipYaegiErrorpathUnderRace(t *testing.T) {
-	t.Helper()
-	if raceDetectorOn {
-		t.Skip("Yaegi interp races on cancel, timeout, and pool-wait goroutines; Unit without -race still runs these")
-	}
-}
-
 // evalErrorpath evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalErrorpath(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -138,7 +130,6 @@ func evalErrorpath(t *testing.T, goPath, expr string) string {
 
 // TestYaegiErrorpath_DialRetry proves interpreted Get against a refusing host retries with backoff and does not panic.
 func TestYaegiErrorpath_DialRetry(t *testing.T) {
-	skipYaegiErrorpathUnderRace(t)
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
 	writeGopathErrorpath(t, goPath)
@@ -150,7 +141,6 @@ func TestYaegiErrorpath_DialRetry(t *testing.T) {
 
 // TestYaegiErrorpath_StallTimeout proves interpreted Get against a stalling peer maps to redis:timeout.
 func TestYaegiErrorpath_StallTimeout(t *testing.T) {
-	skipYaegiErrorpathUnderRace(t)
 	addr := startStallRedis(t)
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
@@ -163,7 +153,6 @@ func TestYaegiErrorpath_StallTimeout(t *testing.T) {
 
 // TestYaegiErrorpath_CancelMidCommand proves interpreted Get with a short caller deadline does not panic.
 func TestYaegiErrorpath_CancelMidCommand(t *testing.T) {
-	skipYaegiErrorpathUnderRace(t)
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.holdGetsForTest(t)
 	goPath := t.TempDir()
@@ -184,7 +173,6 @@ func TestYaegiErrorpath_CancelMidCommand(t *testing.T) {
 
 // TestYaegiErrorpath_PoolWait proves interpreted Get on a full pool returns redis:unreachable and IsPoolWait.
 func TestYaegiErrorpath_PoolWait(t *testing.T) {
-	skipYaegiErrorpathUnderRace(t)
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.mu.Lock()
 	fake.getDelay = 300 * time.Millisecond
@@ -200,7 +188,6 @@ func TestYaegiErrorpath_PoolWait(t *testing.T) {
 
 // TestYaegiErrorpath_TruncatedBulk proves interpreted Get of a short bulk is redis:unreachable, not redis:issue?.
 func TestYaegiErrorpath_TruncatedBulk(t *testing.T) {
-	skipYaegiErrorpathUnderRace(t)
 	truncated := append([]byte("$100\r\n"), bytes.Repeat([]byte("x"), 40)...)
 	addr := startRawReplyRedis(t, []rawReply{{payload: truncated, closeAfter: true}})
 	goPath := t.TempDir()

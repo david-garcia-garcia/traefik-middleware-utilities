@@ -10,11 +10,12 @@ import (
 // TestConcurrentMSetEXUnknownCommandFallback locks that overlapping MSetEX
 // unknown-command fallbacks stay successful and do not leak turns.
 func TestConcurrentMSetEXUnknownCommandFallback(t *testing.T) {
-	if raceDetectorOn {
-		t.Skip("invariant lock stays on Unit; -race reports overlapping native-MSETEX probes before the Lua cache settles")
-	}
 	workers := 16
 	callsPerWorker := 25
+	if raceDetectorOn {
+		workers = 4
+		callsPerWorker = 8
+	}
 	fake, addr := startFakeRedis(t, map[string]string{})
 	fake.setRejectMSetEX()
 	client := New(Config{Host: addr, PoolSize: 8})
