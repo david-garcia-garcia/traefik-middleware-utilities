@@ -8,7 +8,7 @@ JobName: 2026-09-13-tokenbucket-bug-allow-wait-units
 | explore | [x] | [x] | 2026-09-13T06:13:40Z |
 | propose | [x] | [x] | 2026-09-13T06:17:10Z |
 | implement | [x] | [x] | 2026-09-13T06:21:12Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-13T06:27:42Z |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |

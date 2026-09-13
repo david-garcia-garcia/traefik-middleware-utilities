@@ -25,3 +25,10 @@ phase: implement
 findings: dest tests failed then passed after microseconds admit
 fixed: Memory.Allow and Redis.Allow admit from waitMicro; waitDuration and allowedFromWait deleted
 skipped: other tokenbucket bugs
+
+## codereview (2026-09-13)
+
+phase: codereview
+findings: coverage hard 1
+fixed: TestRedis_MaxDelayTruncationFailOpen
+skipped: none
