@@ -12,3 +12,9 @@ findings: shape 1 finished channel; four slotGone writers; verbatim reproducer n
 fixed: explore.md, deviations.md, PR #77 card
 skipped: product apply
 
+## propose (2026-09-13)
+phase: propose
+findings: fold std_go_reclaim_context-lease; change reclaim-nildone-watcher-exit
+fixed: proposal, design, tasks, delta spec, specs.md
+skipped: product apply
+
