@@ -46,3 +46,11 @@ findings: none
 fixed: none
 skipped: none
 CI: https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743230001 success
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+CI: https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34745328729 success
+head: dc3eebe310d36924f4e4c7bd10b9e9ac0f9396a9

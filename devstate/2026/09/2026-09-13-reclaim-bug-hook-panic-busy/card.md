@@ -1,11 +1,11 @@
-Developer review: ready for review — 2026-09-13T06:45:55Z
+Developer review: ready for review — 2026-09-13T07:39:12Z
 
 ## What this changes
-**Operators.** None.
+**Operators.** Watch error-level `reclaim_hook_panic` (key, which hook, panic value): a recovered Sleep or Close panic; the process stays up but that hook is broken.
 
 **Admin users.** None.
 
-**Developers.** `reclaim.Table` recovers a nil `create` and panics in create, Sleep, Wake, and Close so a key is not left `slotBusy` and AfterFunc cannot crash the process. `Open` can return a wrapped Wake panic error. Specs `std_go_reclaim_context-lease` and `std_go_reclaim_value-lifecycle` and usage packet `std_go_reclaim.md` match. Tests 2a–2d plus AfterFunc Close panic.
+**Developers.** `reclaim.Table` recovers a nil `create` and panics in create, Sleep, Wake, and Close so a key is not left `slotBusy` and AfterFunc cannot crash the process. One `runHook` returns the recovered panic so each caller branches; it replaces five inline recover closures and `runSleep`/`runWake`/`runClose`. Nil `create` is rejected in `Open` beside the other argument guards, so the key is never registered. A recovered Sleep or Close panic logs `reclaim_hook_panic` at error; create and Wake panics travel as the returned error so they are not logged twice. `reclaim_dispose` means Close finished. Specs `std_go_reclaim_context-lease` and `std_go_reclaim_value-lifecycle` and usage packet `std_go_reclaim.md` match. Tests 2a–2d plus AfterFunc Close panic, plus `TestTable_SleepPanicIsReportedAtError`, `TestTable_ClosePanicIsReportedAtErrorAndStillDisposes`, `TestTable_WakePanicIsReportedAsErrorNotLogged`. `Open` can return a wrapped Wake panic error.
 
 **End users.** None.
 
@@ -33,14 +33,14 @@ sequenceDiagram
 Ready for review. All eight CI jobs succeeded on this head.
 
 Priority: P1 — Production is unsafe, or serving a wrong public contract today
-Reviewed head: 469fe7f
+Reviewed head: [dc3eebe](https://github.com/david-garcia-garcia/traefik-middleware-utilities/commit/dc3eebe310d36924f4e4c7bd10b9e9ac0f9396a9)
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | CI succeeded; no open PR comments |
-| CI proof | 6/6 | success — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743230001 |
+| CI proof | 6/6 | success — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34745328729 |
 | Local tests proof | N/A | prHost github; CI covers it |
 | Review resolution | 6/6 | OPEN PR; no reviewer comments |
 
@@ -50,8 +50,8 @@ Owner decision: None.
 | Branch | 2026-09-13-reclaim-bug-hook-panic-busy pushed | `git` / GitHub |
 | OpenSpec | reclaim-hook-panic-recovery (archived) | `openspec/changes/archive/2026-09-13-reclaim-hook-panic-recovery/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/49 | GitHub MCP |
-| CI | build 34743230001 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743230001 | Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly |
-| Local tests | passed | `go test -short -timeout 2m -count=1 ./...` |
+| CI | build 34745328729 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34745328729 | Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly |
+| Local tests | passed | `go test -short -timeout 5m -count=1 ./...` on `dc3eebe` |
 | PR comments | no comments | comments none |
 
 ## Specs
@@ -97,22 +97,24 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 469fe7f0488a9480d573281b8ae451a238dbd639 | Card must match the branch you measured |
+| Reviewed head | dc3eebe310d36924f4e4c7bd10b9e9ac0f9396a9 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: Recover at `put` / `drop` / `reclaimLocked` / `dispose` / `Reset` via `endBusySlot`. `runSleep` / `runWake` / `runClose` stay thin.
+Best possible solution: Recover at `put` / `drop` / `reclaimLocked` / `dispose` / `Reset` via `endBusySlot`. One `runHook` returns the panic so each caller unsticks the slot; nil `create` is rejected in `Open`; Sleep and Close panics log `reclaim_hook_panic`; create and Wake panics travel as the returned error.
 
-Do we have a high-confidence way to reproduce? Yes. Fail-then-pass: 2a/2b hung (`Open did not return; key left busy`); 2c AfterFunc child `exit status 2`; 2d Close never ran. After the recover those tests pass; Close AfterFunc panic is covered.
+Do we have a high-confidence way to reproduce? Yes. Fail-then-pass: 2a/2b hung (`Open did not return; key left busy`); 2c AfterFunc child `exit status 2`; 2d Close never ran. After the recover those tests pass; Close AfterFunc panic is covered. Sleep/Close panics assert `reclaim_hook_panic`; Wake panic asserts the returned error and no duplicate log.
 
 Is this the best way to solve the issue? Yes versus `origin/master`. The table owns `slotBusy`/`ready`.
 
 ### Evidence
 What I checked:
-- Fail on `1baff53` (tests only): 4 FAIL in 30s. Pass after `2e24a03` in 0.19s. `go test -short ./...` passed.
-- CI run 34743230001: all eight jobs success (GitHub MCP)
+- Fail on `1baff53` (tests only): 4 FAIL in 30s. Pass after `2e24a03` in 0.19s.
+- CI run 34745328729: all eight jobs success (GitHub MCP) on `dc3eebe310d36924f4e4c7bd10b9e9ac0f9396a9`
+- Local tests: `go test -short -timeout 5m -count=1 ./...` passed on `dc3eebe`
+- PR comments/reviews: empty (GitHub MCP)
 - Qualify: qualified-with-gaps (prepare)
 
 ### Rank-up moves
