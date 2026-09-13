@@ -68,7 +68,7 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `simpleredis/lifecycle_test.go` — New/use/Close cycles and Close during held Gets
 - `simpleredis/commands_msetex_concurrent_test.go` — concurrent unknown-command MSetEX fallback
 - `simpleredis/resp_injection_test.go` — CRLF and inline PING round-trip as data
-- `simpleredis/BUGS.md` — hunt record: three real defects point at other PRs; Rejected rows name the locking test
+- `simpleredis/BUGS.md` — hunt record: handshake matcher under Yaegi; interpreted defer-on-panic proof (`yaegi_defer_test.go`); desync eviction. Rejected rows name the locking test
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin (`Host`, optional `Password`, `Database`, `DropHost`)
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`
 - `knowledge/devdocs/std_go_simpleredis_resp-decode.md` — ReadSlice decode, escaping `+`/`:` copies, `parseLen`
