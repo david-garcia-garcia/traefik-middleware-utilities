@@ -61,8 +61,8 @@ Dest lint (2847a81, v1.63.4, uncapped)
 
 - Q: Fold the lint pin into `std_go_ci_test-suites`, or add a new spec leaf?
   Rank: additive asked — Desired / Affected names possibly that spec and `std_go_test-suites.md`
-  Decision: assumed — fold the pin + enabled-linter contract into `std_go_ci_test-suites`; usage gotchas (testpackage rejected, `checkExported` trap, goimports omitted, errorlint identity) into `std_go_test-suites.md`. Propose runs FindSpecHost; do not invent a `build_*` domain.
-  By: explore
+  Decision: resolved — fold. FindSpecHost: `std_go_ci_test-suites` (high). Usage gotchas in `std_go_test-suites.md`.
+  By: propose
 
 - Q: Enable extra revive `package-comments` / stylecheck ST1000 to force a reclaim package comment the requester expected?
   Rank: additive incidental — dest default revive/stylecheck are 0 for that; Desired says fix measured hits, not extra rules
