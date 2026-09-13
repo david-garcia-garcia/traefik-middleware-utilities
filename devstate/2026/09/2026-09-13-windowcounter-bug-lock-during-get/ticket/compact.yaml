@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: Buffered Take holds l.mu across Redis GET
+url: none
+number: none
