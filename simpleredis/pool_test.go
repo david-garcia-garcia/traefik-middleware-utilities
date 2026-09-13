@@ -544,26 +544,41 @@ func TestIdleCapAfterSequentialRelease(t *testing.T) {
 		t.Run(fmt.Sprintf("poolSize=%d maxIdleConns=%d", row.poolSize, row.maxIdle), func(t *testing.T) {
 			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 			redis := New(Config{Host: addr, PoolSize: row.poolSize, MaxIdleConns: row.maxIdle})
-			conns := make([]*pooledConn, row.poolSize)
-			for i := 0; i < row.poolSize; i++ {
-				conn, err := redis.borrow(context.Background())
-				if err != nil {
-					t.Fatalf("borrow %d: %v", i, err)
-				}
-				conns[i] = conn
-			}
-			for i := 0; i < row.poolSize; i++ {
-				redis.release(conns[i], true)
-				if got := len(redis.idleConns); got > wantIdle {
-					t.Fatalf("idle %d after release %d, want at most %d", got, i+1, wantIdle)
-				}
-			}
-			if got := len(redis.idleConns); got != wantIdle {
-				t.Fatalf("idle %d after poolSize %d maxIdleConns %d, want %d", got, row.poolSize, row.maxIdle, wantIdle)
-			}
-			fake.waitOpenSocketsEqual(t, wantIdle)
+			assertIdleCapAfterSequentialRelease(t, fake, redis, row.poolSize, wantIdle)
 		})
 	}
+
+	t.Run("default Config PoolSize and MaxIdleConns", func(t *testing.T) {
+		fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+		redis := New(Config{Host: addr})
+		if redis.PoolSize() != 8 || redis.MaxIdleConns() != 8 {
+			t.Fatalf("defaults PoolSize=%d MaxIdleConns=%d, want 8 and 8", redis.PoolSize(), redis.MaxIdleConns())
+		}
+		assertIdleCapAfterSequentialRelease(t, fake, redis, redis.PoolSize(), 8)
+	})
+}
+
+// assertIdleCapAfterSequentialRelease borrows liveCap sockets, releases them, and proves idle and still-open equal wantIdle.
+func assertIdleCapAfterSequentialRelease(t *testing.T, fake *fakeRedis, redis *SimpleRedis, liveCap, wantIdle int) {
+	t.Helper()
+	conns := make([]*pooledConn, liveCap)
+	for i := 0; i < liveCap; i++ {
+		conn, err, _ := redis.borrow(context.Background())
+		if err != nil {
+			t.Fatalf("borrow %d: %v", i, err)
+		}
+		conns[i] = conn
+	}
+	for i := 0; i < liveCap; i++ {
+		redis.release(conns[i], true)
+		if got := len(redis.idleConns); got > wantIdle {
+			t.Fatalf("idle %d after release %d, want at most %d", got, i+1, wantIdle)
+		}
+	}
+	if got := len(redis.idleConns); got != wantIdle {
+		t.Fatalf("idle %d after liveCap %d maxIdleConns %d, want %d", got, liveCap, redis.MaxIdleConns(), wantIdle)
+	}
+	fake.waitOpenSocketsEqual(t, wantIdle)
 }
 
 func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
