@@ -5,7 +5,7 @@ Defines the RESP commands a SimpleRedis client speaks after it holds a session: 
 ## Requirements
 
 ### Requirement: Get returns the stored value or a miss
-`Get(name)` SHALL send Redis `GET` for that key. A bulk reply SHALL return those bytes. A null bulk (`$-1`) SHALL return an error whose `Error()` text is `redis:miss`.
+`Get(name)` SHALL send Redis `GET` for that key. A bulk reply SHALL return those bytes. After a one-slot reply, a nil slot (RESP2 null bulk `$-1`) SHALL return an error whose `Error()` text is `redis:miss`. Empty bulk `$0` SHALL return a non-nil empty slice and MUST NOT return `redis:miss`.
 
 #### Scenario: Get hit and miss
 - **WHEN** a key has been Set
@@ -18,6 +18,11 @@ Defines the RESP commands a SimpleRedis client speaks after it holds a session: 
 - **WHEN** Set stores a value that contains newline bytes
 - **AND** Get is called for that key
 - **THEN** Get returns those exact bytes
+
+#### Scenario: Empty bulk is not a miss
+- **WHEN** Get receives empty bulk `$0`
+- **THEN** Get returns a non-nil empty slice
+- **AND** the error is not `redis:miss`
 
 ### Requirement: MGet returns aligned slots and skips empty names
 `MGet(names)` SHALL send Redis `MGET` for those keys. Each null bulk slot SHALL be a nil slice in the result, aligned with the requested names. Empty or nil `names` SHALL return `nil, nil` and MUST NOT dial. A short array reply SHALL return an error whose `Error()` text is `redis:issue?`.
@@ -243,7 +248,7 @@ The package SHALL export `ScriptSHA1Hex(script string) string`. It SHALL return 
 - **THEN** the result equals the compiled `ScriptSHA1Hex` of that body
 
 ### Requirement: Eval sends EVALSHA then EVAL on NOSCRIPT
-`Eval(ctx, script, digest, keys, args)` SHALL have the public signature `Eval(ctx context.Context, script string, digest string, keys []string, args []string) ([][]byte, error)`. Callers SHALL pass the script body and the SHA-1 hex from `ScriptSHA1Hex` (or an equivalent Redis `sha1hex`). `Eval` MUST NOT hash the script body. `Eval` MUST NOT check that `digest` equals `ScriptSHA1Hex(script)`. `Eval` SHALL send Redis `EVALSHA`, the caller `digest`, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. When the error text from that command starts with `NOSCRIPT`, `Eval` SHALL send `EVAL` once with the same script body, `numkeys`, keys, and args. That EVAL is the only place the script body is sent to Redis/Dragonfly so the engine stores it. That `NOSCRIPT` MUST NOT be returned to the caller as the command result. The client MUST NOT send `SCRIPT LOAD` at `Init`. The client MUST NOT export `EvalSha` or `ScriptLoad`. The client MUST NOT keep a digest table or mutex for scripts. The return SHALL keep the same `[][]byte` shape: a `:` integer is one element of decimal digits; a bulk is one element; a Lua or other server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). A Lua indexed table SHALL decode only as a flat array whose elements are bulk strings or integers (or status). Nested tables and `{ err = "..." }` inside an array SHALL return `redis:unsupported-reply`. Scripts that return several values MUST wrap each slot with Lua `tostring` (or return numbers, which become integers). Scripts that touch keys MUST list those keys in `keys` and MUST NOT use `table.maxn`.
+`Eval(ctx, script, digest, keys, args)` SHALL have the public signature `Eval(ctx context.Context, script string, digest string, keys []string, args []string) ([][]byte, error)`. Callers SHALL pass the script body and the SHA-1 hex from `ScriptSHA1Hex` (or an equivalent Redis `sha1hex`). `Eval` MUST NOT hash the script body. `Eval` MUST NOT check that `digest` equals `ScriptSHA1Hex(script)`. `Eval` SHALL send Redis `EVALSHA`, the caller `digest`, the decimal `numkeys` equal to `len(keys)`, then each key, then each arg. Empty `keys` and empty `args` are legal. When the error text from that command starts with `NOSCRIPT`, `Eval` SHALL send `EVAL` once with the same script body, `numkeys`, keys, and args. That EVAL is the only place the script body is sent to Redis/Dragonfly so the engine stores it. That `NOSCRIPT` MUST NOT be returned to the caller as the command result. The client MUST NOT send `SCRIPT LOAD` at `Init`. The client MUST NOT export `EvalSha` or `ScriptLoad`. The client MUST NOT keep a digest table or mutex for scripts. The return SHALL keep the same `[][]byte` shape: a `:` integer is one element of decimal digits; a bulk is one element; a top-level null bulk (`$-1`, including Lua `return false`) SHALL be one nil-slot element with a nil error and MUST NOT be `redis:miss`; Eval MUST NOT remap `redis:miss` as a special case of that verb; a Lua or other server `-` error SHALL be returned as an error (AUTH-class prefixes still `redis:noauth`). A Lua indexed table SHALL decode only as a flat array whose elements are bulk strings or integers (or status). Nested tables and `{ err = "..." }` inside an array SHALL return `redis:unsupported-reply`. Scripts that return several values MUST wrap each slot with Lua `tostring` (or return numbers, which become integers). Scripts that touch keys MUST list those keys in `keys` and MUST NOT use `table.maxn`.
 
 #### Scenario: Later Eval sends EVALSHA not the body
 - **WHEN** Eval is called twice with the same script, that script’s `ScriptSHA1Hex` digest, one key, and two args against a fake that already has that digest
@@ -288,6 +293,11 @@ The package SHALL export `ScriptSHA1Hex(script string) string`. It SHALL return 
 - **THEN** Eval returns `redis:unsupported-reply`
 - **AND** the idle pool is empty
 - **AND** the next command on that client dials a new socket
+
+#### Scenario: Eval null bulk is not a miss
+- **WHEN** Eval receives a top-level RESP2 null bulk `$-1` (Lua `return false`)
+- **THEN** Eval returns one nil slot
+- **AND** the error is not `redis:miss`
 
 ### Requirement: Interpreter tests assert the unsafe conversion matrix
 Tests that import Yaegi SHALL assert which `string`/`[]byte` conversions the interpreter accepts under stdlib-only symbols, stdlib plus unsafe symbols, and unrestricted. Those tests MAY register Yaegi unsafe symbols and MAY import `unsafe` in `_test.go` files. Existing Init/Get/Set/Del/Incr/Eval/MSetEX interpreter tests MUST still use GOPATH with stdlib symbols only and `useunsafe` false. Named copy-versus-unsafe benches SHALL exist so a human can reproduce the measured ns/op; they MUST NOT fail `go test` without `-bench`. Those tests MUST NOT start Traefik.
