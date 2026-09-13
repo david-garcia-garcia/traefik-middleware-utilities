@@ -106,8 +106,8 @@ Owner levels are implemented as specified. No disagreement on Error vs Warn vs D
 
 - Q: `MsgSocketClosed` idle-cap is decided inside `release`; the ticket forbids logging inside `release` and forbids changing its signature. Where does that event go?
   Rank: additive asked — inventory names idle cap; dest close lives in `release` (`pool.go`); signature change is Out of scope
-  Decision: assumed — emit on the existing idle-cap close branch inside `release` because that is the detection site. Do not change `(conn, reusable bool)`. Do not funnel other close reasons through `release`. The "not inside release" rule stays for panic/poison/cancel/timeout.
-  By: explore
+  Decision: assumed — dest #79 moved the idle-cap decision into `parkIdleConn`. Emit `MsgSocketClosed` reason `idle_cap` there (the detection site). `release` still has signature `(conn, reusable bool)` and does not log from the generic `!reusable` arm.
+  By: implement
 
 - Q: Caller `DeadlineExceeded` (not library budget, not `Canceled`) — `MsgTimeout` or silence?
   Rank: additive asked — requirement inventory splits I/O-or-budget timeout vs cancel; `libraryTimeout` already keeps caller deadline as `ctx.Err()`
