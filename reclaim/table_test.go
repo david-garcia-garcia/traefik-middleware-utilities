@@ -835,6 +835,7 @@ func TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 		t.Fatalf("open 1: %v", err)
 	}
 	cancel()
+	// Hold Close so a racing Open cannot create until this incarnation has ended.
 	<-closeEntered
 
 	ctx2, cancel2 := context.WithCancel(context.Background())
@@ -847,6 +848,7 @@ func TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 		}, Hooks{})
 		opened <- err
 	}()
+	// The second Open must stay parked for the whole Close, not create during it.
 	select {
 	case err := <-opened:
 		if createWhileCloseBlocked.Load() {
@@ -858,6 +860,7 @@ func TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
 		}
 	}
+	// Release Close; the parked Open may create only after that returns.
 	close(releaseClose)
 	select {
 	case err := <-opened:
@@ -893,6 +896,7 @@ func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 		t.Fatalf("open 1: %v", err)
 	}
 	cancel()
+	// Wait until expire has entered Close (grace elapsed), then hold it.
 	select {
 	case <-closeEntered:
 	case <-time.After(waitBudget):
@@ -909,6 +913,7 @@ func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 		}, Hooks{})
 		opened <- err
 	}()
+	// The second Open must stay parked for the whole Close, not create during it.
 	select {
 	case err := <-opened:
 		if createWhileCloseBlocked.Load() {
@@ -920,6 +925,7 @@ func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
 		}
 	}
+	// Release Close; the parked Open may create only after that returns.
 	close(releaseClose)
 	select {
 	case err := <-opened:

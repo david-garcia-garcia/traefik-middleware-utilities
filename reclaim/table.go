@@ -143,10 +143,18 @@ func runClose(hooks Hooks) {
 	}
 }
 
-// dispose runs the Close hook and then reports the end, so reclaim_dispose means Close has returned.
-func dispose(key string, hooks Hooks, logger *slog.Logger) {
-	runClose(hooks)
+// unmapAfterClose unmaps the incarnation after Close has returned, logs dispose, then closes
+// ready so waiters create. The caller already ran Close outside t.mu while the slot was slotBusy.
+func (t *Table) unmapAfterClose(key string, incarnation *slot, logger *slog.Logger) {
+	t.mu.Lock()
+	if t.items[key] == incarnation {
+		delete(t.items, key)
+	}
+	incarnation.state = slotGone
+	ready := incarnation.ready
+	t.mu.Unlock()
 	logger.Debug(MsgDispose, "key", key)
+	close(ready)
 }
 
 // Open returns the stored value for key, creating it once, and tracks ctx until it is done.
@@ -323,14 +331,7 @@ func (t *Table) drop(key string, incarnation *slot) {
 		// Zero grace keeps nothing: Close while still slotBusy, then unmap so a racing Open
 		// waits instead of creating during Close.
 		runClose(storedHooks)
-		t.mu.Lock()
-		if t.items[key] == incarnation {
-			delete(t.items, key)
-		}
-		incarnation.state = slotGone
-		close(incarnation.ready)
-		t.mu.Unlock()
-		logger.Debug(MsgDispose, "key", key)
+		t.unmapAfterClose(key, incarnation, logger)
 		return
 	}
 
@@ -369,14 +370,7 @@ func (t *Table) expire(key string, incarnation *slot) {
 	storedHooks := incarnation.hooks
 	t.mu.Unlock()
 	runClose(storedHooks)
-	t.mu.Lock()
-	if t.items[key] == incarnation {
-		delete(t.items, key)
-	}
-	incarnation.state = slotGone
-	close(incarnation.ready)
-	t.mu.Unlock()
-	logger.Debug(MsgDispose, "key", key)
+	t.unmapAfterClose(key, incarnation, logger)
 }
 
 // Reset ends every incarnation on this table. An awake value is slept first, so Close never sees
@@ -409,9 +403,11 @@ func (t *Table) Reset() {
 		case slotAwake:
 			runSleep(storedHooks)
 			logger.Debug(MsgOrphan, "key", key)
-			dispose(key, storedHooks, logger)
+			runClose(storedHooks)
+			logger.Debug(MsgDispose, "key", key)
 		case slotAsleep:
-			dispose(key, storedHooks, logger)
+			runClose(storedHooks)
+			logger.Debug(MsgDispose, "key", key)
 		case slotBusy, slotGone:
 			// The goroutine that owns this transition ends the incarnation itself: it finds the
 			// slot unmapped, or its grace wait already released by the loop above.
