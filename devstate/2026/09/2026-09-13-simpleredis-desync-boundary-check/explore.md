@@ -40,15 +40,15 @@ Identity (client address, user, tenant, Host, trust hop) is not set or reconstru
 
 - Q: Does a dedicated Yaegi test for `Buffered()` land, or only compiled tests?
   Rank: additive asked — optional new test this change would create; criterion is “add if practical”
-  Decision: assumed — compiled tests are required. Add a Yaegi Get against the compiled stray fake only if it fits the existing `yaegi_test.go` GOPATH helpers; do not invent a second interpreter harness.
-  By: explore
+  Decision: resolved — compiled tests plus `TestYaegi_StrayExtraReplyOwnKey` via existing `clientprobe.GetOwnKeys`
+  By: implement
 
 - Q: AUTH leftover (`dial` ignores `reusable`) — handshake-specific assertion, or later-command destroy only?
   Rank: additive asked — new branch inside `do` this change creates; requirement Tension says do not fail AUTH/SELECT solely because `reusable` is false, and prefer not to edit `pool.go`
   Decision: assumed — post-read leftover still returns the AUTH/SELECT value with `reusable = false` (dial ignores that flag). If `Buffered() != 0` *before* the next write on that same conn (SELECT after leftover AUTH), refuse the write inside `do` so SELECT is not parsed from AUTH leftover; `dial` then sees `err` and closes. Compliant handshake stays `Buffered() == 0` at both checks (`TestAuthAndSelectOncePerDial`).
-  By: explore
+  By: implement
 
 - Q: Permanent test file name on dest (reference is build-tagged `bugs_repro_test.go`)?
   Rank: additive asked — new untagged tests this change creates; requirement Desired names the three proofs
-  Decision: assumed — `simpleredis/resp_test.go` for the three proofs (or a sibling `resp_desync_test.go` only if `resp_test.go` would mix unrelated helpers). Fake helper in `simpleredis/fake_redis_test.go`. Untagged. Default `go test ./simpleredis/`.
-  By: explore
+  Decision: resolved — `simpleredis/resp_test.go` proofs plus `startStrayExtraReplyFake` in `simpleredis/fake_redis_test.go`
+  By: implement
