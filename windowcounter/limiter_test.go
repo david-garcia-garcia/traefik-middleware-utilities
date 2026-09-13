@@ -556,7 +556,7 @@ func TestTake_BufferedPendingDeltaOutage(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 	const limit int64 = 5
-	window := time.Minute
+	window := 2 * time.Hour
 	if _, _, err := limiter.Take(context.Background(), "k", limit, window); err != nil {
 		t.Fatal(err)
 	}
@@ -630,7 +630,7 @@ func TestTake_BufferedTwoInstancesOutage(t *testing.T) {
 	a.SetNowForTest(func() time.Time { return now })
 	b.SetNowForTest(func() time.Time { return now })
 	const limit int64 = 5
-	window := time.Minute
+	window := 2 * time.Hour
 	for _, limiter := range []*Limiter{a, b} {
 		allowed, _, takeErr := limiter.Take(context.Background(), "share", limit, window)
 		if takeErr != nil {
@@ -694,7 +694,9 @@ func TestPeek_BufferedEmptyFlushThenKill(t *testing.T) {
 	t.Cleanup(func() { limiter.Close() })
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Take(context.Background(), "k", 5, time.Minute); err != nil {
+	const limit int64 = 5
+	window := 2 * time.Hour
+	if _, _, err := limiter.Take(context.Background(), "k", limit, window); err != nil {
 		t.Fatal(err)
 	}
 	limiter.Sleep()
@@ -702,7 +704,7 @@ func TestPeek_BufferedEmptyFlushThenKill(t *testing.T) {
 	now = now.Add(time.Hour)
 	limiter.SetNowForTest(func() time.Time { return now })
 	getsAfterKill := fake.getCallCount()
-	peekNilError(t, limiter, "k", 5, time.Minute)
+	peekNilError(t, limiter, "k", limit, window)
 	if fake.getCallCount() != getsAfterKill {
 		t.Fatal("buffered Peek GETs Redis after kill")
 	}

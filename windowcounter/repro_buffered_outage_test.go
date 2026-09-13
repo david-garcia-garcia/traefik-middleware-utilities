@@ -19,7 +19,7 @@ func TestRepro_BufferedTakeHidesRedisOutage(t *testing.T) {
 	limiter.SetNowForTest(func() time.Time { return now })
 
 	const limit int64 = 2
-	window := time.Minute
+	window := 2 * time.Hour
 
 	allowed, estimated, err := limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
