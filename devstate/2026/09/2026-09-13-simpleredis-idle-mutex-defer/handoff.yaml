@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-simpleredis-idle-mutex-defer
+jobName: 2026-09-13-simpleredis-idle-mutex-defer
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: 2026-09-13-simpleredis-panic-safe-release
+qualify: qualified-with-gaps
+src: 0f0a2f7b5fcd7ee43ed160666af6ec79114cb6c511add784f0e1dbf665ef35d6
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-idle-mutex-defer
+pr:
+  id: 73
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/73

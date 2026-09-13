@@ -18,13 +18,13 @@ Measured: AUTH peer-close `IsUnreachable` compiled true / interpreted false; AUT
 
 This coverage PR does **not** assert interpreted AUTH/SELECT matcher results; that would be red until that PR lands.
 
-### 2. One lost in-use turn permanently bricks the client
+### 2. Interpreted defer runs on panic under Yaegi
 
-**PR:** `2026-09-13-simpleredis-lost-turn-recovery`
+**Proof:** `simpleredis/yaegi_defer_test.go`
 
-`exec` releases without `defer`. A recovered panic between `borrow` and `release` loses one turn forever. After `PoolSize` losses, every command is `redis:unreachable` with a healthy Redis and no sockets.
+Interpreted `defer` does run on panic under Yaegi v0.16.1, for an explicit interpreted panic, the interpreter's own `errors.As` panic, and a nil-map write. Closed PR 29 rejected deferred `release` on the opposite belief; do not treat that close as policy. `runOnConn` defers `release`, `borrow` defers `freeInUseTurn` when it does not hand a socket off, and `release` unlocks the idle-list mutex via defer inside the keep-or-close owner.
 
-Measured: PoolSize 2, two recovered panics → turns 0/2, idle 0, next Get `redis:unreachable`.
+Measured before deferred `release`: PoolSize 2, two recovered panics → turns 0/2, idle 0, next Get `redis:unreachable`.
 
 ### 3. A desynced pooled socket is never evicted and serves the previous command's reply forever
 
