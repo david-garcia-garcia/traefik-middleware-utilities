@@ -30,3 +30,9 @@ fixed: handshakeFailure at dial; shouldRetry type-assert; four pool_test repros
 skipped: none
 localTests: passed
 ci: in progress 34741831363
+
+## codereview (2026-09-13)
+phase: codereview
+findings: P3 1 (nitpick symmetry client vs redis)
+fixed: renamed client to redis in four handshake tests
+skipped: none
