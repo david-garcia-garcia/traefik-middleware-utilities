@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T06:20:57Z
+Developer review: in progress — 2026-09-13T06:28:15Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** `validateClock` rejects NaN and Inf as `errRate`. Unit tests in `repro_nan_rate_test.go` and `repro_hunt_inf_rate_nan_test.go` prove dest used to accept those rates and Allow fail-opened.
+**Developers.** `validateClock` rejects NaN and Inf as `errRate`. Unit tests `TestRepro_NaNRateRejected` and `TestRepro_InfRateRejected` prove dest used to accept those rates; `TestRepro_NaNRateAllowFailOpen` skips after New rejects.
 
 **End users.** None.
 
@@ -34,28 +34,28 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Apply landed locally (`go test -short ./...` passed). Remote CI still queued.
+Seven-axis review applied the Inf test rename. Remote CI still queued.
 
 Priority: P1 — serving a wrong public contract today
-Reviewed head: 6986195
+Reviewed head: 9c94dc7
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 3/6 | CI still queued |
-| CI proof | 3/6 | Checks queued after the fix push |
+| CI proof | 3/6 | Checks queued after the review rename |
 | Local tests proof | N/A | prHost remote; CI proof covers remote |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-tokenbucket-bug-finite-rate pushed | `git push` `6986195` |
+| Branch | 2026-09-13-tokenbucket-bug-finite-rate pushed | `git push` `9c94dc7` |
 | OpenSpec | tokenbucket-reject-nonfinite-rate | `openspec/changes/tokenbucket-reject-nonfinite-rate/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/52 | pr-host List |
-| CI | build 34742502193 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742502193 | pr-host CI |
-| Local tests | passed | `go test -short ./...` |
+| CI | build 34742817732 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742817732 | pr-host CI |
+| Local tests | passed | `go test -short ./tokenbucket` after rename |
 | PR comments | no comments | inventory empty |
 
 ## Specs
@@ -68,12 +68,12 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-finite-rate` from `origin/master`. Stub PR #52 is the durable card. Apply landed; code review next.
+Local ticket, branch `2026-09-13-tokenbucket-bug-finite-rate` from `origin/master`. Stub PR #52 is the durable card. Code review done; archive next after usage-doc impact.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
 | --- | --- | --- | --- |
-| Do new tests land as the named `repro_*.go` files or fold into `limiter_test.go`? | additive asked | assumed — land `repro_nan_rate_test.go` and `repro_hunt_inf_rate_nan_test.go`; adapt dest Allow signature | explore |
+| Do new tests land as the named `repro_*.go` files or fold into `limiter_test.go`? | additive asked | assumed — land `repro_nan_rate_test.go`; Inf tests as `repro_inf_rate_test.go` after review renamed the hunt filename | codereview |
 | Does `-Inf` get its own constructor test, given dest already rejects it via `rate <= 0`? | additive incidental | assumed — include `-Inf` beside +Inf; dest-green `-Inf` is not the fail-first proof | explore |
 | Does `TestRepro_NaNRateAllowFailOpen` stay as a skip-after-fix witness or become New-reject only? | additive asked | assumed — keep the test; Skip when New rejects NaN | explore |
 | Should `errRate` text change from "greater than 0" to mention finite? | additive incidental | assumed — keep the existing string; callers match `errors.Is` | explore |
@@ -84,10 +84,17 @@ Local ticket, branch `2026-09-13-tokenbucket-bug-finite-rate` from `origin/maste
 - [ ] Wait for CI on PR #52
 
 ## Findings
-None.
+- [Standards 1](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_standards.md) — FIX — Inf test file renamed to `repro_inf_rate_test.go`. Path: `tokenbucket/repro_inf_rate_test.go`. Reply none.
+- [Nitpicks 1](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_nitpicks.md) — FIX — Inf test renamed to `TestRepro_InfRateRejected`. Path: `tokenbucket/repro_inf_rate_test.go`. Reply none.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_standards.md) — 2 total, 0 pending, 1 completed, 1 skipped
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_nitpicks.md) — 1 total, 0 pending, 1 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-finite-rate/devstate/2026/09/2026-09-13-tokenbucket-bug-finite-rate/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -96,24 +103,23 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 6986195c22bc4663abc762cebeba425f3965115a | Card must match the branch you measured |
+| Reviewed head | 9c94dc716c6ace547d08e25416139e166cdde84d | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: `validateClock` now rejects NaN and Inf as `errRate`; Allow and consumeOne were not special-cased.
+Best possible solution: `validateClock` rejects NaN and Inf as `errRate`; Inf tests named for constructor reject, not dest Inf*0 fail-open.
 
-Do we have a high-confidence way to reproduce? Yes — fail-then-pass: dest tests failed (`NewMemory(NaN)`, `NewRedis(NaN)`, `NewMemory(+Inf)`, `NewRedis(+Inf)`, NaN Allow fail-open); after `validateClock` the same command passed; `go test -short ./...` passed.
+Do we have a high-confidence way to reproduce? Yes — fail-then-pass on dest then the gate; rename kept the same assertions.
 
-Is this the best way to solve the issue? Yes — the shared constructor gate is the owner.
+Is this the best way to solve the issue? Yes — the shared constructor gate is the owner. `errRate` string left as dest (public Error() text).
 
 ### Evidence
 What I checked:
-- FAIL `go test -short -count=1 -timeout 60s -run 'TestRepro_NaNRate|TestRepro_InfRate' ./tokenbucket` before the gate (NaN New, +Inf New, NaN Allow always true). `-Inf` already `errRate`.
-- PASS same command after `tokenbucket/clock.go` `rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0)`
-- `go test -short ./...` passed (backendbackoff, reclaim, simpleredis, tokenbucket, windowcounter)
-- CI run 34742502193 queued on `6986195`
+- FAIL then PASS on NaN/+Inf New (implement)
+- Standards 2 / Nitpicks 1 applied or skipped; Spec/Security/Performance/Dead/Coverage none
+- CI run 34742817732 queued on `9c94dc7`
 
 ### Rank-up moves
 None.

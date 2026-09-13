@@ -30,8 +30,8 @@ rate
 
 - Q: Do new tests land as the named `repro_*.go` files or fold into `limiter_test.go`?
   Rank: additive asked — requirement Desired names copy/adapt `repro_nan_rate_test.go` and `repro_hunt_inf_rate_nan_test.go`
-  Decision: assumed — land those two files in `tokenbucket/`; adapt dest Allow signature; do not fold into `limiter_test.go`.
-  By: explore
+  Decision: assumed — land `repro_nan_rate_test.go`; Inf constructor tests as `repro_inf_rate_test.go` after review renamed the hunt filename. Adapt dest Allow signature; do not fold into `limiter_test.go`.
+  By: codereview
 
 - Q: Does `-Inf` get its own constructor test, given dest already rejects it via `rate <= 0`?
   Rank: additive incidental — ticket names `math.IsInf(rate, 0)`; dest `-Inf <= 0` already returns `errRate` (measured)

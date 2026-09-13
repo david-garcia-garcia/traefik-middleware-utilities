@@ -24,3 +24,10 @@ findings: FAIL then PASS on NaN/+Inf New; -Inf already dest-green
 fixed: validateClock finite-rate gate; usage gotcha
 skipped: Allow/consumeOne special-case
 
+## codereview (2026-09-13)
+phase: codereview
+findings: P2 0, hard 2 (rename Inf test/file), 1 skipped (errRate string)
+fixed: `repro_inf_rate_test.go` / `TestRepro_InfRateRejected`
+skipped: errRate Error() text
+
+
