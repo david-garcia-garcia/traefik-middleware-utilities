@@ -24,3 +24,10 @@ phase: implement
 findings: 1500ms Take now errors; weight denom windowSec; package tests passed
 fixed: slidingAt remainder reject + usage gotcha
 skipped: none
+
+## codereview — 2026-09-13T07:13:23Z
+
+phase: codereview
+findings: Standards 2 judgement skipped; other axes none
+fixed: none
+skipped: repro subtest B leftover; slidingAt method comment
