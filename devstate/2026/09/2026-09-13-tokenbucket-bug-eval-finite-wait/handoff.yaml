@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-tokenbucket-bug-eval-finite-wait
+jobName: 2026-09-13-tokenbucket-bug-eval-finite-wait
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: a5c75c1d37bb44d3b4ef6ce4e839fb9f0a6082bf70d2c18b8d6898c98399e9a6
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 53
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/53
