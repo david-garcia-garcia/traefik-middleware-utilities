@@ -226,7 +226,7 @@ const (
 )
 
 // parseLen parses a RESP length from the bytes after the type byte.
-// An optional leading minus is accepted so $-1 stays a miss. Empty or non-digit input is false.
+// An optional leading minus is accepted so $-1 and *-1 parse as negative. Empty or non-digit input is false.
 func parseLen(digits []byte) (int, bool) {
 	if len(digits) == 0 {
 		return 0, false
