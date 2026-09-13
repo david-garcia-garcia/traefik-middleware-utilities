@@ -30,7 +30,10 @@ receive two `sleep` calls without a `wake` between them.
 When the last holder's context is Done, the table SHALL call the Sleep hook when that func is
 non-nil and SHALL keep that value stored for the grace period. The value SHALL keep its identity:
 an `Open` during that period SHALL return the same value, not a new one, and SHALL NOT run
-`create`.
+`create`. If Sleep panics, the table SHALL NOT park the value asleep for reclaim. It SHALL end
+this incarnation: Close, unmap, and release waiters. Those waiters SHALL create a new
+incarnation. The table SHALL NOT emit `reclaim_orphan` (Sleep did not return). It SHALL still
+run Close and emit `reclaim_dispose` after Close returns or after a recovered Close panic.
 
 #### Scenario: A sleeping value keeps its identity
 - **WHEN** every holder for a key is Done and the value has been slept
@@ -38,12 +41,23 @@ an `Open` during that period SHALL return the same value, not a new one, and SHA
 - **THEN** the same value is returned
 - **AND** `create` does not run again
 
+#### Scenario: Sleep panic ends the incarnation
+- **WHEN** the last holder for a key is Done
+- **AND** Sleep panics
+- **THEN** Close of that incarnation runs
+- **AND** a later `Open` for that key is free to create
+- **AND** that later `Open` does not hang waiting on the panicked Sleep
+
 ### Requirement: A caller never receives a sleeping value
 `Open` SHALL NOT return a stored value before `wake` has returned for it. An `Open` that arrives
 while another `Open`, a `sleep`, or a `create` is in flight for the same key SHALL wait for that
-transition to finish before it decides what to do. `wake` SHALL NOT be able to fail: the table
-offers no error path for it and never falls back to `create` when a value cannot resume. A caller
-that cannot guarantee resume SHALL NOT pass Sleep and Wake hooks.
+transition to finish before it decides what to do. `wake` SHALL NOT return an error when it
+returns normally: the table offers no resume-failure path and never falls back to `create` when
+a value cannot resume. A caller that cannot guarantee resume SHALL NOT pass Sleep and Wake hooks.
+If Wake panics, that is a broken hook, not a resume failure: `Open` SHALL return an error wrapping
+the panic (`fmt.Errorf("reclaim: wake %q: panic: %v", key, recovered)`), SHALL NOT return the
+stored pointer, and SHALL end the incarnation (Close, unmap). Concurrent waiters on that
+transition SHALL receive the same error. A later `Open` SHALL be free to create.
 
 #### Scenario: Open returns only after wake returned
 - **WHEN** a key holds a sleeping value whose `wake` blocks
@@ -55,6 +69,14 @@ that cannot guarantee resume SHALL NOT pass Sleep and Wake hooks.
 - **WHEN** several `Open` calls arrive for the same sleeping key at once
 - **THEN** `wake` runs once
 - **AND** every caller receives the same awake value
+
+#### Scenario: Wake panic returns an error and unsticks the key
+- **WHEN** a key holds a sleeping value whose Wake panics
+- **AND** `Open` is called for that key
+- **THEN** that `Open` returns an error wrapping the panic
+- **AND** it does not return the stored pointer
+- **AND** Close of that incarnation runs
+- **AND** a later `Open` for that key is free to create
 
 ### Requirement: Close is always preceded by sleep
 Every ending path SHALL call `sleep` before `close`, so `close` never has to handle the live
@@ -123,3 +145,25 @@ func() (any, error)`: a type-switch to a Sleep method on the returned `any` does
 - **WHEN** interpreted code calls `Open` with `Hooks` that count sleep, wake, and close
 - **AND** the key is orphaned, reopened within grace, then disposed
 - **THEN** each of those counts is at least one
+
+### Requirement: Close panic does not crash the process
+If Close panics, the table SHALL recover so a production `AfterFunc` goroutine SHALL NOT kill the
+process. `ready` SHALL already have been closed before Close runs. A shared hook runner MAY perform
+the recover, provided it hands the panic value back to its caller and that caller decides the
+outcome; no runner SHALL swallow a panic as a silent success, and the table SHALL NOT continue as
+if a panicking hook succeeded. Every recovered panic SHALL be surfaced exactly once and SHALL NOT
+be discarded: where the recovering path has a caller to answer (`create`, Wake), as that call's
+returned error; where it has none (Sleep, Close), on a `reclaim_hook_panic` line at error level
+carrying the key, which hook panicked, and the panic value. Recovering a panic SHALL NOT cost the
+operator the diagnostic the crash would have given them. It SHALL NOT re-panic after unsticking.
+
+#### Scenario: AfterFunc Sleep panic does not kill the process
+- **WHEN** a cancellable holder goes Done
+- **AND** Sleep panics on the production AfterFunc path
+- **THEN** the process continues
+- **AND** a later `Open` for that key is free to create
+
+#### Scenario: Close panic after Sleep does not kill the process
+- **WHEN** Close panics while ending an incarnation
+- **THEN** the process continues
+- **AND** waiters are not left on an open `ready`
