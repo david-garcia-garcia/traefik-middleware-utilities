@@ -49,10 +49,8 @@ type Hooks struct {
 // sequential, and a value that is slow to create or slow to sleep never blocks another key. An
 // Open or a drop that meets a busy slot waits on slot.ready and looks again.
 //
-// The goroutine that sees the last holder go Done owns the rest of that incarnation: it sleeps
-// the value, writes reclaim_orphan, waits out grace, closes the value, and writes
-// reclaim_dispose. Those lines cannot be reordered, because one goroutine writes them in that
-// order.
+// The last-holder drop sleeps the value and writes reclaim_orphan, then either expires at zero
+// grace or starts waitGraceOrWake. Close and reclaim_dispose stay after orphan, in that order.
 type Table struct {
 	mu    sync.Mutex
 	grace time.Duration
@@ -297,9 +295,10 @@ func (t *Table) watch(key string, incarnation *slot, ctx context.Context) {
 	t.drop(key, incarnation)
 }
 
-// drop removes one holder. When it was the last one, this goroutine ends the incarnation: sleep,
-// orphan, grace, close, dispose — in that order, so those lines cannot be reordered. A watcher
-// whose incarnation is already gone finds slotGone and returns.
+// drop removes one holder. When it was the last one, this goroutine sleeps the value and writes
+// reclaim_orphan. Zero grace expires on this stack. Positive grace continues in waitGraceOrWake.
+// Orphan still precedes dispose. A watcher whose incarnation is already gone finds slotGone
+// and returns.
 func (t *Table) drop(key string, incarnation *slot) {
 	t.mu.Lock()
 	incarnation.holders--
