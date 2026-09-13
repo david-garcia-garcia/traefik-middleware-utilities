@@ -14,3 +14,11 @@ findings: none
 fixed: none
 skipped: none
 decisions: 5 assumed (handshakeFailure in pool.go; close-no-reply helpers in pool_test.go; change simpleredis-handshake-no-redial fold tcp-session; mark unexported; leave isUnreachable identity)
+
+## propose (2026-09-13)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+change: simpleredis-handshake-no-redial
+fold: std_go_simpleredis_tcp-session

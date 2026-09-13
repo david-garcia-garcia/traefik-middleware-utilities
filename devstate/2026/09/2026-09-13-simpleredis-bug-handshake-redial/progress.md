@@ -6,7 +6,7 @@ JobName: 2026-09-13-simpleredis-bug-handshake-redial
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T05:50:09Z |
 | explore | [x] | [x] | 2026-09-13T05:54:44Z |
-| propose | [x] | [ ] | |
+| propose | [x] | [x] | 2026-09-13T05:59:17Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
