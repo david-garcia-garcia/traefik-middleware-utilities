@@ -41,3 +41,10 @@ phase: archive
 findings: folded sliding-take and sync-flush; validate ok
 fixed: archive/2026-09-13-windowcounter-buffered-outage-local-cap
 skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: CI run 34747682852 all 8 success on 6e2f116; PR #62 mergeable clean
+fixed: unparam always-nil helper errors; dest Sync (unlock-during-GET, Peek reservation note, reclaim canceled-bind)
+skipped: bugs 2–7; fail-closed rewrite of takeBuffered
+

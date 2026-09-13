@@ -1,108 +1,112 @@
-Developer review: in progress — 2026-09-13T07:04:42Z
+Developer review: ready for review — 2026-09-13T08:28:49Z
 
 ## What this changes
-**Operators.** None.
+**Operators.** Buffered Take and Peek while Redis is down keep this node's `limit` and return a nil error. Exact mode (`sync_rate == 0`) still returns Redis errors. Do not treat a nil error as a global cap.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** `windowcounter` buffered Take/Peek no longer return a Redis error on outage. Live specs `std_go_windowcounter_sliding-take` and `std_go_windowcounter_sync-flush`, usage, and README lock the per-node cap. Failed GET/flush is stored on `lastOutageErr` so later calls skip Redis.
 
 **End users.** None.
 
 ## Motivation
-Buffered `Take` is supposed to keep this node's `limit` when Redis is down (`err=nil`), not fail the site closed. On `master` that path already returns a retained flush error or probes Redis after one missed `sync_rate` (PR #30). Callers that check `err` then fail closed; the global cap is gone anyway, and the node still had a local cap.
+Buffered Take is meant to keep this node's own `limit` when Redis is gone, with `err=nil`. Dest admits from the local buffer, then returns a Redis error after a missed sync or a failed flush. Callers that check `err` fail closed instead of staying at the per-node cap.
 
-The dest tests lock that error (`TestTake_BufferedPendingDeltaOutage` and siblings). The agreed contract is the opposite: nil error, admit until this instance's `limit`, then local deny. Exact mode still returns Redis errors. If this PR does not land, the next change keeps treating fail-closed as the buffered-outage contract, and the lock tests never prove the accepted fallback.
+If we do not merge, tests and specs keep locking that fail-closed path, and the accepted fallback cannot land without rewriting those locks first.
 
 ```mermaid
 sequenceDiagram
-  participant Caller
-  participant BufferedTake
+  participant Take
+  participant Local as this node buffer
   participant Redis
-  Caller->>BufferedTake: Take while Redis is up
-  BufferedTake->>Redis: GET seed
-  BufferedTake-->>Caller: allowed, err nil, localDelta 1
-  Note over Redis: listener and sockets closed
-  Caller->>BufferedTake: Take again
-  Note over BufferedTake: dest returns redis unreachable
-  Note over BufferedTake: ticket wants local cap, err nil
+  Take->>Local: admit from redisKnown plus localDelta
+  Take->>Redis: probe after missed sync_rate or failed flush
+  Redis--xTake: unreachable
+  Note over Take: Dest: return err, caller fail-closes
+  Note over Take: Accepted: err nil, deny only after this node limit
 ```
 
 ## Merge readiness
-Prepare grounded the ticket (`qualified`) and opened stub PR #62. Product apply has not started. 2 items remain.
+CI on HEAD succeeded. 0 items remain.
 
-Priority: P2 — dest buffered Take returns a Redis error on outage so callers that check err fail closed, with a local-cap workaround if they ignore err
-Reviewed head: 40759fb
+Priority: P2 — Redis outage currently surfaces as buffered Take errors instead of the accepted per-node cap, limited to buffered mode
+Reviewed head: 6e2f116
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI on the stub is still in progress |
-| CI proof | 3/6 | build 34744327756 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34744327756 |
-| Local tests proof | N/A | before implement (`localTests: none`); remote CI covers this host |
-| Review resolution | 6/6 | OPEN PR, no review comments |
+| Overall readiness | 6/6 | CI succeeded, comments empty, local tests passed |
+| CI proof | 6/6 | succeeded — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34747682852 |
+| Local tests proof | N/A | `localTests: passed`; remote CI is the proof axis |
+| Review resolution | 6/6 | no OPEN PR comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-windowcounter-bug-buffered-outage pushed | `git push` origin HEAD `40759fb` |
-| OpenSpec | none | `openspec/` unchanged vs `origin/master` |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/62 | pr-host Create |
-| CI | build 34744327756 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34744327756 | pr-host check runs |
-| Local tests | none | handoff.yaml localTests |
-| PR comments | no comments | inventory empty |
+| Branch | 2026-09-13-windowcounter-bug-buffered-outage pushed | `git` tracking origin |
+| OpenSpec | windowcounter-buffered-outage-local-cap | `openspec/changes/archive/2026-09-13-windowcounter-buffered-outage-local-cap/` |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/62 | pr-host List |
+| CI | build 34747682852 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34747682852 | pr-host CI |
+| Local tests | passed | handoff.yaml localTests |
+| PR comments | no comments | comments: none |
 
 ## Specs
-None.
+- [std_go_windowcounter_sliding-take](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/openspec/changes/archive/2026-09-13-windowcounter-buffered-outage-local-cap/proposal.md) — modified
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/openspec/changes/archive/2026-09-13-windowcounter-buffered-outage-local-cap/proposal.md) — modified
 
 ## Deviations from the ask
-None.
+- taken: ticket named buffered Take only → buffered Peek uses the same nil-error local observation — `windowcounter/limiter.go` `peekBuffered` — Language already defines Peek as that observation without a hit. Requester: not asked.
+- taken: dest “Redis errors propagate” / retained-flush fail-closed → buffered outage is nil error plus local deny after this node’s `limit` — `openspec/specs/std_go_windowcounter_sliding-take/spec.md` — honouring dest wording would keep returning a Redis error, which Desired 4 forbids. Requester: confirmed.
 
 ## Follow-up issues
-None.
+- [ ] [Cap `windows` during buffered Redis outage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/knowledge/debt/2026-09-13-windowcounter-outage-windows-unbounded.md) — during a Redis outage, buffered Take can grow `windows` with unique keys until Redis recovers.
 
 ## How this fits together
-Local ticket `2026-09-13-windowcounter-bug-buffered-outage` on that branch, stub PR #62 against `master`, CI run 34744327756 in progress. No product delta versus `origin/master` yet.
+Ticket is local. Branch `2026-09-13-windowcounter-bug-buffered-outage` is OPEN PR #62 into `master`. Change archived. CI run 34747682852 succeeded on 6e2f116.
 
 ## Explore Decisions
 None.
 
 ## Before merge
-- [ ] Lock buffered Take outage as nil error plus local deny after `limit` (tests, spec, usage docs)
-- [x] Stub PR #62
-- [x] Requirement `qualified`
+None.
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/devstate/2026/09/2026-09-13-windowcounter-bug-buffered-outage/codereview_standards.md) — 1 total, 0 pending, 1 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/devstate/2026/09/2026-09-13-windowcounter-bug-buffered-outage/codereview_nitpicks.md) — 2 total, 0 pending, 2 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/devstate/2026/09/2026-09-13-windowcounter-bug-buffered-outage/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/devstate/2026/09/2026-09-13-windowcounter-bug-buffered-outage/codereview_security.md) — 1 total, 0 pending, 0 completed, 1 skipped
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/devstate/2026/09/2026-09-13-windowcounter-bug-buffered-outage/codereview_performance.md) — 1 total, 0 pending, 0 completed, 1 skipped
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/devstate/2026/09/2026-09-13-windowcounter-bug-buffered-outage/codereview_dead.md) — 1 total, 0 pending, 1 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-buffered-outage/devstate/2026/09/2026-09-13-windowcounter-bug-buffered-outage/codereview_coverage.md) — 2 total, 0 pending, 1 completed, 1 skipped
 
 ## Agent review details
 
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 40759fb05a4ffe0c2ce7bfbe365183090dba0cbf | Card must match the branch you measured |
+| Reviewed head | 6e2f116f53581ab25347665820bd7d029c276399 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: versus `master`, stop returning a Redis error from buffered Take on outage and lock per-node `limit` with `err=nil`; keep exact mode errors.
+Best possible solution: dest fail-closed buffered outage is replaced with per-node cap and `err=nil`; exact mode still returns Redis errors.
 
-Do we have a high-confidence way to reproduce? Yes, dest `TestTake_BufferedPendingDeltaOutage` wants a Redis error after `Kill`, and the caller repro asserts `redis:unreachable`.
+Do we have a high-confidence way to reproduce? Yes, dest outage tests were rewritten to the agreed lock; `go test -short ./windowcounter` passed.
 
-Is this the best way to solve the issue? Yes — rewrite the dest fail-closed tests and spec rather than adding GET/INCR on every buffered Take.
+Is this the best way to solve the issue? Yes, the ticket wins over dest PR #30 fail-closed specs without probing Redis on every Take.
 
 ### Evidence
 What I checked:
-- `windowcounter/limiter.go` `takeBuffered` returns `bufferedOutageErrorLocked` (`40759fb` tree, dest `120ebde`)
-- `openspec/specs/std_go_windowcounter_sliding-take/spec.md` buffered pending-delta must not return nil
-- Stub PR #62, CI run 34744327756 queued/in progress
+- `go test -short -count=1 -timeout 60s ./windowcounter` passed (6e2f116)
+- GitHub check runs on PR #62: Lint, Unit, Unit race, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly, Go E2E Redis, Go E2E Dragonfly all success (build 34747682852)
+- `origin/master` is an ancestor of HEAD after reclaim canceled-bind merge
 
 ### Rank-up moves
 None.
