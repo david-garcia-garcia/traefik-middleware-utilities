@@ -448,7 +448,7 @@ func TestReadLineBufferFullIsIssue(t *testing.T) {
 	// Unterminated stream: fill the 4096 buffer with no newline.
 	unterminated := &testPeerCounter{body: bytes.NewReader(bytes.Repeat([]byte{'A'}, 8192))}
 	line, err := readLine(bufio.NewReader(unterminated))
-	if err != errIssue {
+	if err != errIssue { //nolint:errorlint // readLine returns errIssue as the exact sentinel; this test locks that identity
 		t.Fatalf("unterminated = %v %q, want %v", err, line, errIssue)
 	}
 	if unterminated.bytesRead > 4096 {
@@ -462,7 +462,7 @@ func TestReadLineBufferFullIsIssue(t *testing.T) {
 	overCap = append(overCap, '\r', '\n')
 	terminated := &testPeerCounter{body: bytes.NewReader(overCap)}
 	line, err = readLine(bufio.NewReader(terminated))
-	if err != errIssue {
+	if err != errIssue { //nolint:errorlint // readLine returns errIssue as the exact sentinel; this test locks that identity
 		t.Fatalf("over-cap = %v %q, want %v", err, line, errIssue)
 	}
 	if terminated.bytesRead > 4096 {
@@ -555,7 +555,7 @@ func TestReadReplyOverCapIsIssue(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			values, clean, err := readReply(bufio.NewReader(strings.NewReader(test.wire)))
-			if err != errIssue || clean || values != nil {
+			if err != errIssue || clean || values != nil { //nolint:errorlint // readReply returns errIssue as the exact sentinel; this test locks that identity
 				t.Fatalf("%s: values=%q clean=%v err=%v, want errIssue dirty", test.name, values, clean, err)
 			}
 		})
@@ -570,7 +570,7 @@ func TestReadReply256MiBHeaderDoesNotAllocatePayload(t *testing.T) {
 	values, clean, err := readReply(bufio.NewReader(strings.NewReader("$268435456\r\n")))
 	var after runtime.MemStats
 	runtime.ReadMemStats(&after)
-	if err != errIssue || clean || values != nil {
+	if err != errIssue || clean || values != nil { //nolint:errorlint // readReply returns errIssue as the exact sentinel; this test locks that identity
 		t.Fatalf("256MiB header: values=%q clean=%v err=%v, want errIssue dirty", values, clean, err)
 	}
 	grew := after.TotalAlloc - before.TotalAlloc

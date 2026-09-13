@@ -14,7 +14,7 @@ import (
 
 // do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty.
 // exec calls do from runOnConn, which defers release so a panic still returns the in-use turn and closes the socket.
-func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
+func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) (reply [][]byte, reusable bool, err error) {
 	if err := contextStop(ctx); err != nil {
 		return nil, false, err
 	}
@@ -104,7 +104,7 @@ func writeCommand(writer *bufio.Writer, args [][]byte) error {
 }
 
 // readReply parses one RESP value. clean is false when the stream is no longer usable.
-func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
+func readReply(reader *bufio.Reader) (values [][]byte, clean bool, err error) {
 	line, err := readLine(reader)
 	if err != nil {
 		return nil, false, err
@@ -121,7 +121,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		return nil, true, replyError(line[1:])
 	case '$':
 		data, bulkErr := readBulk(reader, line)
-		if bulkErr == errMiss {
+		if bulkErr == errMiss { //nolint:errorlint // readBulk returns errMiss as the exact $-1 sentinel; a wrap is not that decode miss
 			return [][]byte{nil}, true, nil
 		}
 		if bulkErr != nil {
@@ -150,7 +150,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 			switch head[0] {
 			case '$':
 				data, bulkErr := readBulk(reader, head)
-				if bulkErr == errMiss {
+				if bulkErr == errMiss { //nolint:errorlint // readBulk returns errMiss as the exact $-1 sentinel; a wrap is not that decode miss
 					continue
 				}
 				if bulkErr != nil {
@@ -173,7 +173,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 
 // isDirtyProtocolError is a framing or unsupported-type sentinel. It must not become redis:unreachable.
 func isDirtyProtocolError(err error) bool {
-	return err == errIssue || err == errUnsupportedReply
+	return err == errIssue || err == errUnsupportedReply //nolint:errorlint // dirty-protocol sentinels this decoder returns exactly; a wrap would be a different I/O failure
 }
 
 // readBulk reads a $ payload (or a miss when length is negative) and requires a CRLF trailer.
@@ -208,7 +208,7 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 func readLine(reader *bufio.Reader) ([]byte, error) {
 	line, err := reader.ReadSlice('\n')
 	if err != nil {
-		if err == bufio.ErrBufferFull {
+		if err == bufio.ErrBufferFull { //nolint:errorlint // ReadSlice returns ErrBufferFull exactly; a wrap would be I/O and must stay unreachable
 			return nil, errIssue
 		}
 		return nil, err

@@ -84,7 +84,7 @@ func (g *Gate) Report(key string, success bool) error {
 			return nil
 		}
 		g.resetNIfClosedLongEnough(entry, now)
-		entry.credit -= 1
+		entry.credit--
 		if entry.credit <= 0 {
 			entry.state = stateOpen
 			entry.openUntil = now.Add(g.cooldownDuration(entry.n))
