@@ -36,3 +36,24 @@ phase: codereview
 findings: P3 1 (nitpick symmetry client vs redis)
 fixed: renamed client to redis in four handshake tests
 skipped: none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: none
+fixed: none
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: none
+fixed: none
+skipped: none
+archived: openspec/changes/archive/2026-09-13-simpleredis-handshake-no-redial
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+ci: succeeded 34742204061
+verdict: ready for review
