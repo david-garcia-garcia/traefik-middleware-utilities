@@ -240,6 +240,80 @@ func TestEvalTokenBucketThreeBulkStrings(t *testing.T) {
 	}
 }
 
+func TestDesyncedSocketDoesNotServePreviousReplies(t *testing.T) {
+	_, addr := startStrayExtraReplyFake(t, 5)
+	redis := New(Config{Host: addr, PoolSize: 1, MaxRetries: -1})
+
+	const commands = 12
+	for i := 0; i < commands; i++ {
+		key := "k" + strconv.Itoa(i)
+		want := "v" + strconv.Itoa(i)
+		got, err := redis.Get(context.Background(), key)
+		if err != nil {
+			continue
+		}
+		if string(got) != want {
+			t.Fatalf("Get(%s) = %q, want %q or an error (command %d)", key, got, want, i)
+		}
+	}
+}
+
+func TestStrayExtraReplyIsNotPooled(t *testing.T) {
+	fake, addr := startStrayExtraReplyFake(t, 5)
+	redis := New(Config{Host: addr, PoolSize: 1, MaxRetries: -1})
+
+	for i := 0; i < 5; i++ {
+		key := "k" + strconv.Itoa(i)
+		got, err := redis.Get(context.Background(), key)
+		if err != nil {
+			t.Fatalf("Get(%s): %v", key, err)
+		}
+		if string(got) != "v"+strconv.Itoa(i) {
+			t.Fatalf("Get(%s) = %q, want v%d", key, got, i)
+		}
+	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after stray extra = %d, want 0", got)
+	}
+	if fake.connections() != 1 {
+		t.Fatalf("accepts after stray extra = %d, want 1", fake.connections())
+	}
+	if got := redis.OverFrees(); got != 0 {
+		t.Fatalf("OverFrees after leftover destroy = %d, want 0", got)
+	}
+
+	got, err := redis.Get(context.Background(), "k5")
+	if err != nil {
+		t.Fatalf("Get(k5): %v", err)
+	}
+	if string(got) != "v5" {
+		t.Fatalf("Get(k5) = %q, want v5", got)
+	}
+	if fake.connections() != 2 {
+		t.Fatalf("accepts after next Get = %d, want 2", fake.connections())
+	}
+}
+
+func TestAuthLeftoverIsNotParsedAsSelect(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.setHandshakeReplies("+OK\r\n$5\r\nSTRAY\r\n", statusOKReply)
+	redis := New(Config{Host: addr, Pass: "secret", Database: "2", MaxRetries: -1})
+	_, err := redis.Get(context.Background(), "hit")
+	if err == nil || err.Error() != RedisIssue {
+		t.Fatalf("Get = %v, want %s", err, RedisIssue)
+	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle = %d, want 0", got)
+	}
+	auths, selects, gets := fake.handshakeCounts()
+	if auths != 1 || selects != 0 || gets != 0 {
+		t.Fatalf("AUTH=%d SELECT=%d GET=%d, want 1, 0, 0", auths, selects, gets)
+	}
+	if got := redis.OverFrees(); got != 0 {
+		t.Fatalf("OverFrees after AUTH leftover = %d, want 0", got)
+	}
+}
+
 func TestTruncatedReplyIsUnreachableAndNotPooled(t *testing.T) {
 	cases := []struct {
 		name         string

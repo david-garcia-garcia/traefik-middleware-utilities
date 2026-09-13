@@ -873,6 +873,62 @@ func serveRawReply(conn net.Conn, replies []rawReply, index int) {
 	_, _ = io.Copy(io.Discard, conn)
 }
 
+// strayExtraReplyFake counts accepts for a peer that appends one extra bulk every nth command.
+type strayExtraReplyFake struct {
+	mu    sync.Mutex
+	conns int
+}
+
+// connections is how many TCP accepts the fake has seen.
+func (f *strayExtraReplyFake) connections() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.conns
+}
+
+// startStrayExtraReplyFake answers GET kN with vN and, every nth command, appends one extra bulk.
+func startStrayExtraReplyFake(t *testing.T, nth int) (*strayExtraReplyFake, string) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	fake := &strayExtraReplyFake{}
+	go func() {
+		for {
+			conn, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+			fake.mu.Lock()
+			fake.conns++
+			fake.mu.Unlock()
+			go func(conn net.Conn) {
+				defer conn.Close()
+				reader := bufio.NewReader(conn)
+				seen := 0
+				for {
+					args, readErr := readCommand(reader)
+					if readErr != nil {
+						return
+					}
+					seen++
+					value := "v" + args[1][1:]
+					reply := fmt.Sprintf("$%d\r\n%s\r\n", len(value), value)
+					if nth > 0 && seen%nth == 0 {
+						reply += "$5\r\nSTRAY\r\n"
+					}
+					// One write so the stray is already in the reader at the reply boundary.
+					// A stray that arrives while the socket is idle is knowledge/debt/2026-09-13-simpleredis-idle-arrival-desync.md.
+					_, _ = io.WriteString(conn, reply)
+				}
+			}(conn)
+		}
+	}()
+	return fake, listener.Addr().String()
+}
+
 // pooledIdle is the idle-list length under the client mutex.
 func pooledIdle(sr *SimpleRedis) int {
 	sr.idleConnsMu.Lock()
