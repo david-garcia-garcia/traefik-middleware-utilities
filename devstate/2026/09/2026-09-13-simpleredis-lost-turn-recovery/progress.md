@@ -8,7 +8,7 @@ JobName: 2026-09-13-simpleredis-lost-turn-recovery
 | explore | [x] | [x] | 2026-09-13T09:02:12Z |
 | propose | [x] | [x] | 2026-09-13T09:08:00Z |
 | implement | [x] | [ ] | |
-| codereview | [ ] | [ ] | |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
+| codereview | [x] | [ ] | |
+| devdocsimpact | [x] | [ ] | |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
