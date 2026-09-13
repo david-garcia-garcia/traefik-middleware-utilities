@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: Handshake AUTH/SELECT failure redials a second TCP connection
+url: none
+number: none

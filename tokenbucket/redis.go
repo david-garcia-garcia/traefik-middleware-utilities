@@ -2,6 +2,7 @@ package tokenbucket
 
 import (
 	"context"
+	"math"
 	"strconv"
 	"time"
 
@@ -69,7 +70,8 @@ func (r *Redis) Allow(ctx context.Context, key string) (bool, time.Duration, err
 		return false, 0, errEvalLen
 	}
 	waitMicro, convErr := strconv.ParseFloat(string(values[1]), 64)
-	if convErr != nil {
+	// ParseFloat accepts nan/Inf with err nil; those are not a wait.
+	if convErr != nil || math.IsNaN(waitMicro) || math.IsInf(waitMicro, 0) {
 		return false, 0, errEvalWait
 	}
 	// Admit uses whole microseconds, same units as Lua refund (ARGV maxDelay.Microseconds()).

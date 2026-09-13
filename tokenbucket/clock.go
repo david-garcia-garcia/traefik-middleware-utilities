@@ -3,6 +3,7 @@ package tokenbucket
 
 import (
 	"errors"
+	"math"
 	"time"
 )
 
@@ -10,7 +11,7 @@ var (
 	errRate     = errors.New("tokenbucket: rate must be greater than 0")
 	errBurst    = errors.New("tokenbucket: burst must be at least 1")
 	errDelay    = errors.New("tokenbucket: maxDelay must not be negative")
-	errTTL      = errors.New("tokenbucket: ttl must be at least 1s")
+	errTTL      = errors.New("tokenbucket: ttl must be a whole number of seconds (at least 1s)")
 	errRedis    = errors.New("tokenbucket: redis is required")
 	errEvalLen  = errors.New("tokenbucket: eval reply must have 3 fields")
 	errEvalWait = errors.New("tokenbucket: eval wait is not a number")
@@ -24,9 +25,9 @@ type clockConfig struct {
 	ttl      time.Duration
 }
 
-// validateClock rejects rate, burst, maxDelay, and ttl that would divide by zero or expire immediately.
+// validateClock rejects non-positive or non-finite rate, burst below 1, negative maxDelay, and ttl that would expire immediately or disagree with Redis EXPIRE seconds.
 func validateClock(rate float64, burst int64, maxDelay, ttl time.Duration) error {
-	if rate <= 0 {
+	if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
 		return errRate
 	}
 	if burst < 1 {
@@ -35,7 +36,7 @@ func validateClock(rate float64, burst int64, maxDelay, ttl time.Duration) error
 	if maxDelay < 0 {
 		return errDelay
 	}
-	if ttl < time.Second {
+	if ttl < time.Second || ttl%time.Second != 0 {
 		return errTTL
 	}
 	return nil
@@ -53,6 +54,7 @@ func (c clockConfig) ttlSeconds() int64 {
 
 // consumeOne applies one Traefik Lua consume. last and now are Unix microseconds.
 func consumeOne(tokens float64, last int64, limitPerMicro, burst float64, nowMicro, maxDelayMicro int64) (newTokens float64, newLast int64, waitMicro float64) {
+	previousLast := last
 	// Clamp last so a clock jump backward does not invent negative elapsed.
 	if nowMicro < last {
 		last = nowMicro
@@ -74,5 +76,10 @@ func consumeOne(tokens float64, last int64, limitPerMicro, burst float64, nowMic
 			}
 		}
 	}
-	return tokens, nowMicro, waitMicro
+	// Persist the later of previous last and now so a backward clock does not rewind last.
+	persistLast := nowMicro
+	if previousLast > persistLast {
+		persistLast = previousLast
+	}
+	return tokens, persistLast, waitMicro
 }

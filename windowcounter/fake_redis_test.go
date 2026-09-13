@@ -6,9 +6,14 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 )
+
+// redisExpireCommand is the Redis EXPIRE verb the fake records for TTL assertions.
+const redisExpireCommand = "EXPIRE"
 
 // testFakeRedis is an in-process RESP server for limiter unit tests.
 type testFakeRedis struct {
@@ -18,6 +23,13 @@ type testFakeRedis struct {
 	getCalls   int
 	listener   net.Listener
 	conns      []net.Conn
+
+	getBlockPrefix string
+	getHold        time.Duration
+	getEntered     chan struct{}
+	getEnteredOnce sync.Once
+	getRelease     chan struct{}
+	getReleaseOnce sync.Once
 }
 
 // startTestFakeRedis listens on a local TCP port and serves an in-process RESP map.
@@ -59,7 +71,21 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 			_, _ = io.WriteString(conn, "+OK\r\n")
 		case "GET":
 			f.getCalls++
-			_, _ = io.WriteString(conn, testBulk(f.store, args[1]))
+			redisKey := args[1]
+			reply := testBulk(f.store, redisKey)
+			timedHold := time.Duration(0)
+			waitUntilRelease := false
+			entered := f.getEntered
+			release := f.getRelease
+			if f.getBlockPrefix != "" && strings.HasPrefix(redisKey, f.getBlockPrefix) {
+				timedHold = f.getHold
+				waitUntilRelease = f.getHold == 0 && release != nil
+				f.getBlockPrefix = ""
+			}
+			f.mu.Unlock()
+			f.waitGetHold(timedHold, waitUntilRelease, entered, release)
+			_, _ = io.WriteString(conn, reply)
+			f.mu.Lock()
 		case "INCR":
 			afterIncr, incrErr := incrementTestStore(f.store, args[1], 1)
 			if incrErr != nil {
@@ -67,7 +93,7 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				break
 			}
 			_, _ = fmt.Fprintf(conn, ":%d\r\n", afterIncr)
-		case "EXPIRE", "EXPIREAT":
+		case redisExpireCommand, "EXPIREAT":
 			f.lastExpire = append([]string(nil), args...)
 			_, _ = io.WriteString(conn, ":1\r\n")
 		case "EVALSHA":
@@ -113,6 +139,44 @@ func (f *testFakeRedis) getCallCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.getCalls
+}
+
+// blockGetPrefix holds the next GET whose Redis key has prefix until unblockGet or hold elapses.
+func (f *testFakeRedis) blockGetPrefix(prefix string, hold time.Duration) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.getBlockPrefix = prefix
+	f.getHold = hold
+	f.getEntered = make(chan struct{})
+	f.getRelease = make(chan struct{})
+}
+
+// waitGetBlocked waits until a matching GET has entered its hold, or timeout.
+func (f *testFakeRedis) waitGetBlocked(timeout time.Duration) bool {
+	f.mu.Lock()
+	entered := f.getEntered
+	f.mu.Unlock()
+	if entered == nil {
+		return false
+	}
+	select {
+	case <-entered:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+// unblockGet releases a GET waiting in blockGetPrefix so the fake does not hang past Close.
+func (f *testFakeRedis) unblockGet() {
+	f.getReleaseOnce.Do(func() {
+		f.mu.Lock()
+		release := f.getRelease
+		f.mu.Unlock()
+		if release != nil {
+			close(release)
+		}
+	})
 }
 
 // Kill closes the listener and every accepted socket so later commands fail as unreachable.
@@ -180,4 +244,30 @@ func readTestCommand(reader *bufio.Reader) ([]string, error) {
 		args[i] = string(buf[:length])
 	}
 	return args, nil
+}
+
+// waitGetHold waits out a timed GET hold or until unblockGet. Caller has released f.mu so other keys are not stalled.
+func (f *testFakeRedis) waitGetHold(timedHold time.Duration, waitUntilRelease bool, entered, release chan struct{}) {
+	if timedHold == 0 && !waitUntilRelease {
+		return
+	}
+	f.getEnteredOnce.Do(func() {
+		if entered != nil {
+			close(entered)
+		}
+	})
+	if waitUntilRelease {
+		<-release
+		return
+	}
+	timer := time.NewTimer(timedHold)
+	if release != nil {
+		select {
+		case <-release:
+			timer.Stop()
+		case <-timer.C:
+		}
+		return
+	}
+	<-timer.C
 }

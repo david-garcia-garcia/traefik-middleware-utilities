@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-reclaim-bug-hook-panic-busy
+jobName: 2026-09-13-reclaim-bug-hook-panic-busy
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 16799dfa6b1df672b9ea0bd5501baf2879411fc5115efd563d57a225548f8ff8
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: reclaim-hook-panic-recovery
+pr:
+  id: 49
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/49

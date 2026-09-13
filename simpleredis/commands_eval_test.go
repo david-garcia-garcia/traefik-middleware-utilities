@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -164,5 +165,21 @@ func TestEvalUsesCallerDigest(t *testing.T) {
 	}
 	if got[1] == ScriptSHA1Hex(script) {
 		t.Fatalf("EVALSHA used ScriptSHA1Hex(script), Eval hashed")
+	}
+}
+
+func TestEvalNullBulkIsNotMiss(t *testing.T) {
+	addr := startStaticRedis(t, "$-1\r\n")
+	client := New(Config{Host: addr, MaxRetries: -1})
+	script := "return false"
+	values, err := client.Eval(context.Background(), script, ScriptSHA1Hex(script), nil, nil)
+	if errors.Is(err, ErrMiss) {
+		t.Fatalf("Eval $-1: values=%q err=%v, want a result slot not redis:miss", values, err)
+	}
+	if err != nil {
+		t.Fatalf("Eval $-1: err=%v, want nil error", err)
+	}
+	if len(values) != 1 || values[0] != nil {
+		t.Fatalf("Eval $-1: values=%q, want one nil slot", values)
 	}
 }

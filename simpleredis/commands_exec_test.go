@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -285,7 +286,31 @@ func TestShouldRetryPoolWaitIsFalse(t *testing.T) {
 	if shouldRetry(errPoolWait) {
 		t.Fatal("shouldRetry(errPoolWait) = true, want false so MaxRetries does not multiply PoolTimeout")
 	}
+	if shouldRetry(errNotFromNew) {
+		t.Fatal("shouldRetry(errNotFromNew) = true, want false so MaxRetries does not sleep a client that did not come from New")
+	}
+	if !IsUnreachable(errNotFromNew) {
+		t.Fatal("IsUnreachable(errNotFromNew) = false, want true so callers matching the broad condition keep working")
+	}
+	if IsPoolWait(errNotFromNew) {
+		t.Fatal("IsPoolWait(errNotFromNew) = true, want false so pool wait stays a different job")
+	}
 	if !shouldRetry(errUnreachable) {
 		t.Fatal("shouldRetry(errUnreachable) = false, want true")
+	}
+}
+
+func TestShouldRetryHandshakeFailureIsFalse(t *testing.T) {
+	if shouldRetry(handshakeFailure{err: errUnreachable}) {
+		t.Fatal("shouldRetry(handshakeFailure(unreachable)) = true, want false")
+	}
+	if shouldRetry(handshakeFailure{err: errors.New("LOADING Redis is loading the dataset in memory")}) {
+		t.Fatal("shouldRetry(handshakeFailure(LOADING)) = true, want false")
+	}
+	if !shouldRetry(errUnreachable) {
+		t.Fatal("shouldRetry(errUnreachable) = false, want true")
+	}
+	if !shouldRetry(errors.New("LOADING Redis is loading the dataset in memory")) {
+		t.Fatal("shouldRetry(LOADING) = false, want true")
 	}
 }

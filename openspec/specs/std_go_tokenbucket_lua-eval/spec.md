@@ -5,7 +5,7 @@ Redis EVAL of Traefik's token-bucket script so in-process and Redis/Dragonfly Al
 ## Requirements
 
 ### Requirement: Eval runs the copied Traefik script
-The Redis store SHALL admit via `simpleredis.Eval` of the copied Traefik `AllowTokenBucketRaw` script (Traefik Labs MIT notice kept). The hash key SHALL be listed in `KEYS`. The script SHALL use `#rl_source == 4` (not `table.maxn`). Go MUST NOT GET or SET that hash. v1 MUST NOT use EVALSHA. ARGV SHALL pass `rate/1e6`, burst, ttl seconds, Unix microseconds, and maxDelay microseconds.
+The Redis store SHALL admit via `simpleredis.Eval` of Traefik `AllowTokenBucketRaw` (Traefik Labs MIT notice kept) with one intentional last-field change: persisted `last` SHALL be the later of the previous hash `last` and ARGV now `t`. Elapsed SHALL still treat `t` behind `last` as zero elapsed. The hash key SHALL be listed in `KEYS`. The script SHALL use `#rl_source == 4` (not `table.maxn`). Go MUST NOT GET or SET that hash. v1 MUST NOT use EVALSHA. ARGV SHALL pass `rate/1e6`, burst, ttl seconds, Unix microseconds, and maxDelay microseconds.
 
 #### Scenario: Dragonfly dense HGETALL length
 - **WHEN** Allow runs the script on Dragonfly
@@ -17,6 +17,19 @@ The Redis store SHALL admit via `simpleredis.Eval` of the copied Traefik `AllowT
 - **WHEN** Allow updates last and tokens
 - **THEN** those fields change only inside the Eval script
 - **AND** Go MUST NOT issue GET or SET on that key for the bucket
+
+#### Scenario: HSET last is persist-max
+- **WHEN** the script has a previous hash last and ARGV `t` is earlier than that last
+- **THEN** elapsed is clamped so refill is not negative
+- **AND** HSET last is the previous last, not raw `t`
+
+### Requirement: Script last does not rewind
+The Eval script SHALL persist `last` as the later of the previous bucket `last` and ARGV `t`. Tests SHALL assert the script text does not HSET last as raw `t` after the elapsed clamp.
+
+#### Scenario: Script text persists max last
+- **WHEN** unit tests inspect the Eval script
+- **THEN** HSET last is the persist-max of previous last and `t`
+- **AND** MUST NOT write raw `t` as last when `t` is behind previous last
 
 ### Requirement: Two instances share one key
 Two limiter instances with two SimpleRedis clients SHALL share burst and wait for the same opaque Redis key. The second instance MUST NOT grant a second full burst while the first has already consumed it.
@@ -35,6 +48,18 @@ For the same rate, burst, maxDelay, ttl, and Allow sequence (same test clock), m
 - **AND** the same Allow sequence runs on both with aligned clocks
 - **THEN** each step's allowed value matches
 - **AND** each step's wait is either both zero, both positive and at most maxDelay, or both greater than maxDelay
+
+### Requirement: New rejects ttl Redis cannot expire in seconds
+Construction SHALL fail when `ttl` is not a whole number of seconds. Memory expire lifetime and Redis EXPIRE seconds SHALL then be the same duration. The script MUST keep integer-second `EXPIRE`. Construction MUST NOT succeed for a fractional `ttl` while Memory expires at the full Duration and Redis EXPIRE uses truncated seconds.
+
+#### Scenario: Fractional ttl never reaches Allow
+- **WHEN** NewMemory or NewRedis is called with ttl 1500ms
+- **THEN** construction returns an error
+- **AND** no EVAL is sent
+
+#### Scenario: Whole-second ttl still constructs
+- **WHEN** NewMemory or NewRedis is called with ttl 2s
+- **THEN** construction succeeds
 
 ### Requirement: Live Redis and Dragonfly
 Live tests SHALL call Allow against each of Redis and Dragonfly whose address is set using `TOKENBUCKET_LIVE_REDIS` and `TOKENBUCKET_LIVE_DRAGONFLY`. Tests SHALL skip when both addrs are unset or under `-short`. When exactly one address is set they MUST run that engine and MUST NOT fail for the missing engine. CI `e2e-redis` SHALL start Redis, set `TOKENBUCKET_LIVE_REDIS`, and MUST NOT set `TOKENBUCKET_LIVE_DRAGONFLY`. CI `e2e-dragonfly` SHALL start Dragonfly, set `TOKENBUCKET_LIVE_DRAGONFLY`, and MUST NOT set `TOKENBUCKET_LIVE_REDIS`. The unit `test` job MUST pass `-short` and MUST NOT start those engines. Yaegi live SHALL run the same scenarios; the compiled test owns start/skip; the interpreted probe calls Allow. Live scenarios SHALL include burst after idle, two-instance share, memory/Redis agreement, and refund when wait exceeds maxDelay.
