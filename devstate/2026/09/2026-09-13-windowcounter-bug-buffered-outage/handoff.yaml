@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-windowcounter-bug-buffered-outage
+jobName: 2026-09-13-windowcounter-bug-buffered-outage
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: f8ae02b3da000da365c383bc771a1e3b7f953651edc90fc74badcc6e532cfd93
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: windowcounter-buffered-outage-local-cap
+pr:
+  id: 62
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/62
