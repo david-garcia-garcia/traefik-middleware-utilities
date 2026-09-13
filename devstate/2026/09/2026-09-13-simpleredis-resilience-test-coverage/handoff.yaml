@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-simpleredis-resilience-test-coverage
+jobName: 2026-09-13-simpleredis-resilience-test-coverage
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: f1873a984b0398ab88af1fefc8374dc5b16ea7670602cbcdd2c394825435b52c
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 68
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/68
