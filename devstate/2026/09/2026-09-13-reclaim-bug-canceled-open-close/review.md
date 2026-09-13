@@ -29,3 +29,15 @@ phase: codereview
 findings: P1 0, P2 0; Standards 1 hard Leave-a-trail on drop comment
 fixed: drop/Table overview comments (`341db7d`)
 skipped: none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: none — Reclaim packet already matched the apply
+fixed: none needed
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: fold std_go_reclaim_context-lease; map and names OK
+fixed: main spec synced; change archived as 2026-09-13-reclaim-canceled-bind
+skipped: none
