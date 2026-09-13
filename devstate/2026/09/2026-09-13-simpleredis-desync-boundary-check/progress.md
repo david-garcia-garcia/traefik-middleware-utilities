@@ -8,7 +8,7 @@ JobName: 2026-09-13-simpleredis-desync-boundary-check
 | explore | [x] | [x] | 2026-09-13T09:02:20Z |
 | propose | [x] | [x] | 2026-09-13T09:06:06Z |
 | implement | [x] | [x] | 2026-09-13T09:12:31Z |
-| codereview | [x] | [ ] | |
-| devdocsimpact | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-13T09:25:49Z |
+| devdocsimpact | [x] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |

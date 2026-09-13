@@ -21,3 +21,9 @@ phase: implement
 findings: none
 fixed: do leftover destroy + pre-write refuse; tests pass; CI 8/8 green
 skipped: none
+
+## codereview (2026-09-13)
+phase: codereview
+findings: 7 hard (standards 3, nitpicks 3, coverage 1)
+fixed: Yaegi job comments, connections() sibling shape, AUTH leftover test, leftover gates named on do
+skipped: none
