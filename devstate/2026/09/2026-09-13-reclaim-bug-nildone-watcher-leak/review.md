@@ -42,3 +42,9 @@ findings: fold std_go_reclaim_context-lease
 fixed: main spec scenario; archive 2026-09-13-reclaim-nildone-watcher-exit
 skipped: none
 
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: CI 34769287286 all 8 checks success
+fixed: ready title; final card
+skipped: none
+
