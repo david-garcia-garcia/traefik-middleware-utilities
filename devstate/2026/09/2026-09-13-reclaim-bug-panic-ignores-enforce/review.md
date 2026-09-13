@@ -5,3 +5,10 @@ phase: prepare
 findings: qualified-with-gaps — Sleep/Wake panic endings still unmap before Close; spec Sleep-panic has no order vs EnforceCloseBeforeOpen
 fixed: bus, requirement, stub PR #78
 skipped: product apply; reproducer copy; nil-Done watcher leak; reclaim/BUGS.md
+
+## explore (2026-09-13)
+phase: explore
+findings: both TestRepro_* fail on dest c230315 (incarnation 2 creates while Close of 1 blocked); dest has New(Config) not NewTable
+fixed: explore.md with assumed ranks on helper name and dest constructor seam
+skipped: product apply; usage rewrite (dest panic paths still unmap first)
+
