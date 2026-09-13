@@ -6,7 +6,7 @@ JobName: 2026-09-13-simpleredis-idle-arrival-desync
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T17:08:26Z |
 | explore | [x] | [x] | 2026-09-13T17:15:38Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
