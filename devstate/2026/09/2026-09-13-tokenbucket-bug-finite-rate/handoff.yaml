@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-tokenbucket-bug-finite-rate
+jobName: 2026-09-13-tokenbucket-bug-finite-rate
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 46535b3a4d0f8778a211f2e0ba84dba7af619aca7676ee069830008a66b48051
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 52
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/52
