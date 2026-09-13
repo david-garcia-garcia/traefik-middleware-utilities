@@ -5,7 +5,7 @@ JobName: 2026-09-13-reclaim-owned-table
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T08:05:22Z |
-| explore | [x] | [ ] | |
+| explore | [x] | [x] | 2026-09-13T08:10:33Z |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |

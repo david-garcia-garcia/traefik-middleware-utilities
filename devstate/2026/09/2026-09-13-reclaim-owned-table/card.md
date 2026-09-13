@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T08:03:28Z
+Developer review: in progress — 2026-09-13T08:10:33Z
 
 ## What this changes
 **Operators.** None.
@@ -24,27 +24,27 @@ flowchart LR
 ```
 
 ## Merge readiness
-Prepare is grounded (`qualified-with-gaps`). Product apply has not started. Explore is next.
+Explore is written with assumed constructor and ownership decisions. Product apply has not started. Propose is next.
 
 Priority: P3 — spec and internal API clarity, no current operator or end-user harm
-Reviewed head: 771d804
-Owner decision: None.
+Reviewed head: 11f6c1a
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI in progress; no product apply yet |
-| CI proof | 3/6 | Checks in progress on the stub PR |
+| Overall readiness | 1/6 | Head pushed; CI on this SHA not seen |
+| CI proof | 1/6 | `get_status` pending, 0 statuses on `11f6c1a` |
 | Local tests proof | N/A | Before implement (`localTests: none`) |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-reclaim-owned-table pushed | `git push` |
+| Branch | 2026-09-13-reclaim-owned-table pushed | `git push` `11f6c1a` |
 | OpenSpec | none | no change folder |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/65 | pr-host Create |
-| CI | build 34746772807 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34746772807 | pr-host CI |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/65 | pr-host List |
+| CI | not seen | pr-host get_status pending, 0 statuses on `11f6c1a` |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | inventory empty |
 
@@ -58,13 +58,18 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master` (reclaim present; `origin/HEAD` is stale `initial`). Stub PR #65 is the durable card. Next is explore.
+Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master`. Stub PR #65 is the durable card. Explore assumed `New(Config)` and caller-owned tables. Next is propose.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| Is `New` `New(grace time.Duration)` or `New(Config)` with `Grace` as a field? | bounded asked | assumed — `New(Config)` by value; `Grace` only; copy at `New`; no setter; negative → `DefaultGrace`; zero stays 0. Delete `NewTable`. | explore |
+| Is `reclaim/default.go` deleted or left without the singleton? | bounded asked | assumed — delete `reclaim/default.go`. | explore |
+| How does `e2e/reclaimprobe` hold the table so two Traefik `New`s still share an incarnation within grace? | bounded asked | assumed — package-level `var` table in `reclaimprobe`, `New(Config{Grace: DefaultGrace})` once; plugin `New` calls `table.Open`. | explore |
+| Does `Config` live in `table.go` or a new `config.go`? | additive asked | assumed — `Config` next to `Table` in `reclaim/table.go`. No `reclaim/config.go`. | explore |
 
 ## Before merge
-- [ ] Remove `Default`, package `Open`, `Reset`, and `ResetWith`; construct tables with `New()` and caller-owned lifetime
+- [ ] Remove `Default`, package `Open`, `Reset`, and `ResetWith`; construct tables with `New(Config)` and caller-owned lifetime
 - [ ] Fold spec, usage, README, and `reclaimprobe` off the process table
 
 ## Findings
@@ -80,7 +85,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 771d804260d2115ba7e93a15e83ba233d0b18f88 | Card must match the branch you measured |
+| Reviewed head | 11f6c1ac675d237b8faf6ad9f704517896023704 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -94,10 +99,10 @@ Is this the best way to solve the issue? Yes versus dest — remove the singleto
 
 ### Evidence
 What I checked:
-- `git ls-tree origin/master reclaim` exists; `origin/initial` has no `reclaim/`
-- `reclaim/default.go`, `reclaim/table.go` `NewTable`, spec `std_go_reclaim_context-lease`, `e2e/reclaimprobe/plugin.go`, usage docs (`git`, dest `24a6852`)
-- OPEN PR #65, empty comment inventory (GitHub MCP)
-- CI run 34746772807 in progress on `771d804` (start commit `950cb96` had succeeded as 34746615300)
+- `origin/master...HEAD` product diff empty (`git diff` excluding `devstate/`)
+- `devstate/explore.md` four assumed rows (`git`, `11f6c1a`)
+- OPEN PR #65, empty comment inventory (GitHub MCP `get_comments`)
+- CI on `11f6c1a`: `get_status` pending, 0 statuses (GitHub MCP)
 
 ### Rank-up moves
 None.
