@@ -25,6 +25,11 @@ priority: normal
 local: std_go_tokenbucket.md
 description: How a Traefik middleware Allows a Traefik RateLimit token-bucket consume in process or via SimpleRedis Eval.
 
+## Backend backoff
+priority: normal
+local: std_go_backendbackoff.md
+description: How a Traefik middleware Allows then Reports a per-key in-memory backoff gate for an unhealthy backend.
+
 ## Test suites
 priority: normal
 local: std_go_test-suites.md
