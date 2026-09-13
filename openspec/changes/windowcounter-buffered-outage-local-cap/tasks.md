@@ -13,6 +13,6 @@
 
 ## 3. Confirm PASS
 
-- [ ] 3.1 Re-run the new lock tests and confirm PASS
-- [ ] 3.2 Run `go test -short -count=1 -timeout 60s ./windowcounter` and confirm PASS (exact-mode unreachable tests still error)
-- [ ] 3.3 Run `openspec validate windowcounter-buffered-outage-local-cap --type change --strict`
+- [x] 3.1 Re-run the new lock tests and confirm PASS
+- [x] 3.2 Run `go test -short -count=1 -timeout 60s ./windowcounter` and confirm PASS (exact-mode unreachable tests still error)
+- [x] 3.3 Run `openspec validate windowcounter-buffered-outage-local-cap --type change --strict`
