@@ -7,7 +7,7 @@ repoSlug: traefik-middleware-utilities
 destBranch: 2026-09-13-simpleredis-panic-safe-release
 qualify: qualified-with-gaps
 src: 0f0a2f7b5fcd7ee43ed160666af6ec79114cb6c511add784f0e1dbf665ef35d6
-localTests: none
+localTests: passed
 requirement: requirement.md
 comments: none
 explore: explore.md
