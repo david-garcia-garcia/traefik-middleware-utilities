@@ -1,42 +1,40 @@
-Developer review: in progress — 2026-09-13T16:03:48Z
+Developer review: ready for review — 2026-09-13T16:22:45Z
 
 ## What this changes
-**Operators.** None.
+**Operators.** Traefik reload hooks (`Sleep`/`Close`) on a buffered window counter no longer hang when the plugin is interpreted.
 
 **Admin users.** None.
 
-**Developers.** Ticket grounded on `origin/master`: interpreted `windowcounter` buffered `Sleep`/`Close` can hang Yaegi `Eval` until the 5-minute package timeout. No product code in this commit.
+**Developers.** `windowcounter` buffered flush is a stdlib `time.AfterFunc` timer. Interpreted `go` plus `select` on ticker/stop is gone. `TestYaegi_BufferedShareSleepDoesNotHang` fails in 3s if Sleep hangs.
 
 **End users.** None.
 
 ## Motivation
-Buffered `windowcounter` starts a flush goroutine that selects on a ticker and a stop channel. Traefik and the live Yaegi tests run that code interpreted. `Sleep` and `Close` close stop and wait on the WaitGroup. DestBranch still uses that interpreted `go` plus `select`; `simpleredis` already abandoned the same pattern because Yaegi v0.16.1's select can miss a channel close.
-
-CI run 34766385613 killed the whole `windowcounter` binary at 300.008s on `TestYaegiLive_RedisAndDragonfly/dragonfly/bufferedTwoClients`. Exact-mode subtests in the same job had already passed. If the interpreted select misses `close(stop)`, Traefik reload hooks (`Sleep`/`Close`) never return.
+Buffered window counters start a flush worker at `New`. DestBranch used an interpreted goroutine that selected on a ticker and a stop channel. `Sleep` and `Close` close stop and wait on a WaitGroup. Yaegi v0.16.1 can miss that close, so Wait never returns and the whole `go test` package binary dies at 300s. CI run 34766385613 showed that on Dragonfly `bufferedTwoClients`. Exact-mode tests in the same job had already passed. Traefik reload uses the same Sleep/Close hooks.
 
 ```mermaid
 sequenceDiagram
   participant Test as interpreted BufferedShare
   participant Flush as flushLoop select
   participant Sleep as stopFlushAndWait
-  Test->>Flush: New with syncRate starts goroutine
+  Test->>Flush: New with syncRate starts method goroutine
   Test->>Sleep: Sleep closes stop then WaitGroup Wait
-  Note over Flush: Yaegi select may not observe close
+  Note over Flush: Yaegi select on Go 1.21 missed close
   Sleep-->>Test: Wait never returns
 ```
 
 ## Merge readiness
-Prepare complete; explore has not confirmed the hang dump yet. 7 phases remain.
+Apply landed. All eight CI checks succeeded.
 
 Priority: P1 — Production is unsafe, losing data, or serving a wrong public contract today
-Reviewed head: c8061a0
+Reviewed head: 27e0393
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Stub PR exists; CI not seen; no apply yet |
-| CI proof | 1/6 | Pushed; checks not seen |
+| Overall readiness | 6/6 | Remote CI succeeded; no open comments |
+| CI proof | 6/6 | All eight checks succeeded — [run 34768309738](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34768309738) |
 | Local tests proof | N/A | Remote PR; CI proof covers this |
 | Review resolution | 6/6 | No PR comments |
 
@@ -44,64 +42,67 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-13-windowcounter-bug-yaegi-flush-hang pushed | `git` origin |
-| OpenSpec | none | `openspec/` |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/75 | pr-host Create |
-| CI | not seen | pr-host CI |
-| Local tests | none | handoff.yaml localTests |
+| OpenSpec | windowcounter-afterfunc-flush archived | `openspec/changes/archive/2026-09-13-windowcounter-afterfunc-flush/` |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/75 | pr-host |
+| CI | build 34768309738 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34768309738 | pr-host CI |
+| Local tests | passed | `go test -short ./...`; Go 1.21.13 Yaegi watchdog `-count=10`; live Yaegi Redis+Dragonfly 8× after FLUSHALL |
 | PR comments | no comments | comments: none |
 
 ## Specs
-None.
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-yaegi-flush-hang/openspec/changes/archive/2026-09-13-windowcounter-afterfunc-flush/proposal.md) — modified
 
 ## Deviations from the ask
 None.
 
 ## Follow-up issues
-None.
+- [ ] [Reclaim grace waiter still uses interpreted `go` + `select`](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-yaegi-flush-hang/knowledge/debt/2026-09-13-reclaim-grace-select.md) — reclaim `waitGraceOrWake` still uses interpreted `go` plus timer/channel `select`.
 
 ## How this fits together
-Local ticket on `origin/master` → branch `2026-09-13-windowcounter-bug-yaegi-flush-hang` → stub PR 75. Explore next: hang dump plus a minimal Yaegi ticker/stop probe.
+Local ticket on `origin/master` → PR 75. Hypothesis confirmed on Go 1.21.13. Flush path is AfterFunc. Supercede PR 61 for this deadlock.
 
 ## Explore Decisions
 None.
 
 ## Before merge
-- [ ] Confirm or refute the interpreted `flushLoop` select hang with a dump and a minimal probe
-- [ ] Remove interpreted `go` + `select` from the flush path without changing Sleep/Wake/Close semantics
-- [ ] Sweep sibling interpreted packages; note non-trivial hits
-- [ ] Measured CI green on PR 75
+None.
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-yaegi-flush-hang/devstate/2026/09/2026-09-13-windowcounter-bug-yaegi-flush-hang/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-yaegi-flush-hang/devstate/2026/09/2026-09-13-windowcounter-bug-yaegi-flush-hang/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-yaegi-flush-hang/devstate/2026/09/2026-09-13-windowcounter-bug-yaegi-flush-hang/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-yaegi-flush-hang/devstate/2026/09/2026-09-13-windowcounter-bug-yaegi-flush-hang/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-yaegi-flush-hang/devstate/2026/09/2026-09-13-windowcounter-bug-yaegi-flush-hang/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-yaegi-flush-hang/devstate/2026/09/2026-09-13-windowcounter-bug-yaegi-flush-hang/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-windowcounter-bug-yaegi-flush-hang/devstate/2026/09/2026-09-13-windowcounter-bug-yaegi-flush-hang/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as Specs |
+| Specs in this PR | 0 added / 1 modified | Same list as Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | c8061a0ad0e9613761ba1ed55d723dd5eadfc964 | Card must match the branch you measured |
+| Reviewed head | 27e039387061a3ca9d2f5d4653a1880675e273ca | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: DestBranch still runs an interpreted flush `select`; this run has only grounded that fact.
+Best possible solution: DestBranch's interpreted `go`+`select` flush is replaced with `time.AfterFunc`, the same compiled-waiter move `simpleredis` already made.
 
-Do we have a high-confidence way to reproduce? No, the CI hang is intermittent; explore must build a dump and a minimal probe.
+Do we have a high-confidence way to reproduce? Yes — Go 1.21.13 `TestScratchYaegiBufferedShareSleep` hung at 8s with `WaitGroup.Wait` and two `interp._select` frames. Isolated ticker probe without windowcounter sources did not hang.
 
-Is this the best way to solve the issue? Not yet — confirm the hang before changing the flush owner.
+Is this the best way to solve the issue? Yes. AfterFunc keeps periodic flush. Opportunistic Take/Peek flush would leave idle deltas unflushed.
 
 ### Evidence
 What I checked:
-- `origin/master` `windowcounter/limiter.go` `flushLoop` / `stopFlushAndWait` / `stopping` (git show `c230315`)
-- `simpleredis/resp.go` Yaegi AfterFunc note
-- Unmerged PR 61 is the compiled Sleep/Wake race, already on dest
-- Stub PR 75 created from this branch
+- Go 1.21.13 hang dump: goroutine 60 `sync.(*WaitGroup).Wait`; 62/63 `interp._select.func4` `run.go:3815`
+- After: `go test -short ./...`; Yaegi watchdog `-count=10`; live Yaegi 8× Redis+Dragonfly
+- CI run 34768309738: Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly all success
+- Supercede PR 61 for this deadlock; dest already has `stopping`
 
 ### Rank-up moves
 None.
