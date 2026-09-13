@@ -27,3 +27,9 @@ phase: archive
 findings: none
 fixed: dest merge of canceled-bind tests onto New(Config); delta already in live context-lease
 skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none

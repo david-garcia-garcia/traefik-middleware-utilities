@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T08:31:00Z
+Developer review: ready for review — 2026-09-13T08:35:16Z
 
 ## What this changes
 **Operators.** None.
@@ -24,27 +24,27 @@ flowchart LR
 ```
 
 ## Merge readiness
-Archive folded the delta into live `std_go_reclaim_context-lease`. CI on HEAD is still running.
+CI succeeded on this PR. 0 items remain.
 
 Priority: P3 — spec and internal API clarity, no current operator or end-user harm
-Reviewed head: 221ce0f
+Reviewed head: 958e6cd
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI on this SHA is in progress |
-| CI proof | 3/6 | 8 checks in progress on `221ce0f` |
+| Overall readiness | 6/6 | Required checks succeeded |
+| CI proof | 6/6 | 8/8 checks success on `958e6cd` |
 | Local tests proof | N/A | `prHost` is github; CI covers remote |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-reclaim-owned-table pushed | `git push` `221ce0f` |
+| Branch | 2026-09-13-reclaim-owned-table pushed | `git push` `958e6cd` |
 | OpenSpec | reclaim-owned-table | `openspec/changes/archive/2026-09-13-reclaim-owned-table/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/65 | pr-host List |
-| CI | build 34747857540 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34747857540 | pr-host get_check_runs |
+| CI | build 34747949967 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34747949967 | pr-host get_check_runs 8/8 success |
 | Local tests | passed | handoff.yaml localTests (`go test -short -timeout 2m -count=1 ./...`) |
 | PR comments | no comments | get_comments empty, review threads 0 |
 
@@ -58,7 +58,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master`. PR #65. Delta archived into the live context-lease spec. Waiting on CI for pullrequest.
+Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master`. PR #65. Eight phases complete. CI succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -72,7 +72,7 @@ Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master`. PR #
 - [x] Remove `Default`, package `Open`, `Reset`, and `ResetWith`; construct tables with `New(Config)` and caller-owned lifetime
 - [x] Fold spec, usage, README, and `reclaimprobe` off the process table
 - [x] Archive delta into live `std_go_reclaim_context-lease`
-- [ ] Green CI on HEAD
+- [x] Green CI on HEAD
 
 ## Findings
 None.
@@ -93,7 +93,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 221ce0ffe12f4905e163c8fb007f0ecf6f7bc81d | Card must match the branch you measured |
+| Reviewed head | 958e6cdd4a4ec19c87bf2a078dbc0db1abe749c3 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -110,7 +110,7 @@ What I checked:
 - `go test -count=1 -timeout 60s ./reclaim/` passed (worktree, `221ce0f`)
 - `go test -short -timeout 2m -count=1 ./...` passed (worktree, `221ce0f`)
 - `origin/master...HEAD` product: delete `reclaim/default.go`, `New(Config)`, probe/README/usage, canceled-bind tests call `New` (`git diff`)
-- CI on `221ce0f`: 8 checks in progress, run 34747857540 (GitHub MCP get_check_runs)
+- CI on `958e6cd`: Lint, Unit, Unit race, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly, Go E2E Redis, Go E2E Dragonfly all success, run 34747949967 (GitHub MCP get_check_runs)
 
 ### Rank-up moves
 None.
