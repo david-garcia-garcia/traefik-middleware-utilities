@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"bufio"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -287,5 +288,20 @@ func TestShouldRetryPoolWaitIsFalse(t *testing.T) {
 	}
 	if !shouldRetry(errUnreachable) {
 		t.Fatal("shouldRetry(errUnreachable) = false, want true")
+	}
+}
+
+func TestShouldRetryHandshakeFailureIsFalse(t *testing.T) {
+	if shouldRetry(handshakeFailure{err: errUnreachable}) {
+		t.Fatal("shouldRetry(handshakeFailure(unreachable)) = true, want false")
+	}
+	if shouldRetry(handshakeFailure{err: errors.New("LOADING Redis is loading the dataset in memory")}) {
+		t.Fatal("shouldRetry(handshakeFailure(LOADING)) = true, want false")
+	}
+	if !shouldRetry(errUnreachable) {
+		t.Fatal("shouldRetry(errUnreachable) = false, want true")
+	}
+	if !shouldRetry(errors.New("LOADING Redis is loading the dataset in memory")) {
+		t.Fatal("shouldRetry(LOADING) = false, want true")
 	}
 }

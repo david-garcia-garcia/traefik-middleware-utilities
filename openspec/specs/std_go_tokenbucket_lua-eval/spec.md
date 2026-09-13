@@ -49,6 +49,18 @@ For the same rate, burst, maxDelay, ttl, and Allow sequence (same test clock), m
 - **THEN** each step's allowed value matches
 - **AND** each step's wait is either both zero, both positive and at most maxDelay, or both greater than maxDelay
 
+### Requirement: New rejects ttl Redis cannot expire in seconds
+Construction SHALL fail when `ttl` is not a whole number of seconds. Memory expire lifetime and Redis EXPIRE seconds SHALL then be the same duration. The script MUST keep integer-second `EXPIRE`. Construction MUST NOT succeed for a fractional `ttl` while Memory expires at the full Duration and Redis EXPIRE uses truncated seconds.
+
+#### Scenario: Fractional ttl never reaches Allow
+- **WHEN** NewMemory or NewRedis is called with ttl 1500ms
+- **THEN** construction returns an error
+- **AND** no EVAL is sent
+
+#### Scenario: Whole-second ttl still constructs
+- **WHEN** NewMemory or NewRedis is called with ttl 2s
+- **THEN** construction succeeds
+
 ### Requirement: Live Redis and Dragonfly
 Live tests SHALL call Allow against each of Redis and Dragonfly whose address is set using `TOKENBUCKET_LIVE_REDIS` and `TOKENBUCKET_LIVE_DRAGONFLY`. Tests SHALL skip when both addrs are unset or under `-short`. When exactly one address is set they MUST run that engine and MUST NOT fail for the missing engine. CI `e2e-redis` SHALL start Redis, set `TOKENBUCKET_LIVE_REDIS`, and MUST NOT set `TOKENBUCKET_LIVE_DRAGONFLY`. CI `e2e-dragonfly` SHALL start Dragonfly, set `TOKENBUCKET_LIVE_DRAGONFLY`, and MUST NOT set `TOKENBUCKET_LIVE_REDIS`. The unit `test` job MUST pass `-short` and MUST NOT start those engines. Yaegi live SHALL run the same scenarios; the compiled test owns start/skip; the interpreted probe calls Allow. Live scenarios SHALL include burst after idle, two-instance share, memory/Redis agreement, and refund when wait exceeds maxDelay.
 
