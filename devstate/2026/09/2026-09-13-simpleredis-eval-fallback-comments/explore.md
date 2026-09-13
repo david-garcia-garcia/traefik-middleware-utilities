@@ -44,5 +44,5 @@ Usage packet `knowledge/devdocs/std_go_simpleredis.md` still says worst-case wai
 
 - Q: Does implement also update `knowledge/devdocs/std_go_simpleredis.md` (worst-case wait understated for Eval / MSetEX fallbacks)?
   Rank: additive incidental — no Desired line names the usage packet; usage currently states one overall deadline per public verb
-  Decision: assumed — implement stays comments + tests on the named files. Usage completeness is for `opd-devdocsimpact`.
-  By: explore
+  Decision: resolved — updated `knowledge/devdocs/std_go_simpleredis.md` How-to and Gotcha: each hop binds a full command budget; Eval NOSCRIPT and MSetEX unknown-command are separate hops.
+  By: devdocsimpact
