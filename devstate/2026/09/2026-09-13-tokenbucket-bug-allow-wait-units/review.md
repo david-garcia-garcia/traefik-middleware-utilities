@@ -18,3 +18,10 @@ phase: propose
 findings: none
 fixed: none
 skipped: production hunk (propose only)
+
+## implement (2026-09-13)
+
+phase: implement
+findings: dest tests failed then passed after microseconds admit
+fixed: Memory.Allow and Redis.Allow admit from waitMicro; waitDuration and allowedFromWait deleted
+skipped: other tokenbucket bugs

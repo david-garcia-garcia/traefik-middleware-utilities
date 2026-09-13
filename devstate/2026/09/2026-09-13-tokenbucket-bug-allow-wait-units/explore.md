@@ -43,8 +43,8 @@ Measured on dest `9c2a11a` (throwaway tests, then deleted): all four cases faile
 
 - Q: After deleting `waitDuration`, how is Allow's Duration return produced?
   Rank: additive asked — Desired names delete `waitDuration`; dest `std_go_tokenbucket_allow` already returns wait duration (existing callers keep working)
-  Decision: assumed — keep `(bool, time.Duration, error)`; inline `waitMicro * time.Microsecond` at `Memory.Allow` and `Redis.Allow` returns only; admit bool is microseconds, not that Duration.
-  By: explore
+  Decision: resolved — keep `(bool, time.Duration, error)`; inline `waitMicro * time.Microsecond` at `Memory.Allow` and `Redis.Allow` returns only; admit bool is microseconds, not that Duration.
+  By: implement
 
 - Q: Who already owns the request identity used as the Allow key?
   Rank: additive asked — `std_go_tokenbucket_allow` names the caller-owned opaque key
