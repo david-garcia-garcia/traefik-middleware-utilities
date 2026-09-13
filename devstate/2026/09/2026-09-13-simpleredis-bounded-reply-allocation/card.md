@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T17:12:03Z
+Developer review: in progress — 2026-09-13T17:16:15Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None yet versus DestBranch. Explore recorded a chunked `readBulk` and append-on-array-decode shape; product code is unchanged.
+**Developers.** OpenSpec change `simpleredis-bounded-reply-allocation` records that an in-cap `$` or `*` header MUST NOT size `make` before payload or elements arrive. Product `readBulk` is still DestBranch.
 
 **End users.** None.
 
@@ -26,17 +26,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore is written. Product allocation change is not on this branch yet. Propose is next. Simplicity gate: the recorded shape is small enough to implement.
+Propose is written and valid. Simplicity gate passed: chunked `ReadFull` with a 128 KiB first chunk and array append with start cap 16 is small enough to implement. Product decoder change is next.
 
 Priority: P2 — real operator pain (Traefik OOM from a handful of header bytes), limited blast until a hostile or buggy peer (or a desynced socket)
-Reviewed head: 33ce43f
+Reviewed head: 0336427
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Explore landed; CI on this head is still running; product fix not landed |
-| CI proof | 3/6 | build 34770862044 in progress ([Unit](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34770862044/job/103760084138)) |
+| Overall readiness | 3/6 | Propose landed; CI on this head is queued; product fix not landed |
+| CI proof | 3/6 | build 34771076427 queued ([Unit](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771076427/job/103760662365)) |
 | Local tests proof | N/A | Before implement (`localTests: none`) |
 | Review resolution | 6/6 | OPEN PR, no reviewer comments |
 
@@ -44,14 +44,14 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-13-simpleredis-bounded-reply-allocation pushed | `git` |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | simpleredis-bounded-reply-allocation | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/86 | pr-host List |
-| CI | build 34770862044 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34770862044 | pr-host CI |
+| CI | build 34771076427 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771076427 | pr-host CI |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-None.
+- [std_go_simpleredis_resp-decode](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/openspec/changes/simpleredis-bounded-reply-allocation/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -60,7 +60,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → stub PR 86 against `master`. Explore recorded the decode shape; propose will write the spec delta.
+Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → stub PR 86 against `master`. Propose is apply-ready; implement next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -73,7 +73,7 @@ Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → st
 ## Before merge
 - [ ] Keep SimpleRedis reply memory proportional to bytes the peer actually sent, not the declared in-cap `$` or `*` length
 - [ ] Untagged `TotalAlloc` proof for a header-only oversized `$` and `*`
-- [ ] Honour the simplicity gate: stop after propose if the correct fix is not small
+- [x] Honour the simplicity gate: the recorded shape is small enough to implement
 
 ## Findings
 None.
@@ -86,29 +86,27 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
+| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 33ce43f240a0d1978f2e7116393a831667f981d3 | Card must match the branch you measured |
+| Reviewed head | 0336427711e927cd60873d683249bc58dab1daa3 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not on DestBranch yet. Dest still `make`s from the declared in-cap length before reading payload. Explore's shape is chunked `ReadFull` with first allocation `min(need, 128 KiB)` and array append with start cap 16.
+Best possible solution: not on DestBranch yet. Propose's shape is chunked `ReadFull` with first allocation `min(need, 128 KiB)` and array append with start cap 16.
 
-Do we have a high-confidence way to reproduce? Yes. Tagged `TestBugPeerControlledAllocationAmplification` failed on dest: 11 bytes → 67,144,992 allocated; 10 bytes → 25,188,272 (`go test -tags simpleredis_bugs`).
+Do we have a high-confidence way to reproduce? Yes. Tagged `TestBugPeerControlledAllocationAmplification` failed on dest: 11 bytes → 67,144,992 allocated; 10 bytes → 25,188,272.
 
-Is this the best way to solve the issue? Yes versus DestBranch: do not `make` the announced size before bytes arrive; keep the common-path one-shot so `$17` and `$102400` benches stay. `io.CopyN` would add a 32 KiB scratch and miss `decodeBulkBytes`.
+Is this the best way to solve the issue? Yes versus DestBranch. `openspec validate simpleredis-bounded-reply-allocation --strict` is valid. Simplicity gate: implement.
 
 ### Evidence
 What I checked:
-- Dest `simpleredis/resp.go` `readBulk` / `readReply` `*` case (`origin/master` `a239a9e`, worktree `33ce43f`)
-- Tagged reproduction failed as claimed (`TestBugPeerControlledAllocationAmplification`)
-- Decode spec SHALL make+ReadFull (`openspec/specs/std_go_simpleredis_resp-decode/spec.md`)
-- Alloc ceilings in `simpleredis/bench_test.go` (`decodeBulkBytes = 112`, `decode100KBBytes = 127843`, `decodeArrayBytes = 344`)
-- Research: `knowledge/research/ext_redis_resp_bulk-string/`, `ext_redis_proto_max-bulk-len/`, `ext_go-redis_proto_reader-limit/`
+- Change artifacts under `openspec/changes/simpleredis-bounded-reply-allocation/`
+- `openspec validate simpleredis-bounded-reply-allocation --strict` valid
+- FindSpecHost fold `std_go_simpleredis_resp-decode` (high)
 - OPEN PR 86, no comments
-- CI build 34770862044 in progress on `33ce43f`
+- CI build 34771076427 queued on `0336427`
 
 ### Rank-up moves
 None.
