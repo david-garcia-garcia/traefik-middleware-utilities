@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T08:10:33Z
+Developer review: in progress — 2026-09-13T08:14:27Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** OpenSpec change `reclaim-owned-table` folds `std_go_reclaim_context-lease` off the process table onto `New(Config)` and caller-owned lifetime.
 
 **End users.** None.
 
@@ -24,32 +24,32 @@ flowchart LR
 ```
 
 ## Merge readiness
-Explore is written with assumed constructor and ownership decisions. Product apply has not started. Propose is next.
+Propose is apply-ready (`reclaim-owned-table`). Product apply has not started. Implement is next.
 
 Priority: P3 — spec and internal API clarity, no current operator or end-user harm
-Reviewed head: 11f6c1a
+Reviewed head: b228dcd
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 1/6 | Head pushed; CI on this SHA not seen |
-| CI proof | 1/6 | `get_status` pending, 0 statuses on `11f6c1a` |
+| CI proof | 1/6 | `get_status` pending on previous head; this SHA just pushed |
 | Local tests proof | N/A | Before implement (`localTests: none`) |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-reclaim-owned-table pushed | `git push` `11f6c1a` |
-| OpenSpec | none | no change folder |
+| Branch | 2026-09-13-reclaim-owned-table pushed | `git push` `b228dcd` |
+| OpenSpec | reclaim-owned-table | `openspec/changes/reclaim-owned-table/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/65 | pr-host List |
-| CI | not seen | pr-host get_status pending, 0 statuses on `11f6c1a` |
+| CI | not seen | pr-host get_status pending on prior SHA; `b228dcd` just pushed |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | inventory empty |
 
 ## Specs
-None.
+- [std_go_reclaim_context-lease](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/openspec/changes/reclaim-owned-table/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -58,7 +58,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master`. Stub PR #65 is the durable card. Explore assumed `New(Config)` and caller-owned tables. Next is propose.
+Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master`. Stub PR #65. Change `reclaim-owned-table` is apply-ready. Next is implement.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -83,15 +83,15 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs; do not paste diff --stat |
+| Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 11f6c1ac675d237b8faf6ad9f704517896023704 | Card must match the branch you measured |
+| Reviewed head | b228dcd9fe666e4ec53ec1d4c815c578b9a8de15 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not applied yet; dest still exposes the process table.
+Best possible solution: not applied yet; dest still exposes the process table. The change artifacts specify `New(Config)` and deleting `default.go`.
 
 Do we have a high-confidence way to reproduce? Yes — `reclaim/default.go` plus `TestDefault_*` in `reclaim/table_test.go`.
 
@@ -99,10 +99,10 @@ Is this the best way to solve the issue? Yes versus dest — remove the singleto
 
 ### Evidence
 What I checked:
-- `origin/master...HEAD` product diff empty (`git diff` excluding `devstate/`)
-- `devstate/explore.md` four assumed rows (`git`, `11f6c1a`)
-- OPEN PR #65, empty comment inventory (GitHub MCP `get_comments`)
-- CI on `11f6c1a`: `get_status` pending, 0 statuses (GitHub MCP)
+- `openspec validate reclaim-owned-table --type change --strict` valid (`openspec`, `b228dcd`)
+- `origin/master...HEAD` product paths: `openspec/changes/reclaim-owned-table/` only (`git diff`)
+- OPEN PR #65 (GitHub MCP)
+- CI: not seen on `b228dcd` (just pushed)
 
 ### Rank-up moves
 None.
