@@ -10,3 +10,10 @@ phase: explore
 findings: dest 1500ms Take succeeds; 1s Redis buckets; TTL 2
 fixed: none
 skipped: none
+
+## propose — 2026-09-13T07:07:44Z
+
+phase: propose
+findings: fold std_go_windowcounter_sliding-take; change windowcounter-reject-fractional-window
+fixed: none
+skipped: none
