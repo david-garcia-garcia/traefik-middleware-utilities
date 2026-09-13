@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T08:18:34Z
+Developer review: in progress — 2026-09-13T08:31:00Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** `reclaim` no longer has `Default` / package `Open` / `Reset` / `ResetWith`. Callers create a table with `New(Config)` (Grace copied and frozen). `e2e/reclaimprobe` holds a package-level table. README and `std_go_reclaim` / `std_go_backendbackoff` usage follow.
+**Developers.** `reclaim` no longer has `Default` / package `Open` / `Reset` / `ResetWith`. Callers create a table with `New(Config)` (Grace copied and frozen). `e2e/reclaimprobe` holds a package-level table. README and `std_go_reclaim` / `std_go_backendbackoff` usage follow. Canceled-bind tests from dest construct with `New(Config)`.
 
 **End users.** None.
 
@@ -24,32 +24,32 @@ flowchart LR
 ```
 
 ## Merge readiness
-Apply landed. Local `go test ./reclaim/` passed. CI on this SHA not seen. Code review is next.
+Archive folded the delta into live `std_go_reclaim_context-lease`. CI on HEAD is still running.
 
 Priority: P3 — spec and internal API clarity, no current operator or end-user harm
-Reviewed head: d4f8346
+Reviewed head: 221ce0f
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Head pushed; CI on this SHA not seen |
-| CI proof | 1/6 | `get_status` pending, 0 statuses on `d4f8346` |
-| Local tests proof | 6/6 | `localTests: passed` (`go test -count=1 -timeout 60s ./reclaim/`) |
+| Overall readiness | 3/6 | CI on this SHA is in progress |
+| CI proof | 3/6 | 8 checks in progress on `221ce0f` |
+| Local tests proof | N/A | `prHost` is github; CI covers remote |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-reclaim-owned-table pushed | `git push` `d4f8346` |
-| OpenSpec | reclaim-owned-table | `openspec/changes/reclaim-owned-table/` |
+| Branch | 2026-09-13-reclaim-owned-table pushed | `git push` `221ce0f` |
+| OpenSpec | reclaim-owned-table | `openspec/changes/archive/2026-09-13-reclaim-owned-table/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/65 | pr-host List |
-| CI | not seen | pr-host get_status pending, 0 statuses on `d4f8346` |
-| Local tests | passed | handoff.yaml localTests |
-| PR comments | no comments | inventory empty |
+| CI | build 34747857540 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34747857540 | pr-host get_check_runs |
+| Local tests | passed | handoff.yaml localTests (`go test -short -timeout 2m -count=1 ./...`) |
+| PR comments | no comments | get_comments empty, review threads 0 |
 
 ## Specs
-- [std_go_reclaim_context-lease](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/openspec/changes/reclaim-owned-table/proposal.md) — modified
+- [std_go_reclaim_context-lease](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/openspec/changes/archive/2026-09-13-reclaim-owned-table/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -58,7 +58,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master`. Stub PR #65. Apply is on HEAD. Next is code review.
+Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master`. PR #65. Delta archived into the live context-lease spec. Waiting on CI for pullrequest.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -71,14 +71,20 @@ Local ticket, branch `2026-09-13-reclaim-owned-table` from `origin/master`. Stub
 ## Before merge
 - [x] Remove `Default`, package `Open`, `Reset`, and `ResetWith`; construct tables with `New(Config)` and caller-owned lifetime
 - [x] Fold spec, usage, README, and `reclaimprobe` off the process table
+- [x] Archive delta into live `std_go_reclaim_context-lease`
 - [ ] Green CI on HEAD
-- [ ] Archive delta into live `std_go_reclaim_context-lease`
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/devstate/2026/09/2026-09-13-reclaim-owned-table/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/devstate/2026/09/2026-09-13-reclaim-owned-table/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/devstate/2026/09/2026-09-13-reclaim-owned-table/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/devstate/2026/09/2026-09-13-reclaim-owned-table/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/devstate/2026/09/2026-09-13-reclaim-owned-table/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/devstate/2026/09/2026-09-13-reclaim-owned-table/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-owned-table/devstate/2026/09/2026-09-13-reclaim-owned-table/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -87,7 +93,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | d4f834643d4f8383d2021c48cd24cca6afa40808 | Card must match the branch you measured |
+| Reviewed head | 221ce0ffe12f4905e163c8fb007f0ecf6f7bc81d | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -95,16 +101,16 @@ None.
 ### Technical review
 Best possible solution: dest process table is gone; callers own `New(Config)` with frozen Grace.
 
-Do we have a high-confidence way to reproduce? Yes — `go test -count=1 -timeout 60s ./reclaim/` passed after deleting `default.go`.
+Do we have a high-confidence way to reproduce? Yes — `go test -short -timeout 2m -count=1 ./...` passed after dest merge of canceled-bind tests onto `New(Config)`.
 
 Is this the best way to solve the issue? Yes versus dest — remove the singleton rather than add a second config path on `Default`.
 
 ### Evidence
 What I checked:
-- `go test -count=1 -timeout 60s ./reclaim/` passed (worktree, `13c5ab9`)
-- Probe package type-checks (`go test` in `e2e/reclaimprobe`)
-- `origin/master...HEAD` product: delete `reclaim/default.go`, `New(Config)`, probe/README/usage (`git diff`)
-- CI on `d4f8346`: `get_status` pending, 0 statuses (GitHub MCP)
+- `go test -count=1 -timeout 60s ./reclaim/` passed (worktree, `221ce0f`)
+- `go test -short -timeout 2m -count=1 ./...` passed (worktree, `221ce0f`)
+- `origin/master...HEAD` product: delete `reclaim/default.go`, `New(Config)`, probe/README/usage, canceled-bind tests call `New` (`git diff`)
+- CI on `221ce0f`: 8 checks in progress, run 34747857540 (GitHub MCP get_check_runs)
 
 ### Rank-up moves
 None.
