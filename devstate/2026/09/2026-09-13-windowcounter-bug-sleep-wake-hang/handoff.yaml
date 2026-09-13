@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-windowcounter-bug-sleep-wake-hang
+jobName: 2026-09-13-windowcounter-bug-sleep-wake-hang
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 7e0ae36d1c32ffdada6171e6c07eec1df41b28c7ac3bb5022d393e5872415121
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: windowcounter-sleep-wins-wake
+pr:
+  id: 61
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/61
