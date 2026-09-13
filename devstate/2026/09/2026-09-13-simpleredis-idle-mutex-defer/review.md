@@ -22,3 +22,9 @@ findings: none
 fixed: parkIdleConn extract; groupWriteMu defer; BUGS.md section 2
 skipped: no panic-inside-parkIdleConn test
 
+## codereview (2026-09-13)
+phase: codereview
+findings: P3 2 (stale parkIdleConn comment; idle-full-at-cap untested)
+fixed: parkIdleConn comment; TestReleaseClosesWhenIdleFullAtLiveCap
+skipped: none
+

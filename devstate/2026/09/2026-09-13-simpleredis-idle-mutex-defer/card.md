@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T15:43:03Z
+Developer review: in progress — 2026-09-13T15:54:24Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** `release` extracts `parkIdleConn` so `idleConnsMu` unlocks via `defer` without holding the lock across `conn.close()` or `freeInUseTurn`. `cachedGroupWrite` / `storeGroupWrite` defer `groupWriteMu`. `BUGS.md` section 2 records that interpreted `defer` runs on panic under Yaegi v0.16.1 and points at `simpleredis/yaegi_defer_test.go`.
+**Developers.** `release` extracts `parkIdleConn` so `idleConnsMu` unlocks via `defer` without holding the lock across `conn.close()` or `freeInUseTurn`. `cachedGroupWrite` / `storeGroupWrite` defer `groupWriteMu`. `BUGS.md` section 2 records that interpreted `defer` runs on panic under Yaegi v0.16.1 and points at `simpleredis/yaegi_defer_test.go`. `TestReleaseClosesWhenIdleFullAtLiveCap` proves a reusable socket is closed when idle is already at `MaxIdleConns` and live is at `PoolSize`.
 
 **End users.** None.
 
@@ -29,28 +29,28 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Product is on the branch. CI on the product commit succeeded. Code review has not run. 3 items remain.
+Product is on the branch. Seven-axis review applied two hard fixes. CI on the review-fix commit is not seen yet. 3 items remain.
 
 Priority: P1 — a recovered panic inside `release` deadlocks the idle mutex for the process lifetime
-Reviewed head: 6bf96ce
+Reviewed head: 95aef12
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | Product applied, CI succeeded, no open comments |
-| CI proof | 6/6 | succeeded [CI run 34766304374](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34766304374) |
+| Overall readiness | 1/6 | Review-fix commit pushed; CI not seen yet |
+| CI proof | 1/6 | not seen on 95aef12; prior product run 34766304374 succeeded |
 | Local tests proof | N/A | remote PR; localTests passed |
 | Review resolution | 6/6 | OPEN PR #73, no reviewer comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-simpleredis-idle-mutex-defer pushed | `git` HEAD 6bf96ce |
+| Branch | 2026-09-13-simpleredis-idle-mutex-defer pushed | `git` HEAD 3eb6932 |
 | OpenSpec | simpleredis-idle-mutex-defer | `openspec/changes/simpleredis-idle-mutex-defer/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/73 | GitHub |
-| CI | build 34766304374 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34766304374 | GitHub: Lint, Unit, Unit race, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly, Go E2E Redis, Go E2E Dragonfly all success |
-| Local tests | passed | `go vet ./simpleredis/` clean; `go test -count=1 -timeout 300s ./simpleredis/` 13.591s; `-count=5 -run "Pool|Panic|Release|Borrow|Turn"` 7.912s |
+| CI | not seen | GitHub check runs after 95aef12 |
+| Local tests | passed | `go vet ./simpleredis/` clean; `TestReleaseClosesWhenIdleFullAtLiveCap` `-count=5` 0.425s |
 | PR comments | no comments | comments: none |
 
 ## Specs
@@ -81,15 +81,22 @@ Local spec → branch `2026-09-13-simpleredis-idle-mutex-defer` from `origin/202
 - [x] Stub PR #73 opened with base `2026-09-13-simpleredis-panic-safe-release`
 - [x] Explore: extract `parkIdleConn`; no panic-inside-lock test; fold tcp-session delta
 - [x] Propose: OpenSpec `simpleredis-idle-mutex-defer` apply-ready
-- [ ] Seven-axis code review
+- [x] Seven-axis code review (Standards comment + idle-full-at-cap test)
 - [ ] Archive the OpenSpec change into the live catalog
 - [ ] Drop WIP from the PR title
 
 ## Findings
-None.
+- [P3] Leave a trail on `parkIdleConn` — done — block intro now names the do-not-park verdict. Path: `simpleredis/pool.go`.
+- [P3] Full idle at live cap untested — done — `TestReleaseClosesWhenIdleFullAtLiveCap`. Path: `simpleredis/pool_test.go`.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-mutex-defer/devstate/2026/09/2026-09-13-simpleredis-idle-mutex-defer/codereview_standards.md) — 1 total, 0 pending, 1 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-mutex-defer/devstate/2026/09/2026-09-13-simpleredis-idle-mutex-defer/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-mutex-defer/devstate/2026/09/2026-09-13-simpleredis-idle-mutex-defer/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-mutex-defer/devstate/2026/09/2026-09-13-simpleredis-idle-mutex-defer/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-mutex-defer/devstate/2026/09/2026-09-13-simpleredis-idle-mutex-defer/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-mutex-defer/devstate/2026/09/2026-09-13-simpleredis-idle-mutex-defer/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-mutex-defer/devstate/2026/09/2026-09-13-simpleredis-idle-mutex-defer/codereview_coverage.md) — 1 total, 0 pending, 1 completed
 
 ## Agent review details
 
@@ -98,7 +105,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 6bf96ce758f2ec22cde3674ceac1b7e41ec3a8aa | Card must match the branch you measured |
+| Reviewed head | 95aef12c (product) / 3eb6932 (bus) | Card must match the branch you measured |
 
 ### Stored data model
 None.
