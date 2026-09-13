@@ -14,3 +14,8 @@ description: How go-redis proto.Reader.readLine uses ReadSlice and handles bufio
 priority: normal
 local: ext_go-redis_proto_reader-limit/
 description: Whether go-redis proto.Reader caps bulk-string or array allocations taken from a reply header.
+
+## go-redis under Yaegi
+priority: normal
+local: ext_go-redis_yaegi-compatibility/
+description: Whether go-redis v9 can run inside Traefik's Yaegi interpreter with or without useUnsafe; the standing justification for simpleredis.

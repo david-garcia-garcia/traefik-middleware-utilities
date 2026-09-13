@@ -12,7 +12,11 @@ import (
 var nopCancel context.CancelFunc = func() {}
 
 // exec borrows a connection, runs one RESP command, and retries retryable failures up to MaxRetries.
-// After I/O on a socket taken from idle, later attempts of this command skip idle so they do not pop another corpse.
+// After I/O on a socket taken from idle, later attempts of this command skip idle so they do not pop another corpse
+// (borrowSocket documents the vintage this escapes, and why the fd cannot be probed first).
+// skipIdle is per-command on purpose: leftover corpses stay parked, so each later command spends one and then dials.
+// A socket taken from idle that fails after its write is indistinguishable from a lost reply, so that attempt still
+// consumes MaxRetries and MaxRetries -1 still fails the command; no free extra send is added.
 // The library overall deadline is bound onto ctx (stdlib Dialer/Client shape). Caller cancel stays ctx.Err(); library expiry is redis:timeout. INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
 func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, error) {
 	if ctx == nil {

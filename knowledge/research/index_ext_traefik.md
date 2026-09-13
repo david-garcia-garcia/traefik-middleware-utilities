@@ -34,3 +34,8 @@ description: How Traefik v3 Yaegi plugins register unsafe/syscall only when both
 priority: normal
 local: ext_traefik_plugins_yaegi-unsafe/
 description: Which unsafe package symbols Yaegi v0.16.1 exports when Traefik registers stdlib/unsafe.
+
+## Yaegi build constraints
+priority: normal
+local: ext_traefik_plugins_yaegi-build-constraints/
+description: Which build-constraint mechanisms Yaegi v0.16.1 honors when assembling an interpreted package, and which it ignores silently.
