@@ -22,7 +22,7 @@ SimpleRedis reads each RESP line with `ReadSlice('\n')` so short headers do not 
 
 - Read a line with `ReadSlice('\n')`. On `bufio.ErrBufferFull`, return `redis:issue?`. Do not `ReadBytes` the remainder. Do not loop `ReadSlice`. Stay on `bufio.NewReader` (4096).
 - Copy a `+` or `:` payload with `append([]byte(nil), payload...)` before the next read and before `release`.
-- Parse bulk and array lengths from the bytes after the type byte (`parseLen`). Accept optional leading minus (`$-1` miss). Empty or non-digits is `redis:issue?`. Do not use `unsafe` or `strconv.Atoi(string(...))`.
+- Parse bulk and array lengths from the bytes after the type byte (`parseLen`). Accept optional leading minus (`$-1` nil slot, `*-1` negative array). Empty or non-digits is `redis:issue?`. Do not use `unsafe` or `strconv.Atoi(string(...))`.
 - After the bulk miss check, reject a bulk length above `maxBulkLength` (`64 << 20`) and an array count above `maxArrayCount` (`1 << 20`) as `redis:issue?` before any `make`. Do not put those caps on `Config`.
 - For an accepted bulk length, leave `readBulk` as `make([]byte, length+2)` plus `io.ReadFull`. After a complete read, the last two bytes must be CRLF; otherwise return `redis:issue?` so the socket is not pooled. Do not keep a `$` or `*` header slice across a later read.
 
