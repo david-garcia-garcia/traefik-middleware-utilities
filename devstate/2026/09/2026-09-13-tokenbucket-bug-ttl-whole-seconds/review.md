@@ -24,4 +24,22 @@ findings: dest FAIL then whole-second validateClock PASS
 fixed: errTTL whole seconds; ttl_truncation_test.go reshaped; usage gotcha
 skipped: PEXPIRE; Lua rewrite
 
+## codereview (2026-09-13)
+phase: codereview
+findings: seven axes none
+fixed: none
+skipped: none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: none — usage packet already has whole-second ttl gotcha
+fixed: none
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: fold allow and lua-eval
+fixed: live specs synced; change moved to archive/2026-09-13-tokenbucket-ttl-whole-seconds
+skipped: none
+
 

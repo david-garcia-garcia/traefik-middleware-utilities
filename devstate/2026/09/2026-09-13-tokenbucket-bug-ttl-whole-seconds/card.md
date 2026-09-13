@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T06:24:30Z
+Developer review: in progress — 2026-09-13T06:31:59Z
 
 ## What this changes
 **Operators.** None.
@@ -29,10 +29,10 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Apply landed locally; CI on the apply head is still running.
+Apply landed locally; CI on the apply head is still running. Seven-axis review is clean.
 
 Priority: P2 — stores can expire the same key at different times when ttl is not a whole second
-Reviewed head: 7e02c79
+Reviewed head: ce94276
 Owner decision: None.
 
 ## Review scores
@@ -54,8 +54,8 @@ Owner decision: None.
 | PR comments | no comments | inventory empty |
 
 ## Specs
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/openspec/changes/tokenbucket-ttl-whole-seconds/proposal.md) — modified
-- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/openspec/changes/tokenbucket-ttl-whole-seconds/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/openspec/changes/archive/2026-09-13-tokenbucket-ttl-whole-seconds/proposal.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/openspec/changes/archive/2026-09-13-tokenbucket-ttl-whole-seconds/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -64,7 +64,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-ttl-whole-seconds`, stub PR #57. Apply rejected fractional ttl at `validateClock`. Code review is next.
+Local ticket, branch `2026-09-13-tokenbucket-bug-ttl-whole-seconds`, stub PR #57. Apply rejected fractional ttl at `validateClock`. Seven-axis review is clean. Devdocs impact is next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -75,13 +75,19 @@ Local ticket, branch `2026-09-13-tokenbucket-bug-ttl-whole-seconds`, stub PR #57
 
 ## Before merge
 - [x] Land tokenbucket tests that fail on dest for New(1500ms) accepted, Redis ARGV ttl 1, Memory still live at +1200ms, then reject fractional ttl at validateClock and keep 2s accepted
-- [ ] Archive whole-second ttl into the live tokenbucket allow and lua-eval specs
+- [x] Archive whole-second ttl into the live tokenbucket allow and lua-eval specs
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/devstate/2026/09/2026-09-13-tokenbucket-bug-ttl-whole-seconds/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/devstate/2026/09/2026-09-13-tokenbucket-bug-ttl-whole-seconds/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/devstate/2026/09/2026-09-13-tokenbucket-bug-ttl-whole-seconds/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/devstate/2026/09/2026-09-13-tokenbucket-bug-ttl-whole-seconds/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/devstate/2026/09/2026-09-13-tokenbucket-bug-ttl-whole-seconds/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/devstate/2026/09/2026-09-13-tokenbucket-bug-ttl-whole-seconds/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-ttl-whole-seconds/devstate/2026/09/2026-09-13-tokenbucket-bug-ttl-whole-seconds/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -90,7 +96,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 7e02c792d64f6adba2c6952aa693f0257fe055f8 | Card must match the branch you measured |
+| Reviewed head | ce942761 | Card must match the branch you measured |
 
 ### Stored data model
 None.
