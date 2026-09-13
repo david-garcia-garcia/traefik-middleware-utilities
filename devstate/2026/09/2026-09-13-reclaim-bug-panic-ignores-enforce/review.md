@@ -18,4 +18,10 @@ findings: FindSpecHost fold std_go_reclaim_value-lifecycle and std_go_reclaim_co
 fixed: proposal, delta specs, design, tasks
 skipped: product apply
 
+## implement (2026-09-13)
+phase: implement
+findings: TestRepro_* failed on dest then passed; full ./reclaim green
+fixed: endBusyAfterPanic; closer slot on enforced path; usage packet
+skipped: nil-Done watcher leak; reclaim/BUGS.md
+
 
