@@ -21,13 +21,15 @@ They look like unrelated libraries. They share one module on purpose: the window
 
 Package `reclaim/`. Keep one Go value per key for the life of a Traefik plugin instance — a Redis client, a counter, a limiter.
 
-Call `reclaim.Open` from the plugin constructor (`New`). Pass Traefik's constructor context, not `req.Context()`. The first `Open` for a key runs `create` once. Later `Open`s on the same key return that same value. When Traefik reloads config it cancels the old context; the table sleeps the value, and if a new `New` opens the same key before grace ends, it wakes the stored value instead of creating another.
+Call `table.Open` from the plugin constructor (`New`), on a `*Table` the plugin package holds (`reclaim.New`). Pass Traefik's constructor context, not `req.Context()`. The first `Open` for a key runs `create` once. Later `Open`s on the same key return that same value. When Traefik reloads config it cancels the old context; the table sleeps the value, and if a new `New` opens the same key before grace ends, it wakes the stored value instead of creating another.
 
-Pass `Sleep` / `Wake` / `Close` as `reclaim.Hooks` when the stored value has those methods. Production uses the process table (`reclaim.Open`). Prefix keys when more than one type shares it.
+Pass `Sleep` / `Wake` / `Close` as `reclaim.Hooks` when the stored value has those methods. Prefix keys when more than one type shares a table.
 
 ```go
+var table = reclaim.New(reclaim.Config{Grace: reclaim.DefaultGrace})
+
 var limiter *windowcounter.Limiter
-stored, err := reclaim.Open(ctx, "window:"+hash, logger, func() (any, error) {
+stored, err := table.Open(ctx, "window:"+hash, logger, func() (any, error) {
 	var createErr error
 	limiter, createErr = windowcounter.New(client, 0)
 	return limiter, createErr
@@ -130,7 +132,7 @@ ok := callBackend()
 gate.Report("backend:"+host, ok)
 ```
 
-Prefix keys in the caller. Store the Gate in `reclaim.Open` so a Traefik reload keeps the map (`Close` as the reclaim hook; no Sleep/Wake). Two Gate instances do not share state. Do not import `tokenbucket`.
+Prefix keys in the caller. Store the Gate in a reclaim table the caller owns so a Traefik reload keeps the map (`Close` as the reclaim hook; no Sleep/Wake). Two Gate instances do not share state. Do not import `tokenbucket`.
 
 ## Yaegi
 

@@ -102,9 +102,17 @@ type slot struct {
 	logger *slog.Logger
 }
 
-// NewTable builds an empty table. Grace is how long a sleeping value is kept before it is
-// disposed. Zero grace keeps nothing. A negative grace becomes DefaultGrace.
-func NewTable(grace time.Duration) *Table {
+// Config is the freeze-at-New settings for a Table. New copies Grace onto the table.
+// Later writes to this struct do not change a table that already ran New.
+type Config struct {
+	// Grace is how long a sleeping value is kept before it is disposed. Zero keeps nothing.
+	// A negative Grace becomes DefaultGrace.
+	Grace time.Duration
+}
+
+// New builds an empty table. Grace is copied from cfg and MUST NOT change on that table afterwards.
+func New(cfg Config) *Table {
+	grace := cfg.Grace
 	if grace < 0 {
 		grace = DefaultGrace
 	}

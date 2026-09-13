@@ -3,12 +3,8 @@
 ## Language
 
 **Table**:
-A keyed store of `any` values plus holder contexts. The value stays if a new context opens the same key before grace ends; otherwise it is closed and the key is dropped. The caller type-asserts.
-_Avoid_: `otherpkg.Table[*T]`, type alias/embed of that, Traefik `Close`
-
-**Default**:
-The process-wide table (`reclaim.Default`, `reclaim.Open`). One incarnation per key for the whole process.
-_Avoid_: one `NewTable` per caller when they should share; unprefixed keys that can collide
+A keyed store of `any` values plus holder contexts. The value stays if a new context opens the same key before grace ends; otherwise it is closed and the key is dropped. The caller type-asserts. The caller creates the table with `New(Config)` and holds it.
+_Avoid_: `otherpkg.Table[*T]`, type alias/embed of that, Traefik `Close`; a process-wide table in `reclaim`
 
 **Incarnation**:
 One value from `create` to `close`, together with the holders bound to it. A key has at most one at a time. Sleeping and waking do not end an incarnation: a woken value is the same pointer the earlier holder had.
@@ -20,7 +16,7 @@ _Avoid_: Put vs Bind as two public calls; a nil holder context; assuming `Open` 
 
 **Hooks**:
 The optional `Sleep`, `Wake`, and `Close` funcs passed to `Open`, plus `EnforceCloseBeforeOpen`. A nil func skips that event. They belong to the incarnation created at put, not to the latest holder. `EnforceCloseBeforeOpen` defaults off: the table unmaps before Close, so a later `Open` of that key may create while Close is still in flight. Set it when the value owns something exclusive that cannot be held twice (an mmap, a file lock, a listening port, a connection). The cost of turning it on is that a slow or blocking Close now delays the next `create` for that key, which on the Traefik path means delaying a config reload. The ending path reads the stored flag, not a later `Open`'s argument.
-_Avoid_: optional methods on the stored value; replacing hooks on bind or reclaim; putting this knob on `Table` or `NewTable` (production callers use `reclaim.Open` / `Default()`, which have no table config)
+_Avoid_: optional methods on the stored value; replacing hooks on bind or reclaim; putting this knob on `Table` or `Config` (it is per incarnation, not per table)
 
 **Lifecycle**:
 The four events the table drives on one stored value: `create -> (sleep -> wake)* -> sleep -> close`. `create` and `close` run once. `sleep` and `wake` are a matched, repeating pair. `close` is always preceded by `sleep`, on every ending path, so cleanup is never written twice.
@@ -50,20 +46,22 @@ Because grace costs a sleeping value rather than a live one, a long grace is che
 
 ## How to use
 
-- Production: `reclaim.Open(ctx, key, logger, create, hooks)` (process table). Tests: `NewTable` with a short grace, or `Reset`. `logger` is required. Nil hook funcs skip that event.
+- Production: hold `reclaim.New(reclaim.Config{Grace: reclaim.DefaultGrace})` at package scope in the plugin and call `table.Open`. Tests: `New(Config{Grace: short})`. `logger` is required. Nil hook funcs skip that event.
 - Watch stable `msg` + `key`. All five (`reclaim_put`, `reclaim_bind`, `reclaim_orphan`, `reclaim_reclaim`, `reclaim_dispose`) are debug. Put/bind/reclaim use that `Open`'s logger; orphan/dispose use the last `Open` on the key.
 - `reclaim_hook_panic` is the one error-level line: a hook panicked and was recovered. Alert on it — the table kept running, but that hook is broken.
 - `ctx` is the host teardown context (Traefik `New` ctx), not `req.Context()`, not `context.Background()`.
 - Pass `Hooks` that close over a pointer assigned inside `create`. Do not type-switch the stored `any` for Sleep, Wake, or Close.
 - Write the Close hook assuming Sleep already ran. Do not block in Close.
 - Set `Hooks.EnforceCloseBeforeOpen` when the value owns an exclusive resource that cannot be held twice. Leave it off (the default) when overlap is acceptable.
-- Prefix keys when more than one type shares Default.
+- Prefix keys when more than one type shares a table.
 
 ## Pattern snippet
 
 ```go
+var table = reclaim.New(reclaim.Config{Grace: reclaim.DefaultGrace})
+
 var v *BIN
-stored, err := reclaim.Open(ctx, "bin:"+hash, logger, func() (any, error) {
+stored, err := table.Open(ctx, "bin:"+hash, logger, func() (any, error) {
 	v = newBIN(cfg)
 	return v, nil
 }, reclaim.Hooks{
@@ -77,13 +75,12 @@ w := stored.(*BIN)
 
 ## Key files
 
-- `reclaim/table.go` — `Table`, `Open`, the slot state machine, logs
-- `reclaim/default.go` — `Default`, package `Open`, `Reset`
+- `reclaim/table.go` — `Table`, `Config`, `New`, `Open`, the slot state machine, logs
 - `openspec/specs/std_go_reclaim_context-lease/spec.md`, `openspec/specs/std_go_reclaim_value-lifecycle/spec.md`
 
 ## Gotchas
 
-- Hosts that cancel before they call the constructor again need a positive grace (Traefik: ~1 ms, then `New`). `NewTable(0)` ends the incarnation as soon as the last holder is gone.
+- Hosts that cancel before they call the constructor again need a positive grace (Traefik: ~1 ms, then `New`). `New(Config{Grace: 0})` ends the incarnation as soon as the last holder is gone.
 - Yaegi: do not write `Table[*T]` on a type from another package, and do not give `create` an argument.
 - A later `Open` uses the hooks stored at put; its own `Hooks` argument is ignored.
 - A second `Open` while the incarnation is live or in grace returns the same value.
@@ -92,4 +89,4 @@ w := stored.(*BIN)
 - A panicking `create`, Sleep, or Wake unsticks the key (later `Open` can create). AfterFunc recovers Sleep and Close panics so they cannot kill the process.
 - A Close hook that blocks blocks the drop or `Reset` goroutine. When `EnforceCloseBeforeOpen` is set it also blocks any `Open` of that key until it returns. Keep Close cheap.
 - At zero grace an `Open` that races the orphan log is a plain bind, not a reclaim. `reclaim_dispose` of the previous incarnation precedes `reclaim_put` of the next only when that previous incarnation stored `EnforceCloseBeforeOpen`.
-- `Reset` is tests only. It must not race an `Open` on the same key. Reset unmaps first regardless of `EnforceCloseBeforeOpen`.
+- `Table.Reset` is tests only. It must not race an `Open` on the same key. Reset unmaps first regardless of `EnforceCloseBeforeOpen`.
