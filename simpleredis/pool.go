@@ -173,11 +173,11 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 	sr.freeInUseTurn()
 }
 
-// parkIdleConn parks conn on idleConns when the client is open and unused sockets are under maxIdleConns. The idle mutex is released before return.
+// parkIdleConn parks conn on idleConns when the client is open and unused sockets are under maxIdleConns. Close and freeInUseTurn stay in release.
 func (sr *SimpleRedis) parkIdleConn(conn *pooledConn) bool {
 	sr.idleConnsMu.Lock()
 	defer sr.idleConnsMu.Unlock()
-	// Do not park when shut, or when unused sockets already equal the idle cap.
+	// Do not park when shut or when unused sockets already equal the idle cap.
 	if sr.closed.Load() || len(sr.idleConns) >= sr.maxIdleConns {
 		return false
 	}

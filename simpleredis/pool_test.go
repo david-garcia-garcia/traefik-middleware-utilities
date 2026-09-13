@@ -581,8 +581,8 @@ func assertIdleCapAfterSequentialRelease(t *testing.T, fake *fakeRedis, redis *S
 	fake.waitOpenSocketsEqual(t, wantIdle)
 }
 
-// TestReleaseClosesWhenIdleFullAtLiveCap proves a reusable socket is closed, not parked, when idle is already MaxIdleConns.
-func TestReleaseClosesWhenIdleFullAtLiveCap(t *testing.T) {
+// TestReleaseClosesWhenIdleFull proves a reusable socket is closed, not parked, when idle is already MaxIdleConns.
+func TestReleaseClosesWhenIdleFull(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.mu.Lock()
 	fake.getDelay = 20 * time.Millisecond
