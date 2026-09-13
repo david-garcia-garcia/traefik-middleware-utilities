@@ -1,5 +1,5 @@
 {
-  "commentId": "local",
+  "commentId": "pr-body",
   "issueKey": "2026-09-13-tokenbucket-bug-eval-finite-wait",
   "markerValue": "2026-09-13-tokenbucket-bug-eval-finite-wait",
   "issueHost": "local"
