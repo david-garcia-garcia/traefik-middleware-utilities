@@ -38,3 +38,10 @@ phase: devdocsimpact
 findings: none (usage packet already names reject-not-truncate)
 fixed: none
 skipped: none
+
+## archive — 2026-09-13T07:16:43Z
+
+phase: archive
+findings: folded std_go_windowcounter_sliding-take; archived 2026-09-13-windowcounter-reject-fractional-window
+fixed: live spec Fractional window is rejected
+skipped: none
