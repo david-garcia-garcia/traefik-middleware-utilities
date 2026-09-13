@@ -11,3 +11,9 @@ phase: explore
 findings: occupancy reproduced (Peek true/est=3, Take false/est=4); godoc/spec still next-hit
 fixed: explore.md with Rank/Decision; keep Peek compare
 skipped: product apply
+
+## propose (2026-09-13)
+phase: propose
+findings: fold std_go_windowcounter_sliding-take occupancy; tests first then docs
+fixed: change windowcounter-peek-occupancy (proposal, spec delta, design, tasks)
+skipped: product apply
