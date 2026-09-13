@@ -1,7 +1,7 @@
 ## 1. Occupancy lock test
 
-- [ ] 1.1 Create `windowcounter/repro_peek_take_boundary_test.go` from the parent example: exact and buffered, fill `limit` Takes at a frozen clock, then Peek then Take. Keep `TestRepro_PeekAllowsWhenNextTakeDenies`.
-- [ ] 1.2 Rewrite assertions to occupancy so the test PASSES on dest Peek: after N Takes, Peek allowed true / estimated N; next Take allowed false / estimated N+1. Do not require Peek allowed to equal Take allowed.
+- [x] 1.1 Create `windowcounter/repro_peek_take_boundary_test.go` from the parent example: exact and buffered, fill `limit` Takes at a frozen clock, then Peek then Take. Keep `TestRepro_PeekAllowsWhenNextTakeDenies`.
+- [x] 1.2 Rewrite assertions to occupancy so the test PASSES on dest Peek: after N Takes, Peek allowed true / estimated N; next Take allowed false / estimated N+1. Do not require Peek allowed to equal Take allowed.
 
 ## 2. Docs only
 
