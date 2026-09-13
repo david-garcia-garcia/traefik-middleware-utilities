@@ -23,3 +23,9 @@ phase: implement
 findings: new tests failed on dest (nil err); after finishBind they pass; waiter test needed positive grace
 fixed: finishBind at put, awake bind, reclaimLocked; waitGraceOrWake; usage packet
 skipped: abort put before create (would starve waiters)
+
+## codereview (2026-09-13)
+phase: codereview
+findings: P1 0, P2 0; Standards 1 hard Leave-a-trail on drop comment
+fixed: drop/Table overview comments (`341db7d`)
+skipped: none
