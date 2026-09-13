@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T06:25:12Z
+Developer review: in progress — 2026-09-13T06:30:04Z
 
 ## What this changes
 **Operators.** None.
@@ -32,16 +32,16 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Apply landed locally (`localTests: passed`). CI on PR 56 is still queued. 2 items remain.
+Apply landed locally (`localTests: passed`). Seven-axis review is clean. CI on PR 56 is still queued. 1 item remains.
 
 Priority: P2 — real under-grant on new keys when elapsed-from-epoch cannot cover burst; typical small burst at wall-clock now coincidentally fills
-Reviewed head: 5ba03a1
+Reviewed head: 931e93f
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Apply landed; local tests passed; CI in progress |
+| Overall readiness | 3/6 | Apply landed; seven-axis clean; CI in progress |
 | CI proof | 3/6 | Checks queued on run 34742681273 |
 | Local tests proof | N/A | Remote PR; CI proof covers remote |
 | Review resolution | 6/6 | OPEN PR; no review comments |
@@ -50,15 +50,15 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-13-tokenbucket-bug-idle-fill-burst pushed | `git` origin/2026-09-13-tokenbucket-bug-idle-fill-burst |
-| OpenSpec | fill-new-key-to-burst | `openspec/changes/fill-new-key-to-burst/` |
+| OpenSpec | 2026-09-13-fill-new-key-to-burst (archived) | `openspec/changes/archive/2026-09-13-fill-new-key-to-burst/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/56 | pr-host List |
 | CI | build 34742681273 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742681273 | pr-host CI |
 | Local tests | passed | `go test -short -count=1 -timeout 60s ./tokenbucket` ok after 5ba03a1 |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/openspec/changes/fill-new-key-to-burst/proposal.md) — modified
-- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/openspec/changes/fill-new-key-to-burst/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/openspec/changes/archive/2026-09-13-fill-new-key-to-burst/proposal.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/openspec/changes/archive/2026-09-13-fill-new-key-to-burst/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -67,7 +67,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from origin/master. Stub PR 56 is the durable card host. Idle-fill apply is on HEAD 5ba03a1; code review is next.
+Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from origin/master. Stub PR 56 is the durable card host. Change archived to `openspec/changes/archive/2026-09-13-fill-new-key-to-burst`. Waiting on CI.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -88,7 +88,13 @@ Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from or
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/devstate/2026/09/2026-09-13-tokenbucket-bug-idle-fill-burst/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/devstate/2026/09/2026-09-13-tokenbucket-bug-idle-fill-burst/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/devstate/2026/09/2026-09-13-tokenbucket-bug-idle-fill-burst/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/devstate/2026/09/2026-09-13-tokenbucket-bug-idle-fill-burst/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/devstate/2026/09/2026-09-13-tokenbucket-bug-idle-fill-burst/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/devstate/2026/09/2026-09-13-tokenbucket-bug-idle-fill-burst/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-idle-fill-burst/devstate/2026/09/2026-09-13-tokenbucket-bug-idle-fill-burst/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -97,7 +103,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 5ba03a1ab3f1897754d0c04758c4b497e1dacfca | Card must match the branch you measured |
+| Reviewed head | 931e93f59e008de25e643af7865b1e4996efe4a6 | Card must match the branch you measured |
 
 ### Stored data model
 - Changed: Redis hash per Allow key / field `last` — Unix microseconds string — sample at epoch miss `0` → now (`t`). Upgrade: existing hashes still valid; missing hash rewritten on next Allow.
