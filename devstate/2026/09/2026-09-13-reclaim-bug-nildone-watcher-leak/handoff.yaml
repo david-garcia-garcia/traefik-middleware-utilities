@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-reclaim-bug-nildone-watcher-leak
+jobName: 2026-09-13-reclaim-bug-nildone-watcher-leak
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 7f9e9c5829da553035ea47e0af7434d7b4cb58529bb085f8b98fafa5b0b34207
+localTests: none
+requirement: requirement.md
+comments: none
+pr:
+  id: 77
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/77
