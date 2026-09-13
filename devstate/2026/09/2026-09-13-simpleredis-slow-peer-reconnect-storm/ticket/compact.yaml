@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: Investigate simpleredis slow-peer reconnect storm (BUG-5)
+url: none
+number: none
