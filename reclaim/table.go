@@ -155,6 +155,8 @@ func dispose(key string, hooks Hooks, logger *slog.Logger) {
 // and dispose. hooks are stored on the incarnation at put; a later Open (bind or reclaim)
 // ignores this argument. A sleeping value is woken before Open returns, so a caller never
 // receives one asleep. The Close hook, when set, runs when this incarnation ends, after Sleep.
+// (value, nil) means this call bound a holder that was still live at return. If ctx.Err() is
+// set at bind, Open returns that error and not the pointer, and drops the holder on this call.
 func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
 	if t == nil {
 		return nil, fmt.Errorf("reclaim: open %q: nil table", key)
@@ -184,10 +186,9 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 			value := incarnation.value
 			t.mu.Unlock()
 			logger.Debug(MsgBind, "key", key)
-			t.dropWhenDone(key, incarnation, ctx)
-			return value, nil
+			return t.finishBind(ctx, key, incarnation, value)
 		case slotAsleep:
-			return t.reclaimLocked(ctx, key, incarnation, logger), nil
+			return t.reclaimLocked(ctx, key, incarnation, logger)
 		case slotBusy:
 			// A create, wake, or sleep owns the slot. Wait for it, then look again.
 			ready := incarnation.ready
@@ -237,13 +238,13 @@ func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *
 
 	logger.Debug(MsgPut, "key", key)
 	logger.Debug(MsgBind, "key", key)
-	t.dropWhenDone(key, incarnation, ctx)
-	return value, nil
+	return t.finishBind(ctx, key, incarnation, value)
 }
 
 // reclaimLocked wakes a sleeping slot for this Open and binds ctx. The caller holds t.mu and has
-// seen slotAsleep; this releases it, because Wake must not run under the table mutex.
-func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot, logger *slog.Logger) any {
+// seen slotAsleep; this releases it, because Wake must not run under the table mutex. If ctx is
+// already done after wake, it drops this holder and returns that error without the pointer.
+func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot, logger *slog.Logger) (any, error) {
 	incarnation.logger = logger
 	incarnation.state = slotBusy
 	incarnation.ready = make(chan struct{})
@@ -266,8 +267,18 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 
 	logger.Debug(MsgReclaim, "key", key)
 	logger.Debug(MsgBind, "key", key)
+	return t.finishBind(ctx, key, incarnation, value)
+}
+
+// finishBind returns the bound value if ctx is still live, and watches it until Done. If ctx is
+// already done, it drops this holder now (no AfterFunc) and returns that error without the pointer.
+func (t *Table) finishBind(ctx context.Context, key string, incarnation *slot, value any) (any, error) {
+	if err := ctx.Err(); err != nil {
+		t.drop(key, incarnation)
+		return nil, err
+	}
 	t.dropWhenDone(key, incarnation, ctx)
-	return value
+	return value, nil
 }
 
 // dropWhenDone runs drop when ctx is done. A holder with a Done channel uses AfterFunc so the
@@ -335,6 +346,12 @@ func (t *Table) drop(key string, incarnation *slot) {
 		return
 	}
 
+	go t.waitGraceOrWake(key, incarnation, woken, grace)
+}
+
+// waitGraceOrWake closes the incarnation when grace elapses, unless a reclaim woke it. The timer
+// wait is not on the drop caller: a canceled bind must not stall Open for the grace duration.
+func (t *Table) waitGraceOrWake(key string, incarnation *slot, woken chan struct{}, grace time.Duration) {
 	wait := time.NewTimer(grace)
 	defer wait.Stop()
 	select {

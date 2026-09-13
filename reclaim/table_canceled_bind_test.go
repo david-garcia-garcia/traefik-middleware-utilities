@@ -108,7 +108,7 @@ func TestTable_OpenAlreadyDoneReclaimReturnsCtxErr(t *testing.T) {
 
 func TestTable_OpenCanceledCreatorWaiterKeepsLiveValue(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(0)
+	tab := NewTable(graceNoRace)
 	item := &counterClose{}
 	creating := make(chan struct{})
 	waiterStarted := make(chan struct{})
@@ -151,4 +151,5 @@ func TestTable_OpenCanceledCreatorWaiterKeepsLiveValue(t *testing.T) {
 	if item.closes.Load() != 0 {
 		t.Fatal("Close ran while the waiter still held the value")
 	}
+	tab.Reset()
 }
