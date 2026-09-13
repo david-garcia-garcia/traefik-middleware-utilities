@@ -161,16 +161,21 @@ func (sr *SimpleRedis) takeIdleConn() (reused *pooledConn, stale []*pooledConn, 
 
 // release returns a clean conn to idleConns and frees the in-use turn, or closes it when dirty, closed, or idleConns is full at the live cap.
 func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
-	if !reusable {
-		conn.close()
-		sr.freeInUseTurn()
-		return
+	if reusable {
+		// Stamp before park so a later close-because-full still recorded lastUsed.
+		conn.lastUsed = time.Now()
 	}
-	conn.lastUsed = time.Now()
+	if !reusable || !sr.parkIdleConn(conn) {
+		conn.close()
+	}
+	sr.freeInUseTurn()
+}
 
+// parkIdleConn parks conn on idleConns when the client is open and idle is not already maxIdleConns at the live cap. The idle mutex is released before return. inUse still includes this socket until freeInUseTurn runs.
+func (sr *SimpleRedis) parkIdleConn(conn *pooledConn) bool {
 	sr.idleConnsMu.Lock()
+	defer sr.idleConnsMu.Unlock()
 	// Close only when shut or idleConns is already maxIdleConns and live is at liveCap().
-	// inUse still includes this socket until freeInUseTurn runs.
 	idleConnsFull := len(sr.idleConns) >= sr.maxIdleConns
 	inUse := 0
 	if sr.inUseTurns != nil {
@@ -178,14 +183,10 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 	}
 	live := len(sr.idleConns) + inUse
 	if sr.closed.Load() || (idleConnsFull && live >= sr.liveCap()) {
-		sr.idleConnsMu.Unlock()
-		conn.close()
-		sr.freeInUseTurn()
-		return
+		return false
 	}
 	sr.idleConns = append(sr.idleConns, conn)
-	sr.idleConnsMu.Unlock()
-	sr.freeInUseTurn()
+	return true
 }
 
 // dial opens TCP to host, then AUTH and SELECT when those New fields are set.
