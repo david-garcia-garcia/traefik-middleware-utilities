@@ -10,5 +10,5 @@ JobName: 2026-09-13-windowcounter-bug-sleep-wake-hang
 | implement | [x] | [x] | 2026-09-13T07:12:32Z |
 | codereview | [x] | [x] | 2026-09-13T07:20:15Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T07:22:15Z |
-| archive | [x] | [ ] | |
-| pullrequest | [ ] | [ ] | |
+| archive | [x] | [x] | 2026-09-13T07:23:06Z |
+| pullrequest | [x] | [ ] | |
