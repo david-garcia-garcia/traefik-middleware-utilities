@@ -71,7 +71,8 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 		if len(m.buckets) >= maxMemorySources {
 			m.dropOne(now)
 		}
-		entry = &memEntry{}
+		// Missing or TTL-expired key is a full bucket, then consumeOne.
+		entry = &memEntry{tokens: float64(m.clock.burst), last: nowMicro}
 		m.buckets[key] = entry
 	}
 	tokens, last, waitMicro := consumeOne(entry.tokens, entry.last, m.clock.limitPerMicro(), float64(m.clock.burst), nowMicro, m.clock.maxDelay.Microseconds())
