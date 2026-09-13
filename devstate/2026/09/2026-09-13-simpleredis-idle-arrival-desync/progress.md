@@ -4,7 +4,7 @@ JobName: 2026-09-13-simpleredis-idle-arrival-desync
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [ ] | [ ] | |
+| prepare | [x] | [ ] | |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |

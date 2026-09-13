@@ -5,11 +5,13 @@ issueRef: none
 prHost: github
 repoSlug: traefik-middleware-utilities
 destBranch: master
-qualify:
-src:
+qualify: qualified-with-gaps
+src: aca513f40b56509304d59846894d4da9da5bcc8b5577b60ea48dec39e4a1c93f
 localTests: none
 requirement: requirement.md
 comments: none
 explore: none
 change: none
-pr: none
+pr:
+  id: 83
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/83
