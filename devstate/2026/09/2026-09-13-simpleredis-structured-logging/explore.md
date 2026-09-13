@@ -21,7 +21,7 @@ Happy-path `Get` on a reused socket must not build `...any` attrs. Dest `interpr
 
 Identity: Redis **keys** carry tenant and user ids. `Config.Pass` is a secret. The only host we may log is `Config.Host` (the Redis server address New froze). Do not reconstruct it from `net.Conn.RemoteAddr`. Do not log key names or values.
 
-Two Warn events (`MsgSocketPoisoned`, `MsgAuthLeftover`) have no dest detection site until PR #69. Dest HEAD `c14cbec` has no `Buffered()` check in `do` or `dial`. Prepare already noted them as debt.
+PR #69 landed on dest during implement Sync. `do` now has pre-write and post-reply `Buffered()` checks, so all 20 events fire in this apply (including `MsgSocketPoisoned` and `MsgAuthLeftover`).
 
 ## Decisions
 
@@ -56,7 +56,7 @@ Two Warn events (`MsgSocketPoisoned`, `MsgAuthLeftover`) have no dest detection 
 - Security: never `Pass`, never Redis key names, never values. `error` attrs are sentinel text or Redis error payloads (`WRONGPASS…`, `LOADING…`) — those are not keys. Secrets test uses a distinctive password and key and asserts the capturing handler never saw either string.
 - Tests: capturing `slog.Handler` (reclaim `recHandler` shape, local to simpleredis tests). Nil-logger on every public verb. Cost: `testing.AllocsPerRun` around a Debug call site with nil logger and with a handler whose `Enabled` is false for Debug; report the numbers. Yaegi: follow `yaegi_test.go` GOPATH probe; slog is already interpreted in `reclaim/yaegi_test.go`. Do not regress `interpretedcost_test.go`.
 - Spec: delta on `std_go_simpleredis_tcp-session` (Logger freeze, nil policy). Event list may fold into that family or a new leaf — propose runs FindSpecHost. Usage: update `knowledge/devdocs/std_go_simpleredis.md`.
-- Implement 18 events. `MsgSocketPoisoned` and `MsgAuthLeftover` stay follow-up (`knowledge/debt/2026-09-13-simpleredis-leftover-resp-log-events.md`) until #69 is in dest.
+- Implement all 20 events. `MsgSocketPoisoned` and `MsgAuthLeftover` fire at dest leftover checks in `do` (PR #69 merged during implement Sync).
 - Merge last vs OPEN #69 / #72 / #73. Do not take their hunks.
 - No new research folder: slog is stdlib; reclaim Yaegi already uses it; AUTH/NOSCRIPT notes already exist.
 
