@@ -11,4 +11,4 @@ JobName: 2026-09-13-tokenbucket-bug-allow-wait-units
 | codereview | [x] | [x] | 2026-09-13T06:27:42Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T06:29:28Z |
 | archive | [x] | [x] | 2026-09-13T06:29:28Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-13T06:46:57Z |

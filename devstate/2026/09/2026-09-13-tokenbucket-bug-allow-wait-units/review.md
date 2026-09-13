@@ -46,3 +46,10 @@ phase: archive
 findings: none
 fixed: synced std_go_tokenbucket_allow; archived change
 skipped: none
+
+## pullrequest (2026-09-13)
+
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
