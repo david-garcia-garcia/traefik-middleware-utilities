@@ -24,3 +24,21 @@ findings: shape 1 landed; TestRepro failed then passed; go test ./reclaim ok; go
 fixed: table.go finished channel; verbatim reproducer; test-only NewTable; usage gotcha
 skipped: Sleep-panic and Wake-panic bodies; reclaim/BUGS.md
 
+## codereview (2026-09-13)
+phase: codereview
+findings: seven axes none
+fixed: none
+skipped: none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage on std_go_reclaim already produced at implement
+fixed: gotcha on nil-Done watcher exit
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: fold std_go_reclaim_context-lease
+fixed: main spec scenario; archive 2026-09-13-reclaim-nildone-watcher-exit
+skipped: none
+
