@@ -35,3 +35,15 @@ phase: devdocsimpact
 findings: 3 stale-usage
 fixed: std_go_simpleredis, std_go_simpleredis_resp-decode, std_go_test-suites
 skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: fold three deltas onto existing leaves
+fixed: live specs + archive move
+skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: ready title; CI green
+skipped: none

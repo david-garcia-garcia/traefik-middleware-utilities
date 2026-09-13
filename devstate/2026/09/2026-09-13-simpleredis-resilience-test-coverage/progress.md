@@ -10,5 +10,5 @@ JobName: 2026-09-13-simpleredis-resilience-test-coverage
 | implement | [x] | [x] | 2026-09-13T09:14:07Z |
 | codereview | [x] | [x] | 2026-09-13T09:32:20Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T09:34:58Z |
-| archive | [x] | [ ] | |
-| pullrequest | [ ] | [ ] | |
+| archive | [x] | [x] | 2026-09-13T09:39:20Z |
+| pullrequest | [x] | [x] | 2026-09-13T09:40:00Z |
