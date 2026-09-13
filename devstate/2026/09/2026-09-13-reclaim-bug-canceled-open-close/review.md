@@ -17,3 +17,9 @@ phase: propose
 findings: FindSpecHost fold std_go_reclaim_context-lease; change reclaim-canceled-bind valid
 fixed: proposal, delta spec, design, tasks
 skipped: product apply
+
+## implement (2026-09-13)
+phase: implement
+findings: new tests failed on dest (nil err); after finishBind they pass; waiter test needed positive grace
+fixed: finishBind at put, awake bind, reclaimLocked; waitGraceOrWake; usage packet
+skipped: abort put before create (would starve waiters)
