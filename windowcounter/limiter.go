@@ -181,14 +181,8 @@ func (l *Limiter) takeBuffered(ctx context.Context, currentKey, previousKey stri
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	currentState, err := l.windowLocked(ctx, currentKey, expireAt)
-	if err != nil {
-		return false, 0, err
-	}
-	previous, err := l.bufferedCountLocked(ctx, previousKey)
-	if err != nil {
-		return false, 0, err
-	}
+	currentState := l.windowLocked(ctx, currentKey, expireAt)
+	previous := l.bufferedCountLocked(ctx, previousKey)
 	currentState.localDelta++
 	current := currentState.redisKnown + currentState.localDelta
 	estimated := float64(current) + float64(previous)*weight
@@ -214,80 +208,74 @@ func (l *Limiter) peekBuffered(ctx context.Context, currentKey, previousKey stri
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	current, err := l.peekCountLocked(ctx, currentKey, expireAt)
-	if err != nil {
-		return false, 0, err
-	}
-	previous, err := l.bufferedCountLocked(ctx, previousKey)
-	if err != nil {
-		return false, 0, err
-	}
+	current := l.peekCountLocked(ctx, currentKey, expireAt)
+	previous := l.bufferedCountLocked(ctx, previousKey)
 	estimated := float64(current) + float64(previous)*weight
 	return estimated <= float64(limit), estimated, nil
 }
 
 // peekCountLocked returns redis_known + local_delta without incrementing. GET only on first sight of redisKey.
-func (l *Limiter) peekCountLocked(ctx context.Context, redisKey string, expireAt int64) (int64, error) {
+func (l *Limiter) peekCountLocked(ctx context.Context, redisKey string, expireAt int64) int64 {
 	state := l.windows[redisKey]
 	if state != nil {
 		// Already in the buffer: do not GET just because localDelta is 0.
 		if expireAt > state.expireAt {
 			state.expireAt = expireAt
 		}
-		return state.redisKnown + state.localDelta, nil
+		return state.redisKnown + state.localDelta
 	}
 	if l.skipRedisContactLocked() {
-		return l.seedEmptyWindowLocked(redisKey, expireAt).redisKnown, nil
+		return l.seedEmptyWindowLocked(redisKey, expireAt).redisKnown
 	}
 	known, err := l.getCountUnlocked(ctx, redisKey)
 	if err != nil {
 		l.rememberOutageLocked(err)
-		return l.seedEmptyWindowLocked(redisKey, expireAt).redisKnown, nil
+		return l.seedEmptyWindowLocked(redisKey, expireAt).redisKnown
 	}
 	state = l.applyGetLocked(redisKey, known, expireAt)
-	return state.redisKnown + state.localDelta, nil
+	return state.redisKnown + state.localDelta
 }
 
 // windowLocked returns the buffer for a Redis key, seeding redis_known from GET on first sight.
-func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt int64) (*windowState, error) {
+func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt int64) *windowState {
 	state := l.windows[redisKey]
 	if state != nil {
 		if expireAt > state.expireAt {
 			state.expireAt = expireAt
 		}
 		if state.localDelta != 0 || l.skipRedisContactLocked() {
-			return state, nil
+			return state
 		}
 	} else if l.skipRedisContactLocked() {
-		return l.seedEmptyWindowLocked(redisKey, expireAt), nil
+		return l.seedEmptyWindowLocked(redisKey, expireAt)
 	}
 	known, err := l.getCountUnlocked(ctx, redisKey)
 	if err != nil {
 		l.rememberOutageLocked(err)
 		if state != nil {
-			return state, nil
+			return state
 		}
-		return l.seedEmptyWindowLocked(redisKey, expireAt), nil
+		return l.seedEmptyWindowLocked(redisKey, expireAt)
 	}
-	return l.applyGetLocked(redisKey, known, expireAt), nil
+	return l.applyGetLocked(redisKey, known, expireAt)
 }
 
 // bufferedCountLocked is redis_known + local_delta, GET-seeding a key the limiter has not seen.
-func (l *Limiter) bufferedCountLocked(ctx context.Context, redisKey string) (int64, error) {
+func (l *Limiter) bufferedCountLocked(ctx context.Context, redisKey string) int64 {
 	state := l.windows[redisKey]
 	if state != nil {
-		return state.redisKnown + state.localDelta, nil
+		return state.redisKnown + state.localDelta
 	}
 	if l.skipRedisContactLocked() {
-		return l.seedEmptyWindowLocked(redisKey, 0).redisKnown, nil
+		return l.seedEmptyWindowLocked(redisKey, 0).redisKnown
 	}
 	known, err := l.getCountUnlocked(ctx, redisKey)
 	if err != nil {
 		l.rememberOutageLocked(err)
-		return l.seedEmptyWindowLocked(redisKey, 0).redisKnown, nil
+		return l.seedEmptyWindowLocked(redisKey, 0).redisKnown
 	}
 	state = l.applyGetLocked(redisKey, known, 0)
-	return state.redisKnown + state.localDelta, nil
+	return state.redisKnown + state.localDelta
 }
 
 // getCountUnlocked drops l.mu for Redis GET then re-locks. Caller holds l.mu.
