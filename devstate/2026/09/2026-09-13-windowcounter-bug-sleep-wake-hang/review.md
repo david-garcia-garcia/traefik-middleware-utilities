@@ -17,3 +17,10 @@ phase: propose
 findings: fold std_go_windowcounter_sync-flush; change windowcounter-sleep-wins-wake valid
 fixed: proposal, delta spec, design, tasks
 skipped: limiter apply
+
+## implement (2026-09-13)
+phase: implement
+findings: stopping flag; race test FAIL then pass; localTests passed
+fixed: limiter.go Wake/stopFlushAndWait; TestRepro_SleepWakeRaceHangs; TestWake_StartsTickerAfterSleep; usage gotcha
+skipped: none in scope
+
