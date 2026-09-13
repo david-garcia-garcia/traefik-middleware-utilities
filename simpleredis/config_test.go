@@ -47,3 +47,33 @@ func TestConfigFrozenAtNew(t *testing.T) {
 		t.Fatalf("PoolSize() = %d, want 1", got)
 	}
 }
+
+// TestMaxIdleConnsClampedToPoolSize proves the frozen idle trim is a value the idle list can reach.
+// No fake Redis: New freezes both knobs without dialing, and the accessors are the surface an operator reads.
+func TestMaxIdleConnsClampedToPoolSize(t *testing.T) {
+	rows := []struct {
+		name        string
+		cfg         Config
+		wantPool    int
+		wantMaxIdle int
+	}{
+		{"explicit idle above pool clamps down", Config{Host: "127.0.0.1:1", PoolSize: 4, MaxIdleConns: 100}, 4, 4},
+		{"explicit idle below pool is kept", Config{Host: "127.0.0.1:1", PoolSize: 8, MaxIdleConns: 2}, 8, 2},
+		{"explicit idle equal to pool is kept", Config{Host: "127.0.0.1:1", PoolSize: 3, MaxIdleConns: 3}, 3, 3},
+		{"zero Config keeps both defaults", Config{Host: "127.0.0.1:1"}, defaultPoolSize, defaultMaxIdleConns},
+		{"default idle clamps to a smaller pool", Config{Host: "127.0.0.1:1", PoolSize: 2}, 2, 2},
+		{"default pool keeps a smaller explicit idle", Config{Host: "127.0.0.1:1", MaxIdleConns: 3}, defaultPoolSize, 3},
+	}
+	for _, row := range rows {
+		row := row
+		t.Run(row.name, func(t *testing.T) {
+			redis := New(row.cfg)
+			if got := redis.PoolSize(); got != row.wantPool {
+				t.Fatalf("PoolSize() = %d, want %d", got, row.wantPool)
+			}
+			if got := redis.MaxIdleConns(); got != row.wantMaxIdle {
+				t.Fatalf("MaxIdleConns() = %d, want %d", got, row.wantMaxIdle)
+			}
+		})
+	}
+}

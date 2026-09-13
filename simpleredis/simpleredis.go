@@ -130,7 +130,7 @@ func (sr *SimpleRedis) PoolSize() int {
 	return sr.liveCap()
 }
 
-// MaxIdleConns is the idle-list trim New froze.
+// MaxIdleConns is the idle-list trim New froze, never above PoolSize because the idle list cannot outgrow the live cap.
 func (sr *SimpleRedis) MaxIdleConns() int {
 	return sr.maxIdleConns
 }
