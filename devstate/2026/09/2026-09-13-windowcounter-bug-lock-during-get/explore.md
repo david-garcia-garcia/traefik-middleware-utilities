@@ -36,23 +36,23 @@ Kong research (`ext_kong_rate-limiting_sliding-sync`) is flush semantics, not th
 
 - Q: Does first-sight previous GET in `bufferedCountLocked` use the same snapshot / unlock / merge as `windowLocked`?
   Rank: additive asked — Desired #2 (no Redis while holding `l.mu`); dest `bufferedCountLocked` GETs on map miss under the Take lock (`windowcounter/limiter.go`); Out of scope is bug 2's already-mapped skip, not this first-sight GET
-  Decision: assumed — same snapshot, unlock, getCount, re-lock, merge. Already-mapped previous stays a memory read (bug 2 not taken).
-  By: explore
+  Decision: resolved — same snapshot, unlock, getCount, re-lock, merge. Already-mapped previous stays a memory read (bug 2 not taken).
+  By: implement
 
 - Q: Do `bufferedOutageErrorLocked`'s nested flush and probe GET also drop `l.mu` before Redis?
   Rank: additive asked — Desired #2 general rule; ticket names `flushPending` copy/unlock/Eval; dest probe GET and `flushPendingLocked` run under the Take lock (`windowcounter/limiter.go` `bufferedOutageErrorLocked`)
-  Decision: assumed — nested flush uses the same copy/unlock/Eval/re-lock as `flushPending`; probe GET snapshots the key, unlocks, getCount, re-locks. Call sites of `flushPending` / `flushPendingLocked` in this package: `flushLoop`, `Sleep`, `Close`, `bufferedOutageErrorLocked` (four, all `windowcounter/limiter.go`).
-  By: explore
+  Decision: resolved — nested flush uses the same copy/unlock/Eval/re-lock as `flushPending`; probe GET snapshots the key, unlocks, getCount, re-locks. Call sites of `flushPending` / `flushPendingLocked` in this package: `flushLoop`, `Sleep`, `Close`, `bufferedOutageErrorLocked` (four, all `windowcounter/limiter.go`).
+  By: implement
 
 - Q: After Eval, how do we apply `localDelta -= flushedDelta` if a second flush copied overlapping delta while the first Eval was in flight?
   Rank: bounded asked — Desired #4 changes dest `flushPendingLocked` which zeros `localDelta` under lock; four call sites enumerated above
-  Decision: assumed — mark the copied delta in-flight on that window so a second flusher does not Eval the same snapshot; on Eval success `redisKnown = n` and `localDelta -= flushedDelta`; on Eval failure clear in-flight and leave `localDelta` (including Takes during the round trip).
-  By: explore
+  Decision: resolved — mark the copied delta in-flight on that window so a second flusher does not Eval the same snapshot; on Eval success `redisKnown = n` and `localDelta -= flushedDelta`; on Eval failure clear in-flight and leave `localDelta` (including Takes during the round trip).
+  By: implement
 
 - Q: What does merge mean when another Take inserted the key during GET?
   Rank: additive asked — Desired #3 names merge if another Take inserted
-  Decision: assumed — on re-lock, if the key is missing, insert `{redisKnown: known, expireAt}`. If present, keep that entry's `localDelta`; set `redisKnown` from this GET only when `localDelta == 0`. Do not replace the pointer and drop concurrent hits.
-  By: explore
+  Decision: resolved — on re-lock, if the key is missing, insert `{redisKnown: known, expireAt}`. If present, keep that entry's `localDelta`; set `redisKnown` from this GET only when `localDelta == 0`. Do not replace the pointer and drop concurrent hits.
+  By: implement
 
 - Q: Test file name on dest?
   Rank: additive asked — Desired #1 example path `windowcounter/repro_lock_during_get_test.go`

@@ -65,3 +65,4 @@ _, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 - `Sleep` flushes pending deltas then stops the ticker. After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's.
 - EVAL scripts must list keys in `KEYS` (Dragonfly).
 - Buffered Take still returns the local admit decision beside a flush error. Check `err` to fail closed; ignoring `err` is fail-open up to this instance's `limit`.
+- Buffered GET and flush EVAL run without the limiter mutex. A slow Redis round trip on one opaque key must not stall Take on another key.
