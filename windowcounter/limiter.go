@@ -32,12 +32,13 @@ type Limiter struct {
 	syncRate time.Duration
 	now      func() time.Time
 
-	mu      sync.Mutex
-	windows map[string]*windowState
-	closed  bool
-	ticker  *time.Ticker
-	stop    chan struct{}
-	wg      sync.WaitGroup
+	mu       sync.Mutex
+	windows  map[string]*windowState
+	closed   bool
+	stopping bool // true while stopFlushAndWait has cleared stop and is waiting for flushLoop
+	ticker   *time.Ticker
+	stop     chan struct{}
+	wg       sync.WaitGroup
 
 	lastFlushErr  error     // last failed flush, returned by buffered Take/Peek
 	flushFailedAt time.Time // when lastFlushErr was stored
@@ -311,11 +312,11 @@ func (l *Limiter) Sleep() {
 	l.stopFlushAndWait()
 }
 
-// Wake starts the flush ticker when sync_rate is positive and the limiter is not closed.
+// Wake starts the flush ticker when sync_rate is positive, the limiter is not closed, and Sleep or Close is not waiting for flushLoop.
 func (l *Limiter) Wake() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.closed || l.syncRate == 0 || l.stop != nil {
+	if l.closed || l.syncRate == 0 || l.stop != nil || l.stopping {
 		return
 	}
 	l.startFlushLocked()
@@ -357,13 +358,19 @@ func (l *Limiter) takeFlushTickerLocked() *time.Ticker {
 // stopFlushAndWait stops the ticker then waits for flushLoop. Caller must not hold l.mu.
 func (l *Limiter) stopFlushAndWait() {
 	l.mu.Lock()
+	l.stopping = true
 	ticker := l.takeFlushTickerLocked()
-	l.mu.Unlock()
 	if ticker == nil {
+		l.stopping = false
+		l.mu.Unlock()
 		return
 	}
+	l.mu.Unlock()
 	l.wg.Wait()
 	ticker.Stop()
+	l.mu.Lock()
+	l.stopping = false
+	l.mu.Unlock()
 }
 
 // flushLoop EVAL-flushes on each tick until stop.
