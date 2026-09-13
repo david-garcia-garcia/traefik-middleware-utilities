@@ -98,8 +98,11 @@ type slot struct {
 	// ready is closed when the in-flight transition ends. Waiters re-read state afterwards.
 	ready chan struct{}
 	// woken is closed by the Open that reclaims a sleeping value, to end its grace wait.
-	woken  chan struct{}
-	logger *slog.Logger
+	woken chan struct{}
+	// finished is closed when this incarnation has ended, so a nil-Done watcher can stop
+	// polling without drop.
+	finished chan struct{}
+	logger   *slog.Logger
 }
 
 // Config is the freeze-at-New settings for a Table. New copies Grace onto the table.
@@ -129,14 +132,34 @@ func requireContext(ctx context.Context) {
 	}
 }
 
-// waitCtx returns when ctx is done. Prefer Done(); if it is nil (Background), poll Err.
-func waitCtx(ctx context.Context) {
+// waitCtx returns when ctx is done or this incarnation has ended. Prefer Done(); if it is nil
+// (Background), poll Err. incarnationEnded is true when finished closed first: the caller must
+// not drop, because the slot is already gone.
+func waitCtx(ctx context.Context, finished <-chan struct{}) (incarnationEnded bool) {
 	if done := ctx.Done(); done != nil {
-		<-done
-		return
+		select {
+		case <-done:
+			return false
+		case <-finished:
+			return true
+		}
 	}
-	for ctx.Err() == nil {
-		time.Sleep(20 * time.Millisecond)
+	tick := time.NewTicker(20 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case <-finished:
+			return true
+		default:
+		}
+		if ctx.Err() != nil {
+			return false
+		}
+		select {
+		case <-finished:
+			return true
+		case <-tick.C:
+		}
 	}
 }
 
@@ -151,6 +174,15 @@ func runHook(hook func()) (recovered any) {
 	defer func() { recovered = recover() }()
 	hook()
 	return nil
+}
+
+// closeFinished closes the per-incarnation finished channel exactly once. The caller holds t.mu.
+func closeFinished(incarnation *slot) {
+	if incarnation.finished == nil {
+		return
+	}
+	close(incarnation.finished)
+	incarnation.finished = nil
 }
 
 // dispose runs the Close hook and then reports the end. reclaim_dispose means Close has returned;
@@ -168,6 +200,7 @@ func (t *Table) endBusySlot(key string, incarnation *slot, createErr error) {
 	t.mu.Lock()
 	incarnation.createErr = createErr
 	incarnation.state = slotGone
+	closeFinished(incarnation)
 	if t.items[key] == incarnation {
 		delete(t.items, key)
 	}
@@ -183,6 +216,7 @@ func (t *Table) unmapAfterClose(key string, incarnation *slot) {
 		delete(t.items, key)
 	}
 	incarnation.state = slotGone
+	closeFinished(incarnation)
 	ready := incarnation.ready
 	t.mu.Unlock()
 	close(ready)
@@ -247,7 +281,7 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 		if !mapped {
 			// Register the key before create runs, so a second first Open waits for this result
 			// instead of creating a value that would be thrown away.
-			incarnation = &slot{state: slotBusy, ready: make(chan struct{}), logger: logger}
+			incarnation = &slot{state: slotBusy, ready: make(chan struct{}), finished: make(chan struct{}), logger: logger}
 			t.items[key] = incarnation
 			t.mu.Unlock()
 			return t.put(ctx, key, incarnation, logger, create, hooks)
@@ -367,12 +401,17 @@ func (t *Table) dropWhenDone(ctx context.Context, key string, incarnation *slot)
 		context.AfterFunc(ctx, func() { t.drop(key, incarnation) })
 		return
 	}
-	go t.watch(ctx, key, incarnation)
+	finished := incarnation.finished
+	go t.watch(ctx, key, incarnation, finished)
 }
 
-// watch waits until ctx is done, then drops that holder from this slot.
-func (t *Table) watch(ctx context.Context, key string, incarnation *slot) {
-	waitCtx(ctx)
+// watch waits until ctx is done or this incarnation has ended. It drops the holder only when ctx
+// is done while the incarnation is still live. finished is the channel from bind time, so a
+// later closeFinished nil does not hide the close from this goroutine.
+func (t *Table) watch(ctx context.Context, key string, incarnation *slot, finished <-chan struct{}) {
+	if waitCtx(ctx, finished) {
+		return
+	}
 	t.drop(key, incarnation)
 }
 
@@ -476,6 +515,7 @@ func (t *Table) expire(key string, incarnation *slot) {
 		return
 	}
 	incarnation.state = slotGone
+	closeFinished(incarnation)
 	if t.items[key] == incarnation {
 		delete(t.items, key)
 	}
@@ -508,6 +548,7 @@ func (t *Table) Reset() {
 		state, storedHooks, logger := incarnation.state, incarnation.hooks, incarnation.logger
 		if state == slotAwake || state == slotAsleep {
 			incarnation.state = slotGone
+			closeFinished(incarnation)
 		}
 		t.mu.Unlock()
 
