@@ -15,3 +15,9 @@ phase: propose
 findings: fold std_go_simpleredis_tcp-session; change simpleredis-stale-pooled-socket-retry
 fixed: none
 skipped: epoch. Apply not started.
+
+## implement (2026-09-13)
+phase: implement
+findings: skip-idle after unused-socket unreachable; no free extra send
+fixed: sequential Gets after full idle drop at default MaxRetries
+skipped: MaxRetries -1 extra send (lost-reply collision); epoch; idle wipe
