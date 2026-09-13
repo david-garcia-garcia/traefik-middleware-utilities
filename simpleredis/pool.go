@@ -175,7 +175,7 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 func (sr *SimpleRedis) parkIdleConn(conn *pooledConn) bool {
 	sr.idleConnsMu.Lock()
 	defer sr.idleConnsMu.Unlock()
-	// Close only when shut or idleConns is already maxIdleConns and live is at liveCap().
+	// Do not park when shut, or when idleConns is already maxIdleConns and live is at liveCap().
 	idleConnsFull := len(sr.idleConns) >= sr.maxIdleConns
 	inUse := 0
 	if sr.inUseTurns != nil {
