@@ -16,3 +16,9 @@ findings: none
 fixed: none
 skipped: none
 
+## implement (2026-09-13)
+phase: implement
+findings: none
+fixed: parkIdleConn extract; groupWriteMu defer; BUGS.md section 2
+skipped: no panic-inside-parkIdleConn test
+
