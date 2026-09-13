@@ -78,12 +78,24 @@ func (sr *SimpleRedis) doWithHeldSocket(ctx context.Context, conn *pooledConn, a
 // Same shape as net.Dialer / http.Client: one child context, not a parallel time.Time next to ctx.
 // libraryOwnsDeadline is true when DeadlineExceeded on the returned ctx is the library budget (maps to redis:timeout).
 func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context, maxRetries int) (context.Context, context.CancelFunc, bool) {
-	libraryDeadline := time.Now().Add(time.Duration(maxRetries+1) * (sr.DialTimeout() + sr.IOTimeout()))
+	libraryDeadline := time.Now().Add(sr.commandBudgetDuration(maxRetries))
 	if parent, ok := ctx.Deadline(); ok && !parent.After(libraryDeadline) {
 		return ctx, nopCancel, false
 	}
 	ctx, cancel := context.WithDeadline(ctx, libraryDeadline)
 	return ctx, cancel, true
+}
+
+// commandBudget is the overall command duration after retryLimits: (maxRetries+1)*(DialTimeout+IOTimeout).
+// Reclaim uses this same bound so a live command cannot still be in flight when its checkout is closed.
+func (sr *SimpleRedis) commandBudget() time.Duration {
+	maxRetries, _, _ := retryLimits(sr.maxRetries, sr.minRetryBackoff, sr.maxRetryBackoff)
+	return sr.commandBudgetDuration(maxRetries)
+}
+
+// commandBudgetDuration is (maxRetries+1)*(DialTimeout+IOTimeout) for an already-mapped retry count.
+func (sr *SimpleRedis) commandBudgetDuration(maxRetries int) time.Duration {
+	return time.Duration(maxRetries+1) * (sr.DialTimeout() + sr.IOTimeout())
 }
 
 // libraryTimeout maps a library-owned context deadline to redis:timeout. Caller cancel and a sooner caller deadline stay ctx.Err().

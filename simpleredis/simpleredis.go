@@ -83,8 +83,13 @@ type SimpleRedis struct {
 	heldSockets atomic.Int64
 	// lostTurns counts in-use-turn tokens restored after a leak (idle empty and heldSockets is 0).
 	lostTurns atomic.Int64
+	// abandonedClosed counts sockets closed after a panic left them checked out past the command budget.
+	abandonedClosed atomic.Int64
 	// turnRecoverMu serializes refill of inUseTurns so two waiters do not double-fill.
 	turnRecoverMu sync.Mutex
+	// checkedOutMu guards checkedOut (sockets handed out by borrow and not yet released).
+	checkedOutMu sync.Mutex
+	checkedOut   map[*pooledConn]time.Time
 
 	// groupWriteMu guards groupWrite (native MSETEX vs Lua fallback). Not idleConnsMu: that lock is the unused-socket list.
 	groupWriteMu sync.Mutex
@@ -107,6 +112,7 @@ func New(cfg Config) *SimpleRedis {
 		idleTimeout:     cfg.IdleTimeout,
 		dialTimeout:     cfg.DialTimeout,
 		ioTimeout:       cfg.IOTimeout,
+		checkedOut:      make(map[*pooledConn]time.Time),
 	}
 	sr.ensureInUseTurns()
 	return sr
@@ -149,6 +155,11 @@ func (sr *SimpleRedis) OverFrees() int64 {
 // LostTurns is how many in-use-turn tokens this client restored after a leak.
 func (sr *SimpleRedis) LostTurns() int64 {
 	return sr.lostTurns.Load()
+}
+
+// AbandonedClosed is how many sockets this client closed after a panic left them checked out past the command budget.
+func (sr *SimpleRedis) AbandonedClosed() int64 {
+	return sr.abandonedClosed.Load()
 }
 
 // PoolTimeout is how long a waiter past PoolSize blocks.

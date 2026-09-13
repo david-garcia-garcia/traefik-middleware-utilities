@@ -123,6 +123,7 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error) {
 func (sr *SimpleRedis) borrowAfterPoolWait(ctx context.Context) (*pooledConn, error) {
 	sr.turnRecoverMu.Lock()
 	defer sr.turnRecoverMu.Unlock()
+	sr.closeAbandonedCheckouts()
 	if sr.heldSockets.Load() == 0 {
 		sr.recoverLostTurnsLocked()
 	}
@@ -167,6 +168,50 @@ func (sr *SimpleRedis) recoverLostTurnsLocked() {
 	}
 }
 
+// registerCheckout records that borrow handed conn out. Caller still holds the in-use turn.
+func (sr *SimpleRedis) registerCheckout(conn *pooledConn) {
+	if conn == nil {
+		return
+	}
+	sr.checkedOutMu.Lock()
+	if sr.checkedOut == nil {
+		sr.checkedOut = make(map[*pooledConn]time.Time)
+	}
+	sr.checkedOut[conn] = time.Now()
+	sr.checkedOutMu.Unlock()
+}
+
+// deregisterCheckout removes conn from the checkout registry. Safe if it was never registered.
+func (sr *SimpleRedis) deregisterCheckout(conn *pooledConn) {
+	if conn == nil {
+		return
+	}
+	sr.checkedOutMu.Lock()
+	delete(sr.checkedOut, conn)
+	sr.checkedOutMu.Unlock()
+}
+
+// closeAbandonedCheckouts closes sockets whose checkout is at least the command budget old.
+// Only the pool-wait path calls this. Young checkouts (a live command, or a borrow-to-do / do-to-release
+// gap) stay open. Caller holds turnRecoverMu.
+func (sr *SimpleRedis) closeAbandonedCheckouts() {
+	budget := sr.commandBudget()
+	now := time.Now()
+	sr.checkedOutMu.Lock()
+	var abandoned []*pooledConn
+	for conn, at := range sr.checkedOut {
+		if now.Sub(at) >= budget {
+			abandoned = append(abandoned, conn)
+			delete(sr.checkedOut, conn)
+		}
+	}
+	sr.checkedOutMu.Unlock()
+	for _, conn := range abandoned {
+		conn.close()
+		sr.abandonedClosed.Add(1)
+	}
+}
+
 // takeIdleOrDial pops a young unused socket or dials while the caller already holds a turn.
 func (sr *SimpleRedis) takeIdleOrDial(ctx context.Context) (*pooledConn, error) {
 	// Prefer a young unused socket over a new dial.
@@ -179,6 +224,7 @@ func (sr *SimpleRedis) takeIdleOrDial(ctx context.Context) (*pooledConn, error) 
 		conn.close()
 	}
 	if reused != nil {
+		sr.registerCheckout(reused)
 		return reused, nil
 	}
 	// Idle miss: dial while still holding the turn. Defer restores heldSockets if AUTH/SELECT panics.
@@ -189,6 +235,7 @@ func (sr *SimpleRedis) takeIdleOrDial(ctx context.Context) (*pooledConn, error) 
 		sr.freeInUseTurn()
 		return nil, err
 	}
+	sr.registerCheckout(conn)
 	return conn, nil
 }
 
@@ -220,6 +267,7 @@ func (sr *SimpleRedis) takeIdleConn() (reused *pooledConn, stale []*pooledConn, 
 
 // release returns a clean conn to idleConns and frees the in-use turn, or closes it when dirty, closed, or idleConns is full at the live cap.
 func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
+	sr.deregisterCheckout(conn)
 	if !reusable {
 		conn.close()
 		sr.freeInUseTurn()
