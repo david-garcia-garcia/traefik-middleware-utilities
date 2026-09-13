@@ -113,24 +113,33 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error) {
 		}
 	}
 
+	// The turn is held from here. Return it on every path that does not hand a socket to the
+	// caller, including a panic in takeIdleConn or dial.
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			sr.freeInUseTurn()
+		}
+	}()
+
 	// Prefer a young unused socket over a new dial.
 	reused, stale, closed := sr.takeIdleConn()
 	if closed {
-		sr.freeInUseTurn()
 		return nil, errUnreachable
 	}
 	for _, conn := range stale {
 		conn.close()
 	}
 	if reused != nil {
+		handedOff = true
 		return reused, nil
 	}
 	// Idle miss: dial while still holding the turn.
 	conn, err := sr.dial(ctx)
 	if err != nil {
-		sr.freeInUseTurn()
 		return nil, err
 	}
+	handedOff = true
 	return conn, nil
 }
 

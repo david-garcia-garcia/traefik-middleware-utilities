@@ -42,14 +42,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 			last = err
 			continue
 		}
-		// If do panics under Yaegi, the process does not crash and this in-use-turn is lost.
-		// Not deferred-release: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/29
-		values, reusable, err := sr.do(ctx, conn, args)
-		if stop := contextStop(ctx); stop != nil {
-			sr.release(conn, false)
-			return nil, libraryTimeout(stop, libraryOwnsDeadline)
-		}
-		sr.release(conn, reusable)
+		values, err := sr.runOnConn(ctx, conn, args)
 		if err == nil {
 			return values, nil
 		}
@@ -62,6 +55,20 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		return nil, libraryTimeout(last, libraryOwnsDeadline)
 	}
 	return nil, errTimeout
+}
+
+// runOnConn runs one command on conn and always releases it, including when do panics.
+// reusable starts false because a panic proves nothing about the socket's protocol position:
+// the release then closes the socket and returns the in-use turn instead of leaking both.
+func (sr *SimpleRedis) runOnConn(ctx context.Context, conn *pooledConn, args [][]byte) (values [][]byte, err error) {
+	reusable := false
+	defer func() { sr.release(conn, reusable) }()
+	values, reusable, err = sr.do(ctx, conn, args)
+	if stop := contextStop(ctx); stop != nil {
+		reusable = false
+		return nil, stop
+	}
+	return values, err
 }
 
 // bindCommandDeadline wraps ctx with (maxRetries+1)*(DialTimeout+IOTimeout) when that instant is sooner than the parent.
