@@ -32,14 +32,14 @@ sequenceDiagram
 Ready for review. 0 items remain.
 
 Priority: P1 — dest unmaps then Closes, so a reload Open can create the next value while the previous Close is still running
-Reviewed head: 233e4ce
+Reviewed head: 9b6466c
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | CI succeeded; no open review comments |
-| CI proof | 6/6 | all required checks succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743483895 |
+| CI proof | 6/6 | all required checks succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743786210 |
 | Local tests proof | N/A | remote PR; localTests: passed |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
@@ -49,7 +49,7 @@ Owner decision: None.
 | Branch | 2026-09-13-reclaim-bug-unmap-before-close pushed | git / origin |
 | OpenSpec | reclaim-close-before-unmap archived | `openspec/changes/archive/2026-09-13-reclaim-close-before-unmap/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/50 | pr-host List |
-| CI | build 34743483895 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743483895 | pr-host CI |
+| CI | build 34743786210 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743786210 | pr-host CI |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | none OPEN |
 
@@ -95,7 +95,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 233e4ce93e4f3c834cca7088bc44ee3bb0878b99 | Card must match the branch you measured |
+| Reviewed head | 9b6466c6db3e5687c58300c48fb41b8fe96a9b65 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -114,7 +114,7 @@ What I checked:
 - Zero-grace `drop` stays `slotBusy` through Close; `expire` claims `slotBusy` before Close
 - Tests-only `Reset` still unmaps first (existing Reset tests)
 - Did not fix canceled-ctx disposed return or hook-panic bricks key
-- CI run 34743483895: Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly — all success
+- CI run 34743786210: Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly — all success
 
 ### Rank-up moves
 None.

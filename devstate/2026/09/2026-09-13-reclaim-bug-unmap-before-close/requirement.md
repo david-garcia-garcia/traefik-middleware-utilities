@@ -18,13 +18,13 @@ Zero grace (and expire after a positive grace) unmaps the key, then runs Close o
 - Dest has no test that fails when create of incarnation 2 starts while Close of 1 is blocked.
 
 ## Desired
-1. FIRST land a compiled product test that FAILS on current master: Close of incarnation 1 blocked, `Open` same key, create of incarnation 2 starts during that Close. Shape: `NewTable(0)`, Close hook signals then blocks, cancel last holder, concurrent `Open`; `t.Fatal` if create ran while Close was blocked; after the fix the second `Open` waits until Close returns, then creates. Cover expire after a positive grace if cheap (same unmap-then-Close in `expire`).
-2. THEN keep the key mapped in `slotBusy` for the whole Close, then unmap and `close(ready)`. `Open` already waits on `slotBusy`; after `ready` it sees the key gone and creates.
-3. Zero grace: after Sleep, do not publish `slotAsleep` and do not unmap. Close as part of that same busy transition, then unmap / `close(ready)`.
-4. expire: do not delete until Close returns. Switch to `slotBusy` (not asleep) for the Close window so a racing `Open` cannot reclaim.
-5. Do not run Close under `t.mu`. Do not leave the slot asleep during Close.
-6. THEN the new test PASSES. Existing reclaim tests stay green.
-7. Reset: same Close-before-unmap ordering only if it is cheap and keeps existing Reset tests.
+Make the Close-before-create wait OPT-IN per incarnation via `Hooks.EnforceCloseBeforeOpen` (default false = dest: unmap then Close, overlap allowed).
+1. Keep the wait tests, but they set `EnforceCloseBeforeOpen: true`. Add a deterministic default-off test: Close signals then blocks; `Open` MUST return a fresh value while Close is still blocked.
+2. When the stored flag is true: keep the key mapped `slotBusy` for the whole Close, then unmap and `close(ready)`.
+3. When the stored flag is false: dest — unmap, then Close. A concurrent `Open` may create during Close.
+4. Read the flag from the ending incarnation's stored hooks, never from a later `Open`.
+5. Do not run Close under `t.mu`. Do not leave the slot asleep during Close. Close always goes through `runHook`/`dispose` so a panic cannot escape AfterFunc, on both flag paths.
+6. Reset stays unmap-first regardless of the flag.
 
 ## Affected
 - `reclaim/table.go` (`drop` zero-grace unmap, `expire` unmap-then-Close, slot state during Close)

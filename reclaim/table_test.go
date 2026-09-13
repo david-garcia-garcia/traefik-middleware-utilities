@@ -807,9 +807,10 @@ func TestTable_ZeroGraceRacingOpenIsPlainBind(t *testing.T) {
 	if n := countMsg(h.events(), MsgReclaim); n != 0 {
 		t.Fatalf("%d reclaim lines at zero grace, want 0 (sequence %v)", n, keySeq(h.events(), "a"))
 	}
-	want := []string{MsgPut, MsgBind, MsgOrphan, MsgDispose, MsgPut, MsgBind}
-	if seq := keySeq(h.events(), "a"); !reflect.DeepEqual(seq, want) {
-		t.Fatalf("sequence %v, want %v", seq, want)
+	waitKeyMsg(t, h, MsgDispose, "a")
+	// Default unmaps before Close, so dispose need not precede the second put.
+	if n := countMsg(h.events(), MsgPut); n != 2 {
+		t.Fatalf("%d put lines, want 2 (sequence %v)", n, keySeq(h.events(), "a"))
 	}
 }
 
@@ -830,7 +831,8 @@ func TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 	var createWhileCloseBlocked atomic.Bool
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return "first", nil }, Hooks{
-		Close: func() { close(closeEntered); <-releaseClose },
+		Close:                  func() { close(closeEntered); <-releaseClose },
+		EnforceCloseBeforeOpen: true,
 	}); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
@@ -891,7 +893,8 @@ func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 	var createWhileCloseBlocked atomic.Bool
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return "first", nil }, Hooks{
-		Close: func() { close(closeEntered); <-releaseClose },
+		Close:                  func() { close(closeEntered); <-releaseClose },
+		EnforceCloseBeforeOpen: true,
 	}); err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
@@ -938,6 +941,54 @@ func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 	if !createWhileCloseBlocked.Load() {
 		t.Fatal("second Open did not create after Close returned")
 	}
+}
+
+// TestTable_ZeroGraceCreateDoesNotWaitForClose locks the default: with the flag unset, Open
+// returns a fresh value while Close is still blocked. That is dest behaviour, not a race assert.
+func TestTable_ZeroGraceCreateDoesNotWaitForClose(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(0)
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return "first", nil }, Hooks{
+		Close: func() { close(closeEntered); <-releaseClose },
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	<-closeEntered
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	opened := make(chan any, 1)
+	go func() {
+		value, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
+			return "second", nil
+		}, Hooks{})
+		if err != nil {
+			t.Errorf("open 2: %v", err)
+			opened <- nil
+			return
+		}
+		opened <- value
+	}()
+	select {
+	case got := <-opened:
+		if got != "second" {
+			t.Fatalf("Open value %v, want a fresh incarnation while Close is blocked", got)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("Open blocked for Close; default must unmap first")
+	}
+	close(releaseClose)
 }
 
 func TestTable_ResetDuringSleepStillOrphansBeforeDispose(t *testing.T) {
