@@ -14,6 +14,18 @@ import (
 
 // TestYaegi_NewGetSetDel proves interpreted code can New, Set, Get, and Del
 // against a compiled fake TCP Redis. Traefik is not started.
+func TestYaegi_StrayExtraReplyOwnKey(t *testing.T) {
+	_, addr := startStrayExtraReplyFake(t, 5)
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.GetOwnKeys(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi stray extra: %q, want ok", got)
+	}
+}
+
 func TestYaegi_NewGetSetDel(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{})
 	goPath := t.TempDir()
@@ -191,6 +203,23 @@ func RoundTrip(host string) string {
 		return "del:" + err.Error()
 	}
 	return string(got)
+}
+
+// GetOwnKeys Gets k0..k11. A stray extra bulk must not surface as another key's value.
+func GetOwnKeys(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, MaxRetries: -1})
+	for i := 0; i < 12; i++ {
+		key := "k" + strconv.Itoa(i)
+		want := "v" + strconv.Itoa(i)
+		got, err := client.Get(context.Background(), key)
+		if err != nil {
+			continue
+		}
+		if string(got) != want {
+			return "Get(" + key + ")=" + string(got)
+		}
+	}
+	return "ok"
 }
 
 const kongIncrbyExpireatScript = ` + "`" + `local exists = redis.call("exists", KEYS[1])
