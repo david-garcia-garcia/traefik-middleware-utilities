@@ -25,6 +25,10 @@ const waitBudget = 10 * time.Second
 // unstuckValue is what a later Open creates after a panicking hook unstuck the key.
 const unstuckValue = "next"
 
+// firstIncarnation and nextIncarnation are the stored values in Close-vs-create overlap tests.
+const firstIncarnation = "first"
+const nextIncarnation = "second"
+
 // graceNoRace is long enough that a test asserting the reclaim branch cannot lose the grace race.
 const graceNoRace = 5 * time.Second
 
@@ -868,10 +872,188 @@ func TestTable_ZeroGraceRacingOpenIsPlainBind(t *testing.T) {
 	if n := countMsg(h.events(), MsgReclaim); n != 0 {
 		t.Fatalf("%d reclaim lines at zero grace, want 0 (sequence %v)", n, keySeq(h.events(), "a"))
 	}
-	want := []string{MsgPut, MsgBind, MsgOrphan, MsgDispose, MsgPut, MsgBind}
-	if seq := keySeq(h.events(), "a"); !reflect.DeepEqual(seq, want) {
-		t.Fatalf("sequence %v, want %v", seq, want)
+	waitKeyMsg(t, h, MsgDispose, "a")
+	// Default unmaps before Close, so dispose need not precede the second put.
+	if n := countMsg(h.events(), MsgPut); n != 2 {
+		t.Fatalf("%d put lines, want 2 (sequence %v)", n, keySeq(h.events(), "a"))
 	}
+}
+
+// TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns fails if a later Open starts create
+// while the previous incarnation's Close is still blocked.
+func TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(0)
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	var createWhileCloseBlocked atomic.Bool
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
+		Close:                  func() { close(closeEntered); <-releaseClose },
+		EnforceCloseBeforeOpen: true,
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	// Hold Close so a racing Open cannot create until this incarnation has ended.
+	<-closeEntered
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	opened := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
+			createWhileCloseBlocked.Store(true)
+			return nextIncarnation, nil
+		}, Hooks{})
+		opened <- err
+	}()
+	// The second Open must stay parked for the whole Close, not create during it.
+	select {
+	case err := <-opened:
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+		t.Fatalf("second Open returned before Close returned: %v", err)
+	case <-time.After(200 * time.Millisecond):
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+	}
+	// Release Close; the parked Open may create only after that returns.
+	close(releaseClose)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("open 2: %v", err)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("second Open did not return after Close returned")
+	}
+	if !createWhileCloseBlocked.Load() {
+		t.Fatal("second Open did not create after Close returned")
+	}
+}
+
+// TestTable_ExpireCreateWaitsUntilPreviousCloseReturns is the same overlap after grace elapsed.
+func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(time.Millisecond)
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	var createWhileCloseBlocked atomic.Bool
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
+		Close:                  func() { close(closeEntered); <-releaseClose },
+		EnforceCloseBeforeOpen: true,
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	// Wait until expire has entered Close (grace elapsed), then hold it.
+	select {
+	case <-closeEntered:
+	case <-time.After(waitBudget):
+		t.Fatal("Close did not run after grace elapsed")
+	}
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	opened := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
+			createWhileCloseBlocked.Store(true)
+			return nextIncarnation, nil
+		}, Hooks{})
+		opened <- err
+	}()
+	// The second Open must stay parked for the whole Close, not create during it.
+	select {
+	case err := <-opened:
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+		t.Fatalf("second Open returned before Close returned: %v", err)
+	case <-time.After(200 * time.Millisecond):
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+	}
+	// Release Close; the parked Open may create only after that returns.
+	close(releaseClose)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("open 2: %v", err)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("second Open did not return after Close returned")
+	}
+	if !createWhileCloseBlocked.Load() {
+		t.Fatal("second Open did not create after Close returned")
+	}
+}
+
+// TestTable_ZeroGraceCreateDoesNotWaitForClose locks the default: with the flag unset, Open
+// returns a fresh value while Close is still blocked. That is dest behaviour, not a race assert.
+func TestTable_ZeroGraceCreateDoesNotWaitForClose(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(0)
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
+		Close: func() { close(closeEntered); <-releaseClose },
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	<-closeEntered
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	opened := make(chan any, 1)
+	go func() {
+		value, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
+			return nextIncarnation, nil
+		}, Hooks{})
+		if err != nil {
+			t.Errorf("open 2: %v", err)
+			opened <- nil
+			return
+		}
+		opened <- value
+	}()
+	select {
+	case got := <-opened:
+		if got != nextIncarnation {
+			t.Fatalf("Open value %v, want a fresh incarnation while Close is blocked", got)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("Open blocked for Close; default must unmap first")
+	}
+	close(releaseClose)
 }
 
 func TestTable_ResetDuringSleepStillOrphansBeforeDispose(t *testing.T) {
@@ -1838,6 +2020,36 @@ func TestTable_ClosePanicAfterFuncDoesNotCrash(t *testing.T) {
 	}
 }
 
+func TestTable_ClosePanicAfterFuncDoesNotCrashEnforce(t *testing.T) {
+	if os.Getenv("RECLAIM_CLOSE_PANIC_ENFORCE_CHILD") == "1" {
+		h := &recHandler{}
+		tab := NewTable(0)
+		ctx, cancel := context.WithCancel(context.Background())
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
+			return "v", nil
+		}, Hooks{Close: func() { panic("close boom") }, EnforceCloseBeforeOpen: true}); err != nil {
+			os.Exit(2)
+		}
+		cancel()
+		deadline := time.Now().Add(waitBudget)
+		for time.Now().Before(deadline) && mappedKeys(tab) != 0 {
+			time.Sleep(time.Millisecond)
+		}
+		if _, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			return unstuckValue, nil
+		}, Hooks{}); err != nil {
+			os.Exit(4)
+		}
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_ClosePanicAfterFuncDoesNotCrashEnforce$") //nolint:gosec // G204: re-exec this test binary
+	cmd.Env = append(os.Environ(), "RECLAIM_CLOSE_PANIC_ENFORCE_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("AfterFunc Close panic crashed the process: %v\n%s", err, out)
+	}
+}
+
 func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 	h := &recHandler{}
 	tab := NewTable(graceNoRace)
@@ -1911,6 +2123,33 @@ func TestTable_ClosePanicIsReportedAtErrorAndStillDisposes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
 		Close: func() { panic("close boom") },
+	}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgHookPanic, "a")
+	waitKeyMsg(t, h, MsgDispose, "a")
+
+	lines := h.hookPanics()
+	if len(lines) != 1 {
+		t.Fatalf("%d hook panic lines, want 1", len(lines))
+	}
+	got := lines[0]
+	if got.level != slog.LevelError {
+		t.Errorf("hook panic logged at %v, want error", got.level)
+	}
+	if got.hook != "close" || got.panic != "close boom" {
+		t.Errorf("hook panic line %+v, want hook close panic close boom", got)
+	}
+}
+
+func TestTable_ClosePanicIsReportedAtErrorAndStillDisposesEnforce(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(0)
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
+		Close:                  func() { panic("close boom") },
+		EnforceCloseBeforeOpen: true,
 	}); err != nil {
 		t.Fatalf("open: %v", err)
 	}

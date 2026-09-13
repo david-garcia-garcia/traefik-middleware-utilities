@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-windowcounter-bug-lock-during-get
+jobName: 2026-09-13-windowcounter-bug-lock-during-get
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 70bb31c251823ae9c3909f970839ac8fc3bf166fa747865e5588898594828168
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: windowcounter-unlock-during-get
+pr:
+  id: 59
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/59
