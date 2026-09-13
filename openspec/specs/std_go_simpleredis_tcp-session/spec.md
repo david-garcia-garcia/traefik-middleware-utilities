@@ -23,13 +23,24 @@ The session SHALL live in package `simpleredis` under folder `simpleredis/`. The
 
 Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` 200 milliseconds, `IOTimeout` 100 milliseconds. Retry fields on `Config`: `0` at `New` means 1 extra retry; `-1` means off (one send). An explicit `MaxRetries` of 3 means 3 extra retries. `MinRetryBackoff` / `MaxRetryBackoff` keep go-redis sentinels: `0` means 8ms / 512ms; `-1` means off.
 
+After those defaults, `New` SHALL return `ErrMaxIdleConnsAbovePoolSize` and a nil client when `MaxIdleConns` is above `PoolSize`. That includes an explicit trim above the live cap and a zero `MaxIdleConns` (default 8) against a smaller explicit `PoolSize`. `New` MUST NOT rewrite either knob. A trim below `PoolSize` SHALL still create a client.
+
 #### Scenario: New does not open a socket
 - **WHEN** `New` is called with a host that refuses connections
-- **THEN** `New` returns a client without error
+- **AND** pool knobs are valid after defaults
+- **THEN** `New` returns a client and a nil error
 - **AND** no TCP connection is opened
 
+#### Scenario: New rejects MaxIdleConns above PoolSize
+- **WHEN** `New` is called with `PoolSize` 4 and `MaxIdleConns` 100
+- **THEN** `New` returns no client
+- **AND** the error is `ErrMaxIdleConnsAbovePoolSize`
+- **WHEN** `New` is called with `PoolSize` 2 and `MaxIdleConns` left at 0
+- **THEN** `New` returns no client
+- **AND** the error is `ErrMaxIdleConnsAbovePoolSize`
+
 #### Scenario: Live cap is frozen at New
-- **WHEN** `Config.PoolSize` is 1 at `New`
+- **WHEN** `Config.PoolSize` is 1 at `New` and `MaxIdleConns` is 1
 - **AND** `PoolSize` is written to 16 on that Config and on the client after `New`
 - **AND** one command holds the only live turn
 - **AND** another command waits past `PoolTimeout`
@@ -83,12 +94,9 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **THEN** unused sockets equal 1 after the last return
 - **AND** after waiting for peer close, still-open sockets equal 1
 
-#### Scenario: Sequential returns honour MaxIdleConns at or above PoolSize
+#### Scenario: Sequential returns honour MaxIdleConns equal to PoolSize
 - **WHEN** `PoolSize` sockets are checked out then returned one by one against a fake Redis
-- **AND** `PoolSize` is 2 and `MaxIdleConns` is 8
-- **THEN** unused sockets equal 2 after the last return
-- **AND** after waiting for peer close, still-open sockets equal 2
-- **WHEN** `PoolSize` is 8 and `MaxIdleConns` is 8
+- **AND** `PoolSize` is 8 and `MaxIdleConns` is 8
 - **THEN** unused sockets equal 8 after the last return
 - **AND** after waiting for peer close, still-open sockets equal 8
 

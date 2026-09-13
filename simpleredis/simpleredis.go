@@ -86,8 +86,12 @@ type SimpleRedis struct {
 }
 
 // New copies cfg onto a client and builds the in-use-turn channel. Does not dial. Call before concurrent use.
-func New(cfg Config) *SimpleRedis {
-	cfg = cfg.applyDefaults()
+// After defaults, MaxIdleConns above PoolSize returns ErrMaxIdleConnsAbovePoolSize and a nil client.
+func New(cfg Config) (*SimpleRedis, error) {
+	cfg, err := cfg.applyDefaults()
+	if err != nil {
+		return nil, err
+	}
 	sr := &SimpleRedis{
 		host:            cfg.Host,
 		pass:            cfg.Pass,
@@ -103,7 +107,7 @@ func New(cfg Config) *SimpleRedis {
 		ioTimeout:       cfg.IOTimeout,
 	}
 	sr.ensureInUseTurns()
-	return sr
+	return sr, nil
 }
 
 // Close drains unused pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval/MSetEX/MSetEXAt return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
@@ -130,7 +134,7 @@ func (sr *SimpleRedis) PoolSize() int {
 	return sr.liveCap()
 }
 
-// MaxIdleConns is the idle-list trim New froze, never above PoolSize because the idle list cannot outgrow the live cap.
+// MaxIdleConns is the idle-list trim New froze. New does not create a client when that trim would sit above PoolSize.
 func (sr *SimpleRedis) MaxIdleConns() int {
 	return sr.maxIdleConns
 }

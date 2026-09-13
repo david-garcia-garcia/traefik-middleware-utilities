@@ -438,7 +438,10 @@ import (
 
 // GetLoop builds one client with New and runs count Get calls.
 func GetLoop(host string, count int) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	for i := 0; i < count; i++ {
 		if _, err := client.Get(context.Background(), "hit"); err != nil {
 			return "get:" + err.Error()

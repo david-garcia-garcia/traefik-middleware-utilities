@@ -1,6 +1,10 @@
 package simpleredis
 
-import "time"
+import (
+	"errors"
+	"fmt"
+	"time"
+)
 
 const (
 	defaultMaxIdleConns = 8
@@ -12,10 +16,14 @@ const (
 	defaultMaxRetries   = 1
 )
 
+// ErrMaxIdleConnsAbovePoolSize is New when, after defaults, MaxIdleConns is above PoolSize.
+// The idle list cannot hold more sockets than the live cap, so that Config cannot build a client.
+var ErrMaxIdleConnsAbovePoolSize = errors.New("simpleredis: MaxIdleConns must not exceed PoolSize")
+
 // Config is the freeze-at-New settings for a SimpleRedis client.
 // New copies these values onto the client. Later writes to this struct do not change a client that already ran New.
 // A zero Config uses the package defaults (live cap 8, idle trim 8, 200ms pool wait, 30s idle reuse gate, 200ms dial, 100ms I/O, 1 extra retry).
-// New clamps the idle trim to the live cap, so MaxIdleConns is never reported above PoolSize; an idle trim above the live cap is unreachable because a socket only sits on the idle list while it counts against PoolSize.
+// After those defaults, New returns ErrMaxIdleConnsAbovePoolSize and no client when MaxIdleConns is above PoolSize (explicit trim, or default 8 against a smaller PoolSize). A trim below PoolSize stays as written: that trades a smaller idle footprint for closing (and later re-dialling) every socket released above the trim.
 // Worst-case command wait is (MaxRetries+1)*(DialTimeout+IOTimeout) (600ms at those defaults). Min/max backoff keep go-redis sentinels: 0 means 8ms / 512ms; -1 means off. MaxRetries 0 at New means 1 extra retry; -1 means none.
 type Config struct {
 	// Host is the TCP address New stores (host:port). New does not dial.
@@ -27,8 +35,8 @@ type Config struct {
 
 	// PoolSize is the live-socket cap (idle plus in-use). 0 means 8.
 	PoolSize int
-	// MaxIdleConns is how many unused sockets release will keep. 0 means 8, then the value is clamped down to PoolSize because the idle list can never hold more sockets than the live cap.
-	// Below PoolSize stays as written: that trades a smaller idle footprint for closing (and later re-dialling) every socket released above the trim.
+	// MaxIdleConns is how many unused sockets release will keep. 0 means 8.
+	// New rejects the Config when the value after that default is above PoolSize.
 	MaxIdleConns int
 	// PoolTimeout is how long a waiter past PoolSize blocks. 0 means 200ms.
 	PoolTimeout time.Duration
@@ -47,17 +55,13 @@ type Config struct {
 	MaxRetryBackoff time.Duration
 }
 
-// applyDefaults fills zero pool, timeout, and MaxRetries knobs, then clamps MaxIdleConns to PoolSize so the frozen idle trim is a value the idle list can actually reach. Min/max backoff sentinels stay 0/-1 for retryLimits.
-func (cfg Config) applyDefaults() Config {
+// applyDefaults fills zero pool, timeout, and MaxRetries knobs, then rejects MaxIdleConns above PoolSize. Min/max backoff sentinels stay 0/-1 for retryLimits.
+func (cfg Config) applyDefaults() (Config, error) {
 	if cfg.PoolSize <= 0 {
 		cfg.PoolSize = defaultPoolSize
 	}
 	if cfg.MaxIdleConns <= 0 {
 		cfg.MaxIdleConns = defaultMaxIdleConns
-	}
-	// An idle trim above the live cap can never be hit, so freezing it would only misreport the pool through MaxIdleConns(). Both knobs are final by here, including the silent case where the default 8 lands on a smaller explicit PoolSize.
-	if cfg.MaxIdleConns > cfg.PoolSize {
-		cfg.MaxIdleConns = cfg.PoolSize
 	}
 	if cfg.PoolTimeout <= 0 {
 		cfg.PoolTimeout = defaultPoolTimeout
@@ -74,5 +78,8 @@ func (cfg Config) applyDefaults() Config {
 	if cfg.MaxRetries == 0 {
 		cfg.MaxRetries = defaultMaxRetries
 	}
-	return cfg
+	if cfg.MaxIdleConns > cfg.PoolSize {
+		return Config{}, fmt.Errorf("%w (MaxIdleConns=%d PoolSize=%d)", ErrMaxIdleConnsAbovePoolSize, cfg.MaxIdleConns, cfg.PoolSize)
+	}
+	return cfg, nil
 }
