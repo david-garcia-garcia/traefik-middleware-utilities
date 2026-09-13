@@ -5,7 +5,7 @@ JobName: 2026-09-13-simpleredis-handshake-sentinel-match
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T08:51:44Z |
-| explore | [x] | [ ] | |
+| explore | [x] | [x] | 2026-09-13T09:02:24Z |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
