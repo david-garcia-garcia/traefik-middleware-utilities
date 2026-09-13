@@ -46,3 +46,11 @@ fixed: none
 skipped: none
 archived: openspec/changes/archive/2026-09-13-simpleredis-handshake-sentinel-match/
 validate: spec_map OK, artifact_names OK
+
+## pullrequest (2026-09-13T09:25:16Z)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/67
+ci: 8/8 success run 34749421982

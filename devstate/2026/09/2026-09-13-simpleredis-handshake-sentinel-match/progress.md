@@ -11,4 +11,4 @@ JobName: 2026-09-13-simpleredis-handshake-sentinel-match
 | codereview | [x] | [x] | 2026-09-13T09:20:53Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T09:20:53Z |
 | archive | [x] | [x] | 2026-09-13T09:20:53Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-13T09:25:16Z |
