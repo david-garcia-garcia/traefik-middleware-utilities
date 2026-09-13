@@ -17,3 +17,9 @@ phase: propose
 findings: fold sliding-take and sync-flush; change windowcounter-buffered-outage-local-cap
 fixed: OpenSpec proposal, deltas, tasks (tests first)
 skipped: product apply
+
+## implement (2026-09-13)
+phase: implement
+findings: localTests passed; CI run 34746003664 all 8 success
+fixed: limiter buffered outage nil-error per-node cap; lock tests; usage/README
+skipped: bugs 2–7; phase close was conductor
