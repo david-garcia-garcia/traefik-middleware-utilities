@@ -15,3 +15,9 @@ phase: propose
 findings: none
 fixed: none
 skipped: buffered flushScript, DEL on expire failure, TTL refresh on every hit, other windowcounter bugs
+
+## implement (2026-09-13T07:17:26Z)
+phase: implement
+findings: dest repro FAIL then EVAL PASS
+fixed: exact Take EVAL INCR plus EXPIRE if PTTL < 0
+skipped: buffered flushScript, DEL on expire failure, TTL refresh on every hit, other windowcounter bugs
