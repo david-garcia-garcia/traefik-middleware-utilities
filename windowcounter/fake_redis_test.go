@@ -10,6 +10,9 @@ import (
 	"testing"
 )
 
+// expireCommand is the Redis EXPIRE verb the fake records for exact-Take TTL.
+const expireCommand = "EXPIRE"
+
 // testFakeRedis is an in-process RESP server for limiter unit tests.
 type testFakeRedis struct {
 	mu                  sync.Mutex
@@ -70,18 +73,16 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				break
 			}
 			_, _ = fmt.Fprintf(conn, ":%d\r\n", afterIncr)
-		case "EXPIRE", "EXPIREAT":
+		case expireCommand, "EXPIREAT":
 			f.lastExpire = append([]string(nil), args...)
-			if args[0] == "EXPIRE" {
+			if args[0] == expireCommand {
 				f.expireCommands++
-			}
-			// Fail N EXPIRE commands with a non-retryable RESP error, then succeed.
-			if args[0] == "EXPIRE" && f.expireFailRemaining > 0 {
-				f.expireFailRemaining--
-				_, _ = io.WriteString(conn, "-ERR expire failed\r\n")
-				break
-			}
-			if args[0] == "EXPIRE" {
+				// Fail N EXPIRE commands with a non-retryable RESP error, then succeed.
+				if f.expireFailRemaining > 0 {
+					f.expireFailRemaining--
+					_, _ = io.WriteString(conn, "-ERR expire failed\r\n")
+					break
+				}
 				seconds, convErr := strconv.ParseInt(args[2], 10, 64)
 				if convErr == nil {
 					f.expireSec[args[1]] = seconds
@@ -123,7 +124,7 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				}
 				if pttlMsLocked(f.store, f.expireSec, key) < 0 {
 					f.expireCommands++
-					f.lastExpire = []string{"EXPIRE", key, args[4]}
+					f.lastExpire = []string{expireCommand, key, args[4]}
 					if f.expireFailRemaining > 0 {
 						f.expireFailRemaining--
 						_, _ = io.WriteString(conn, "-ERR expire failed\r\n")
