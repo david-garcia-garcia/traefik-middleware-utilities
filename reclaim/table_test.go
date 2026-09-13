@@ -22,6 +22,9 @@ import (
 // waitBudget guards a condition that should already be true. It is not a timing assertion.
 const waitBudget = 10 * time.Second
 
+// unstuckValue is what a later Open creates after a panicking hook unstuck the key.
+const unstuckValue = "next"
+
 // graceNoRace is long enough that a test asserting the reclaim branch cannot lose the grace race.
 const graceNoRace = 5 * time.Second
 
@@ -1690,7 +1693,7 @@ func TestTable_CreatePanicUnsticksKey(t *testing.T) {
 	h := &recHandler{}
 	tab := NewTable(graceNoRace)
 	func() {
-		defer func() { recover() }()
+		defer func() { _ = recover() }()
 		_, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
 			panic("create boom")
 		}, Hooks{})
@@ -1702,12 +1705,12 @@ func TestTable_CreatePanicUnsticksKey(t *testing.T) {
 	created := 0
 	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
 		created++
-		return "next", nil
+		return unstuckValue, nil
 	}, Hooks{})
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}
-	if value != "next" || created != 1 {
+	if value != unstuckValue || created != 1 {
 		t.Fatalf("second open value %v created %d, want next created once", value, created)
 	}
 }
@@ -1716,7 +1719,7 @@ func TestTable_NilCreateUnsticksKey(t *testing.T) {
 	h := &recHandler{}
 	tab := NewTable(graceNoRace)
 	func() {
-		defer func() { recover() }()
+		defer func() { _ = recover() }()
 		_, err := tab.Open(context.Background(), "a", recLogger(h), nil, Hooks{})
 		want := fmt.Sprintf("reclaim: create %q: nil create", "a")
 		if err == nil || err.Error() != want {
@@ -1724,12 +1727,12 @@ func TestTable_NilCreateUnsticksKey(t *testing.T) {
 		}
 	}()
 	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
-		return "next", nil
+		return unstuckValue, nil
 	}, Hooks{})
 	if err != nil {
 		t.Fatalf("second open: %v", err)
 	}
-	if value != "next" {
+	if value != unstuckValue {
 		t.Fatalf("second open value %v, want next", value)
 	}
 }
@@ -1757,13 +1760,13 @@ func TestTable_SleepPanicAfterFuncDoesNotCrash(t *testing.T) {
 			os.Exit(3)
 		}
 		if _, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
-			return "next", nil
+			return unstuckValue, nil
 		}, Hooks{}); err != nil {
 			os.Exit(4)
 		}
 		os.Exit(0)
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_SleepPanicAfterFuncDoesNotCrash$")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_SleepPanicAfterFuncDoesNotCrash$") //nolint:gosec // G204: re-exec this test binary
 	cmd.Env = append(os.Environ(), "RECLAIM_SLEEP_PANIC_CHILD=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1787,13 +1790,13 @@ func TestTable_ClosePanicAfterFuncDoesNotCrash(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 		if _, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
-			return "next", nil
+			return unstuckValue, nil
 		}, Hooks{}); err != nil {
 			os.Exit(4)
 		}
 		os.Exit(0)
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_ClosePanicAfterFuncDoesNotCrash$")
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_ClosePanicAfterFuncDoesNotCrash$") //nolint:gosec // G204: re-exec this test binary
 	cmd.Env = append(os.Environ(), "RECLAIM_CLOSE_PANIC_CHILD=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1817,7 +1820,7 @@ func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 	cancel()
 	waitKeyMsg(t, h, MsgOrphan, "a")
 	func() {
-		defer func() { recover() }()
+		defer func() { _ = recover() }()
 		_, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
 			return "ignored", nil
 		}, Hooks{})
@@ -1828,12 +1831,12 @@ func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 	}()
 	waitUntil(t, func() bool { return closed.Load() == 1 })
 	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
-		return "next", nil
+		return unstuckValue, nil
 	}, Hooks{})
 	if err != nil {
 		t.Fatalf("third open: %v", err)
 	}
-	if value != "next" {
+	if value != unstuckValue {
 		t.Fatalf("third open value %v, want next", value)
 	}
 }
