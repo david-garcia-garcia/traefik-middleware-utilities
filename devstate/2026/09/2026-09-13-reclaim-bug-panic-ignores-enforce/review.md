@@ -42,4 +42,11 @@ findings: fold std_go_reclaim_value-lifecycle and std_go_reclaim_context-lease; 
 fixed: main specs synced; change archived as 2026-09-13-reclaim-panic-enforce-close
 skipped: none
 
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: PR #78 title set; CI 34769288585 success on 19e4941 (8/8)
+fixed: ready title; delivery card on pr-body
+skipped: none
+
+
 
