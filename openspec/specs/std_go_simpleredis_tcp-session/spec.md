@@ -215,13 +215,14 @@ A Traefik local plugin SHALL import this module’s `simpleredis` package. Traef
 - **THEN** it does not stop `whoami-a` or `whoami-b`
 
 ### Requirement: Handshake AUTH or SELECT failure closes and is not pooled
-When AUTH on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool. AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. When SELECT on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool, and SHALL return that error text. `ERR DB index is out of range` MUST NOT map to `redis:noauth`. AUTH SHALL run before SELECT when both password and database are non-empty. A handshake failure SHALL surface one error to the caller and MUST NOT open a second TCP connection for that command. That MUST NOT-redial rule includes AUTH or SELECT peer close with no reply, AUTH `-LOADING Redis is loading the dataset in memory`, and AUTH `-ERR max number of clients reached`. TCP dial refuse before AUTH/SELECT MAY still retry. A command that receives `LOADING ` after a successful handshake MAY still retry. In-process handshake-failure tests SHALL use a fake whose AUTH and SELECT replies are configurable (default success so existing success tests stay). Live Redis and Dragonfly tests SHALL prove the cases each dest engine supports and SHALL skip when those engines are unset.
+When AUTH on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool. AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth` and SHALL match `errors.Is(err, ErrNoAuth)` for both compiled and Yaegi-interpreted callers. When SELECT on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool, and SHALL return that error text. `ERR DB index is out of range` MUST NOT map to `redis:noauth`. AUTH SHALL run before SELECT when both password and database are non-empty. A handshake failure SHALL surface one error to the caller and MUST NOT open a second TCP connection for that command. That MUST NOT-redial rule includes AUTH or SELECT peer close with no reply, AUTH `-LOADING Redis is loading the dataset in memory`, and AUTH `-ERR max number of clients reached`. AUTH or SELECT peer close SHALL return `redis:unreachable` and SHALL match `IsUnreachable` for both compiled and Yaegi-interpreted callers. The session MUST NOT wrap that error in a package-local type whose `Unwrap` compiled `errors.Is` cannot see under Yaegi. TCP dial refuse before AUTH/SELECT MAY still retry. A command that receives `LOADING ` after a successful handshake MAY still retry. In-process handshake-failure tests SHALL use a fake whose AUTH and SELECT replies are configurable (default success so existing success tests stay). Live Redis and Dragonfly tests SHALL prove the cases each dest engine supports and SHALL skip when those engines are unset.
 
 #### Scenario: Fake AUTH rejected maps to redis:noauth and is not pooled
 - **WHEN** the client is created with `New` with a non-empty password and an empty database
 - **AND** the fake replies to AUTH with an AUTH-class prefix (`NOAUTH`, `WRONGPASS`, `NOPERM`, or `ERR Client sent AUTH`)
 - **AND** a command is issued
 - **THEN** the command returns `redis:noauth`
+- **AND** `errors.Is` matches `ErrNoAuth` for a compiled caller
 - **AND** the idle pool is empty
 - **AND** the fake observes that the client closed the socket
 - **AND** the fake accepted one TCP connection
@@ -240,14 +241,16 @@ When AUTH on a new dial returns an error, the session SHALL close that socket an
 - **WHEN** the client is created with `New` with a non-empty password, `MaxRetries: 1`, and MinRetryBackoff off
 - **AND** the peer accepts TCP, reads AUTH, and closes with no reply
 - **AND** a command is issued
-- **THEN** the command returns an error
+- **THEN** the command returns `redis:unreachable`
+- **AND** `IsUnreachable` is true for a compiled caller
 - **AND** the peer accepted one TCP connection
 
 #### Scenario: Fake SELECT close without reply after AUTH is not redialed
 - **WHEN** the client is created with `New` with a password, a database, `MaxRetries: 1`, and MinRetryBackoff off
 - **AND** the peer accepts TCP, replies `+OK` to AUTH, reads SELECT, and closes with no reply
 - **AND** a command is issued
-- **THEN** the command returns an error
+- **THEN** the command returns `redis:unreachable`
+- **AND** `IsUnreachable` is true for a compiled caller
 - **AND** the peer accepted one TCP connection
 
 #### Scenario: Fake AUTH LOADING is not redialed
@@ -278,6 +281,7 @@ When AUTH on a new dial returns an error, the session SHALL close that socket an
 - **AND** the client is created with `New` with a wrong password
 - **AND** a command is issued
 - **THEN** each engine returns `redis:noauth`
+- **AND** `errors.Is` matches `ErrNoAuth`
 - **AND** the idle pool is empty
 - **WHEN** those passworded engines are unset
 - **THEN** the live wrong-password tests skip
