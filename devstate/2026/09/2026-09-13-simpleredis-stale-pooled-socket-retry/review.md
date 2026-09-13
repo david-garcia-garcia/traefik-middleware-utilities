@@ -21,3 +21,9 @@ phase: implement
 findings: skip-idle after unused-socket unreachable; no free extra send
 fixed: sequential Gets after full idle drop at default MaxRetries
 skipped: MaxRetries -1 extra send (lost-reply collision); epoch; idle wipe
+
+## codereview (2026-09-13)
+phase: codereview
+findings: Standards 2 hard (stale name, serve comment); Dead 1 hard (leftover borrow)
+fixed: renamed fake to peerDropAllFake; serve job comment; deleted borrow; tests call borrowSocket(ctx, false)
+skipped: none

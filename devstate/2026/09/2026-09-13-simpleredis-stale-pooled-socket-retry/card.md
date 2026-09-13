@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T17:28:10Z
+Developer review: in progress — 2026-09-13T17:39:18Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** After an I/O failure on a socket taken from idle, later attempts of that SimpleRedis command skip idle and dial instead of popping the next dead unused socket. Sequential Gets after a full idle vintage drop succeed at default MaxRetries. Lost-reply Incr with MaxRetries off still fails with `redis:unreachable`.
+**Developers.** After an I/O failure on a socket taken from idle, later attempts of that SimpleRedis command skip idle and dial instead of popping the next dead unused socket. `borrowSocket` is the only borrow path. Sequential Gets after a full idle vintage drop succeed at default MaxRetries. Lost-reply Incr with MaxRetries off still fails with `redis:unreachable`.
 
 **End users.** None.
 
@@ -30,27 +30,27 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Apply landed skip-idle on remaining attempts. Local tests passed. CI is still running. 2 items remain.
+Seven-axis review applied (rename fake, comment serve, delete leftover `borrow`). Local tests passed. CI is still running on the reviewed head. 2 items remain.
 
 Priority: P1 — sequential commands after a Redis restart fail against a healthy peer
-Reviewed head: 0a76d0e
+Reviewed head: 41bdb8d
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 3/6 | CI in progress |
-| CI proof | 3/6 | in progress [CI run 34771662303](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771662303) |
+| CI proof | 3/6 | in progress [CI run 34772232796](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34772232796) |
 | Local tests proof | N/A | remote PR; localTests passed |
 | Review resolution | 6/6 | OPEN PR #87, no reviewer comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-simpleredis-stale-pooled-socket-retry pushed | `git` HEAD 0a76d0e |
+| Branch | 2026-09-13-simpleredis-stale-pooled-socket-retry pushed | `git` HEAD 41bdb8d |
 | OpenSpec | simpleredis-stale-pooled-socket-retry | `openspec/changes/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/87 | GitHub |
-| CI | build 34771662303 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771662303 | GitHub: 8 checks in progress |
+| CI | build 34772232796 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34772232796 | GitHub: 8 checks in progress |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | comments: none |
 
@@ -64,7 +64,7 @@ Owner decision: None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-13-simpleredis-stale-pooled-socket-retry` from `origin/master` → GitHub PR #87 → apply on HEAD 0a76d0e → CI 34771662303 in progress.
+Local spec → branch `2026-09-13-simpleredis-stale-pooled-socket-retry` from `origin/master` → GitHub PR #87 → apply on HEAD 41bdb8d → CI 34772232796 in progress.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -74,8 +74,9 @@ Local spec → branch `2026-09-13-simpleredis-stale-pooled-socket-retry` from `o
 | How is force a fresh dial plumbed into borrow without a config knob and without colliding with BUG-6 on takeIdleConn? | additive asked | assumed — unexported shared body with skipIdle; package borrow stays the three-value wrapper. | explore |
 
 ## Before merge
-- [x] Sequential Gets after every idle socket is dropped succeed at default MaxRetries (`TestStalePooledSocketSequentialGetsSucceedAfterPeerDrop`)
+- [x] Sequential Gets after every idle socket is dropped succeed at default MaxRetries (`TestPeerDropAllSequentialGetsSucceedAfterPeerDrop`)
 - [x] In-use-turn semaphore stays sound (`OverFrees() == 0`)
+- [x] Seven-axis hard findings applied (fake rename, serve comment, leftover `borrow` deleted)
 - [ ] CI on PR #87 succeeded
 - [ ] Drop WIP from the PR title when ready
 
@@ -83,7 +84,13 @@ Local spec → branch `2026-09-13-simpleredis-stale-pooled-socket-retry` from `o
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-stale-pooled-socket-retry/devstate/2026/09/2026-09-13-simpleredis-stale-pooled-socket-retry/codereview_standards.md) — 2 total, 0 pending, 2 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-stale-pooled-socket-retry/devstate/2026/09/2026-09-13-simpleredis-stale-pooled-socket-retry/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-stale-pooled-socket-retry/devstate/2026/09/2026-09-13-simpleredis-stale-pooled-socket-retry/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-stale-pooled-socket-retry/devstate/2026/09/2026-09-13-simpleredis-stale-pooled-socket-retry/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-stale-pooled-socket-retry/devstate/2026/09/2026-09-13-simpleredis-stale-pooled-socket-retry/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-stale-pooled-socket-retry/devstate/2026/09/2026-09-13-simpleredis-stale-pooled-socket-retry/codereview_dead.md) — 1 total, 0 pending, 1 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-stale-pooled-socket-retry/devstate/2026/09/2026-09-13-simpleredis-stale-pooled-socket-retry/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -92,17 +99,17 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 0a76d0e7cca6dfd27baf28449b7450623f89b237 | Card must match the branch you measured |
+| Reviewed head | 41bdb8d075fc611911d7a3662e5dcdc3492b1d4e | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: skip idle on later attempts of the same command after unused-socket unreachable. A free extra send would retry lost-reply Incr when MaxRetries is off.
+Best possible solution: skip idle on later attempts of the same command after unused-socket unreachable. A free extra send would retry lost-reply Incr when MaxRetries is off. Epoch is not required.
 
-Do we have a high-confidence way to reproduce? Yes. Tagged `TestBugDeadIdlePoolFailsRequestsAfterPeerRestart` is 0 failures after the fix (was 4). Default-suite `TestStalePooledSocketSequentialGetsSucceedAfterPeerDrop` failed before, passed after.
+Do we have a high-confidence way to reproduce? Yes. Tagged `TestBugDeadIdlePoolFailsRequestsAfterPeerRestart` is 0 failures after the fix (was 4). Default-suite `TestPeerDropAllSequentialGetsSucceedAfterPeerDrop` failed before, passed after.
 
-Is this the best way to solve the issue? Yes versus dest. Epoch is not required. MaxRetries -1 still fails that one command; that is the reshape that keeps lost-reply Incr honest.
+Is this the best way to solve the issue? Yes versus dest. MaxRetries -1 still fails that one command; that is the reshape that keeps lost-reply Incr honest.
 
 ### Evidence
 What I checked:
@@ -110,7 +117,7 @@ What I checked:
 - `go test ./simpleredis/ -count=1` passed; `go test ./... -count=1 -short` passed
 - tagged BUG-1: 0 failures at default MaxRetries; MaxRetries -1 still 4 (accepted)
 - `TestLostReplyIncrMaxRetriesOff` still green
-- CI run 34771662303 in progress
+- CI run 34772232796 in progress
 
 ### Rank-up moves
 None.
