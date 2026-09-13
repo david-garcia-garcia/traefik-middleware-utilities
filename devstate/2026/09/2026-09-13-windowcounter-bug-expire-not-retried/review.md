@@ -33,3 +33,15 @@ phase: devdocsimpact
 findings: stale-usage Window counter exact path
 fixed: std_go_windowcounter.md EVAL expire-if-no-TTL (already produced in implement)
 skipped: none
+
+## archive (2026-09-13T07:45:25Z)
+phase: archive
+findings: none
+fixed: spec folded into std_go_windowcounter_sync-flush; change moved to archive
+skipped: none
+
+## pullrequest (2026-09-13T07:45:25Z)
+phase: pullrequest
+findings: Lint goconst EXPIRE on fake_redis_test.go (CI failed once)
+fixed: expireCommand constant; CI succeeded on the lint-fix head
+skipped: none
