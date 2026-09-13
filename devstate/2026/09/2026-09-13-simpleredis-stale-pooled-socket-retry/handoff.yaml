@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-simpleredis-stale-pooled-socket-retry
+jobName: 2026-09-13-simpleredis-stale-pooled-socket-retry
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: edab4f7453104dc17b1fa002c1156bb85d907789659e5eeb0b1ef855968011b1
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
