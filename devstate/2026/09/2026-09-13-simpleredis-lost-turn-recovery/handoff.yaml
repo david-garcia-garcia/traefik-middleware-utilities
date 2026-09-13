@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-simpleredis-lost-turn-recovery
+jobName: 2026-09-13-simpleredis-lost-turn-recovery
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 41d447bd23417ea023aa6d83b75782a400dacf83222d0594ab8033bb787de37f
+localTests: none
+requirement: requirement.md
+comments: none
+pr:
+  id: 66
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/66
