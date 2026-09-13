@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-windowcounter-bug-yaegi-flush-hang
+jobName: 2026-09-13-windowcounter-bug-yaegi-flush-hang
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 577de66c7cd7a89632f016fdda20d2bb5dbd14891dedc583d217a3b7afb9f7fe
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
