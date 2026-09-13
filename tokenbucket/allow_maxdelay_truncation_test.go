@@ -74,3 +74,42 @@ func reproMaxDelayTruncationFailOpen(t *testing.T, rate float64, maxDelay time.D
 		t.Fatalf("fail-open: refunded consume still admitted (second=%v tokens=%v third=%v)", second, tokensAfterSecond, third)
 	}
 }
+
+// TestRedis_MaxDelayTruncationFailOpen is the Redis Allow mapping of the 1500ns
+// dest split: Lua refunds in whole microseconds; dest Duration admit would still allow.
+func TestRedis_MaxDelayTruncationFailOpen(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := newSimpleRedisForTest(t, addr)
+	const rate = 1e6 / 1.2
+	maxDelay := 1500 * time.Nanosecond
+	limiter, err := NewRedis(client, rate, 1, maxDelay, 2*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Unix(1_700_000_000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+
+	first, _, firstErr := limiter.Allow(context.Background(), "k")
+	if firstErr != nil {
+		t.Fatal(firstErr)
+	}
+	if !first {
+		t.Fatal("first Allow must consume the burst token")
+	}
+
+	second, _, secondErr := limiter.Allow(context.Background(), "k")
+	if secondErr != nil {
+		t.Fatal(secondErr)
+	}
+	if second {
+		t.Fatal("fail-open: Redis Allow admitted a refunded consume")
+	}
+
+	third, _, thirdErr := limiter.Allow(context.Background(), "k")
+	if thirdErr != nil {
+		t.Fatal(thirdErr)
+	}
+	if third {
+		t.Fatal("fail-open: following Redis Allow was a stacked consume")
+	}
+}
