@@ -9,6 +9,6 @@ JobName: 2026-09-13-simpleredis-eval-fallback-comments
 | propose | [x] | [x] | 2026-09-13T05:55:41Z |
 | implement | [x] | [x] | 2026-09-13T05:58:26Z |
 | codereview | [x] | [x] | 2026-09-13T06:03:01Z |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
+| devdocsimpact | [x] | [ ] | |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
