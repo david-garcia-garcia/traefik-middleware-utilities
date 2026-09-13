@@ -15,3 +15,9 @@ phase: propose
 findings: none
 fixed: none
 skipped: wait mapping, NaN rate, ttl truncation, last rewind, x/time/rate
+
+## implement (2026-09-13T06:25:12Z)
+phase: implement
+findings: FAIL then PASS TestRepro_NewKeyFillsToBurstAtEpoch (a432483 → 5ba03a1)
+fixed: Lua empty hash and Memory new memEntry seed burst/now; fake missing hash matches
+skipped: wait mapping, NaN rate, ttl truncation, last rewind, x/time/rate

@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T06:21:19Z
+Developer review: in progress — 2026-09-13T06:25:12Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** OpenSpec change `fill-new-key-to-burst` folds idle-fill into `std_go_tokenbucket_allow` and `std_go_tokenbucket_lua-eval`. Dest still seeds missing state as `tokens=0` `last=0` until apply.
+**Developers.** Missing token-bucket state is a full bucket then consume 1: Lua empty `HGETALL` sets `tokens = burst` `last = t`; Memory new `memEntry` (including after TTL delete) starts the same; fake Redis missing hash matches. Tests at Unix epoch (burst 5) and burst `1e12`. Do not import `x/time/rate`.
 
 **End users.** None.
 
@@ -32,18 +32,18 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Propose is apply-ready. Product fill has not landed. 5 items remain.
+Apply landed locally (`localTests: passed`). CI on PR 56 is still queued. 2 items remain.
 
 Priority: P2 — real under-grant on new keys when elapsed-from-epoch cannot cover burst; typical small burst at wall-clock now coincidentally fills
-Reviewed head: 52ab848
+Reviewed head: 5ba03a1
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Propose complete; CI in progress; no product apply |
-| CI proof | 3/6 | Checks queued on run 34742430174 |
-| Local tests proof | N/A | Before implement |
+| Overall readiness | 3/6 | Apply landed; local tests passed; CI in progress |
+| CI proof | 3/6 | Checks queued on run 34742681273 |
+| Local tests proof | N/A | Remote PR; CI proof covers remote |
 | Review resolution | 6/6 | OPEN PR; no review comments |
 
 ## Verification
@@ -52,8 +52,8 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-13-tokenbucket-bug-idle-fill-burst pushed | `git` origin/2026-09-13-tokenbucket-bug-idle-fill-burst |
 | OpenSpec | fill-new-key-to-burst | `openspec/changes/fill-new-key-to-burst/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/56 | pr-host List |
-| CI | build 34742430174 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742430174 | pr-host CI |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 34742681273 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742681273 | pr-host CI |
+| Local tests | passed | `go test -short -count=1 -timeout 60s ./tokenbucket` ok after 5ba03a1 |
 | PR comments | no comments | no comments.md |
 
 ## Specs
@@ -67,7 +67,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from origin/master. Stub PR 56 is the durable card host. Propose folded idle-fill into the existing tokenbucket specs; implement is next.
+Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from origin/master. Stub PR 56 is the durable card host. Idle-fill apply is on HEAD 5ba03a1; code review is next.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -76,8 +76,8 @@ Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from or
 | Does TTL-delete need its own epoch subtest? | additive asked | assumed — no extra epoch TTL subtest; one `memEntry` constructor then seed burst/`nowMicro`; existing TTL test stays as delete-then-Allow | explore |
 
 ## Before merge
-- [ ] Tests that fail on dest (`epoch_clock` burst 5; `huge_burst_elapsed_below_burst` burst 1e12), then Lua empty-hash and Memory new-entry fill, then PASS
-- [ ] Memory and Redis/fake still agree under `-short`
+- [x] Tests that fail on dest (`epoch_clock` burst 5; `huge_burst_elapsed_below_burst` burst 1e12), then Lua empty-hash and Memory new-entry fill, then PASS
+- [x] Memory and Redis/fake still agree under `-short`
 - [ ] CI succeeded on PR 56
 - [x] Stub PR open
 - [x] Requirement grounded on dest Lua and Memory
@@ -97,24 +97,26 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 52ab8489acf4d24d4e6e008b861aaaf6affc1703 | Card must match the branch you measured |
+| Reviewed head | 5ba03a1ab3f1897754d0c04758c4b497e1dacfca | Card must match the branch you measured |
 
 ### Stored data model
-None.
+- Changed: Redis hash per Allow key / field `last` — Unix microseconds string — sample at epoch miss `0` → now (`t`). Upgrade: existing hashes still valid; missing hash rewritten on next Allow.
+- Changed: Redis hash per Allow key / field `tokens` — float string — sample at epoch miss `-1` → `burst-1`. Upgrade: existing hashes still valid; missing hash rewritten on next Allow.
 
 ### Technical review
-Best possible solution: dest still uses Traefik `last=0` elapsed-from-epoch; the agreed fill is missing state = full burst then consume 1 on both stores.
+Best possible solution: missing state is a full bucket then consume 1 on both stores; `consumeOne` stays consume math.
 
-Do we have a high-confidence way to reproduce? Yes — dest `Allow` at epoch burst 5 leaves `tokens=-1`; huge burst `1e12` leaves `1.7e9`.
+Do we have a high-confidence way to reproduce? Yes — FAIL at a432483 (`TestRepro_NewKeyFillsToBurstAtEpoch` five subtests: Memory epoch tokens=-1, huge 1.7e9, fake Redis same, script missing seed); PASS at 5ba03a1.
 
-Is this the best way to solve the issue? Yes — seed Lua empty hash and Memory new `memEntry` full, keep `consumeOne` as consume math, match fake missing hash to Lua.
+Is this the best way to solve the issue? Yes — seed Lua empty hash and Memory new `memEntry` full; fake missing hash matches Lua.
 
 ### Evidence
 What I checked:
+- FAIL `go test -short -count=1 -timeout 60s -run TestRepro_NewKeyFillsToBurstAtEpoch ./tokenbucket` at a432483 (all 5 subtests)
+- PASS same test and `go test -short -count=1 -timeout 60s ./tokenbucket` after 5ba03a1
+- MIT notice kept in `tokenbucket/lua.go`
 - `openspec validate fill-new-key-to-burst --strict` valid
-- FindSpecHost fold `std_go_tokenbucket_allow` and `std_go_tokenbucket_lua-eval`
-- `validate_artifact_names` OK
-- OPEN PR 56; CI run 34742430174 queued
+- OPEN PR 56; CI run 34742681273 queued
 
 ### Rank-up moves
 None.
