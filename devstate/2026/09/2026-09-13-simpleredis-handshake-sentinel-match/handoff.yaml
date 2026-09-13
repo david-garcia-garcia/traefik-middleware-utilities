@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-simpleredis-handshake-sentinel-match
+jobName: 2026-09-13-simpleredis-handshake-sentinel-match
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 3a40b9a7b54c0a07cb55e2069ac3f0b44e1d816d2355b67d62bb387c50096181
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 67
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/67
