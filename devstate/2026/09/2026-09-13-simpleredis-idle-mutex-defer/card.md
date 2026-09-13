@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T15:54:24Z
+Developer review: ready for review — 2026-09-13T15:59:29Z
 
 ## What this changes
 **Operators.** None.
@@ -29,32 +29,32 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Product is on the branch. Seven-axis review applied two hard fixes. CI on the review-fix commit is not seen yet. 3 items remain.
+Product is on the branch. CI succeeded. Ready for review. 1 item remains.
 
 Priority: P1 — a recovered panic inside `release` deadlocks the idle mutex for the process lifetime
-Reviewed head: 95aef12
+Reviewed head: a523861
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Review-fix commit pushed; CI not seen yet |
-| CI proof | 1/6 | not seen on 95aef12; prior product run 34766304374 succeeded |
+| Overall readiness | 6/6 | Product applied, CI succeeded, no open comments |
+| CI proof | 6/6 | succeeded [CI run 34767145157](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34767145157) |
 | Local tests proof | N/A | remote PR; localTests passed |
 | Review resolution | 6/6 | OPEN PR #73, no reviewer comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-simpleredis-idle-mutex-defer pushed | `git` HEAD 3eb6932 |
-| OpenSpec | simpleredis-idle-mutex-defer | `openspec/changes/simpleredis-idle-mutex-defer/` |
+| Branch | 2026-09-13-simpleredis-idle-mutex-defer pushed | `git` HEAD a523861 |
+| OpenSpec | simpleredis-idle-mutex-defer | `openspec/changes/archive/2026-09-13-simpleredis-idle-mutex-defer/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/73 | GitHub |
-| CI | not seen | GitHub check runs after 95aef12 |
-| Local tests | passed | `go vet ./simpleredis/` clean; `TestReleaseClosesWhenIdleFullAtLiveCap` `-count=5` 0.425s |
+| CI | build 34767145157 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34767145157 | GitHub: Lint, Unit, Unit race, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly, Go E2E Redis, Go E2E Dragonfly all success |
+| Local tests | passed | `go vet ./simpleredis/` clean; `go test -count=1 -timeout 300s ./simpleredis/` 13.591s; `-count=5 -run "Pool|Panic|Release|Borrow|Turn"` 7.912s; `TestReleaseClosesWhenIdleFullAtLiveCap` `-count=5` 0.425s |
 | PR comments | no comments | comments: none |
 
 ## Specs
-- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-mutex-defer/openspec/changes/simpleredis-idle-mutex-defer/proposal.md) — modified
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-mutex-defer/openspec/changes/archive/2026-09-13-simpleredis-idle-mutex-defer/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -63,7 +63,7 @@ None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-13-simpleredis-idle-mutex-defer` from `origin/2026-09-13-simpleredis-panic-safe-release` → GitHub PR #73 (stacked on #71, must merge after it) → OpenSpec `simpleredis-idle-mutex-defer` → product HEAD 6bf96ce → CI 34766304374 success.
+Local spec → branch `2026-09-13-simpleredis-idle-mutex-defer` from `origin/2026-09-13-simpleredis-panic-safe-release` → GitHub PR #73 (stacked on #71, must merge after it) → OpenSpec `simpleredis-idle-mutex-defer` archived → product HEAD a523861 → CI 34767145157 success.
 
 **Stacked:** this PR is stacked on #71 and MUST merge after it. Base is `2026-09-13-simpleredis-panic-safe-release`, not master.
 
@@ -82,8 +82,8 @@ Local spec → branch `2026-09-13-simpleredis-idle-mutex-defer` from `origin/202
 - [x] Explore: extract `parkIdleConn`; no panic-inside-lock test; fold tcp-session delta
 - [x] Propose: OpenSpec `simpleredis-idle-mutex-defer` apply-ready
 - [x] Seven-axis code review (Standards comment + idle-full-at-cap test)
-- [ ] Archive the OpenSpec change into the live catalog
-- [ ] Drop WIP from the PR title
+- [x] Archive the OpenSpec change into the live catalog
+- [x] Drop WIP from the PR title
 
 ## Findings
 - [P3] Leave a trail on `parkIdleConn` — done — block intro now names the do-not-park verdict. Path: `simpleredis/pool.go`.
@@ -105,7 +105,7 @@ Local spec → branch `2026-09-13-simpleredis-idle-mutex-defer` from `origin/202
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 95aef12c (product) / 3eb6932 (bus) | Card must match the branch you measured |
+| Reviewed head | a523861bd47c4830fbf6cba4bde229a2b2b716d1 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -120,10 +120,11 @@ Is this the best way to solve the issue? Yes versus dest: extract so defer owns 
 ### Evidence
 What I checked:
 - `go vet ./simpleredis/` clean
-- `go test -count=1 -timeout 300s ./simpleredis/` passed in 13.591s
+- `go test -count=1 -timeout 300s ./simpleredis/` passed in 13.591s (includes Yaegi)
 - `go test -count=5 -timeout 600s -run "Pool|Panic|Release|Borrow|Turn" ./simpleredis/` passed in 7.912s
-- `openspec validate simpleredis-idle-mutex-defer --strict` valid
-- CI run 34766304374: all 8 checks success
+- `TestReleaseClosesWhenIdleFullAtLiveCap` `-count=5` passed in 0.425s
+- CI run 34767145157: all 8 checks success
+- `openspec validate` (pre-archive) valid; catalog `validate_artifact_names` OK; `validate_spec_map` OK
 - Close / takeIdleConn / resp.go / math/rand / OverFrees unchanged vs dest
 - In-flight `2026-09-13-simpleredis-close-abandoned-socket` `release` still adds `deregisterCheckout` then dest's body — mechanical conflict remains
 
