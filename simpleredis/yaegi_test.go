@@ -1,7 +1,11 @@
 package simpleredis
 
 import (
+	"bufio"
+	"context"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -74,6 +78,66 @@ func TestYaegi_MatchSentinels(t *testing.T) {
 	got := evalClientprobe(t, goPath, `clientprobe.MatchSentinels()`)
 	if got != "ok" {
 		t.Fatalf("yaegi match sentinels: %q, want ok", got)
+	}
+}
+
+// TestYaegi_HandshakeAuthEOFMatchesUnreachable ports TestBugInterpretedHandshakeFailureDefeatsUnreachableMatching: interpreted IsUnreachable must match AUTH peer-close, same as compiled.
+func TestYaegi_HandshakeAuthEOFMatchesUnreachable(t *testing.T) {
+	_, addr := startAcceptFake(t, func(_ net.Conn, reader *bufio.Reader) {
+		_, _ = readCommand(reader)
+	})
+
+	compiled := New(Config{Host: addr, Pass: "secret", MaxRetries: -1})
+	_, compiledErr := compiled.Get(context.Background(), "hit")
+	if !IsUnreachable(compiledErr) {
+		t.Fatalf("compiled control broke: IsUnreachable(%v) = false", compiledErr)
+	}
+
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.HandshakeAuthEOFUnreachable(%q)`, addr))
+	if got != "true" {
+		t.Fatalf("interpreted IsUnreachable(handshake AUTH EOF) = %s, want true", got)
+	}
+}
+
+// TestYaegi_HandshakeAuthWrongPassMatchesNoAuth ports TestBugInterpretedHandshakeFailureDefeatsNoAuthMatching: interpreted errors.Is must match AUTH WRONGPASS, same as compiled.
+func TestYaegi_HandshakeAuthWrongPassMatchesNoAuth(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.setHandshakeReplies("-WRONGPASS invalid password\r\n", statusOKReply)
+
+	compiled := New(Config{Host: addr, Pass: "wrong", MaxRetries: -1})
+	_, compiledErr := compiled.Get(context.Background(), "hit")
+	if !errors.Is(compiledErr, ErrNoAuth) {
+		t.Fatalf("compiled control broke: errors.Is(%v, ErrNoAuth) = false", compiledErr)
+	}
+
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.HandshakeAuthRejectNoAuth(%q)`, addr))
+	if got != "true" {
+		t.Fatalf("interpreted errors.Is(handshake WRONGPASS, ErrNoAuth) = %s, want true", got)
+	}
+}
+
+// TestYaegi_MatchPackageUnreachableAndMiss proves interpreted matchers on errors the package returns (dead port and miss), not only a %w wrap.
+func TestYaegi_MatchPackageUnreachableAndMiss(t *testing.T) {
+	_, missAddr := startFakeRedis(t, map[string]string{})
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.DeadPortIsUnreachable(%q)`, "127.0.0.1:1"))
+	if got != "true" {
+		t.Fatalf("interpreted IsUnreachable(dead port) = %s, want true", got)
+	}
+	got = evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.MissingKeyIsMiss(%q)`, missAddr))
+	if got != "true" {
+		t.Fatalf("interpreted IsMiss(missing key) = %s, want true", got)
 	}
 }
 
@@ -391,5 +455,51 @@ func MatchSentinels() string {
 		return "IsMiss"
 	}
 	return "ok"
+}
+
+// HandshakeAuthEOFUnreachable reports IsUnreachable for an AUTH peer-close handshake failure.
+func HandshakeAuthEOFUnreachable(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host, Pass: "secret", MaxRetries: -1})
+	_, err := client.Get(context.Background(), "hit")
+	if err == nil {
+		return "no-error"
+	}
+	if err.Error() != simpleredis.RedisUnreachable {
+		return "text:" + err.Error()
+	}
+	return strconv.FormatBool(simpleredis.IsUnreachable(err))
+}
+
+// HandshakeAuthRejectNoAuth reports errors.Is(err, ErrNoAuth) for a WRONGPASS handshake failure.
+func HandshakeAuthRejectNoAuth(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host, Pass: "wrong", MaxRetries: -1})
+	_, err := client.Get(context.Background(), "hit")
+	if err == nil {
+		return "no-error"
+	}
+	if err.Error() != simpleredis.RedisNoAuth {
+		return "text:" + err.Error()
+	}
+	return strconv.FormatBool(errors.Is(err, simpleredis.ErrNoAuth))
+}
+
+// DeadPortIsUnreachable reports IsUnreachable for a TCP refuse before handshake.
+func DeadPortIsUnreachable(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1})
+	_, err := client.Get(context.Background(), "hit")
+	if err == nil {
+		return "no-error"
+	}
+	return strconv.FormatBool(simpleredis.IsUnreachable(err))
+}
+
+// MissingKeyIsMiss reports IsMiss for a GET of a missing key.
+func MissingKeyIsMiss(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1})
+	_, err := client.Get(context.Background(), "missing-key-yaegi")
+	if err == nil {
+		return "no-error"
+	}
+	return strconv.FormatBool(simpleredis.IsMiss(err))
 }
 `

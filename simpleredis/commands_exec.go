@@ -34,9 +34,9 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 				return nil, libraryTimeout(err, libraryOwnsDeadline)
 			}
 		}
-		conn, err := sr.borrow(ctx)
+		conn, err, handshakeFailed := sr.borrow(ctx)
 		if err != nil {
-			if sr.isClosed() || !shouldRetry(err) {
+			if sr.isClosed() || !shouldRetry(err, handshakeFailed) {
 				return nil, libraryTimeout(err, libraryOwnsDeadline)
 			}
 			last = err
@@ -53,7 +53,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		if err == nil {
 			return values, nil
 		}
-		if !shouldRetry(err) {
+		if !shouldRetry(err, false) {
 			return values, libraryTimeout(err, libraryOwnsDeadline)
 		}
 		last = err
@@ -173,7 +173,7 @@ func retryBackoff(retry int, minBackoff, maxBackoff time.Duration) time.Duration
 }
 
 // shouldRetry is go-redis shouldRetry as this client can see it. Timeouts and cancelled contexts are never retried. Pool wait elapsed is errPoolWait (same Error() text, not retried) so MaxRetries does not multiply PoolTimeout. Handshake AUTH or SELECT failures marked at dial are not retried.
-func shouldRetry(err error) bool {
+func shouldRetry(err error, handshakeFailed bool) bool {
 	if err == nil {
 		return false
 	}
@@ -183,20 +183,13 @@ func shouldRetry(err error) bool {
 	if isCommandTimeout(err) {
 		return false
 	}
-	if isHandshakeFailure(err) {
+	if handshakeFailed {
 		return false
 	}
 	if isUnreachable(err) {
 		return true
 	}
 	return isRetryableRedisReply(err)
-}
-
-// isHandshakeFailure is an AUTH or SELECT error marked at dial. Not retryable.
-// Type assert, not errors.As: Yaegi panics on As for this struct (*target must implement error).
-func isHandshakeFailure(err error) bool {
-	_, ok := err.(handshakeFailure)
-	return ok
 }
 
 // isCommandTimeout is redis:timeout from an I/O deadline or the overall command budget. Not retryable.
