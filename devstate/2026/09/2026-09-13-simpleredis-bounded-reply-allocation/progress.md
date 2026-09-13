@@ -9,6 +9,6 @@ JobName: 2026-09-13-simpleredis-bounded-reply-allocation
 | propose | [x] | [x] | 2026-09-13T17:16:15Z |
 | implement | [x] | [x] | 2026-09-13T17:21:59Z |
 | codereview | [x] | [x] | 2026-09-13T17:24:00Z |
-| devdocsimpact | [x] | [ ] | |
-| archive | [x] | [ ] | |
-| pullrequest | [ ] | [ ] | |
+| devdocsimpact | [x] | [x] | 2026-09-13T17:28:17Z |
+| archive | [x] | [x] | 2026-09-13T17:28:17Z |
+| pullrequest | [x] | [x] | 2026-09-13T17:28:17Z |

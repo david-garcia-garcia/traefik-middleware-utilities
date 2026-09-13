@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T17:21:59Z
+Developer review: ready for review — 2026-09-13T17:28:17Z
 
 ## What this changes
 **Operators.** None.
@@ -26,17 +26,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Implement landed. Local tests passed. CI on this head is still queued. Code review is next.
+Ready for review. All required CI checks succeeded. Local tests passed. Checklist is empty.
 
 Priority: P2 — real operator pain (Traefik OOM from a handful of header bytes), limited blast until a hostile or buggy peer (or a desynced socket)
-Reviewed head: df93dfa
+Reviewed head: b6931e2
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Fix landed locally; CI on this head is queued |
-| CI proof | 3/6 | build 34771368092 queued ([Unit](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771368092/job/103761454585)) |
+| Overall readiness | 6/6 | CI green; no open comments; local tests passed |
+| CI proof | 6/6 | build 34771609776 succeeded ([Unit](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771609776/job/103762103357)) |
 | Local tests proof | N/A | Remote PR; CI is the proof axis (`localTests: passed`) |
 | Review resolution | 6/6 | OPEN PR, no reviewer comments |
 
@@ -44,14 +44,14 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-13-simpleredis-bounded-reply-allocation pushed | `git` |
-| OpenSpec | simpleredis-bounded-reply-allocation | `openspec/` |
+| OpenSpec | simpleredis-bounded-reply-allocation (archived) | `openspec/changes/archive/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/86 | pr-host List |
-| CI | build 34771368092 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771368092 | pr-host CI |
+| CI | build 34771609776 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771609776 | pr-host CI |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-- [std_go_simpleredis_resp-decode](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/openspec/changes/simpleredis-bounded-reply-allocation/proposal.md) — modified
+- [std_go_simpleredis_resp-decode](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/openspec/changes/archive/2026-09-13-simpleredis-bounded-reply-allocation/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -60,7 +60,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → stub PR 86 against `master`. Implement grew bulk/array buffers from arrived bytes; seven-axis review is next.
+Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → PR 86 against `master`. Decode now grows from arrived bytes; CI on `b6931e2` succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -71,15 +71,19 @@ Local ticket → branch `2026-09-13-simpleredis-bounded-reply-allocation` → st
 | Who already owns client identity (address, user, tenant, Host, trust hop) for this change? | additive incidental | assumed — none. The decoder classifies a RESP header; it does not set or rebuild a host fact | explore |
 
 ## Before merge
-- [x] Keep SimpleRedis reply memory proportional to bytes the peer actually sent, not the declared in-cap `$` or `*` length
-- [x] Untagged `TotalAlloc` proof for a header-only oversized `$` and `*`
-- [x] Honour the simplicity gate: the recorded shape is small enough to implement
+None.
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/devstate/2026/09/2026-09-13-simpleredis-bounded-reply-allocation/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/devstate/2026/09/2026-09-13-simpleredis-bounded-reply-allocation/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/devstate/2026/09/2026-09-13-simpleredis-bounded-reply-allocation/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/devstate/2026/09/2026-09-13-simpleredis-bounded-reply-allocation/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/devstate/2026/09/2026-09-13-simpleredis-bounded-reply-allocation/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/devstate/2026/09/2026-09-13-simpleredis-bounded-reply-allocation/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-bounded-reply-allocation/devstate/2026/09/2026-09-13-simpleredis-bounded-reply-allocation/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -88,7 +92,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | df93dfa03f8255e53961dbae2697e1bcb8257484 | Card must match the branch you measured |
+| Reviewed head | b6931e2c19be8ad4bd294d08696fd6d9d75b4dd7 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -108,8 +112,9 @@ What I checked:
 - Fuzz seeds `FuzzReadReply` / `FuzzParseLen` passed
 - Alloc ceilings unchanged vs dest (`TestAllocDecodeBulk` 2/48, `TestAllocDecodeArray10` 11/272, `TestAllocDecodeBulk100KB` 2/106521)
 - Tagged reproduction passed after the fix
+- Seven-axis review: all none
 - OPEN PR 86, no comments
-- CI build 34771368092 queued on `df93dfa`
+- CI build 34771609776 succeeded (Lint, Unit, Unit race, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly, Go E2E Redis, Go E2E Dragonfly)
 
 ### Rank-up moves
 None.
