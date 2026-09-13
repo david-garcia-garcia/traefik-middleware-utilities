@@ -55,11 +55,11 @@ func (f *peerDropAllFake) serve(conn net.Conn) {
 		}
 		f.mu.Lock()
 		reply := statusOKReply
-		if args[0] == "GET" {
+		if args[0] == chaosCmdGet {
 			reply = bulk(f.store, args[1])
 		}
 		hold := f.hold
-		if hold != nil && args[0] == "GET" {
+		if hold != nil && args[0] == chaosCmdGet {
 			f.heldGets++
 			f.mu.Unlock()
 			<-hold
