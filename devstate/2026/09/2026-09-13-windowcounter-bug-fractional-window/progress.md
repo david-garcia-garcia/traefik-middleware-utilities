@@ -11,4 +11,4 @@ JobName: 2026-09-13-windowcounter-bug-fractional-window
 | codereview | [x] | [x] | 2026-09-13T07:13:23Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T07:14:51Z |
 | archive | [x] | [x] | 2026-09-13T07:16:43Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-13T07:40:04Z |

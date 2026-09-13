@@ -45,3 +45,10 @@ phase: archive
 findings: folded std_go_windowcounter_sliding-take; archived 2026-09-13-windowcounter-reject-fractional-window
 fixed: live spec Fractional window is rejected
 skipped: none
+
+## pullrequest — 2026-09-13T07:40:04Z
+
+phase: pullrequest
+findings: CI 34745667809 all 8 success; title ready
+fixed: goconst redisExpireCommand
+skipped: none
