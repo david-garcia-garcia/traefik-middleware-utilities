@@ -5,7 +5,7 @@ JobName: 2026-09-13-simpleredis-idle-socket-reaper
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T17:09:07Z |
-| explore | [x] | [ ] | |
+| explore | [x] | [x] | 2026-09-13T17:14:25Z |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
