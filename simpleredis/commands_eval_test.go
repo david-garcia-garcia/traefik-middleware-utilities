@@ -6,6 +6,9 @@ import (
 	"testing"
 )
 
+// TestEvalArgvAndIntegerReply is dest NOSCRIPT success: EVALSHA miss then EVAL of the body.
+// Those are two exec hops. Each hop binds its own overall deadline on purpose so EVAL still has a full command budget after EVALSHA.
+// Do not assert elapsed against one public-command budget; sharing remaining time can starve EVAL.
 func TestEvalArgvAndIntegerReply(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
 	redis := New(Config{Host: addr})
@@ -24,6 +27,20 @@ func TestEvalArgvAndIntegerReply(t *testing.T) {
 	evalSha, eval := fake.evalCommandCounts()
 	if evalSha != 1 || eval != 1 {
 		t.Fatalf("after first Eval EVALSHA=%d EVAL=%d, want 1, 1", evalSha, eval)
+	}
+}
+
+// TestEvalNoscriptFallbackIsOwnExec documents the intended per-hop budget: EVALSHA then EVAL both run, and Eval succeeds.
+// Do not add a first-hop delay then stall, and do not fail because elapsed exceeds one public-command budget.
+func TestEvalNoscriptFallbackIsOwnExec(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{})
+	redis := New(Config{Host: addr})
+	if _, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
+		t.Fatalf("Eval NOSCRIPT fallback: %v", err)
+	}
+	evalSha, eval := fake.evalCommandCounts()
+	if evalSha != 1 || eval != 1 {
+		t.Fatalf("EVALSHA=%d EVAL=%d, want 1, 1", evalSha, eval)
 	}
 }
 
