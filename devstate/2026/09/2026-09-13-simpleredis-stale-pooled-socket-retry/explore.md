@@ -74,7 +74,8 @@ After the cheap fix:
 
 - Q: When `MaxRetries` is `-1` (one send on dest), does a reused-socket I/O failure still get one hard-bounded force-dial?
   Rank: bounded asked — 1 production call site of the retry loop (`simpleredis/commands_exec.go` `exec`; searched `simpleredis/*.go` for `.borrow(`: exec plus 3 tests that stay on the wrapper); Desired on requirement.md: "that failure does not consume the retry budget, and the next attempt is forced onto a fresh dial"
-  Decision: assumed — yes. One extra send per command, only when the failed socket came from idle, only once. Spec today says `-1` means off (one send); the delta is that one unused-socket EOF is not a send against the peer. `bindCommandDeadline` stays `(maxRetries+1)*(DialTimeout+IOTimeout)`: a FIN/RST EOF is fast enough to leave Dial+IO for the force-dial. Half-open (no RST, full `IOTimeout` then fail) at `MaxRetries: -1` can still exhaust the budget; that is not this defect.
+	Decision: assumed — no. Remaining attempts of that command skip idle. MaxRetries still counts, so `-1` still fails that command. A free extra send would retry lost-reply Incr (write succeeded, then EOF), which on this platform is the same I/O as a dead unused socket. Default MaxRetries (1 extra) is enough for sequential recovery.
+  By: implement
   By: explore
 
 - Q: After a successful force-dial, do leftover idle corpses stay on the list?
