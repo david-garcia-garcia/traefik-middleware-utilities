@@ -53,7 +53,7 @@ func runLivePoolBackend(t *testing.T, addr string) {
 	t.Cleanup(client.Close)
 
 	t.Run("waiterIsUnreachable", func(t *testing.T) {
-		conn, err := client.borrow(context.Background())
+		conn, err, _ := client.borrow(context.Background())
 		if err != nil {
 			t.Fatalf("borrow: %v", err)
 		}
