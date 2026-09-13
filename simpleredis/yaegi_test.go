@@ -171,6 +171,55 @@ func TestYaegi_MSetEXLua(t *testing.T) {
 	}
 }
 
+// TestYaegi_StructuredLogging proves interpreted New with a slog logger emits simpleredis_open.
+func TestYaegi_StructuredLogging(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathFile(t, goPath, "logprobe", "probe.go", logprobeSrc)
+
+	interpreter := interp.New(interp.Options{GoPath: goPath})
+	if err := interpreter.Use(stdlib.Symbols); err != nil {
+		t.Fatalf("use stdlib: %v", err)
+	}
+	if _, err := interpreter.Eval(`import "logprobe"`); err != nil {
+		t.Fatalf("import logprobe: %v", err)
+	}
+	evaluated, err := interpreter.Eval(`logprobe.OpenEvent()`)
+	if err != nil {
+		t.Fatalf("eval OpenEvent: %v", err)
+	}
+	got := evaluated.Interface().(string)
+	if got != "ok" {
+		t.Fatalf("yaegi structured logging: %q, want ok", got)
+	}
+}
+
+const logprobeSrc = `package logprobe
+
+import (
+	"bytes"
+	"log/slog"
+	"strings"
+
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
+)
+
+// OpenEvent constructs a client with a capturing text logger and checks simpleredis_open.
+func OpenEvent() string {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	client := simpleredis.New(simpleredis.Config{Host: "127.0.0.1:1", Logger: logger})
+	_ = client
+	if !strings.Contains(buf.String(), simpleredis.MsgOpen) {
+		return "missing open: " + buf.String()
+	}
+	if strings.Contains(buf.String(), "Pass") {
+		return "pass leaked: " + buf.String()
+	}
+	return "ok"
+}
+`
+
 // evalClientprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalClientprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
