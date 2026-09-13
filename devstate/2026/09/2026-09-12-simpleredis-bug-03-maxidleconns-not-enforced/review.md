@@ -45,3 +45,9 @@ phase: pullrequest
 findings: none
 fixed: dropped WIP; title 🐛 fix(simpleredis): honour MaxIdleConns on unused sockets
 skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: merged origin/master c230315; three-value borrow in idle-cap proof; default Config assertion; CI 34768150616 green; out of Draft
+skipped: none
