@@ -39,3 +39,9 @@ phase: archive
 findings: none
 fixed: live tcp-session spec panic requirement; change moved to archive/2026-09-13-simpleredis-panic-safe-release
 skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: merged origin/master (#67 handshakeFailed) into IssueKey; CI 1243 success on b5d241c
+skipped: none
