@@ -10,6 +10,7 @@ import (
 // pooledConn is one TCP socket plus RESP reader/writer kept in idleConns.
 type pooledConn struct {
 	netConn  net.Conn
+	stall    *stallConn // same socket as netConn when dial wrapped; nil in tests that inject a raw conn
 	reader   *bufio.Reader
 	writer   *bufio.Writer
 	lastUsed time.Time
@@ -202,10 +203,13 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 		}
 		return nil, errUnreachable, false
 	}
+	// Wrap before bufio so ReadFull/Flush hit per-Read/Write stall deadlines.
+	wrapped := &stallConn{tcp: netConn, ctx: ctx, stall: sr.IOTimeout()}
 	conn = &pooledConn{
-		netConn: netConn,
-		reader:  bufio.NewReader(netConn),
-		writer:  bufio.NewWriter(netConn),
+		netConn: wrapped,
+		stall:   wrapped,
+		reader:  bufio.NewReader(wrapped),
+		writer:  bufio.NewWriter(wrapped),
 	}
 
 	// AUTH before SELECT so a passworded server accepts the session.

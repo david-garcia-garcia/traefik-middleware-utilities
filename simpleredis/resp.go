@@ -12,6 +12,53 @@ import (
 	"time"
 )
 
+// stallConn is the TCP conn bufio reads and writes. IOTimeout is applied per kernel
+// Read/Write so a steadily streaming peer is not killed for size. watchConnClose
+// still closes when the overall command context fires.
+//
+// Every net.Conn method is declared: Yaegi v0.16.1 does not treat promoted
+// methods from an embedded net.Conn as satisfying that interface, and import
+// then fails on `net.Conn = *stallConn`.
+type stallConn struct {
+	tcp   net.Conn
+	ctx   context.Context
+	stall time.Duration
+}
+
+func (c *stallConn) bind(ctx context.Context, stall time.Duration) {
+	c.ctx = ctx
+	c.stall = stall
+}
+
+func (c *stallConn) setStallDeadline(setDeadline func(time.Time) error) error {
+	bound := clampTimeout(c.ctx, c.stall)
+	if bound <= 0 {
+		return os.ErrDeadlineExceeded
+	}
+	return setDeadline(time.Now().Add(bound))
+}
+
+func (c *stallConn) Read(p []byte) (int, error) {
+	if err := c.setStallDeadline(c.tcp.SetReadDeadline); err != nil {
+		return 0, err
+	}
+	return c.tcp.Read(p)
+}
+
+func (c *stallConn) Write(p []byte) (int, error) {
+	if err := c.setStallDeadline(c.tcp.SetWriteDeadline); err != nil {
+		return 0, err
+	}
+	return c.tcp.Write(p)
+}
+
+func (c *stallConn) Close() error                       { return c.tcp.Close() }
+func (c *stallConn) LocalAddr() net.Addr                { return c.tcp.LocalAddr() }
+func (c *stallConn) RemoteAddr() net.Addr               { return c.tcp.RemoteAddr() }
+func (c *stallConn) SetDeadline(t time.Time) error      { return c.tcp.SetDeadline(t) }
+func (c *stallConn) SetReadDeadline(t time.Time) error  { return c.tcp.SetReadDeadline(t) }
+func (c *stallConn) SetWriteDeadline(t time.Time) error { return c.tcp.SetWriteDeadline(t) }
+
 // do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty,
 // leftover bytes remain after a complete value, or unread bytes were already in the reader before the write.
 // exec calls do from runOnConn, which defers release so a panic still returns the in-use turn and closes the socket.
@@ -26,10 +73,12 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		}
 		return nil, false, errTimeout
 	}
-	if err := conn.netConn.SetDeadline(time.Now().Add(ioBound)); err != nil {
+	if conn.stall != nil {
+		conn.stall.bind(ctx, sr.IOTimeout())
+	} else if err := conn.netConn.SetDeadline(time.Now().Add(ioBound)); err != nil {
 		return nil, false, errUnreachable
 	}
-	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before SetDeadline.
+	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before the stall deadline.
 	stopWatch := watchConnClose(ctx, conn.netConn)
 	defer stopWatch()
 	// Unread leftover from a prior command on this socket must not be parsed as this command's reply.

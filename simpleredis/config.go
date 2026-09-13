@@ -34,7 +34,7 @@ type Config struct {
 	IdleTimeout time.Duration
 	// DialTimeout is the TCP dial bound. 0 means 200ms.
 	DialTimeout time.Duration
-	// IOTimeout is the per-command SetDeadline. 0 means 100ms.
+	// IOTimeout is the stall bound: quiet time between socket reads/writes. 0 means 100ms.
 	IOTimeout time.Duration
 
 	// MaxRetries is extra retries after the first attempt. 0 at New means 1; -1 means none (one send).
