@@ -50,7 +50,7 @@ skipped: none
 
 ## sync (2026-09-13)
 phase: pullrequest
-findings: origin/master 4 commits; conflict std_go_tokenbucket_allow (ttl New scenarios vs persist-last); CI 34744464465 Integration Tests Dragonfly failed in 2s (sibling Redis 21s, prior green 22s)
+findings: origin/master 4 commits; conflict std_go_tokenbucket_allow (ttl New scenarios vs persist-last); CI 34744464465 Integration Tests Dragonfly failed in 2s (sibling Redis 21s, prior green 22s); rerun 34744800891 all 8 succeeded
 fixed: merge 2b35c26; both ttl scenarios and persist-last kept
 skipped: none
 
