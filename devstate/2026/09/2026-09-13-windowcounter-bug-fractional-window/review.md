@@ -31,3 +31,10 @@ phase: codereview
 findings: Standards 2 judgement skipped; other axes none
 fixed: none
 skipped: repro subtest B leftover; slidingAt method comment
+
+## devdocsimpact — 2026-09-13T07:14:51Z
+
+phase: devdocsimpact
+findings: none (usage packet already names reject-not-truncate)
+fixed: none
+skipped: none
