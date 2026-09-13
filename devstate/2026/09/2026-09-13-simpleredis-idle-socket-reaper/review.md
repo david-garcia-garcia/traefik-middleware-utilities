@@ -11,3 +11,9 @@ phase: explore
 findings: hunt reproduced (idle 4, server open 4); dest spec already encodes quiet-client keep; dest callers never Close
 fixed: none
 skipped: directions 1 and 2; spec/usage rewrite; product code. Direction 3 chosen. Stop after propose.
+
+## propose (2026-09-13)
+phase: propose
+findings: skip_specs change simpleredis-idle-keep-until-close; validate passed
+fixed: none
+skipped: implement and later phases (simplicity-gate success)
