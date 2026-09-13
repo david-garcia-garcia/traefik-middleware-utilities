@@ -59,7 +59,7 @@ type Hooks struct {
 // looks again.
 //
 // The last-holder drop sleeps the value and writes reclaim_orphan, then either expires at zero
-// grace or starts waitGraceOrWake. Close and reclaim_dispose stay after orphan, in that order.
+// grace or arms a grace AfterFunc. Close and reclaim_dispose stay after orphan, in that order.
 // A Sleep panic aborts instead: Close and unmap (order follows stored EnforceCloseBeforeOpen), no orphan. Those lines cannot be reordered,
 // because one goroutine writes them in that order.
 type Table struct {
@@ -97,8 +97,8 @@ type slot struct {
 	holders   int
 	// ready is closed when the in-flight transition ends. Waiters re-read state afterwards.
 	ready chan struct{}
-	// woken is closed by the Open that reclaims a sleeping value, to end its grace wait.
-	woken chan struct{}
+	// graceTimer expires a sleeping incarnation. An Open that reclaims stops it.
+	graceTimer *time.Timer
 	// finished is closed on every path that ends this incarnation, so a nil-Done watcher
 	// can stop polling without drop. Paths: endBusySlot (create fail; Sleep/Wake panic
 	// when EnforceCloseBeforeOpen is unset), unmapAfterClose on the real incarnation
@@ -365,10 +365,10 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 	incarnation.logger = logger
 	incarnation.state = slotBusy
 	incarnation.ready = make(chan struct{})
-	if incarnation.woken != nil {
-		// End the grace wait: this incarnation is not being disposed after all.
-		close(incarnation.woken)
-		incarnation.woken = nil
+	if incarnation.graceTimer != nil {
+		// Cancel expiry: this incarnation is not being disposed after all.
+		incarnation.graceTimer.Stop()
+		incarnation.graceTimer = nil
 	}
 	incarnation.holders++
 	value := incarnation.value
@@ -426,7 +426,7 @@ func (t *Table) watch(ctx context.Context, key string, incarnation *slot, finish
 }
 
 // drop removes one holder. When it was the last one, this goroutine sleeps the value and writes
-// reclaim_orphan. Zero grace expires on this stack. Positive grace continues in waitGraceOrWake.
+// reclaim_orphan. Zero grace expires on this stack. Positive grace arms a grace AfterFunc.
 // Orphan still precedes dispose. A Sleep panic aborts: Close, unmap (order follows stored
 // EnforceCloseBeforeOpen), no orphan. When the stored
 // EnforceCloseBeforeOpen is set, Close runs while the key is still mapped slotBusy. A watcher
@@ -448,8 +448,6 @@ func (t *Table) drop(key string, incarnation *slot) {
 
 	incarnation.state = slotBusy
 	incarnation.ready = make(chan struct{})
-	incarnation.woken = make(chan struct{})
-	woken := incarnation.woken
 	logger := incarnation.logger
 	storedHooks := incarnation.hooks
 	grace := t.grace
@@ -483,26 +481,20 @@ func (t *Table) drop(key string, incarnation *slot) {
 		delete(t.items, key)
 		mapped = false
 	}
+	if mapped {
+		// Why AfterFunc, not go + select on timer.C and woken: this package is interpreted under
+		// Yaegi (Traefik plugins and TestYaegi_*). Yaegi v0.16.1's interp._select can miss a timer
+		// wake when interpreted code selects on a channel from a goroutine started as go method(...).
+		// Concurrent expire on Go 1.21.13 left expire uncalled and a goroutine in interp._select.func4
+		// (run.go:3815) created by go callf(in) (run.go:1322). time.AfterFunc is the real stdlib
+		// timer. The wait is not on the drop caller: a canceled bind must not stall Open for grace.
+		incarnation.graceTimer = time.AfterFunc(grace, func() { t.expire(key, incarnation) })
+	}
 	t.mu.Unlock()
 
 	// Not mapped means zero grace, or Reset dropped this slot: either way it is ours to close.
 	if !mapped {
 		t.expire(key, incarnation)
-		return
-	}
-
-	go t.waitGraceOrWake(key, incarnation, woken, grace)
-}
-
-// waitGraceOrWake closes the incarnation when grace elapses, unless a reclaim woke it. The timer
-// wait is not on the drop caller: a canceled bind must not stall Open for the grace duration.
-func (t *Table) waitGraceOrWake(key string, incarnation *slot, woken chan struct{}, grace time.Duration) {
-	wait := time.NewTimer(grace)
-	defer wait.Stop()
-	select {
-	case <-wait.C:
-		t.expire(key, incarnation)
-	case <-woken:
 	}
 }
 
@@ -546,9 +538,9 @@ func (t *Table) Reset() {
 	items := t.items
 	t.items = map[string]*slot{}
 	for _, incarnation := range items {
-		if incarnation.woken != nil {
-			close(incarnation.woken)
-			incarnation.woken = nil
+		if incarnation.graceTimer != nil {
+			incarnation.graceTimer.Stop()
+			incarnation.graceTimer = nil
 		}
 	}
 	t.mu.Unlock()

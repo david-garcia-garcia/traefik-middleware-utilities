@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
@@ -41,6 +42,51 @@ func TestYaegi_OpenHooksRunSleepWakeClose(t *testing.T) {
 	}
 	if sleeps < 1 || wakes < 1 || closes < 1 {
 		t.Fatalf("hook counts %q, want each at least 1", got)
+	}
+}
+
+// TestYaegi_GraceExpireDoesNotHang is the DestBranch hang: interpreted concurrent last-holder
+// drop with positive grace. Before AfterFunc, Go 1.21.13 missed Close and parked waitGraceOrWake
+// in interp._select. Fail in 3s, not the 5-minute package timeout.
+func TestYaegi_GraceExpireDoesNotHang(t *testing.T) {
+	if raceDetectorOn {
+		t.Skip("Yaegi v0.16.1 select races inside the interp on context cancel; Unit without -race still runs this")
+	}
+	goPath := t.TempDir()
+	writeGopathReclaim(t, goPath)
+	writeGopathFile(t, goPath, "graceprobe", "expire.go", graceExpireHangSrc)
+
+	done := make(chan string, 1)
+	go func() {
+		interpreter := interp.New(interp.Options{GoPath: goPath})
+		if err := interpreter.Use(stdlib.Symbols); err != nil {
+			done <- "use:" + err.Error()
+			return
+		}
+		if _, err := interpreter.Eval(`import "graceprobe"`); err != nil {
+			done <- "import:" + err.Error()
+			return
+		}
+		evaluated, err := interpreter.Eval(`graceprobe.ConcurrentExpire()`)
+		if err != nil {
+			done <- "eval:" + err.Error()
+			return
+		}
+		got, ok := evaluated.Interface().(string)
+		if !ok {
+			done <- "type"
+			return
+		}
+		done <- got
+	}()
+
+	select {
+	case got := <-done:
+		if got != "ok" {
+			t.Fatalf("yaegi grace expire: %q, want ok", got)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("interpreted concurrent grace expire hung")
 	}
 }
 
@@ -185,5 +231,60 @@ func waitCount(hookCount *atomic.Int32) {
 	for hookCount.Load() == 0 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
+}
+`
+
+const graceExpireHangSrc = `package graceprobe
+
+import (
+	"context"
+	"fmt"
+	"io"
+	"log/slog"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/reclaim"
+)
+
+// ConcurrentExpire drops many keys at once so a missed grace timer cannot hide in a serial loop.
+func ConcurrentExpire() string {
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	tab := reclaim.New(reclaim.Config{Grace: time.Millisecond})
+	for round := 0; round < 8; round++ {
+		var wg sync.WaitGroup
+		var misses atomic.Int32
+		for i := 0; i < 16; i++ {
+			wg.Add(1)
+			go func(n int) {
+				defer wg.Done()
+				var closes atomic.Int32
+				ctx, cancel := context.WithCancel(context.Background())
+				_, err := tab.Open(ctx, fmt.Sprintf("c%d-%d", round, n), logger, func() (any, error) {
+					return n, nil
+				}, reclaim.Hooks{
+					Close: func() { closes.Add(1) },
+				})
+				if err != nil {
+					misses.Add(1)
+					return
+				}
+				cancel()
+				deadline := time.Now().Add(2 * time.Second)
+				for closes.Load() == 0 && time.Now().Before(deadline) {
+					time.Sleep(time.Millisecond)
+				}
+				if closes.Load() == 0 {
+					misses.Add(1)
+				}
+			}(i)
+		}
+		wg.Wait()
+		if misses.Load() > 0 {
+			return fmt.Sprintf("concurrent-miss:round=%d misses=%d", round, misses.Load())
+		}
+	}
+	return "ok"
 }
 `
