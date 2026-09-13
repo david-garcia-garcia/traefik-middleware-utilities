@@ -86,7 +86,7 @@ type SimpleRedis struct {
 }
 
 // New copies cfg onto a client and builds the in-use-turn channel. Does not dial. Call before concurrent use.
-// After defaults, MaxIdleConns above PoolSize returns ErrMaxIdleConnsAbovePoolSize and a nil client.
+// An explicit MaxIdleConns above PoolSize returns ErrMaxIdleConnsAbovePoolSize and a nil client; a defaulted one follows PoolSize.
 func New(cfg Config) (*SimpleRedis, error) {
 	cfg, err := cfg.applyDefaults()
 	if err != nil {
@@ -134,7 +134,7 @@ func (sr *SimpleRedis) PoolSize() int {
 	return sr.liveCap()
 }
 
-// MaxIdleConns is the idle-list trim New froze. New does not create a client when that trim would sit above PoolSize.
+// MaxIdleConns is the idle-list trim New froze, never above PoolSize. New does not create a client when an explicit trim sits above PoolSize.
 func (sr *SimpleRedis) MaxIdleConns() int {
 	return sr.maxIdleConns
 }
