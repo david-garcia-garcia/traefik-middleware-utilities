@@ -35,3 +35,9 @@ phase: devdocsimpact
 findings: none — Window counter packet already occupancy
 fixed: none
 skipped: produce (already applied)
+
+## archive (2026-09-13)
+phase: archive
+findings: fold std_go_windowcounter_sliding-take; map/names OK
+fixed: live spec occupancy; archive 2026-09-13-windowcounter-peek-occupancy
+skipped: none

@@ -10,5 +10,5 @@ JobName: 2026-09-13-windowcounter-bug-peek-occupancy
 | implement | [x] | [x] | 2026-09-13T07:15:16Z |
 | codereview | [x] | [x] | 2026-09-13T07:19:55Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T07:21:20Z |
-| archive | [x] | [ ] | |
+| archive | [x] | [x] | 2026-09-13T07:23:10Z |
 | pullrequest | [ ] | [ ] | |
