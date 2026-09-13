@@ -12,6 +12,7 @@ import (
 var nopCancel context.CancelFunc = func() {}
 
 // exec borrows a connection, runs one RESP command, and retries retryable failures up to MaxRetries.
+// After I/O on a socket taken from idle, later attempts of this command skip idle so they do not pop another corpse.
 // The library overall deadline is bound onto ctx (stdlib Dialer/Client shape). Caller cancel stays ctx.Err(); library expiry is redis:timeout. INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
 func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, error) {
 	if ctx == nil {
@@ -25,6 +26,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 	defer cancel()
 
 	var last error
+	skipIdle := false
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if err := contextStop(ctx); err != nil {
 			return nil, libraryTimeout(err, libraryOwnsDeadline)
@@ -34,7 +36,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 				return nil, libraryTimeout(err, libraryOwnsDeadline)
 			}
 		}
-		conn, err, handshakeFailed := sr.borrow(ctx)
+		conn, err, handshakeFailed, fromIdle := sr.borrowSocket(ctx, skipIdle)
 		if err != nil {
 			if sr.isClosed() || !shouldRetry(err, handshakeFailed) {
 				return nil, libraryTimeout(err, libraryOwnsDeadline)
@@ -45,6 +47,9 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		values, err := sr.runOnConn(ctx, conn, args)
 		if err == nil {
 			return values, nil
+		}
+		if fromIdle && isUnreachable(err) {
+			skipIdle = true
 		}
 		if !shouldRetry(err, false) {
 			return values, libraryTimeout(err, libraryOwnsDeadline)

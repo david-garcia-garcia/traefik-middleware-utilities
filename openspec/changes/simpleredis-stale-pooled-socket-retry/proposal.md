@@ -4,7 +4,7 @@ After a Redis restart, failover, or `CLIENT KILL` of every idle socket, sequenti
 
 ## What Changes
 
-- After an I/O failure on a socket taken from idle, the command force-dials instead of popping the next idle corpse. That unused-socket I/O is not a send against the peer: it does not consume `MaxRetries`, at most once per command, including when `MaxRetries` is `-1`.
+- After an I/O failure on a socket taken from idle, later attempts of that command skip idle and dial instead of popping the next corpse. `MaxRetries` still counts. No free extra send: a dead unused socket can fail after write succeeds, which is the same shape as a lost reply.
 - `borrow`'s three-value signature stays. `takeIdleConn` is not rewritten (BUG-6 owns that path). Leftover idle corpses stay parked; later sequential commands each spend one then force-dial.
 - Permanent untagged default-suite test: real TCP, in-process RESP fake, warm idle with simultaneous in-flight commands, drop every accepted socket, sequential Gets succeed. New fake/helper types use a bug-specific prefix.
 - No config knob. No pool-generation / epoch. No idle-list wipe from the command path.

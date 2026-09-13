@@ -70,15 +70,24 @@ func (sr *SimpleRedis) freeInUseTurn() {
 //
 //nolint:revive // error stays before handshakeFailed; reordering would collide with in-flight SimpleRedis PRs.
 func (sr *SimpleRedis) borrow(ctx context.Context) (conn *pooledConn, err error, handshakeFailed bool) {
+	conn, err, handshakeFailed, _ = sr.borrowSocket(ctx, false)
+	return
+}
+
+// borrowSocket is borrow, plus whether conn came from idle. skipIdle skips the unused list:
+// this command already saw a dead unused socket, so idle is not evidence the peer is up.
+//
+//nolint:revive // error stays before handshakeFailed to match borrow.
+func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *pooledConn, err error, handshakeFailed bool, fromIdle bool) {
 	// closed is atomic; inUseTurns is written once in New before concurrent use.
 	if sr.closed.Load() {
-		return nil, errUnreachable, false
+		return nil, errUnreachable, false, false
 	}
 	if sr.inUseTurns == nil {
-		return nil, errNotFromNew, false
+		return nil, errNotFromNew, false, false
 	}
 	if err := contextStop(ctx); err != nil {
-		return nil, err, false
+		return nil, err, false, false
 	}
 
 	// Uncontended borrow must not allocate a timer; the wait exists only for a waiter past poolSize.
@@ -96,12 +105,12 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (conn *pooledConn, err error,
 			if !timer.Stop() {
 				<-timer.C
 			}
-			return nil, ctx.Err(), false
+			return nil, ctx.Err(), false, false
 		case <-timer.C:
 			if err := contextStop(ctx); err != nil {
-				return nil, err, false
+				return nil, err, false, false
 			}
-			return nil, errPoolWait, false
+			return nil, errPoolWait, false, false
 		}
 	}
 
@@ -114,25 +123,30 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (conn *pooledConn, err error,
 		}
 	}()
 
-	// Prefer a young unused socket over a new dial.
-	reused, stale, closed := sr.takeIdleConn()
-	if closed {
-		return nil, errUnreachable, false
+	if !skipIdle {
+		// Prefer a young unused socket over a new dial.
+		reused, stale, closed := sr.takeIdleConn()
+		if closed {
+			return nil, errUnreachable, false, false
+		}
+		for _, idle := range stale {
+			idle.close()
+		}
+		if reused != nil {
+			handedOff = true
+			return reused, nil, false, true
+		}
+	} else if sr.closed.Load() {
+		// Close raced after the turn was taken; do not dial a client that is shutting down.
+		return nil, errUnreachable, false, false
 	}
-	for _, conn := range stale {
-		conn.close()
-	}
-	if reused != nil {
-		handedOff = true
-		return reused, nil, false
-	}
-	// Idle miss: dial while still holding the turn.
+	// Idle miss, or skipIdle: dial while still holding the turn.
 	conn, err, handshakeFailed = sr.dial(ctx)
 	if err != nil {
-		return nil, err, handshakeFailed
+		return nil, err, handshakeFailed, false
 	}
 	handedOff = true
-	return conn, nil, false
+	return conn, nil, false, false
 }
 
 // takeIdleConn sweeps unused sockets older than idleTimeout, then pops the newest survivor. Stale sockets are returned for close after the lock. closed is true when Close ran.
