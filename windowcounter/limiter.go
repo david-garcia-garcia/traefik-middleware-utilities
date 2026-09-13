@@ -138,7 +138,8 @@ func (l *Limiter) Take(ctx context.Context, key string, limit int64, window time
 	return l.takeBuffered(ctx, sliding.currentKey, sliding.previousKey, sliding.expireAt, sliding.weight, limit)
 }
 
-// Peek returns whether a hit would be allowed and the sliding estimate without incrementing.
+// Peek reports whether already-used occupancy is at or under limit, and the sliding estimate, without recording a hit.
+// allowed is occupancy, not whether the next Take would admit.
 func (l *Limiter) Peek(ctx context.Context, key string, limit int64, window time.Duration) (bool, float64, error) {
 	if err := ctx.Err(); err != nil {
 		return false, 0, err
