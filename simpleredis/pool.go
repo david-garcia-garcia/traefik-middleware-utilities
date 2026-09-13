@@ -83,7 +83,7 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error) {
 		return nil, errUnreachable
 	}
 	if sr.inUseTurns == nil {
-		return nil, errUnreachable
+		return nil, errNotFromNew
 	}
 	if err := contextStop(ctx); err != nil {
 		return nil, err
