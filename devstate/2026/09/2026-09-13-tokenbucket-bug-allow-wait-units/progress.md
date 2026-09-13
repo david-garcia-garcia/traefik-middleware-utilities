@@ -4,7 +4,7 @@ JobName: 2026-09-13-tokenbucket-bug-allow-wait-units
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [ ] | [ ] | |
+| prepare | [x] | [x] | 2026-09-13T06:10:05Z |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
