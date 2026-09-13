@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: Close abandoned SimpleRedis sockets after panic between borrow and release
+url: none
+number: none

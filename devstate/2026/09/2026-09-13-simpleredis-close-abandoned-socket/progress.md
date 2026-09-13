@@ -1,0 +1,14 @@
+# Progress
+IssueKey: 2026-09-13-simpleredis-close-abandoned-socket
+JobName: 2026-09-13-simpleredis-close-abandoned-socket
+
+| Phase | Work | Card | At |
+|-------|------|------|----|
+| prepare | [x] | [x] | 2026-09-13T14:09:39Z |
+| explore | [ ] | [ ] | |
+| propose | [ ] | [ ] | |
+| implement | [ ] | [ ] | |
+| codereview | [ ] | [ ] | |
+| devdocsimpact | [ ] | [ ] | |
+| archive | [ ] | [ ] | |
+| pullrequest | [ ] | [ ] | |

@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-simpleredis-close-abandoned-socket
+jobName: 2026-09-13-simpleredis-close-abandoned-socket
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: 2026-09-13-simpleredis-lost-turn-recovery
+qualify: qualified
+src: 8c9a2b17a3d88e7016b1ceeb183fca6dfbec9e8f7f1a046636fc2027c471db9d
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 70
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/70
