@@ -10,3 +10,9 @@ findings: none
 fixed: none
 skipped: no panic-inside-parkIdleConn test (would need a production hook)
 
+## propose (2026-09-13)
+phase: propose
+findings: none
+fixed: none
+skipped: none
+
