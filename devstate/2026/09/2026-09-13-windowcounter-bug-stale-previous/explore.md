@@ -48,8 +48,8 @@ Identity: callers own the opaque key. The library never reads HTTP, client addre
 
 - Q: Does Take-only previous GET live in `bufferedCountLocked` or a Take-only sibling so Peek stays skip-storm?
   Rank: additive asked — Desired 2 GET on buffered Take; Desired 4 do not GET previous on every Peek
-  Decision: assumed — Take-only sibling (or Take path that GETs like `windowLocked` without writing current `expireAt`). Leave `bufferedCountLocked` for Peek.
-  By: explore
+  Decision: assumed — Take-only sibling (`takeBufferedPreviousLocked`). GET when previous `expireAt > 0` and `localDelta == 0`. Leave `bufferedCountLocked` for Peek.
+  By: implement
 
 - Q: Does a failed GET of previous on buffered Take propagate like `windowLocked`, or is it treated as Redis-down / pending-delta outage?
   Rank: additive asked — Desired 5 do not fold into Redis-down; current GET already returns
