@@ -110,7 +110,7 @@ func assertLiveTTLPositive(t *testing.T, client *SimpleRedis, key string) {
 // waitLiveSimpleRedis builds a one-slot client and waits until Set against addr succeeds.
 func waitLiveSimpleRedis(t *testing.T, addr string) *SimpleRedis {
 	t.Helper()
-	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: 80 * time.Millisecond})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: 80 * time.Millisecond})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		if err := client.Set(context.Background(), "simpleredis-live-probe", []byte("1"), 60); err == nil {

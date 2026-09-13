@@ -12,7 +12,7 @@ func TestWriteCommandDoesNotInjectCommands(t *testing.T) {
 	key := "range" + injected
 	value := "payload" + injected
 	fake, addr := startFakeRedis(t, map[string]string{})
-	client := New(Config{Host: addr, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, MaxRetries: -1})
 
 	if err := client.Set(context.Background(), key, []byte(value), 60); err != nil {
 		t.Fatalf("Set: %v", err)

@@ -40,7 +40,7 @@ func TestTimeoutOnReusedConnIsNotRetried(t *testing.T) {
 		}
 	}()
 
-	redis := New(Config{Host: listener.Addr().String()})
+	redis := newTestRedis(t, Config{Host: listener.Addr().String()})
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("first Get: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestTimeoutOnReusedConnIsNotRetried(t *testing.T) {
 
 func TestLostReplyIncrIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestLostReplyIncrIsRetried(t *testing.T) {
 
 func TestLostReplyIncrByIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
@@ -119,7 +119,7 @@ func TestLostReplyIncrByIsRetried(t *testing.T) {
 
 func TestLostReplyEvalIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestLostReplyEvalIsRetried(t *testing.T) {
 
 func TestLostReplyIncrMaxRetriesOff(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr, MaxRetries: -1})
+	redis := newTestRedis(t, Config{Host: addr, MaxRetries: -1})
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
@@ -179,7 +179,7 @@ func TestLostReplyIncrMaxRetriesOff(t *testing.T) {
 
 func TestLostReplyGetIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestLostReplyGetIsRetried(t *testing.T) {
 
 func TestLoadingReplyIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	fake.armErrorReplyOnceForTest("-LOADING Redis is loading the dataset in memory\r\n")
 	got, err := redis.Get(context.Background(), "hit")
@@ -213,7 +213,7 @@ func TestLoadingReplyIsRetried(t *testing.T) {
 
 func TestTryAgainReplyIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	fake.armErrorReplyOnceForTest("-TRYAGAIN Try again later\r\n")
 	got, err := redis.Incr(context.Background(), "counter")
@@ -241,7 +241,7 @@ func TestRetryableRedisRepliesAreRetried(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-			redis := New(Config{Host: addr})
+			redis := newTestRedis(t, Config{Host: addr})
 			fake.armErrorReplyOnceForTest(tc.reply)
 			got, err := redis.Get(context.Background(), "hit")
 			if err != nil {
