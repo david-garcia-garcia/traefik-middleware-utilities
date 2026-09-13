@@ -175,7 +175,7 @@ func TestChaosPoolInvariants(t *testing.T) {
 	}
 
 	fake, addr := startChaosFake(t)
-	client := New(Config{Host: addr, PoolSize: chaosPoolSize, MaxRetries: 1, IOTimeout: 50 * time.Millisecond, PoolTimeout: 50 * time.Millisecond})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: chaosPoolSize, MaxIdleConns: chaosPoolSize, MaxRetries: 1, IOTimeout: 50 * time.Millisecond, PoolTimeout: 50 * time.Millisecond})
 	t.Cleanup(client.Close)
 
 	var crossTalk atomic.Int64

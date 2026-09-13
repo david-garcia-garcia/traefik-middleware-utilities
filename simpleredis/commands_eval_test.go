@@ -11,7 +11,7 @@ import (
 // Do not assert elapsed against one public-command budget; sharing remaining time can starve EVAL.
 func TestEvalArgvAndIntegerReply(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	values, err := redis.Eval(context.Background(), kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win"}, []string{"7", "1700000000"})
 	if err != nil {
@@ -34,7 +34,7 @@ func TestEvalArgvAndIntegerReply(t *testing.T) {
 // Do not add a first-hop delay then stall, and do not fail because elapsed exceeds one public-command budget.
 func TestEvalNoscriptFallbackIsOwnExec(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 	if _, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
 		t.Fatalf("Eval NOSCRIPT fallback: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestEvalNoscriptFallbackIsOwnExec(t *testing.T) {
 
 func TestEvalLaterSendsEvalShaNotBody(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	if _, err := redis.Eval(context.Background(), kongIncrbyExpireatScript, ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"win"}, []string{"7", "1700000000"}); err != nil {
 		t.Fatalf("first Eval: %v", err)
@@ -76,7 +76,7 @@ func TestEvalLaterSendsEvalShaNotBody(t *testing.T) {
 
 func TestEvalTwoScriptsTwoDigests(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	if _, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
 		t.Fatalf("script A first: %v", err)
@@ -105,7 +105,7 @@ func TestEvalTwoScriptsTwoDigests(t *testing.T) {
 
 func TestEvalEmptyKeysSendsNumkeysZero(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	if _, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
 		t.Fatalf("first Eval: %v", err)
@@ -125,7 +125,7 @@ func TestEvalEmptyKeysSendsNumkeysZero(t *testing.T) {
 
 func TestEvalEmptyKeys(t *testing.T) {
 	addr := startStaticRedis(t, ":1\r\n")
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 	values, err := redis.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil)
 	if err != nil {
 		t.Fatalf("Eval empty: %v", err)
@@ -149,7 +149,7 @@ func TestScriptSHA1HexIsLowercase40(t *testing.T) {
 
 func TestEvalUsesCallerDigest(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 	script := "return 1"
 	digest := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	if digest == ScriptSHA1Hex(script) {
@@ -170,7 +170,7 @@ func TestEvalUsesCallerDigest(t *testing.T) {
 
 func TestEvalNullBulkIsNotMiss(t *testing.T) {
 	addr := startStaticRedis(t, "$-1\r\n")
-	client := New(Config{Host: addr, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, MaxRetries: -1})
 	script := "return false"
 	values, err := client.Eval(context.Background(), script, ScriptSHA1Hex(script), nil, nil)
 	if errors.Is(err, ErrMiss) {
