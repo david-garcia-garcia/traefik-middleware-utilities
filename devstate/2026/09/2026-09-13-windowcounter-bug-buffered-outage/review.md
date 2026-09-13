@@ -35,3 +35,9 @@ phase: devdocsimpact
 findings: none — std_go_windowcounter already documents per-node nil-error cap
 fixed: none
 skipped: produce (usage already true)
+
+## archive (2026-09-13)
+phase: archive
+findings: folded sliding-take and sync-flush; validate ok
+fixed: archive/2026-09-13-windowcounter-buffered-outage-local-cap
+skipped: none
