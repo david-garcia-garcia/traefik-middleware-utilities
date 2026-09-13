@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-reclaim-owned-table
+jobName: 2026-09-13-reclaim-owned-table
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 5e9b00a421dd6b49bff6151dce94ffcea5ff81e856379f6f9d8ec84beb43ea4b
+localTests: none
+requirement: requirement.md
+comments: none
+pr:
+  id: 65
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/65
