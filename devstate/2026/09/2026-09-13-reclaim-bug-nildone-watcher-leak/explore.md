@@ -66,8 +66,8 @@ Two ticket shapes. This run takes **shape 1** (per-incarnation `finished` channe
 
 - Q: How is `finished` closed exactly once when Reset races a busy owner?
   Rank: bounded asked — 4 `slotGone` writers enumerated; double `close` panics; Desired #3 names every ending path
-  Decision: assumed — `closeFinished` under `t.mu` (close then nil). `Reset` signals only awake/asleep. Busy/gone stay with the owner (`endBusySlot` / `unmapAfterClose` / `expire`).
-  By: explore
+  Decision: assumed — `closeFinished` under `t.mu` (close then nil). `Reset` signals only awake/asleep. Busy/gone stay with the owner (`endBusySlot` / `unmapAfterClose` / `expire`). `dropWhenDone` captures `finished` before `go watch` so a later nil does not hide the close.
+  By: implement
 
 - Q: The verbatim reproducer calls `NewTable`, which dest removed. How does it compile?
   Rank: additive asked — Desired #1 names land the existing file verbatim; spec `std_go_reclaim_context-lease` forbids production `NewTable`
