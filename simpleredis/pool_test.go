@@ -641,32 +641,32 @@ func assertTurnsFullAndNoOverFrees(t *testing.T, sr *SimpleRedis) {
 func TestBugLostInUseTurnBricksPoolPermanently(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	const poolSize = 2
-	sr := New(Config{
+	redis := New(Config{
 		Host:        addr,
 		PoolSize:    poolSize,
 		PoolTimeout: 20 * time.Millisecond,
 		MaxRetries:  -1,
 	})
-	if _, err := sr.Get(context.Background(), "hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
-	if got := sr.LostTurns(); got != 0 {
+	if got := redis.LostTurns(); got != 0 {
 		t.Fatalf("LostTurns after warm Get = %d, want 0", got)
 	}
 
 	for i := 0; i < poolSize; i++ {
-		borrowErr := bugPanicAfterBorrow(sr)
+		borrowErr := bugPanicAfterBorrow(redis)
 		if borrowErr != nil {
 			t.Fatalf("borrow %d: %v", i, borrowErr)
 		}
 	}
 
-	_, err := sr.Get(context.Background(), "hit")
+	_, err := redis.Get(context.Background(), "hit")
 	if err != nil {
 		t.Fatalf("Get after %d lost in-use turns = %v, want success: turns=%d/%d, idle=%d, accepts=%d, LostTurns=%d",
-			poolSize, err, len(sr.inUseTurns), cap(sr.inUseTurns), pooledIdle(sr), fake.connections(), sr.LostTurns())
+			poolSize, err, len(redis.inUseTurns), cap(redis.inUseTurns), pooledIdle(redis), fake.connections(), redis.LostTurns())
 	}
-	if got := sr.LostTurns(); got < int64(poolSize) {
+	if got := redis.LostTurns(); got < int64(poolSize) {
 		t.Fatalf("LostTurns = %d, want at least %d", got, poolSize)
 	}
 }
@@ -677,7 +677,7 @@ func TestRecoveryDoesNotFireWhileSocketsBusy(t *testing.T) {
 	fake.mu.Lock()
 	fake.getDelay = 300 * time.Millisecond
 	fake.mu.Unlock()
-	sr := New(Config{Host: addr, PoolSize: 2, PoolTimeout: 50 * time.Millisecond, IOTimeout: time.Second, MaxRetries: -1})
+	redis := New(Config{Host: addr, PoolSize: 2, PoolTimeout: 50 * time.Millisecond, IOTimeout: time.Second, MaxRetries: -1})
 
 	started := make(chan struct{}, 2)
 	var wg sync.WaitGroup
@@ -686,7 +686,7 @@ func TestRecoveryDoesNotFireWhileSocketsBusy(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			started <- struct{}{}
-			if _, err := sr.Get(context.Background(), "hit"); err != nil {
+			if _, err := redis.Get(context.Background(), "hit"); err != nil {
 				t.Errorf("holder Get: %v", err)
 			}
 		}()
@@ -700,7 +700,7 @@ func TestRecoveryDoesNotFireWhileSocketsBusy(t *testing.T) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	_, err := sr.Get(context.Background(), "hit")
+	_, err := redis.Get(context.Background(), "hit")
 	if err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("waiter Get = %v, want %s", err, RedisUnreachable)
 	}
@@ -710,7 +710,7 @@ func TestRecoveryDoesNotFireWhileSocketsBusy(t *testing.T) {
 	if got := fake.connections(); got > 2 {
 		t.Fatalf("busy pool opened %d connections, want at most 2", got)
 	}
-	if got := sr.LostTurns(); got != 0 {
+	if got := redis.LostTurns(); got != 0 {
 		t.Fatalf("LostTurns = %d, want 0 while sockets are busy", got)
 	}
 	wg.Wait()
@@ -719,17 +719,17 @@ func TestRecoveryDoesNotFireWhileSocketsBusy(t *testing.T) {
 // TestLostTurnsReportsLeak is the diagnosable counter next to OverFrees.
 func TestLostTurnsReportsLeak(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	sr := New(Config{Host: addr, PoolSize: 1, PoolTimeout: 20 * time.Millisecond, MaxRetries: -1})
-	if _, err := sr.Get(context.Background(), "hit"); err != nil {
+	redis := New(Config{Host: addr, PoolSize: 1, PoolTimeout: 20 * time.Millisecond, MaxRetries: -1})
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
-	if err := bugPanicAfterBorrow(sr); err != nil {
+	if err := bugPanicAfterBorrow(redis); err != nil {
 		t.Fatalf("borrow: %v", err)
 	}
-	if _, err := sr.Get(context.Background(), "hit"); err != nil {
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("Get after leak: %v", err)
 	}
-	if got := sr.LostTurns(); got < 1 {
+	if got := redis.LostTurns(); got < 1 {
 		t.Fatalf("LostTurns = %d, want at least 1", got)
 	}
 }
@@ -743,4 +743,54 @@ func bugPanicAfterBorrow(sr *SimpleRedis) (borrowErr error) {
 	}
 	_ = conn
 	panic("simulated panic inside do")
+}
+
+// TestDoWithHeldSocketPanicRestoresHeldCount proves Traefik unwind of do does not leave the client looking busy.
+func TestDoWithHeldSocketPanicRestoresHeldCount(t *testing.T) {
+	redis := New(Config{Host: "127.0.0.1:1", PoolSize: 1, PoolTimeout: 20 * time.Millisecond, MaxRetries: -1})
+	func() {
+		defer func() { _ = recover() }()
+		_, _, _ = redis.doWithHeldSocket(context.Background(), &pooledConn{}, [][]byte{[]byte("PING")})
+	}()
+	if got := redis.heldSockets.Load(); got != 0 {
+		t.Fatalf("heldSockets after panic in do = %d, want 0", got)
+	}
+}
+
+// TestRecoveryDoesNotFireDuringHungDial is a waiter while the sole turn is in DialContext.
+func TestRecoveryDoesNotFireDuringHungDial(t *testing.T) {
+	redis := New(Config{
+		Host:        "192.0.2.1:1",
+		PoolSize:    1,
+		PoolTimeout: 50 * time.Millisecond,
+		DialTimeout: time.Second,
+		MaxRetries:  -1,
+	})
+	started := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		started <- struct{}{}
+		_, _ = redis.Get(context.Background(), "hit")
+	}()
+	<-started
+	deadline := time.Now().Add(time.Second)
+	for redis.heldSockets.Load() == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("holder did not enter dial")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	_, err := redis.Get(context.Background(), "hit")
+	if err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("waiter Get = %v, want %s", err, RedisUnreachable)
+	}
+	if !IsPoolWait(err) {
+		t.Fatalf("waiter Get = %v, want pool wait", err)
+	}
+	if got := redis.LostTurns(); got != 0 {
+		t.Fatalf("LostTurns = %d, want 0 during hung dial", got)
+	}
+	wg.Wait()
 }

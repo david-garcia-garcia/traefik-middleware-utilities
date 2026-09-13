@@ -109,17 +109,62 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error) {
 			if err := contextStop(ctx); err != nil {
 				return nil, err
 			}
-			if !sr.recoverLostTurns() {
-				return nil, errPoolWait
-			}
-			select {
-			case <-sr.inUseTurns:
-			default:
-				return nil, errPoolWait
-			}
+			// Timed-out waiter: restore leaked turns if nothing is owned, take one, then
+			// idle-or-dial while still holding turnRecoverMu so another waiter cannot refill and dial past PoolSize.
+			return sr.borrowAfterPoolWait(ctx)
 		}
 	}
 
+	return sr.takeIdleOrDial(ctx)
+}
+
+// borrowAfterPoolWait restores leaked turns if the client owns no socket, takes one turn, then
+// idle-or-dials. turnRecoverMu is held until this borrow returns so concurrent waiters cannot mint extra turns.
+func (sr *SimpleRedis) borrowAfterPoolWait(ctx context.Context) (*pooledConn, error) {
+	sr.turnRecoverMu.Lock()
+	defer sr.turnRecoverMu.Unlock()
+	if sr.heldSockets.Load() == 0 {
+		sr.recoverLostTurnsLocked()
+	}
+	select {
+	case <-sr.inUseTurns:
+	default:
+		return nil, errPoolWait
+	}
+	return sr.takeIdleOrDial(ctx)
+}
+
+// recoverLostTurnsLocked refills inUseTurns when idle is empty and heldSockets is 0.
+// Caller holds turnRecoverMu.
+func (sr *SimpleRedis) recoverLostTurnsLocked() {
+	if sr.inUseTurns == nil || sr.closed.Load() {
+		return
+	}
+	if sr.heldSockets.Load() != 0 {
+		return
+	}
+	sr.idleConnsMu.Lock()
+	idleCount := len(sr.idleConns)
+	sr.idleConnsMu.Unlock()
+	if idleCount != 0 {
+		return
+	}
+	filled := 0
+	for {
+		select {
+		case sr.inUseTurns <- struct{}{}:
+			filled++
+		default:
+			if filled > 0 {
+				sr.lostTurns.Add(int64(filled))
+			}
+			return
+		}
+	}
+}
+
+// takeIdleOrDial pops a young unused socket or dials while the caller already holds a turn.
+func (sr *SimpleRedis) takeIdleOrDial(ctx context.Context) (*pooledConn, error) {
 	// Prefer a young unused socket over a new dial.
 	reused, stale, closed := sr.takeIdleConn()
 	if closed {
@@ -132,50 +177,15 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error) {
 	if reused != nil {
 		return reused, nil
 	}
-	// Idle miss: dial while still holding the turn.
+	// Idle miss: dial while still holding the turn. Defer restores heldSockets if AUTH/SELECT panics.
 	sr.heldSockets.Add(1)
+	defer sr.heldSockets.Add(-1)
 	conn, err := sr.dial(ctx)
-	sr.heldSockets.Add(-1)
 	if err != nil {
 		sr.freeInUseTurn()
 		return nil, err
 	}
 	return conn, nil
-}
-
-// recoverLostTurns restores missing in-use turns when idle is empty and no still-running
-// command holds a socket. That combination is a leaked turn, not a full pool.
-func (sr *SimpleRedis) recoverLostTurns() bool {
-	if sr.inUseTurns == nil {
-		return false
-	}
-	sr.turnRecoverMu.Lock()
-	defer sr.turnRecoverMu.Unlock()
-	if sr.closed.Load() {
-		return false
-	}
-	if sr.heldSockets.Load() != 0 {
-		return false
-	}
-	sr.idleConnsMu.Lock()
-	idleCount := len(sr.idleConns)
-	sr.idleConnsMu.Unlock()
-	if idleCount != 0 {
-		return false
-	}
-	filled := 0
-	for {
-		select {
-		case sr.inUseTurns <- struct{}{}:
-			filled++
-		default:
-			if filled == 0 {
-				return false
-			}
-			sr.lostTurns.Add(int64(filled))
-			return true
-		}
-	}
 }
 
 // takeIdleConn sweeps unused sockets older than idleTimeout, then pops the newest survivor. Stale sockets are returned for close after the lock. closed is true when Close ran.
