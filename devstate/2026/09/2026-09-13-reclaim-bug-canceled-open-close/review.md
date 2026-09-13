@@ -47,3 +47,9 @@ phase: pullrequest
 findings: PR #51 summary set; CI 34742827420 success on 9df18e4; token cannot undraft
 fixed: ready title already set; delivery card on pr-body
 skipped: draft:false (PAT Resource not accessible)
+
+## pullrequest-sync (2026-09-13)
+phase: pullrequest
+findings: merged origin/master including EnforceCloseBeforeOpen; mermaid dest-failure sequence without dotted Err call; CI 34747225967 success on 821a8b7
+fixed: PR summary card; mermaid
+skipped: draft:false (PAT Resource not accessible)
