@@ -16,11 +16,20 @@ import (
 const (
 	chaosKeyCount     = 64
 	chaosPoolSize     = 4
+	chaosHonest       = 0
 	chaosDelay        = 1
 	chaosCloseNoReply = 2
 	chaosLoading      = 3
 	chaosTruncated    = 4
+	chaosCmdAuth      = "AUTH"
+	chaosCmdSelect    = "SELECT"
+	chaosCmdGet       = "GET"
 )
+
+// chaosIntn is the chaos mix. Not a secret.
+func chaosIntn(n int) int {
+	return rand.Intn(n) //nolint:gosec // G404: test chaos mix
+}
 
 // chaosFake is an in-process RESP server that, per command after handshake, randomly
 // replies honestly, delays, closes with no reply, replies LOADING, or truncates a bulk.
@@ -61,6 +70,7 @@ func startChaosFake(t *testing.T) (*chaosFake, string) {
 	return fake, listener.Addr().String()
 }
 
+// serve answers AUTH/SELECT honestly, then randomly honest / delay / close / LOADING / truncated bulk.
 func (f *chaosFake) serve(conn net.Conn) {
 	defer func() {
 		_ = conn.Close()
@@ -74,15 +84,19 @@ func (f *chaosFake) serve(conn net.Conn) {
 		if err != nil {
 			return
 		}
-		if args[0] == "AUTH" || args[0] == "SELECT" {
+		if args[0] == chaosCmdAuth || args[0] == chaosCmdSelect {
 			if _, err := io.WriteString(conn, statusOKReply); err != nil {
 				return
 			}
 			continue
 		}
-		switch rand.Intn(5) {
+		switch chaosIntn(5) {
+		case chaosHonest:
+			if _, err := io.WriteString(conn, f.honestReply(args)); err != nil {
+				return
+			}
 		case chaosDelay:
-			time.Sleep(time.Duration(rand.Intn(4)) * time.Millisecond)
+			time.Sleep(time.Duration(chaosIntn(4)) * time.Millisecond)
 			if _, err := io.WriteString(conn, f.honestReply(args)); err != nil {
 				return
 			}
@@ -97,27 +111,26 @@ func (f *chaosFake) serve(conn net.Conn) {
 				return
 			}
 			return
-		default:
-			if _, err := io.WriteString(conn, f.honestReply(args)); err != nil {
-				return
-			}
 		}
 	}
 }
 
+// honestReply is GET kN → vN, otherwise +OK.
 func (f *chaosFake) honestReply(args []string) string {
-	if args[0] == "GET" && len(args) > 1 {
+	if args[0] == chaosCmdGet && len(args) > 1 {
 		return bulk(f.store, args[1])
 	}
 	return statusOKReply
 }
 
+// openSockets is how many accepted sockets are still open.
 func (f *chaosFake) openSockets() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.open
 }
 
+// accepts is how many TCP accepts the chaos fake has seen.
 func (f *chaosFake) accepts() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -173,7 +186,7 @@ func TestChaosPoolInvariants(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for time.Now().Before(stopAt) {
-				keyIndex := rand.Intn(chaosKeyCount)
+				keyIndex := chaosIntn(chaosKeyCount)
 				name := "k" + strconv.Itoa(keyIndex)
 				want := "v" + strconv.Itoa(keyIndex)
 				ctx, cancel := chaosGetContext()
@@ -198,15 +211,16 @@ func TestChaosPoolInvariants(t *testing.T) {
 	}
 }
 
+// chaosGetContext is Background, a short timeout, or cancel soon via AfterFunc.
 func chaosGetContext() (context.Context, context.CancelFunc) {
-	switch rand.Intn(3) {
+	switch chaosIntn(3) {
 	case 0:
 		return context.Background(), func() {}
 	case 1:
 		return context.WithTimeout(context.Background(), 8*time.Millisecond)
 	default:
 		ctx, cancel := context.WithCancel(context.Background())
-		time.AfterFunc(time.Duration(rand.Intn(4)+1)*time.Millisecond, cancel)
+		time.AfterFunc(time.Duration(chaosIntn(4)+1)*time.Millisecond, cancel)
 		return ctx, cancel
 	}
 }

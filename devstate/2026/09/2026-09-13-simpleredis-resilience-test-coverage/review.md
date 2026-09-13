@@ -17,3 +17,9 @@ phase: propose
 findings: fold coverage onto tcp-session, resp-decode, resp-commands
 fixed: none
 skipped: none
+
+## implement (2026-09-13)
+phase: implement
+findings: all six probes passed; no product fix
+fixed: none
+skipped: none
