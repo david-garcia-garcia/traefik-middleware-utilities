@@ -12,3 +12,10 @@ findings: both TestRepro_* fail on dest c230315 (incarnation 2 creates while Clo
 fixed: explore.md with assumed ranks on helper name and dest constructor seam
 skipped: product apply; usage rewrite (dest panic paths still unmap first)
 
+## propose (2026-09-13)
+phase: propose
+findings: FindSpecHost fold std_go_reclaim_value-lifecycle and std_go_reclaim_context-lease; change reclaim-panic-enforce-close valid
+fixed: proposal, delta specs, design, tasks
+skipped: product apply
+
+
