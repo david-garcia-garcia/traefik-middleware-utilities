@@ -45,3 +45,9 @@ phase: pullrequest
 findings: none
 fixed: reused PR 69, dropped WIP title, CI 8/8 green
 skipped: no comments.md replies
+
+## follow-up (2026-09-13)
+phase: pullrequest
+findings: idle-arrival desync still open
+fixed: debt note, Buffered() limit comments, live spec scoped to leftover in the reader
+skipped: no idle-arrival probe
