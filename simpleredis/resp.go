@@ -324,18 +324,23 @@ func (e *shortBulkError) Error() string { return e.err.Error() }
 // Unwrap returns the ReadFull error so ioOrContext can still see a deadline.
 func (e *shortBulkError) Unwrap() error { return e.err }
 
+const (
+	cmdAuth   = "AUTH"
+	cmdSelect = "SELECT"
+)
+
 // handshakeCommand is AUTH or SELECT (dial handshake verbs).
 func handshakeCommand(args [][]byte) bool {
 	if len(args) == 0 {
 		return false
 	}
 	verb := string(args[0])
-	return verb == "AUTH" || verb == "SELECT"
+	return verb == cmdAuth || verb == cmdSelect
 }
 
 // logReplyFailure emits Warn for short bulk or malformed/unsupported RESP.
 func (sr *SimpleRedis) logReplyFailure(err error) {
-	if short, ok := err.(*shortBulkError); ok {
+	if short, ok := err.(*shortBulkError); ok { //nolint:errorlint // Yaegi panics on errors.As of a package-local struct
 		sr.logWarn(MsgShortBulk, "announced", short.announced, "read", short.read, "host", sr.host)
 		return
 	}

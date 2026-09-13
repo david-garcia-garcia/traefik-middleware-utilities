@@ -237,7 +237,7 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 
 	// AUTH before SELECT so a passworded server accepts the session.
 	if sr.pass != "" {
-		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(cmdAuth), []byte(sr.pass)}); err != nil {
 			conn.close()
 			if err != errNoAuth { //nolint:errorlint // AUTH-class already logged in do
 				sr.logWarn(MsgHandshakeFailed, "error", err, "host", sr.host)
@@ -246,7 +246,7 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 		}
 	}
 	if sr.database != "" {
-		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(cmdSelect), []byte(sr.database)}); err != nil {
 			conn.close()
 			if err != errNoAuth { //nolint:errorlint // AUTH-class already logged in do
 				sr.logWarn(MsgHandshakeFailed, "error", err, "host", sr.host)

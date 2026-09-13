@@ -91,6 +91,8 @@ func (sr *SimpleRedis) storeGroupWrite(path groupWritePath) {
 		sr.logDebugCapability(context.Background(), capabilityNative)
 	case groupWriteLua:
 		sr.logDebugCapability(context.Background(), capabilityLua)
+	case groupWriteUnknown:
+		// No event until native or lua is stored.
 	}
 }
 
