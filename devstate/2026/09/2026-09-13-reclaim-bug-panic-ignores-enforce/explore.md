@@ -45,8 +45,8 @@ Shared helper between the two panic sites. Stored `EnforceCloseBeforeOpen` selec
 
 - Q: What is the shared helper named, and does `endMappedClose` grow a `createErr` argument?
   Rank: additive asked — new helper this change creates; criterion 2 names one helper between the two sites; `endMappedClose` already has 2 callers (`drop` zero-grace, `expire`)
-  Decision: assumed — `endBusyAfterPanic(key, incarnation, storedHooks, logger, createErr)` used only by the two panic sites. It records `createErr` under `t.mu` while still mapped, then either `endMappedClose` or `endBusySlot`+`dispose`. Do not grow `endMappedClose`'s signature; healthy paths have no error to publish.
-  By: explore
+  Decision: assumed — `endBusyAfterPanic(key, incarnation, storedHooks, logger, createErr)` used only by the two panic sites. Flag unset: `endBusySlot` then `dispose`. Flag set: record `createErr` on the ended incarnation, occupy the key with a closer `slotBusy`, close the old `ready` so Wake waiters replay the error, `dispose`, then `unmapAfterClose` on the closer. Same-slot `endMappedClose` would give a later Open the Wake error (TestRepro_WakePanicUnmapsBeforeCloseWithEnforce).
+  By: implement
 
 - Q: How does the dest constructor seam get resolved without rewriting the reproducers?
   Rank: additive asked — criterion 1 names land the validated file; dest `New(Config)` replaced `NewTable`
