@@ -45,7 +45,7 @@ _ = wait
 
 ## Gotchas
 
-- `rate <= 0`, NaN, Inf, `burst < 1`, `maxDelay < 0`, or `ttl < 1s` fails New. Passthrough is skipping construction. This package has no unlimited-rate constructor.
+- `rate <= 0`, NaN, Inf, `burst < 1`, `maxDelay < 0`, or a `ttl` that is not a whole number of seconds of at least 1s fails New. Redis EXPIRE is integer seconds; New must not accept a Duration Redis cannot represent. Passthrough is skipping construction. This package has no unlimited-rate constructor.
 - Lua always returns `"true"`; Go maps allowed from wait vs maxDelay and from refund.
 - EVAL scripts must list keys in `KEYS` (Dragonfly). Do not use `table.maxn`.
 - Two limiter instances on one Redis key share burst. Do not expect a second full burst.
