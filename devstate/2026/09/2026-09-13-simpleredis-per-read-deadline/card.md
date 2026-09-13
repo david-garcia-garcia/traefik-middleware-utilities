@@ -1,18 +1,18 @@
-Developer review: in progress — 2026-09-13T17:04:38Z
+Developer review: in progress — 2026-09-13T17:10:01Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None yet. This branch only opens the review PR. The ticket is to stop treating `IOTimeout` as a total-transfer cap so a steadily streaming Redis bulk that outlasts one `IOTimeout` can still be read.
+**Developers.** None yet versus DestBranch. Explore reproduced BUG-3 and chose a stall-timeout wrapper under `bufio` at dial. Product code has not landed.
 
 **End users.** None.
 
 ## Motivation
-A GET of a large Redis value on DestBranch can fail forever even when the peer is healthy and sending bytes the whole time. `do` stamps one `SetDeadline(now+IOTimeout)` for the whole command. Default `IOTimeout` is 100 milliseconds; the decoder still accepts bulks up to 64 MiB. Those two numbers need about 5.4 Gbit/s sustained. A 4 MiB value at 60 ms failed 5/5 with `redis:timeout`, allocated ~20 MiB, and burned a fresh dial each time.
+A GET of a large Redis value on DestBranch can fail forever even when the peer is healthy and sending bytes the whole time. `do` stamps one `SetDeadline(now+IOTimeout)` for the whole command. Default `IOTimeout` is 100 milliseconds; the decoder still accepts bulks up to 64 MiB.
 
-If we do not merge a stall-timeout (or an equally small correct alternative), any key whose payload cannot cross the wire inside one `IOTimeout` stays unreadable, and every retry looks like a generic timeout. Raising `IOTimeout` is not a workaround: that same knob bounds every small command.
+Measured on this run: tagged `TestBugValueLargerThanIOTimeoutIsPermanentlyUnfetchable` failed 5/5 with `redis:timeout`, 5 dials, 20.5 MiB allocated, 0.30s. If we do not merge a stall-timeout, those keys stay unreadable and every retry looks like a generic timeout.
 
 ```mermaid
 sequenceDiagram
@@ -27,27 +27,27 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Ticket is grounded and a stub PR exists. Product code has not landed. 8 items remain.
+Explore is written. Simplicity gate: the stall wrapper is small enough to implement. Product code has not landed. 7 items remain.
 
 Priority: P1 — Production is serving a wrong public contract today: compliant large values are permanently unreadable.
-Reviewed head: ff821e8
+Reviewed head: 945ca37
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Stub PR only; CI not seen; no apply yet |
-| CI proof | 1/6 | Pushed; checks not seen |
+| Overall readiness | 1/6 | No apply yet; CI not seen |
+| CI proof | 1/6 | Branch pushed; checks not seen |
 | Local tests proof | N/A | Before implement; remote PR uses CI proof |
 | Review resolution | 6/6 | OPEN PR; no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-simpleredis-per-read-deadline pushed | `git push` origin |
+| Branch | 2026-09-13-simpleredis-per-read-deadline pushed | origin (bus commits local 945ca37 unpushed) |
 | OpenSpec | none | no change folder |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/84 | GitHub Create |
-| CI | not seen | just pushed |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/84 | GitHub |
+| CI | not seen | not measured this card |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | comments: none |
 
@@ -55,23 +55,26 @@ Owner decision: None.
 None.
 
 ## Deviations from the ask
-None.
+- taken: reconcile `maxBulkLength` with what `IOTimeout` can carry → keep `64 << 20`; stall bound plus overall command budget is the wall-time cap — `simpleredis/resp.go` `maxBulkLength` — a shrink or bandwidth model re-breaks large values the stall fix makes readable. Requester: not asked.
 
 ## Follow-up issues
 None.
 
 ## How this fits together
-Local ticket `2026-09-13-simpleredis-per-read-deadline` runs on this branch from `origin/master`. Stub PR #84 is the durable card host. First prepare worker returned paths that were not on disk; this prepare re-ran in `wt-modsec-2026-09-13-simpleredis-per-read-deadline` and is the record.
+Local ticket on branch `2026-09-13-simpleredis-per-read-deadline`, stub PR #84. Explore reproduced the tagged failure and recorded proceed policies on `explore.md`.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| Should `maxBulkLength` shrink to what `IOTimeout` can carry? | bounded incidental | assumed — leave `64 << 20`; overall budget plus `watchConnClose` is the wall-time cap | explore |
+| How does per-Read refresh keep the caller deadline vs `redis:timeout` split? | additive asked | assumed — each Read/Write uses `clampTimeout(ctx, IOTimeout)`; `do` still passes start-of-command `ioBound` to `ioOrContext`; `watchConnClose` is the hard stop | explore |
 
 ## Before merge
-- [ ] Explore the stall-timeout shape and the `maxBulkLength` tension
-- [ ] Propose (or stop at the simplicity gate)
-- [ ] Implement only if the simplest correct fix is small
+- [ ] Propose the tcp-session stall-timeout delta
+- [ ] Implement the dial-time `net.Conn` wrapper
 - [ ] Default-suite stall-progress and stall-silence tests
 - [ ] Keep caller-deadline vs `redis:timeout` tests green
+- [ ] Prove a drip peer cannot pin a turn past the command budget
 - [ ] Measured CI on this PR
 
 ## Findings
@@ -87,24 +90,24 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | No apply yet |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | ff821e87bae195ceb235d8356aef4c8183441af6 | Card must match the branch you measured |
+| Reviewed head | 945ca3743580ab3adad218271ffcdf4bd54a6e2d | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not chosen yet; DestBranch still uses one absolute `SetDeadline` per command.
+Best possible solution: wrap the TCP conn at dial so every `bufio` `Read`/`Write` refreshes `SetReadDeadline`/`SetWriteDeadline` with `clampTimeout(ctx, IOTimeout)`, and keep `watchConnClose` as the overall cap.
 
-Do we have a high-confidence way to reproduce? Yes, tagged `TestBugValueLargerThanIOTimeoutIsPermanentlyUnfetchable` against a trickle bulk peer (explore will run it).
+Do we have a high-confidence way to reproduce? Yes — tagged test failed 5/5 with `redis:timeout`, 5 dials, 20.5 MiB allocated.
 
-Is this the best way to solve the issue? Not decided. Prepare does not pick the wrapper vs other shapes.
+Is this the best way to solve the issue? Yes versus DestBranch one-shot `SetDeadline`. A bandwidth-derived `maxBulkLength` is the worse alternative (deviation taken).
 
 ### Evidence
 What I checked:
-- `simpleredis/resp.go` `do` one-shot `SetDeadline` (origin/master a239a9e)
-- `simpleredis/commands_exec.go` `bindCommandDeadline` / `clampTimeout` / `ioOrContext` (same SHA)
-- `openspec/specs/std_go_simpleredis_tcp-session/spec.md` overall-deadline requirement (same SHA)
-- Stub PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/84
+- Tagged repro FAIL (caller checkout, 5/5, 20.5 MiB, 5 dials)
+- `simpleredis/resp.go` `do` / `watchConnClose` / `ioOrContext`
+- `simpleredis/pool.go` `dial` creates `bufio` on `netConn`
+- `openspec/specs/std_go_simpleredis_tcp-session/spec.md` overall-deadline requirement
 
 ### Rank-up moves
 None.
