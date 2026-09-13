@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T17:15:38Z
+Developer review: in progress — 2026-09-13T17:19:41Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** None.
+**Developers.** OpenSpec change `simpleredis-idle-arrival-desync` recommends no `simpleredis` code change; research packets `ext_go-redis_pool_conn-check` and `ext_go_net_setreaddeadline` record why.
 
 **End users.** None.
 
@@ -14,7 +14,7 @@ A parked SimpleRedis socket can sit one reply ahead when a stray bulk arrives on
 
 On dest that looks like `Get(k2)` returning `POISONED` while `err == nil`. This run's tagged reproduction: 19 wrong, 40 correct, 0 errors over 59 later commands. A rate limiter then admits or denies on another window key's count.
 
-Not merging leaves that silent wrong-data path open. Explore measured option 1 on Windows: an expired read deadline misses kernel data, and the smallest deadline that sees it costs about 525 microseconds per clean reuse versus 18.6 microseconds Get. The simplicity gate says stop after propose if there is no small, coherent, elegant fix.
+Not merging this PR leaves that hole as dest already has it, plus a written no-fix recommendation. The cost of not taking a probe is the silent wrong-data path. The cost of taking option 1 as specified is an incorrect Windows probe, or about 525 microseconds per clean reuse versus 18.6 microseconds Get. This proposal chooses neither code change.
 
 ```mermaid
 sequenceDiagram
@@ -31,17 +31,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Explore is written. Propose will recommend no product fix. 6 items remain.
+Propose recommends no product fix. The simplicity gate stops the run here. 5 later phases are not started.
 
 Priority: P1 — Production is serving a wrong public contract today
-Reviewed head: 88cd4e5
+Reviewed head: 4d67e78
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Explore CI is still in progress |
-| CI proof | 3/6 | 8 checks in progress on explore head ([run 34771041171](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771041171)) |
+| Overall readiness | 1/6 | Propose head just pushed; CI not seen on 4d67e78 |
+| CI proof | 1/6 | not seen on 4d67e78. Prior explore-card head 8/8 succeeded ([run 34771106331](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771106331)) |
 | Local tests proof | N/A | `prHost` is github |
 | Review resolution | 6/6 | OPEN PR, no comments |
 
@@ -49,9 +49,9 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-13-simpleredis-idle-arrival-desync pushed | `git` / GitHub |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | simpleredis-idle-arrival-desync | `openspec/changes/simpleredis-idle-arrival-desync/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/83 | pr-host List |
-| CI | build 34771041171 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34771041171 | pr-host CI |
+| CI | not seen on 4d67e78 | pr-host CI |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | no comments.md |
 
@@ -62,10 +62,10 @@ None.
 None.
 
 ## Follow-up issues
-None.
+- [ ] [Idle-arrival desync still poisons a pooled SimpleRedis socket](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-arrival-desync/knowledge/debt/2026-09-13-simpleredis-idle-arrival-desync.md) — idle-arrival kernel probe has no portable Yaegi-safe cheap fix; dest still returns another key's Get with err == nil.
 
 ## How this fits together
-Explore recorded that option 1 is not a correct cheap probe on Windows, option 2 cannot catch GET/GET, and the run should stop after propose. Branch `2026-09-13-simpleredis-idle-arrival-desync`, PR 83.
+Propose recorded none of the three directions. Branch `2026-09-13-simpleredis-idle-arrival-desync`, PR 83. Implement is not started (simplicity gate).
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -75,8 +75,8 @@ Explore recorded that option 1 is not a correct cheap probe on Windows, option 2
 | Permanent test file name and fake prefix on dest? | additive asked | assumed — moot this run (no fix, no failing default-suite test). If a later change ships a probe: `simpleredis/resp_test.go` plus `startIdleArrivalStrayFake` in `fake_redis_test.go`. | explore |
 
 ## Before merge
-- [ ] [P1] Propose writes options and costs, then stop (no product fix unless a human overrides)
-- [x] Explore reproduced idle-arrival (19/59 wrong, no errors) and measured option 1
+- [ ] [P1] Human accepts no product fix, or overrides and commissions a probe despite the measured cost
+- [x] Propose wrote options, costs, and `skip_specs`
 
 ## Findings
 None.
@@ -91,26 +91,27 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 88cd4e5600aff21f67181a5739cd3f43a7bc87de | Card must match the branch you measured |
+| Reviewed head | 4d67e784e3e78e800567b2b63882f9dcb2ac25d9 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: dest already refuses leftover in the reader. The remaining hole has no portable Yaegi-safe probe that is both correct and cheap.
+Best possible solution: dest leftover-in-reader destroy plus a written no-probe recommendation. There is no portable Yaegi-safe probe that is both correct and cheap.
 
-Do we have a high-confidence way to reproduce? Yes, tagged `TestBugIdleArrivalDesyncReturnsAnotherKeysValue` (19 wrong this run). Dest default suite does not cover idle arrival.
+Do we have a high-confidence way to reproduce? Yes, tagged `TestBugIdleArrivalDesyncReturnsAnotherKeysValue` (19 wrong this run).
 
-Is this the best way to solve the issue? No product fix this run. Option 1 expired deadline misses kernel data on Windows; a 1ns deadline that sees data costs ~525 µs vs 18.6 µs Get. Option 2 cannot tell two GET bulks apart. Stopping after propose is the gate.
+Is this the best way to solve the issue? Yes versus DestBranch for this gate: do not ship option 1 (Windows expired deadline misses kernel data; 1ns wait is ~28x Get) or option 2 (GET/GET same shape).
 
 ### Evidence
 What I checked:
-- Tagged reproduction FAIL: Get(k2)="POISONED"; 19 wrong, 40 correct, 0 errors (caller workspace)
-- `BenchmarkGet` 18303–18796 ns/op (worktree, Windows amd64)
-- Throwaway loopback: `SetReadDeadline(time.Now())` dirty timeout then blocking Read got the stray byte; `+1ns` sees data; empty `+1ns` ~525 µs/op
-- go-redis `connCheck` Unix MSG_PEEK vs Windows dummy no-op (pin 7f3b3dff)
-- Traefik `useUnsafe` dual gate (`knowledge/research/ext_traefik_plugins_useunsafe/`)
-- CI run 34771041171 in progress on 88cd4e5
+- Tagged reproduction FAIL: Get(k2)="POISONED"; 19 wrong, 40 correct, 0 errors
+- `BenchmarkGet` 18303–18796 ns/op
+- Throwaway: `SetReadDeadline(time.Now())` dirty timeout; `+1ns` sees data; empty `+1ns` ~525 microseconds/op
+- `knowledge/research/ext_go-redis_pool_conn-check/` Unix MSG_PEEK vs Windows no-op
+- `knowledge/research/ext_go_net_setreaddeadline/` zero Time is not a poll
+- openspec validate: change complete, specs skipped
+- Prior CI run 34771106331 succeeded; 4d67e78 not seen
 
 ### Rank-up moves
 None.

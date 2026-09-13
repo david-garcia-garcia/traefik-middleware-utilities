@@ -10,3 +10,9 @@ findings: option 1 expired deadline misses kernel data on Windows; 1ns probe ~52
 fixed: none
 skipped: no product code. Stop after propose is the gate.
 
+## propose (2026-09-13)
+phase: propose
+findings: none of the three directions; skip_specs
+fixed: none
+skipped: implement and later phases (simplicity gate)
+
