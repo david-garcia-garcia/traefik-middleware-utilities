@@ -15,3 +15,9 @@ phase: propose
 findings: none
 fixed: none
 skipped: product fix not in this phase
+
+## implement (2026-09-13)
+phase: implement
+findings: none
+fixed: do leftover destroy + pre-write refuse; tests pass; CI 8/8 green
+skipped: none
