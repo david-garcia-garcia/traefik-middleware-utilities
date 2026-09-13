@@ -76,7 +76,7 @@ func TestTake_ExpireOnFirstHit(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := fake.lastExpireCommand()
-	if len(got) < 3 || got[0] != "EXPIRE" || got[2] != "20" {
+	if len(got) < 3 || got[0] != redisExpireCommand || got[2] != "20" {
 		t.Fatalf("expire argv %v want EXPIRE … 20", got)
 	}
 	afterFirst := fake.expireCommandCount()
@@ -255,6 +255,32 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 	limiter.mu.Unlock()
 	if running {
 		t.Fatal("Wake after Close started a ticker")
+	}
+}
+
+// TestWake_StartsTickerAfterSleep checks that Wake after a completed Sleep starts the flush ticker again, including a second Sleep while already stopped.
+func TestWake_StartsTickerAfterSleep(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := newSimpleRedisForTest(t, addr)
+	limiter, err := New(client, minSyncRate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer limiter.Close()
+	limiter.Sleep()
+	limiter.Sleep()
+	limiter.mu.Lock()
+	stopped := limiter.stop == nil
+	limiter.mu.Unlock()
+	if !stopped {
+		t.Fatal("Sleep left a ticker running")
+	}
+	limiter.Wake()
+	limiter.mu.Lock()
+	running := limiter.stop != nil
+	limiter.mu.Unlock()
+	if !running {
+		t.Fatal("Wake after Sleep did not start a ticker")
 	}
 }
 

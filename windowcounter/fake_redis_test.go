@@ -10,8 +10,8 @@ import (
 	"testing"
 )
 
-// expireCommand is the Redis EXPIRE verb the fake records for exact-Take TTL.
-const expireCommand = "EXPIRE"
+// redisExpireCommand is the Redis EXPIRE verb the fake records for TTL assertions.
+const redisExpireCommand = "EXPIRE"
 
 // testFakeRedis is an in-process RESP server for limiter unit tests.
 type testFakeRedis struct {
@@ -73,9 +73,9 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				break
 			}
 			_, _ = fmt.Fprintf(conn, ":%d\r\n", afterIncr)
-		case expireCommand, "EXPIREAT":
+		case redisExpireCommand, "EXPIREAT":
 			f.lastExpire = append([]string(nil), args...)
-			if args[0] == expireCommand {
+			if args[0] == redisExpireCommand {
 				f.expireCommands++
 				// Fail N EXPIRE commands with a non-retryable RESP error, then succeed.
 				if f.expireFailRemaining > 0 {
@@ -124,7 +124,7 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				}
 				if pttlMsLocked(f.store, f.expireSec, key) < 0 {
 					f.expireCommands++
-					f.lastExpire = []string{expireCommand, key, args[4]}
+					f.lastExpire = []string{redisExpireCommand, key, args[4]}
 					if f.expireFailRemaining > 0 {
 						f.expireFailRemaining--
 						_, _ = io.WriteString(conn, "-ERR expire failed\r\n")

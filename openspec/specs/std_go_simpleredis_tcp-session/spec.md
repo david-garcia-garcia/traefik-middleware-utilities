@@ -170,6 +170,24 @@ The session SHALL keep at most `poolSize` live TCP connections (idle plus in use
 - **AND** a later Get returns `redis:unreachable`
 - **AND** no new TCP connection is opened
 
+### Requirement: Client not from New fails immediately
+A command on a `SimpleRedis` that did not come from `New` SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT be retried (MUST NOT sleep retry backoff). `New` remains the only constructor of the in-use-turn channel. `Close` on that client SHALL be idempotent and MUST NOT panic. Empty `MGet` and empty or mismatched `MSetEX` / `MSetEXAt` stay pre-dial validation and MUST NOT panic.
+
+#### Scenario: Zero-value Get does not retry
+- **WHEN** `Get` is called on `&SimpleRedis{}`
+- **THEN** the command returns `redis:unreachable`
+- **AND** it returns in under the default minimum retry backoff (8 milliseconds)
+
+#### Scenario: Zero-value exported methods do not panic
+- **WHEN** every exported command and `Close` is called on `&SimpleRedis{}` (non-empty `MGet` / `MSetEX` / `MSetEXAt` so they reach the session)
+- **AND** `Close` is called a second time
+- **THEN** no call panics
+- **AND** each command that reaches the session returns `redis:unreachable`
+
+#### Scenario: New remains the only in-use-turn constructor
+- **WHEN** a client is `&SimpleRedis{}` and `New` has not run
+- **THEN** that client has no in-use-turn channel
+
 ### Requirement: I/O deadline is timeout, not a net.Error assert
 When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `IOTimeout` default is 100 milliseconds). A timeout on a reused connection MUST NOT open a second connection.
 
