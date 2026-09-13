@@ -4,7 +4,7 @@ JobName: 2026-09-13-simpleredis-structured-logging
 
 | Phase | Work | Card | At |
 |-------|------|------|----|
-| prepare | [ ] | [ ] | |
+| prepare | [x] | [x] | 2026-09-13T15:57:16Z |
 | explore | [ ] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
