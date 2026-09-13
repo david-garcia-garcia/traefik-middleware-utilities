@@ -53,7 +53,7 @@ When `pass` is non-empty, each new dial SHALL send `AUTH` with that password bef
 - **AND** they are not sent again on those Gets
 
 ### Requirement: Idle connections are pooled
-The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdleConns` (const default 8). Live sockets (idle plus checked out) SHALL not exceed `PoolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `PoolSize`, a caller SHALL wait for a released socket instead of dialing. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `PoolSize` connections, including when more callers overlap than `PoolSize`. An idle connection older than `IdleTimeout` (const default thirty seconds) SHALL not be reused. On the next command that borrows, every idle socket older than `IdleTimeout` SHALL be closed, including those behind a younger tail that is reused. If no younger idle socket remains, the next command SHALL dial a new one if live sockets are under `PoolSize`. `New` MUST NOT start a goroutine to close idle sockets. A client that issues no later command MAY keep idle sockets past `IdleTimeout` until `Close`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. `release` MUST NOT close a reusable socket solely because the idle list is full while live sockets are under `PoolSize`.
+The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdleConns` (const default 8). Live sockets (idle plus checked out) SHALL not exceed `PoolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `PoolSize`, a caller SHALL wait for a released socket instead of dialing. Live sockets the client owns are unused idle sockets plus sockets a still-running command has checked out. An empty in-use-turn channel with zero owned sockets is a leaked turn, not a full pool: the next waiter SHALL restore missing turns up to `PoolSize` and MAY dial. Recovery MUST NOT run while owned sockets are at `PoolSize`. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `PoolSize` connections, including when more callers overlap than `PoolSize`. An idle connection older than `IdleTimeout` (const default thirty seconds) SHALL not be reused. On the next command that borrows, every idle socket older than `IdleTimeout` SHALL be closed, including those behind a younger tail that is reused. If no younger idle socket remains, the next command SHALL dial a new one if live sockets are under `PoolSize`. `New` MUST NOT start a goroutine to close idle sockets. A client that issues no later command MAY keep idle sockets past `IdleTimeout` until `Close`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. `release` MUST NOT close a reusable socket solely because the idle list is full while live sockets are under `PoolSize`.
 
 Every command (GET, MGET, SET, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL) SHALL use go-redis-shaped command retry. `MaxRetries`, `MinRetryBackoff`, and `MaxRetryBackoff` live on `Config` and are copied at `New`. The retry loop SHALL be `for attempt := 0; attempt <= maxRetries; attempt++` (zero Config means 1 extra retry, at most two sends). Backoff SHALL wait only between retries (`attempt > 0`), using go-redis `RetryBackoff` (`math/rand` `Int63n` jitter), and MUST return when the command context is done or the overall command deadline has passed. Construction is `New(Config)`.
 
@@ -118,7 +118,7 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **AND** the peer observes a second GET on a new connection
 
 ### Requirement: Full pool wait returns redis:unreachable
-When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried. The pool-wait sentinel SHALL wrap the unreachable sentinel so `errors.Is` matches unreachable, and the retry classifier MUST still treat pool wait as not retryable (`shouldRetry` false for pool wait, true for a plain unreachable sentinel). Identity compare, or a pool-wait check before unreachable, is required; rewriting the classifier to `errors.Is` against unreachable alone MUST NOT retry pool wait.
+When every live socket the client owns is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, and the client still owns live sockets at `PoolSize`, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried. The pool-wait sentinel SHALL wrap the unreachable sentinel so `errors.Is` matches unreachable, and the retry classifier MUST still treat pool wait as not retryable (`shouldRetry` false for pool wait, true for a plain unreachable sentinel). Identity compare, or a pool-wait check before unreachable, is required; rewriting the classifier to `errors.Is` against unreachable alone MUST NOT retry pool wait.
 
 #### Scenario: Pool wait times out
 - **WHEN** all live sockets at the default `poolSize` (8) are busy
@@ -386,6 +386,30 @@ When a caller returns an in-use-turn token while the in-use-turn channel is alre
 #### Scenario: Hammered borrow and release stay balanced
 - **WHEN** many goroutines hammer borrow and release through a healthy fake, a dead address, an AUTH-rejecting fake, and a starved pool with a short `PoolTimeout`
 - **THEN** those goroutines all finish
+- **AND** the in-use-turn channel `len` equals `cap`
+- **AND** `OverFrees()` is 0
+
+### Requirement: Lost in-use turns MUST NOT brick the client
+When a command takes an in-use turn and never returns it (a panic between take and return that Traefik recovers), the client SHALL NOT stay unable to dial for the process lifetime. The next waiter that would return pool-wait `redis:unreachable` SHALL restore missing turns up to `PoolSize` when the client owns zero sockets: unused idle sockets plus sockets a still-running command has checked out. Recovery MUST NOT restore turns while owned sockets are at `PoolSize`. `LostTurns()` SHALL increment by the number of tokens restored. `LostTurns()` SHALL be readable next to `OverFrees()`, `PoolSize()`, and `MaxIdleConns()`. `exec` MUST NOT defer `release` as the recovery. `New` MUST NOT start a goroutine to recover turns.
+
+#### Scenario: Recovered panics after borrow do not brick the client
+- **WHEN** a client of `PoolSize` 2 has warmed one idle socket
+- **AND** `PoolSize` callers each take a turn via `borrow` then panic with `recover()` in the caller and never `release`
+- **AND** a later Get runs
+- **THEN** that Get succeeds
+- **AND** `LostTurns()` is at least `PoolSize`
+
+#### Scenario: Recovery does not fire while sockets are busy
+- **WHEN** all live sockets at `PoolSize` 2 are busy in-flight commands
+- **AND** another command is issued
+- **AND** no socket becomes free within one `PoolTimeout`
+- **THEN** that command returns `redis:unreachable`
+- **AND** the fake observes no additional TCP connection for that command
+- **AND** `LostTurns()` is 0
+
+#### Scenario: LostTurns is zero when borrow and release stay balanced
+- **WHEN** a client runs a sequential Get against a live fake
+- **THEN** `LostTurns()` is 0
 - **AND** the in-use-turn channel `len` equals `cap`
 - **AND** `OverFrees()` is 0
 
