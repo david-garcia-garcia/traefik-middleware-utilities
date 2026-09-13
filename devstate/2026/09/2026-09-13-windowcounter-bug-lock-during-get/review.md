@@ -25,3 +25,10 @@ phase: implement
 findings: none
 fixed: unlock-around-I/O; HOLB repro
 skipped: none
+
+## codereview (2026-09-13)
+
+phase: codereview
+findings: P2 0, hard 3
+fixed: flushPendingLocked trail comment; waitGetHold timedHold vs waitUntilRelease
+skipped: none
