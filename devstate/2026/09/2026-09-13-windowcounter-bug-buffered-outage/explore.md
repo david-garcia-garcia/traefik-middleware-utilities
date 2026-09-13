@@ -57,8 +57,8 @@ Dest currently fail-closed on buffered outage. Parent example `windowcounter/rep
 
 - Q: Does buffered Peek follow Take’s nil-error per-node fallback, or stay dest fail-closed?
   Rank: bounded incidental — 1 production method pair `Peek`/`peekBuffered` in `windowcounter/limiter.go`; 24 `.Peek(` call sites, all in `windowcounter/limiter_test.go`, `limiter_yaegi_test.go`, `limiter_e2e_test.go` (searched `*.go` for `.Peek(`; `e2e/` has no windowcounter). Outage-specific Peek asserts are 3 tests in `limiter_test.go` (`TestTake_BufferedPendingDeltaOutage`, `TestTake_BufferedSleepStoresFlushError`, `TestPeek_BufferedEmptyFlushThenKill`). All migratable here. Mandate: Unknowns say the ticket names buffered Take; no Desired line names Peek’s error contract.
-  Decision: assumed — Peek follows Take (`err=nil`, same local estimate, no hit). Language already defines Peek as that observation; dest `peekBuffered` already shares `bufferedOutageErrorLocked`. Leaving Peek fail-closed would split the sibling. Exact-mode Peek stays error-returning.
-  By: explore
+  Decision: resolved — Peek follows Take (`err=nil`, same local estimate, no hit). Language already defines Peek as that observation; dest `peekBuffered` already shares `bufferedOutageErrorLocked`. Leaving Peek fail-closed would split the sibling. Exact-mode Peek stays error-returning.
+  By: propose
 
 - Q: Is dest `Kill` enough for the lock test, or must this change port parent `trackConn` / `closeListenerAndConns`?
   Rank: additive asked — Desired 2 names dest `Kill` versus those parent names; dest `Kill` already closes listener and sockets (`windowcounter/fake_redis_test.go`).
@@ -67,8 +67,8 @@ Dest currently fail-closed on buffered outage. Parent example `windowcounter/rep
 
 - Q: Are `lastFlushErr` / probe helpers removed, or only disconnected from buffered Take?
   Rank: bounded asked — Desired 3–4 and Affected `takeBuffered` / `bufferedOutageErrorLocked`; return sites `takeBuffered` and `peekBuffered`; writes in `flushPendingLocked` and `bufferedOutageErrorLocked` (`windowcounter/limiter.go`).
-  Decision: assumed — disconnect Take/Peek from returning `lastFlushErr` and from the missed-`sync_rate` EVAL/GET probe. Keep storing a failed flush (Sleep/Close/flushLoop already call `flushPendingLocked`) so later buffered Take/Peek skip Redis contact and stay `err=nil` instead of timeout-looping the share-refresh GET. Remove `bufferedOutageErrorLocked` as an error-returning helper. Do not delete `lastFlushErr` while it still skips GET. Leave unread `flushFailedAt` (pre-existing, no reader). Exact mode unchanged.
-  By: explore
+  Decision: resolved — disconnect Take/Peek from returning `lastFlushErr` and from the missed-`sync_rate` EVAL/GET probe. Keep storing a failed flush (Sleep/Close/flushLoop already call `flushPendingLocked`) so later buffered Take/Peek skip Redis contact and stay `err=nil` instead of timeout-looping the share-refresh GET. Remove `bufferedOutageErrorLocked` as an error-returning helper. Do not delete `lastFlushErr` while it still skips GET. Leave unread `flushFailedAt` (pre-existing, no reader). Exact mode unchanged.
+  By: propose
 
 - Q: Who already owns the client identity on a Take/Peek key?
   Rank: additive asked — sliding-take scenario “Caller owns the key”
