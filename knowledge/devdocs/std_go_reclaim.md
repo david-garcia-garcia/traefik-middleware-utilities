@@ -35,7 +35,7 @@ Optional `Hooks.Wake`, called when an `Open` finds a stored, sleeping value. `Op
 _Avoid_: an error return or a create-fallback on wake; work in `Wake` slow enough to stall a Traefik reload
 
 **Close**:
-Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table waits until it has returned before `reclaim_dispose`.
+Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table waits until it has returned before `reclaim_dispose`. The key stays mapped until then, so a later `Open` of that key waits and then creates; it does not run `create` while Close is still in flight.
 _Avoid_: cleanup in Close that Sleep already did; a Close hook that blocks; Traefik plugin `Close`
 
 **Grace**:
@@ -86,6 +86,6 @@ w := stored.(*BIN)
 - A second `Open` while the incarnation is live or in grace returns the same value.
 - Tests assert the `msg` constants. A test that cancels a holder and immediately calls `Open` is usually not testing the wake branch — wait for `reclaim_orphan` first.
 - `Open` blocks for as long as `Wake` takes. Keep `Wake` cheap.
-- A Close hook that blocks blocks the drop or `Reset` goroutine. Keep Close cheap.
-- At zero grace an `Open` that races the orphan log is a plain bind, not a reclaim.
+- A Close hook that blocks blocks the drop or `Reset` goroutine and any `Open` of that key until it returns. Keep Close cheap.
+- At zero grace an `Open` that races the orphan log is a plain bind, not a reclaim, and its `create` starts only after Close of the previous incarnation has returned.
 - `Reset` is tests only. It must not race an `Open` on the same key.

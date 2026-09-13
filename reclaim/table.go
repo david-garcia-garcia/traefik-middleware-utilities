@@ -63,13 +63,13 @@ type Table struct {
 type slotState int
 
 const (
-	// slotBusy means create, Wake, or Sleep is in flight. Wait on slot.ready, then look again.
+	// slotBusy means create, Wake, Sleep, or Close is in flight. Wait on slot.ready, then look again.
 	slotBusy slotState = iota
 	// slotAwake means the value is usable and Open may bind a holder to it.
 	slotAwake
 	// slotAsleep means the value has been slept and is kept until grace ends.
 	slotAsleep
-	// slotGone means this incarnation has been claimed for close, or create failed. The key is
+	// slotGone means this incarnation has ended (Close returned, or create failed). The key is
 	// already unmapped, so nothing can reach the slot except a watcher that predates the claim.
 	slotGone
 )
@@ -189,7 +189,7 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 		case slotAsleep:
 			return t.reclaimLocked(ctx, key, incarnation, logger), nil
 		case slotBusy:
-			// A create, wake, or sleep owns the slot. Wait for it, then look again.
+			// A create, wake, sleep, or close owns the slot. Wait for it, then look again.
 			ready := incarnation.ready
 			t.mu.Unlock()
 			<-ready
@@ -287,13 +287,14 @@ func (t *Table) watch(key string, incarnation *slot, ctx context.Context) {
 }
 
 // drop removes one holder. When it was the last one, this goroutine ends the incarnation: sleep,
-// orphan, grace, close, dispose — in that order, so those lines cannot be reordered. A watcher
-// whose incarnation is already gone finds slotGone and returns.
+// orphan, grace, close, dispose — in that order, so those lines cannot be reordered. Close runs
+// while the key is still mapped slotBusy. A watcher whose incarnation is already gone finds
+// slotGone and returns.
 func (t *Table) drop(key string, incarnation *slot) {
 	t.mu.Lock()
 	incarnation.holders--
 	for incarnation.state == slotBusy {
-		// A create, wake, or sleep owns the slot. Wait for it before deciding to sleep.
+		// A create, wake, sleep, or close owns the slot. Wait for it before deciding to sleep.
 		ready := incarnation.ready
 		t.mu.Unlock()
 		<-ready
@@ -318,18 +319,28 @@ func (t *Table) drop(key string, incarnation *slot) {
 	// that owns the transition, so nothing else can write this incarnation's dispose line first.
 	logger.Debug(MsgOrphan, "key", key)
 
+	if grace <= 0 {
+		// Zero grace keeps nothing: Close while still slotBusy, then unmap so a racing Open
+		// waits instead of creating during Close.
+		runClose(storedHooks)
+		t.mu.Lock()
+		if t.items[key] == incarnation {
+			delete(t.items, key)
+		}
+		incarnation.state = slotGone
+		close(incarnation.ready)
+		t.mu.Unlock()
+		logger.Debug(MsgDispose, "key", key)
+		return
+	}
+
 	t.mu.Lock()
 	incarnation.state = slotAsleep
 	close(incarnation.ready)
 	mapped := t.items[key] == incarnation
-	if mapped && grace <= 0 {
-		// Zero grace keeps nothing: unmap now, so no Open can ever see this value asleep.
-		delete(t.items, key)
-		mapped = false
-	}
 	t.mu.Unlock()
 
-	// Not mapped means zero grace, or Reset dropped this slot: either way it is ours to close.
+	// Not mapped means Reset dropped this slot: it is ours to close.
 	if !mapped {
 		t.expire(key, incarnation)
 		return
@@ -345,21 +356,27 @@ func (t *Table) drop(key string, incarnation *slot) {
 }
 
 // expire ends a sleeping incarnation, unless an Open woke it or something else already claimed
-// it. It is the only place that closes a value the table still had mapped.
+// it. Close runs as slotBusy so a racing Open waits; the key is unmapped only after Close returns.
 func (t *Table) expire(key string, incarnation *slot) {
 	t.mu.Lock()
 	if incarnation.state != slotAsleep || incarnation.holders > 0 {
 		t.mu.Unlock()
 		return
 	}
-	incarnation.state = slotGone
-	if t.items[key] == incarnation {
-		delete(t.items, key)
-	}
+	incarnation.state = slotBusy
+	incarnation.ready = make(chan struct{})
 	logger := incarnation.logger
 	storedHooks := incarnation.hooks
 	t.mu.Unlock()
-	dispose(key, storedHooks, logger)
+	runClose(storedHooks)
+	t.mu.Lock()
+	if t.items[key] == incarnation {
+		delete(t.items, key)
+	}
+	incarnation.state = slotGone
+	close(incarnation.ready)
+	t.mu.Unlock()
+	logger.Debug(MsgDispose, "key", key)
 }
 
 // Reset ends every incarnation on this table. An awake value is slept first, so Close never sees

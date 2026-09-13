@@ -6,12 +6,12 @@
 
 ## 2. Close-before-unmap
 
-- [ ] 2.1 In `drop`, after Sleep at zero grace: do not publish `slotAsleep`, do not unmap, do not `close(ready)`. Close as part of that same `slotBusy` transition, then unmap / `close(ready)`, then the dispose log. Do not run Close under `t.mu`.
-- [ ] 2.2 In `expire`: if still asleep and holders are 0, switch to `slotBusy` (new `ready`) under `t.mu`, unlock, `runClose`, then unmap and `close(ready)`, then the dispose log. Do not delete until Close returns. Do not leave the slot asleep during Close. Do not call `dispose` in a way that Closes twice.
-- [ ] 2.3 Leave tests-only `Reset` unmap-first. Do not fix canceled-ctx disposed return or hook-panic bricks the key. Update package / `slotBusy` comments so they match Close-as-busy.
+- [x] 2.1 In `drop`, after Sleep at zero grace: do not publish `slotAsleep`, do not unmap, do not `close(ready)`. Close as part of that same `slotBusy` transition, then unmap / `close(ready)`, then the dispose log. Do not run Close under `t.mu`.
+- [x] 2.2 In `expire`: if still asleep and holders are 0, switch to `slotBusy` (new `ready`) under `t.mu`, unlock, `runClose`, then unmap and `close(ready)`, then the dispose log. Do not delete until Close returns. Do not leave the slot asleep during Close. Do not call `dispose` in a way that Closes twice.
+- [x] 2.3 Leave tests-only `Reset` unmap-first. Do not fix canceled-ctx disposed return or hook-panic bricks the key. Update package / `slotBusy` comments so they match Close-as-busy.
 
 ## 3. Proof and usage
 
-- [ ] 3.1 Re-run the two overlap tests until they PASS. Run `go test ./reclaim/...` until existing reclaim tests stay green.
-- [ ] 3.2 Update `knowledge/devdocs/std_go_reclaim.md` so Language Close / Gotchas say `Open` waits until Close returns for that key, then creates. Append `devstate/knowledge.md`.
-- [ ] 3.3 `openspec validate --change reclaim-close-before-unmap --strict`
+- [x] 3.1 Re-run the two overlap tests until they PASS. Run `go test ./reclaim/...` until existing reclaim tests stay green.
+- [x] 3.2 Update `knowledge/devdocs/std_go_reclaim.md` so Language Close / Gotchas say `Open` waits until Close returns for that key, then creates. Append `devstate/knowledge.md`.
+- [x] 3.3 `openspec validate --change reclaim-close-before-unmap --strict`
