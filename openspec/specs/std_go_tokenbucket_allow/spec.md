@@ -25,7 +25,7 @@ Token-bucket Allow: admit or delay one consume on an opaque key against refill r
 - **THEN** the library MUST NOT read HTTP headers, client address, user, tenant, or Host to build that key
 
 ### Requirement: Memory store uses Lua formulas
-The in-memory store SHALL refill at `rate` tokens per second, cap at `burst`, consume 1, and compute wait in the same units Traefik's Redis script uses (tokens per microsecond, Unix microseconds, maxDelay microseconds). It MUST NOT import `golang.org/x/time/rate`. Idle keys SHALL accumulate up to `burst`. Entries SHALL expire after the caller `ttl` on later Allow (lazy). Construction SHALL fail when `rate <= 0`, `burst < 1`, `maxDelay < 0`, or `ttl < 1s`.
+The in-memory store SHALL refill at `rate` tokens per second, cap at `burst`, consume 1, and compute wait in the same units Traefik's Redis script uses (tokens per microsecond, Unix microseconds, maxDelay microseconds). It MUST NOT import `golang.org/x/time/rate`. Idle keys SHALL accumulate up to `burst`. Entries SHALL expire after the caller `ttl` on later Allow (lazy). Construction SHALL fail when `rate <= 0`, `burst < 1`, `maxDelay < 0`, or `ttl` is not a whole number of seconds of at least 1s.
 
 #### Scenario: New rejects invalid clock
 - **WHEN** NewMemory is called with rate 0 or a negative rate
@@ -38,6 +38,15 @@ The in-memory store SHALL refill at `rate` tokens per second, cap at `burst`, co
 - **THEN** the store treats the bucket as filled to `burst` before consuming 1
 - **AND** that Allow returns allowed true when `burst >= 1`
 
+#### Scenario: New rejects fractional ttl
+- **WHEN** NewMemory or NewRedis is called with ttl 1500ms
+- **THEN** construction returns the same ttl error as ttl below 1s
+- **AND** no map entry is created
+
+#### Scenario: New accepts whole-second ttl
+- **WHEN** NewMemory or NewRedis is called with ttl 2s
+- **THEN** construction succeeds
+
 ### Requirement: Redis errors do not become deny
 When the Redis store is used and Redis is unreachable or times out, Allow SHALL return that error (`redis:unreachable` or `redis:timeout`). The library MUST NOT fail-open, fail-close, or denyOnError inside Allow.
 
@@ -45,6 +54,15 @@ When the Redis store is used and Redis is unreachable or times out, Allow SHALL 
 - **WHEN** Allow cannot complete the script because the server is unreachable
 - **THEN** Allow returns `redis:unreachable`
 - **AND** does not return allowed false as a substitute
+
+### Requirement: Eval wait that is not a finite number is not a consume
+When the Redis store is used and Eval returns three fields, Allow SHALL treat the wait field as a finite number of microseconds. A wait that is not a number, including `nan`, `+Inf`, `-Inf`, and `inf`, SHALL return the existing wait-is-not-a-number error (`tokenbucket: eval wait is not a number`). Allow MUST NOT return allowed true with a nil error. Allow MUST NOT return allowed false with a nil error. Allow MUST NOT introduce a second error for that wait. Admit and refund comparisons MUST NOT replace this rule: a non-finite wait is not a delay that can be compared to maxDelay.
+
+#### Scenario: Non-finite wait is wait-is-not-a-number
+- **WHEN** Eval returns three fields whose wait is `nan`, `+Inf`, `-Inf`, or `inf`
+- **THEN** Allow returns `tokenbucket: eval wait is not a number`
+- **AND** does not return allowed true
+- **AND** does not return a nil error
 
 ### Requirement: Unit and Yaegi prove Allow
 Compiled tests SHALL prove burst-after-idle and refund on the memory store, and Eval encoding on a fake TCP Redis, without Traefik. Interpreted tests SHALL run the same Allow scenarios with stdlib only and `useunsafe` false. A test-only clock setter SHALL exist so sequences do not wait real time.

@@ -7,6 +7,17 @@ import (
 	"time"
 )
 
+// handshakeFailure is an AUTH or SELECT error from dial. exec must not retry it.
+type handshakeFailure struct {
+	err error
+}
+
+// Error is the inner AUTH or SELECT failure text (redis:unreachable, LOADING …, redis:noauth).
+func (e handshakeFailure) Error() string { return e.err.Error() }
+
+// Unwrap is the inner AUTH or SELECT failure.
+func (e handshakeFailure) Unwrap() error { return e.err }
+
 // pooledConn is one TCP socket plus RESP reader/writer kept in idleConns.
 type pooledConn struct {
 	netConn  net.Conn
@@ -202,13 +213,13 @@ func (sr *SimpleRedis) dial(ctx context.Context) (*pooledConn, error) {
 	if sr.pass != "" {
 		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
 			conn.close()
-			return nil, err
+			return nil, handshakeFailure{err: err}
 		}
 	}
 	if sr.database != "" {
 		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
 			conn.close()
-			return nil, err
+			return nil, handshakeFailure{err: err}
 		}
 	}
 	return conn, nil
