@@ -188,11 +188,6 @@ field is false (the zero value), `create` MAY start while Close is still in flig
 - **WHEN** `Open` is called with a logger whose handler level is info
 - **THEN** `reclaim_put` and `reclaim_dispose` are not emitted
 
-#### Scenario: Recovered hook panic is reported
-- **WHEN** a Sleep or Close hook panics and the table recovers it
-- **THEN** logs include `reclaim_hook_panic` at error level for that key
-- **AND** that line carries which hook panicked and the panic value
-
 ### Requirement: Incarnation end closes the stored value before it reports the end
 When an incarnation ends (grace elapsed while sleeping, `Reset`, or a zero-grace drop), the table
 SHALL call the Close hook when that func is non-nil and SHALL wait until it has returned, or until

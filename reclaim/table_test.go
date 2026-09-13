@@ -25,6 +25,10 @@ const waitBudget = 10 * time.Second
 // unstuckValue is what a later Open creates after a panicking hook unstuck the key.
 const unstuckValue = "next"
 
+// firstIncarnation and nextIncarnation are the stored values in Close-vs-create overlap tests.
+const firstIncarnation = "first"
+const nextIncarnation = "second"
+
 // graceNoRace is long enough that a test asserting the reclaim branch cannot lose the grace race.
 const graceNoRace = 5 * time.Second
 
@@ -891,7 +895,7 @@ func TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 	})
 	var createWhileCloseBlocked atomic.Bool
 	ctx, cancel := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return "first", nil }, Hooks{
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
 		Close:                  func() { close(closeEntered); <-releaseClose },
 		EnforceCloseBeforeOpen: true,
 	}); err != nil {
@@ -907,7 +911,7 @@ func TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 	go func() {
 		_, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
 			createWhileCloseBlocked.Store(true)
-			return "second", nil
+			return nextIncarnation, nil
 		}, Hooks{})
 		opened <- err
 	}()
@@ -953,7 +957,7 @@ func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 	})
 	var createWhileCloseBlocked atomic.Bool
 	ctx, cancel := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return "first", nil }, Hooks{
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
 		Close:                  func() { close(closeEntered); <-releaseClose },
 		EnforceCloseBeforeOpen: true,
 	}); err != nil {
@@ -973,7 +977,7 @@ func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
 	go func() {
 		_, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
 			createWhileCloseBlocked.Store(true)
-			return "second", nil
+			return nextIncarnation, nil
 		}, Hooks{})
 		opened <- err
 	}()
@@ -1019,7 +1023,7 @@ func TestTable_ZeroGraceCreateDoesNotWaitForClose(t *testing.T) {
 		}
 	})
 	ctx, cancel := context.WithCancel(context.Background())
-	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return "first", nil }, Hooks{
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
 		Close: func() { close(closeEntered); <-releaseClose },
 	}); err != nil {
 		t.Fatalf("open 1: %v", err)
@@ -1032,7 +1036,7 @@ func TestTable_ZeroGraceCreateDoesNotWaitForClose(t *testing.T) {
 	opened := make(chan any, 1)
 	go func() {
 		value, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
-			return "second", nil
+			return nextIncarnation, nil
 		}, Hooks{})
 		if err != nil {
 			t.Errorf("open 2: %v", err)
@@ -1043,7 +1047,7 @@ func TestTable_ZeroGraceCreateDoesNotWaitForClose(t *testing.T) {
 	}()
 	select {
 	case got := <-opened:
-		if got != "second" {
+		if got != nextIncarnation {
 			t.Fatalf("Open value %v, want a fresh incarnation while Close is blocked", got)
 		}
 	case <-time.After(waitBudget):
