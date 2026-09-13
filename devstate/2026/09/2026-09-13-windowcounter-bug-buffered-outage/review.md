@@ -29,3 +29,9 @@ phase: codereview
 findings: Standards 1 done, Nitpicks 2 done, Spec none, Security 1 skipped (ticket), Performance 1 skipped (debt), Dead 1 done, Coverage 1 done 1 skipped
 fixed: lastOutageErr rename, lastRedisOK deleted, skip-GET lock test
 skipped: fail-closed; windows cap (debt)
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: none — std_go_windowcounter already documents per-node nil-error cap
+fixed: none
+skipped: produce (usage already true)
