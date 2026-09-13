@@ -260,8 +260,10 @@ once per incarnation. Because the table waits, a Close hook that blocks blocks w
 incarnation; Close hooks SHALL NOT block. Every goroutine the table starts for a key SHALL exit
 once that key's holder contexts are Done and its incarnation has ended. A watcher started for a
 holder whose `Done` is nil SHALL exit without dropping that holder when the incarnation has ended,
-even if `ctx.Err()` is still unset. When that holder's `Err()` is set while the incarnation is
-still live, the table SHALL still drop the holder.
+even if `ctx.Err()` is still unset. That exit rule SHALL hold when the incarnation ends on a
+Sleep panic or a Wake panic, including when that incarnation stored `Hooks.EnforceCloseBeforeOpen`.
+When that holder's `Err()` is set while the incarnation is still live, the table SHALL still
+drop the holder.
 
 When the ending incarnation stored `Hooks.EnforceCloseBeforeOpen`, the table SHALL keep the key
 stored until Close has returned, so a concurrent `Open` for that key waits for Close instead of

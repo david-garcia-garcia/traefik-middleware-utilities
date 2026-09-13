@@ -99,8 +99,13 @@ type slot struct {
 	ready chan struct{}
 	// woken is closed by the Open that reclaims a sleeping value, to end its grace wait.
 	woken chan struct{}
-	// finished is closed when this incarnation has ended, so a nil-Done watcher can stop
-	// polling without drop.
+	// finished is closed on every path that ends this incarnation, so a nil-Done watcher
+	// can stop polling without drop. Paths: endBusySlot (create fail; Sleep/Wake panic
+	// when EnforceCloseBeforeOpen is unset), unmapAfterClose on the real incarnation
+	// (enforce Close: zero-grace drop, expire), expire when EnforceCloseBeforeOpen is
+	// unset, Reset for awake/asleep, and endBusyAfterPanic when EnforceCloseBeforeOpen
+	// is set (Sleep-panic drop and Wake-panic reclaimLocked). A closer placeholder
+	// never has a finished channel: no holder binds to it.
 	finished chan struct{}
 	logger   *slog.Logger
 }
@@ -177,6 +182,8 @@ func runHook(hook func()) (recovered any) {
 }
 
 // closeFinished closes the per-incarnation finished channel exactly once. The caller holds t.mu.
+// Every ending path must call this on the real incarnation (see finished). A closer whose
+// finished is nil is a no-op, which is deliberate: no watcher can reference that slot.
 func closeFinished(incarnation *slot) {
 	if incarnation.finished == nil {
 		return
@@ -240,9 +247,12 @@ func (t *Table) endBusyAfterPanic(key string, incarnation *slot, storedHooks Hoo
 		t.mu.Lock()
 		incarnation.createErr = createErr
 		incarnation.state = slotGone
+		closeFinished(incarnation)
 		oldReady := incarnation.ready
 		// Occupy the key for the Close window. Waiters already parked on oldReady replay
 		// createErr from this incarnation; a later Open finds closer and creates after Close.
+		// finished stays nil: a holder never binds to this closer, so no watcher can
+		// reference it. Do not add a channel here.
 		closer := &slot{state: slotBusy, ready: make(chan struct{}), logger: logger}
 		t.items[key] = closer
 		t.mu.Unlock()
