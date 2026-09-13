@@ -51,3 +51,9 @@ phase: pullrequest
 findings: idle-arrival desync still open
 fixed: debt note, Buffered() limit comments, live spec scoped to leftover in the reader
 skipped: no idle-arrival probe
+
+## master-sync (2026-09-13)
+phase: sync
+findings: none
+fixed: merge origin/master (PR #71 and #67); leftover gate kept; CI 8/8 green on 1f7326c
+skipped: golangci-lint-harden and idle-mutex-defer were not on master
