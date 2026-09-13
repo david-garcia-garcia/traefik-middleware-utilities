@@ -41,3 +41,9 @@ phase: archive
 findings: fold std_go_reclaim_context-lease; map and names OK
 fixed: main spec synced; change archived as 2026-09-13-reclaim-canceled-bind
 skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: PR #51 summary set; CI 34742827420 success on 9df18e4; token cannot undraft
+fixed: ready title already set; delivery card on pr-body
+skipped: draft:false (PAT Resource not accessible)
