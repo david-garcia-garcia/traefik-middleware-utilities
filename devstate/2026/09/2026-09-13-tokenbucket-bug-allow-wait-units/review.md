@@ -53,3 +53,10 @@ phase: pullrequest
 findings: none
 fixed: none
 skipped: none
+
+## pullrequest (2026-09-13 master sync)
+
+phase: pullrequest
+findings: mermaid `;` and `µ` blanked the GitHub PR conversation
+fixed: merged origin/master; ASCII mermaid on the delivery card
+skipped: none
