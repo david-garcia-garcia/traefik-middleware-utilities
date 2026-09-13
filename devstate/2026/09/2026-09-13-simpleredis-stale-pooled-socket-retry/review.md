@@ -27,3 +27,9 @@ phase: codereview
 findings: Standards 2 hard (stale name, serve comment); Dead 1 hard (leftover borrow)
 fixed: renamed fake to peerDropAllFake; serve job comment; deleted borrow; tests call borrowSocket(ctx, false)
 skipped: none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage on std_go_simpleredis idle-socket gotcha
+fixed: skip-idle sequential recovery on the SimpleRedis usage packet
+skipped: none
