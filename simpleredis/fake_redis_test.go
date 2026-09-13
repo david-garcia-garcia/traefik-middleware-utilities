@@ -919,6 +919,8 @@ func startStrayExtraReplyFake(t *testing.T, nth int) (*strayExtraReplyFake, stri
 					if nth > 0 && seen%nth == 0 {
 						reply += "$5\r\nSTRAY\r\n"
 					}
+					// One write so the stray is already in the reader at the reply boundary.
+					// A stray that arrives while the socket is idle is knowledge/debt/2026-09-13-simpleredis-idle-arrival-desync.md.
 					_, _ = io.WriteString(conn, reply)
 				}
 			}(conn)

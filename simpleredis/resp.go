@@ -33,6 +33,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	stopWatch := watchConnClose(ctx, conn.netConn)
 	defer stopWatch()
 	// Unread leftover from a prior command on this socket must not be parsed as this command's reply.
+	// Buffered() covers leftover already in the reader, not a stray that arrives while the socket is idle: it does not see the kernel receive buffer.
 	if conn.reader.Buffered() != 0 {
 		return nil, false, errIssue
 	}
@@ -50,6 +51,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		return nil, false, ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
 	}
 	// Extra well-formed RESP after this reply means the peer is ahead; return the value and destroy the socket.
+	// Same limit as the pre-write check: leftover already in the reader, not a stray still only in the kernel buffer.
 	if conn.reader.Buffered() != 0 {
 		return values, false, err
 	}
