@@ -58,7 +58,7 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 	if of := sr.OverFrees(); of != 0 {
 		t.Fatalf("OverFrees = %d, want 0", of)
 	}
-	requireMsg(t, h, MsgPanic, slog.LevelError)
+	requireMsg(t, h, "simpleredis_panic", slog.LevelError)
 
 	value, err := sr.Get(context.Background(), "hit")
 	if err != nil {

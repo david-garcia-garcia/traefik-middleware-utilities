@@ -24,7 +24,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		if err := contextStop(ctx); err != nil {
 			return nil, false, err
 		}
-		sr.logDebugTimeout(ctx, errTimeout)
+		sr.logger.Debug("simpleredis_timeout")
 		return nil, false, errTimeout
 	}
 	if err := conn.netConn.SetDeadline(time.Now().Add(ioBound)); err != nil {
@@ -39,17 +39,19 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	// makes for a short bulk read, which MUST NOT surface as redis:issue?.
 	// Buffered() covers leftover already in the reader, not a stray that arrives while the socket is idle: it does not see the kernel receive buffer.
 	if conn.reader.Buffered() != 0 {
-		buffered := conn.reader.Buffered()
-		if handshakeCommand(args) {
-			// AUTH/SELECT leftover: unread bytes before the handshake write.
-			sr.logWarn(MsgAuthLeftover, "buffered", buffered, "host", sr.host)
+		// Handshake leftover: unread bytes before AUTH or SELECT.
+		if len(args) > 0 {
+			verb := string(args[0])
+			if verb == "AUTH" || verb == "SELECT" {
+				sr.logger.Warn("simpleredis_auth_leftover")
+			}
 		}
 		return nil, false, errUnreachable
 	}
 	if err := writeCommand(conn.writer, args); err != nil {
 		mapped := ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
 		if mapped == errTimeout { //nolint:errorlint // exact I/O timeout sentinel
-			sr.logDebugTimeout(ctx, mapped)
+			sr.logger.Debug("simpleredis_timeout")
 		}
 		return nil, false, mapped
 	}
@@ -58,23 +60,25 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		return nil, false, stop
 	}
 	if err != nil && !clean {
-		sr.logReplyFailure(err)
 		if isDirtyProtocolError(err) {
+			sr.logger.Warn("simpleredis_bad_reply", "error", err)
 			return nil, false, err
 		}
 		mapped := ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
 		if mapped == errTimeout { //nolint:errorlint // exact I/O timeout sentinel
-			sr.logDebugTimeout(ctx, mapped)
+			sr.logger.Debug("simpleredis_timeout")
+		} else if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+			sr.logger.Warn("simpleredis_short_bulk")
 		}
 		return nil, false, mapped
 	}
 	if err == errNoAuth { //nolint:errorlint // AUTH-class is the exact mapped sentinel
-		sr.logError(MsgNoAuth, "host", sr.host, "error", err)
+		sr.logger.Error("simpleredis_noauth")
 	}
 	// Extra well-formed RESP after this reply means the peer is ahead; return the value and destroy the socket.
 	// Same limit as the pre-write check: leftover already in the reader, not a stray still only in the kernel buffer.
 	if conn.reader.Buffered() != 0 {
-		sr.logWarn(MsgSocketPoisoned, "buffered", conn.reader.Buffered(), "host", sr.host)
+		sr.logger.Warn("simpleredis_socket_poisoned")
 		return values, false, err
 	}
 	return values, true, err
@@ -226,9 +230,8 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 		return nil, errIssue
 	}
 	data := make([]byte, length+2)
-	n, err := io.ReadFull(reader, data)
-	if err != nil {
-		return nil, &shortBulkError{announced: length, read: n, err: err}
+	if _, err := io.ReadFull(reader, data); err != nil {
+		return nil, err
 	}
 	// Trailer must be CRLF; otherwise the stream is off a reply boundary.
 	if data[length] != '\r' || data[length+1] != '\n' {
@@ -310,42 +313,4 @@ func ioError(err error) error {
 		return errTimeout
 	}
 	return errUnreachable
-}
-
-// shortBulkError is a truncated $ payload. announced is the RESP length; read is bytes filled.
-type shortBulkError struct {
-	announced int
-	read      int
-	err       error
-}
-
-// Error is the ReadFull error text so callers still see the I/O failure.
-func (e *shortBulkError) Error() string { return e.err.Error() }
-
-// Unwrap returns the ReadFull error so ioOrContext can still see a deadline.
-func (e *shortBulkError) Unwrap() error { return e.err }
-
-const (
-	cmdAuth   = "AUTH"
-	cmdSelect = "SELECT"
-)
-
-// handshakeCommand is AUTH or SELECT (dial handshake verbs).
-func handshakeCommand(args [][]byte) bool {
-	if len(args) == 0 {
-		return false
-	}
-	verb := string(args[0])
-	return verb == cmdAuth || verb == cmdSelect
-}
-
-// logReplyFailure emits Warn for short bulk or malformed/unsupported RESP.
-func (sr *SimpleRedis) logReplyFailure(err error) {
-	if short, ok := err.(*shortBulkError); ok { //nolint:errorlint // Yaegi panics on errors.As of a package-local struct
-		sr.logWarn(MsgShortBulk, "announced", short.announced, "read", short.read, "host", sr.host)
-		return
-	}
-	if isDirtyProtocolError(err) {
-		sr.logWarn(MsgBadReply, "error", err, "host", sr.host)
-	}
 }

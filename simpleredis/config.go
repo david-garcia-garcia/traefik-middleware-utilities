@@ -46,7 +46,7 @@ type Config struct {
 	MinRetryBackoff time.Duration
 	// MaxRetryBackoff caps backoff. 0 means 512ms; -1 means 0.
 	MaxRetryBackoff time.Duration
-	// Logger is optional slog. Nil (zero Config) means the client emits nothing. New does not install a discard handler. Never log Pass.
+	// Logger is slog for this client. Nil at New becomes a discard logger so call sites never see nil. Never log Pass.
 	Logger *slog.Logger
 }
 

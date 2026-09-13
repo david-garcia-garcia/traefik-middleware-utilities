@@ -210,7 +210,7 @@ func OpenEvent() string {
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	client := simpleredis.New(simpleredis.Config{Host: "127.0.0.1:1", Logger: logger})
 	_ = client
-	if !strings.Contains(buf.String(), simpleredis.MsgOpen) {
+	if !strings.Contains(buf.String(), "simpleredis_open") {
 		return "missing open: " + buf.String()
 	}
 	if strings.Contains(buf.String(), "Pass") {

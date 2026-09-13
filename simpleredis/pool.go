@@ -61,8 +61,8 @@ func (sr *SimpleRedis) freeInUseTurn() {
 	case sr.inUseTurns <- struct{}{}:
 	default:
 		// Over-free: some path returned a turn it did not take. Drop so the request does not hang.
-		overFrees := sr.overFrees.Add(1)
-		sr.logError(MsgOverFree, "over_frees", overFrees, "turns", len(sr.inUseTurns), "cap", cap(sr.inUseTurns))
+		sr.overFrees.Add(1)
+		sr.logger.Error("simpleredis_over_free")
 	}
 }
 
@@ -76,7 +76,6 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (conn *pooledConn, err error,
 		return nil, errUnreachable, false
 	}
 	if sr.inUseTurns == nil {
-		sr.logError(MsgNotFromNew, "host", sr.host)
 		return nil, errNotFromNew, false
 	}
 	if err := contextStop(ctx); err != nil {
@@ -99,17 +98,17 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (conn *pooledConn, err error,
 				<-timer.C
 			}
 			if errorsIsCanceled(ctx.Err()) {
-				sr.logDebugCanceled(ctx)
+				sr.logger.Debug("simpleredis_canceled")
 			}
 			return nil, ctx.Err(), false
 		case <-timer.C:
 			if err := contextStop(ctx); err != nil {
 				if errorsIsCanceled(err) {
-					sr.logDebugCanceled(ctx)
+					sr.logger.Debug("simpleredis_canceled")
 				}
 				return nil, err, false
 			}
-			sr.logWarn(MsgPoolExhausted, "pool_size", sr.liveCap(), "wait", sr.inUseTurnWait(), "host", sr.host)
+			sr.logger.Warn("simpleredis_pool_exhausted")
 			return nil, errPoolWait, false
 		}
 	}
@@ -131,20 +130,19 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (conn *pooledConn, err error,
 	for _, conn := range stale {
 		conn.close()
 	}
+	if len(stale) > 0 {
+		sr.logger.Debug("simpleredis_idle_swept")
+	}
 	if reused != nil {
 		handedOff = true
 		return reused, nil, false
 	}
 	// Idle miss: dial while still holding the turn.
-	dialReason := dialReasonIdleMiss
-	if len(stale) > 0 {
-		dialReason = dialReasonStale
-	}
 	conn, err, handshakeFailed = sr.dial(ctx)
 	if err != nil {
 		return nil, err, handshakeFailed
 	}
-	sr.logDebugDial(ctx, dialReason)
+	sr.logger.Debug("simpleredis_dial")
 	handedOff = true
 	return conn, nil, false
 }
@@ -172,9 +170,6 @@ func (sr *SimpleRedis) takeIdleConn() (reused *pooledConn, stale []*pooledConn, 
 		reused = sr.idleConns[n-1]
 		sr.idleConns = sr.idleConns[:n-1]
 	}
-	if swept := len(stale); swept > 0 {
-		sr.logDebugIdleSwept(context.Background(), swept, len(sr.idleConns))
-	}
 	return reused, stale, false
 }
 
@@ -195,11 +190,7 @@ func (sr *SimpleRedis) parkIdleConn(conn *pooledConn) bool {
 	sr.idleConnsMu.Lock()
 	defer sr.idleConnsMu.Unlock()
 	// Do not park when shut, or when unused sockets already equal the idle cap.
-	if sr.closed.Load() {
-		return false
-	}
-	if len(sr.idleConns) >= sr.maxIdleConns {
-		sr.logDebugSocketClosed(context.Background(), closedReasonIdleCap)
+	if sr.closed.Load() || len(sr.idleConns) >= sr.maxIdleConns {
 		return false
 	}
 	sr.idleConns = append(sr.idleConns, conn)
@@ -231,19 +222,19 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 
 	// AUTH before SELECT so a passworded server accepts the session.
 	if sr.pass != "" {
-		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(cmdAuth), []byte(sr.pass)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
 			conn.close()
 			if err != errNoAuth { //nolint:errorlint // AUTH-class already logged in do
-				sr.logWarn(MsgHandshakeFailed, "error", err, "host", sr.host)
+				sr.logger.Warn("simpleredis_handshake_failed", "error", err)
 			}
 			return nil, err, true
 		}
 	}
 	if sr.database != "" {
-		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(cmdSelect), []byte(sr.database)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
 			conn.close()
 			if err != errNoAuth { //nolint:errorlint // AUTH-class already logged in do
-				sr.logWarn(MsgHandshakeFailed, "error", err, "host", sr.host)
+				sr.logger.Warn("simpleredis_handshake_failed", "error", err)
 			}
 			return nil, err, true
 		}

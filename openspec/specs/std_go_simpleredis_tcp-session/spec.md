@@ -23,7 +23,7 @@ The session SHALL live in package `simpleredis` under folder `simpleredis/`. The
 
 Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` 200 milliseconds, `IOTimeout` 100 milliseconds. Retry fields on `Config`: `0` at `New` means 1 extra retry; `-1` means off (one send). An explicit `MaxRetries` of 3 means 3 extra retries. `MinRetryBackoff` / `MaxRetryBackoff` keep go-redis sentinels: `0` means 8ms / 512ms; `-1` means off.
 
-A nil `Config.Logger` SHALL mean the client emits no slog lines. `New` MUST NOT replace a nil logger with a discard handler or any other handler. `log/slog` is a Go standard-library package and SHALL be an allowed import of the session source.
+A nil `Config.Logger` SHALL be replaced at `New` with a discard logger (`slog.NewTextHandler` writing to `io.Discard`) so later call sites never nil-check the logger. `New` MUST NOT return an error when `Logger` is nil. `log/slog` is a Go standard-library package and SHALL be an allowed import of the session source.
 
 #### Scenario: New does not open a socket
 - **WHEN** `New` is called with a host that refuses connections

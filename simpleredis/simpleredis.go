@@ -4,6 +4,7 @@ package simpleredis
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -105,8 +106,12 @@ func New(cfg Config) *SimpleRedis {
 		ioTimeout:       cfg.IOTimeout,
 		logger:          cfg.Logger,
 	}
+	// Nil Config.Logger is a discard handler so later call sites never nil-check.
+	if sr.logger == nil {
+		sr.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
 	sr.ensureInUseTurns()
-	sr.logDebugOpen()
+	sr.logger.Debug("simpleredis_open", "host", sr.host)
 	return sr
 }
 
@@ -119,11 +124,9 @@ func (sr *SimpleRedis) Close() {
 	idleConns := sr.idleConns
 	sr.idleConns = nil
 	sr.idleConnsMu.Unlock()
-	idleClosed := len(idleConns)
 	for _, conn := range idleConns {
 		conn.close()
 	}
-	sr.logDebugClose(idleClosed)
 }
 
 // isClosed is true after Close. Used so a closed-client unreachable does not spin MaxRetries.

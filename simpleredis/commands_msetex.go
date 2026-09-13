@@ -86,14 +86,7 @@ func (sr *SimpleRedis) storeGroupWrite(path groupWritePath) {
 	sr.groupWriteMu.Lock()
 	sr.groupWrite = path
 	sr.groupWriteMu.Unlock()
-	switch path {
-	case groupWriteNative:
-		sr.logDebugCapability(context.Background(), capabilityNative)
-	case groupWriteLua:
-		sr.logDebugCapability(context.Background(), capabilityLua)
-	case groupWriteUnknown:
-		// No event until native or lua is stored.
-	}
+	sr.logger.Debug("simpleredis_capability")
 }
 
 // msetexArgs is native MSETEX: numkeys, pairs in order, then EX or EXAT, then the decimal TTL.
