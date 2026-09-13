@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-reclaim-bug-panic-ignores-enforce
+jobName: 2026-09-13-reclaim-bug-panic-ignores-enforce
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 6dc61ea14ef65481bd77f020da967bb6bc13dace363a59e4204d3c1ac61ff2ba
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
