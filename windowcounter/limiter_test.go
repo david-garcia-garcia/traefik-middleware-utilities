@@ -514,21 +514,35 @@ func TestPeek_Unreachable(t *testing.T) {
 	}
 }
 
-func wantRedisOutage(t *testing.T, err error) {
+// takeUntilLocalDeny takes until this node's sliding estimate exceeds limit, requiring a nil error on every call.
+func takeUntilLocalDeny(t *testing.T, limiter *Limiter, key string, already, limit int64, window time.Duration) {
 	t.Helper()
-	if err == nil {
-		t.Fatal("want Redis outage error")
+	ctx := context.Background()
+	for hit := already; hit < limit; hit++ {
+		allowed, estimated, err := limiter.Take(ctx, key, limit, window)
+		if err != nil {
+			t.Fatalf("buffered take after outage err %v want nil, estimated %v", err, estimated)
+		}
+		if !allowed {
+			t.Fatalf("buffered take %d denied, estimated %v want admit until %d", hit+1, estimated, limit)
+		}
 	}
-	if isRedisOutageMessage(err.Error()) {
-		return
+	allowed, estimated, err := limiter.Take(ctx, key, limit, window)
+	if err != nil {
+		t.Fatalf("buffered take after limit err %v want nil", err)
 	}
-	t.Fatalf("err %v want %s or %s", err, simpleredis.RedisUnreachable, simpleredis.RedisTimeout)
+	if allowed {
+		t.Fatalf("buffered take after limit allowed, estimated %v want deny", estimated)
+	}
 }
 
-// isRedisOutageMessage is Unreachable or Timeout, exact or as a wrapped substring.
-func isRedisOutageMessage(msg string) bool {
-	return msg == simpleredis.RedisUnreachable || msg == simpleredis.RedisTimeout ||
-		strings.Contains(msg, simpleredis.RedisUnreachable) || strings.Contains(msg, simpleredis.RedisTimeout)
+// peekNilError requires Peek to return a nil error.
+func peekNilError(t *testing.T, limiter *Limiter, key string, limit int64, window time.Duration) {
+	t.Helper()
+	_, estimated, err := limiter.Peek(context.Background(), key, limit, window)
+	if err != nil {
+		t.Fatalf("buffered peek after outage err %v want nil, estimated %v", err, estimated)
+	}
 }
 
 func TestTake_BufferedPendingDeltaOutage(t *testing.T) {
@@ -541,11 +555,13 @@ func TestTake_BufferedPendingDeltaOutage(t *testing.T) {
 	t.Cleanup(func() { limiter.Close() })
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Take(context.Background(), "k", 5, time.Minute); err != nil {
+	const limit int64 = 5
+	window := time.Minute
+	if _, _, err := limiter.Take(context.Background(), "k", limit, window); err != nil {
 		t.Fatal(err)
 	}
 	getsAfterSeed := fake.getCallCount()
-	if _, _, err := limiter.Take(context.Background(), "k", 5, time.Minute); err != nil {
+	if _, _, err := limiter.Take(context.Background(), "k", limit, window); err != nil {
 		t.Fatal(err)
 	}
 	if fake.getCallCount() != getsAfterSeed {
@@ -554,10 +570,12 @@ func TestTake_BufferedPendingDeltaOutage(t *testing.T) {
 	fake.Kill()
 	now = now.Add(time.Hour)
 	limiter.SetNowForTest(func() time.Time { return now })
-	_, _, err = limiter.Take(context.Background(), "k", 5, time.Minute)
-	wantRedisOutage(t, err)
-	_, _, err = limiter.Peek(context.Background(), "k", 5, time.Minute)
-	wantRedisOutage(t, err)
+	getsAfterKill := fake.getCallCount()
+	takeUntilLocalDeny(t, limiter, "k", 2, limit, window)
+	if fake.getCallCount() != getsAfterKill {
+		t.Fatal("buffered Take GETs Redis after kill with a pending delta")
+	}
+	peekNilError(t, limiter, "k", limit, window)
 }
 
 func TestTake_BufferedFlushThenKillFailsClosed(t *testing.T) {
@@ -568,7 +586,9 @@ func TestTake_BufferedFlushThenKillFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { limiter.Close() })
-	if _, _, err := limiter.Take(context.Background(), "k", 5, time.Minute); err != nil {
+	const limit int64 = 5
+	window := time.Minute
+	if _, _, err := limiter.Take(context.Background(), "k", limit, window); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(time.Second)
@@ -588,8 +608,8 @@ func TestTake_BufferedFlushThenKillFailsClosed(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	fake.Kill()
-	_, _, err = limiter.Take(context.Background(), "k", 5, time.Minute)
-	wantRedisOutage(t, err)
+	takeUntilLocalDeny(t, limiter, "k", 1, limit, window)
+	peekNilError(t, limiter, "k", limit, window)
 }
 
 func TestTake_BufferedTwoInstancesOutage(t *testing.T) {
@@ -611,40 +631,21 @@ func TestTake_BufferedTwoInstancesOutage(t *testing.T) {
 	b.SetNowForTest(func() time.Time { return now })
 	const limit int64 = 5
 	window := time.Minute
-	nilErrorAdmits := 0
 	for _, limiter := range []*Limiter{a, b} {
 		allowed, _, takeErr := limiter.Take(context.Background(), "share", limit, window)
 		if takeErr != nil {
 			t.Fatal(takeErr)
 		}
-		if allowed {
-			nilErrorAdmits++
+		if !allowed {
+			t.Fatal("healthy take denied")
 		}
 	}
 	fake.Kill()
 	now = now.Add(time.Hour)
 	a.SetNowForTest(func() time.Time { return now })
 	b.SetNowForTest(func() time.Time { return now })
-	sawOutage := false
-	for _, limiter := range []*Limiter{a, b} {
-		for i := 0; i < 4; i++ {
-			allowed, _, takeErr := limiter.Take(context.Background(), "share", limit, window)
-			if takeErr != nil {
-				wantRedisOutage(t, takeErr)
-				sawOutage = true
-				continue
-			}
-			if allowed {
-				nilErrorAdmits++
-			}
-		}
-	}
-	if !sawOutage {
-		t.Fatal("want a Redis error after kill")
-	}
-	if nilErrorAdmits > int(limit) {
-		t.Fatalf("nil-error admits %d want <= %d", nilErrorAdmits, limit)
-	}
+	takeUntilLocalDeny(t, a, "share", 1, limit, window)
+	takeUntilLocalDeny(t, b, "share", 1, limit, window)
 }
 
 func TestParseEvalInt_WrapsCause(t *testing.T) {
@@ -675,10 +676,12 @@ func TestTake_BufferedSleepStoresFlushError(t *testing.T) {
 	}
 	fake.Kill()
 	limiter.Sleep()
-	_, _, err = limiter.Take(context.Background(), "k", 5, time.Minute)
-	wantRedisOutage(t, err)
-	_, _, err = limiter.Peek(context.Background(), "k", 5, time.Minute)
-	wantRedisOutage(t, err)
+	getsAfterSleep := fake.getCallCount()
+	takeUntilLocalDeny(t, limiter, "k", 1, 5, time.Minute)
+	if fake.getCallCount() != getsAfterSleep {
+		t.Fatal("buffered Take GETs Redis after a stored flush error")
+	}
+	peekNilError(t, limiter, "k", 5, time.Minute)
 }
 
 func TestPeek_BufferedEmptyFlushThenKill(t *testing.T) {
@@ -698,6 +701,9 @@ func TestPeek_BufferedEmptyFlushThenKill(t *testing.T) {
 	fake.Kill()
 	now = now.Add(time.Hour)
 	limiter.SetNowForTest(func() time.Time { return now })
-	_, _, err = limiter.Peek(context.Background(), "k", 5, time.Minute)
-	wantRedisOutage(t, err)
+	getsAfterKill := fake.getCallCount()
+	peekNilError(t, limiter, "k", 5, time.Minute)
+	if fake.getCallCount() != getsAfterKill {
+		t.Fatal("buffered Peek GETs Redis after kill")
+	}
 }

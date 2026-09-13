@@ -1,9 +1,9 @@
 ## 1. Tests first (must FAIL on dest)
 
-- [ ] 1.1 Add `windowcounter/repro_buffered_outage_test.go` copied from the parent repro; call dest `Kill` (do not port `trackConn` / `closeListenerAndConns`); port only helpers this ticket needs
-- [ ] 1.2 Rewrite assertions to `err=nil`, admit until this node's `limit`, then `allowed=false` (they currently fail wanting `redis:unreachable`)
-- [ ] 1.3 Rewrite dest fail-closed cases to that same lock: `TestTake_BufferedPendingDeltaOutage`, `TestTake_BufferedFlushThenKillFailsClosed`, `TestTake_BufferedTwoInstancesOutage` (each instance's own `limit`, nil error), `TestTake_BufferedSleepStoresFlushError`, `TestPeek_BufferedEmptyFlushThenKill`. Keep `TestTake_Unreachable` / `TestPeek_Unreachable`
-- [ ] 1.4 Run `go test -short -count=1 -timeout 60s -run 'TestRepro_BufferedTakeHidesRedisOutage|TestTake_BufferedPendingDeltaOutage|TestTake_BufferedFlushThenKillFailsClosed|TestTake_BufferedTwoInstancesOutage|TestTake_BufferedSleepStoresFlushError|TestPeek_BufferedEmptyFlushThenKill' ./windowcounter` and confirm FAIL on dest's fail-closed lock
+- [x] 1.1 Add `windowcounter/repro_buffered_outage_test.go` copied from the parent repro; call dest `Kill` (do not port `trackConn` / `closeListenerAndConns`); port only helpers this ticket needs
+- [x] 1.2 Rewrite assertions to `err=nil`, admit until this node's `limit`, then `allowed=false` (they currently fail wanting `redis:unreachable`)
+- [x] 1.3 Rewrite dest fail-closed cases to that same lock: `TestTake_BufferedPendingDeltaOutage`, `TestTake_BufferedFlushThenKillFailsClosed`, `TestTake_BufferedTwoInstancesOutage` (each instance's own `limit`, nil error), `TestTake_BufferedSleepStoresFlushError`, `TestPeek_BufferedEmptyFlushThenKill`. Keep `TestTake_Unreachable` / `TestPeek_Unreachable`
+- [x] 1.4 Run `go test -short -count=1 -timeout 60s -run 'TestRepro_BufferedTakeHidesRedisOutage|TestTake_BufferedPendingDeltaOutage|TestTake_BufferedFlushThenKillFailsClosed|TestTake_BufferedTwoInstancesOutage|TestTake_BufferedSleepStoresFlushError|TestPeek_BufferedEmptyFlushThenKill' ./windowcounter` and confirm FAIL on dest's fail-closed lock
 
 ## 2. Buffered outage is local cap (do not fail-closed)
 
