@@ -5,7 +5,7 @@ JobName: 2026-09-13-simpleredis-bug-handshake-redial
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T05:50:09Z |
-| explore | [x] | [ ] | |
+| explore | [x] | [x] | 2026-09-13T05:54:44Z |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
