@@ -5,7 +5,7 @@ JobName: 2026-09-13-simpleredis-close-abandoned-socket
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T14:09:39Z |
-| explore | [x] | [ ] | |
+| explore | [x] | [x] | 2026-09-13T14:19:35Z |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
