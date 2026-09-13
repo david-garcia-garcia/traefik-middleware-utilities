@@ -117,6 +117,8 @@ process table is constructed.
 - **AND** the last holder context is Done
 - **THEN** the value is slept and disposed without waiting
 - **AND** the key is not left stored
+- **AND** the key stayed stored until close returned
+- **AND** there was no window in which an `Open` could wake that value
 
 ### Requirement: Lifecycle events are logged
 The table SHALL emit a structured log line for each of: incarnation created (`Open` create),
@@ -137,7 +139,9 @@ including zero, with no exception for `Reset`.
 
 At zero grace the table keeps no sleeping value, so an `Open` that races the last holder going
 away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), not as
-`reclaim_reclaim`.
+`reclaim_reclaim`. That new incarnation's `create` SHALL NOT start until Close of the previous
+incarnation has returned, so `reclaim_dispose` for the previous incarnation SHALL precede
+`reclaim_put` of the next.
 
 #### Scenario: Hash change orphan then dispose
 - **WHEN** key A is opened, then all of A's contexts are Done
@@ -157,6 +161,7 @@ away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), n
 - **AND** an `Open` for that key races that drop
 - **THEN** that `Open` records `reclaim_put` and `reclaim_bind` for the key
 - **AND** it does not record `reclaim_reclaim`
+- **AND** `reclaim_dispose` for the previous incarnation is recorded before that `reclaim_put`
 
 #### Scenario: Reset logs orphan then dispose
 - **WHEN** `Reset` is called on a table that still has a live incarnation
@@ -179,6 +184,14 @@ the table waits, a Close hook that blocks blocks whoever ended the incarnation; 
 SHALL NOT block. Every goroutine the table starts for a key SHALL exit once that key's holder
 contexts are Done and its incarnation has ended.
 
+On the zero-grace drop path and when grace elapses, the table SHALL keep the key stored until
+Close has returned, so a concurrent `Open` for that key waits for Close instead of creating while
+it is in flight. After Close returns the key SHALL NOT be stored. Close SHALL NOT run while the
+table mutex is held. The Close window SHALL NOT be a sleeping window: an `Open` that arrives
+during Close MUST NOT wake the ending incarnation.
+
+Tests-only `Reset` MAY unmap first. Callers MUST NOT race `Reset` with `Open` on the same key.
+
 #### Scenario: Dispose log implies Close has returned
 - **WHEN** a key is orphaned and grace elapses
 - **AND** the Close hook is set
@@ -198,6 +211,12 @@ contexts are Done and its incarnation has ended.
 #### Scenario: Goroutines do not outlive the incarnation
 - **WHEN** many keys are opened, then every holder context is Done and every incarnation has ended
 - **THEN** the table owns no more goroutines than it did before those `Open` calls
+
+#### Scenario: Create does not start while previous Close is in flight
+- **WHEN** Close is in flight for a key (zero grace, or after grace elapsed)
+- **AND** `Open` is called for that key
+- **THEN** `create` does not run until Close has returned
+- **AND** that `Open` does not reclaim the closing value
 
 ### Requirement: Library Open loads under Traefik Yaegi
 A Traefik local plugin SHALL import this module's `reclaim` package and call `Open` from `New`
