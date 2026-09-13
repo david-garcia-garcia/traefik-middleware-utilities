@@ -19,7 +19,7 @@ Sliding-window hit counter: admit or deny a hit on an opaque key against a limit
 - **THEN** the library MUST NOT read HTTP headers, client address, user, tenant, or Host to build that key
 
 ### Requirement: Sliding estimate uses current and previous windows
-The current window start SHALL be `floor(unixSeconds / windowSeconds) × windowSeconds`. Redis keys SHALL be `{opaqueKey}:{windowStart}` and `{opaqueKey}:{previousWindowStart}`. A missing previous window SHALL count as zero. Window length SHALL be a whole number of seconds. Sub-second windows MUST NOT be supported.
+The current window start SHALL be `floor(unixSeconds / windowSeconds) × windowSeconds`. Redis keys SHALL be `{opaqueKey}:{windowStart}` and `{opaqueKey}:{previousWindowStart}`. A missing previous window SHALL count as zero. Window length SHALL be a whole number of seconds. Sub-second windows MUST NOT be supported. Take and Peek MUST return an error when `window` is shorter than one second or is not an integer number of seconds (for example 1500ms). They MUST NOT accept that window and silently use truncated whole-second buckets. Weight and TTL SHALL use that whole-second length only.
 
 #### Scenario: Dump at the window boundary does not double the limit
 - **WHEN** a key has used its full limit near the end of a window
@@ -38,6 +38,13 @@ The current window start SHALL be `floor(unixSeconds / windowSeconds) × windowS
 - **WHEN** Take returns
 - **THEN** the usage value is the sliding estimate after this Take as a float
 - **AND** it is not remaining quota and not an integer ceiling of the estimate
+
+#### Scenario: Fractional window is rejected
+- **WHEN** Take is called with a window of 1500ms
+- **THEN** Take returns a non-nil error
+- **AND** MUST NOT increment a Redis window key
+- **WHEN** Take is called with a window of 500ms
+- **THEN** Take returns a non-nil error
 
 ### Requirement: Peek observes without increment
 `Peek(ctx, key, limit, window)` SHALL return `allowed` and the sliding estimate using the same arguments, formula, and Redis keys as Take, and MUST NOT increment the current-window counter. `Allow` SHALL remain the same operation as Take and MUST NOT become Peek. The first argument SHALL be a `context.Context`.
