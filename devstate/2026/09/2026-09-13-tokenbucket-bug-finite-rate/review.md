@@ -18,3 +18,9 @@ findings: fold std_go_tokenbucket_allow; tests-first tasks
 fixed: OpenSpec change tokenbucket-reject-nonfinite-rate
 skipped: product apply
 
+## implement (2026-09-13)
+phase: implement
+findings: FAIL then PASS on NaN/+Inf New; -Inf already dest-green
+fixed: validateClock finite-rate gate; usage gotcha
+skipped: Allow/consumeOne special-case
+
