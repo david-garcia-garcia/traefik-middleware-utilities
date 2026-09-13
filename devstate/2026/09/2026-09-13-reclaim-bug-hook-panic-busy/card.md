@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T06:08:53Z
+Developer review: in progress — 2026-09-13T06:16:06Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** OpenSpec change `reclaim-hook-panic-recovery` folds nil-create/create-panic into `std_go_reclaim_context-lease` and panicking Sleep/Wake/Close into `std_go_reclaim_value-lifecycle`. Table recover is not applied yet.
+**Developers.** `reclaim.Table` recovers a nil `create` and panics in create, Sleep, Wake, and Close so a key is not left `slotBusy` and AfterFunc cannot crash the process. `Open` can return a wrapped Wake panic error. Tests 2a–2d.
 
 **End users.** None.
 
@@ -30,17 +30,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Proposal is on the branch. Implement remains (tests that fail on master, then recover).
+Recover is on the branch. Local unit tests passed. CI on this head is still queued.
 
 Priority: P1 — Production is unsafe, or serving a wrong public contract today
-Reviewed head: 1bf59d3
+Reviewed head: 2df37dc
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Pushed; CI on this head not seen; propose only |
-| CI proof | 1/6 | Pushed and still not seen on 1bf59d3 |
+| Overall readiness | 3/6 | CI in progress on the recover head |
+| CI proof | 3/6 | queued — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742235082 |
 | Local tests proof | N/A | prHost github; CI covers it |
 | Review resolution | 6/6 | OPEN PR; no reviewer comments |
 
@@ -50,8 +50,8 @@ Owner decision: None.
 | Branch | 2026-09-13-reclaim-bug-hook-panic-busy pushed | `git` / GitHub |
 | OpenSpec | reclaim-hook-panic-recovery | `openspec/changes/reclaim-hook-panic-recovery/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/49 | GitHub MCP |
-| CI | not seen | head 1bf59d3 just pushed |
-| Local tests | none | handoff.yaml |
+| CI | build 34742235082 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742235082 | GitHub MCP check runs queued |
+| Local tests | passed | `go test -short -timeout 2m -count=1 ./...` |
 | PR comments | no comments | comments none |
 
 ## Specs
@@ -76,8 +76,9 @@ Local ticket `devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/` on branc
 | After a Sleep panic, emit `reclaim_orphan` / `reclaim_dispose`? | additive incidental | assumed — skip orphan (Sleep did not return); still Close then dispose | explore |
 
 ## Before merge
-- [ ] [P1] Recover nil `create` and panics in create/Sleep/Wake/Close so a key is not left `slotBusy` and AfterFunc cannot crash the process
-- [ ] Land product tests that fail on current master, then implement, then they pass
+- [x] [P1] Recover nil `create` and panics in create/Sleep/Wake/Close so a key is not left `slotBusy` and AfterFunc cannot crash the process
+- [x] Land product tests that fail on current master, then implement, then they pass
+- [ ] CI green on 2df37dc
 - [x] Stub review PR open
 - [x] Explore: 2a–2d reproduced on master
 - [x] Propose `reclaim-hook-panic-recovery`
@@ -95,23 +96,23 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 1bf59d34ed8095c336738a199e76074d53f1aba4 | Card must match the branch you measured |
+| Reviewed head | 2df37dc32b11cdaa347bb6ae1a097a947ffcb817 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: Not applied yet versus `origin/master`. Recover at `put` / `drop` / `reclaimLocked` / `dispose` / `Reset`.
+Best possible solution: Recover at `put` / `drop` / `reclaimLocked` / `dispose` / `Reset`, sharing `failBusySlot` with the existing create-error path. `runSleep` / `runWake` / `runClose` stay thin.
 
-Do we have a high-confidence way to reproduce? Yes. Explore throwaway tests: 2a–2d hang / leftover busy / AfterFunc child `exit status 2`.
+Do we have a high-confidence way to reproduce? Yes. Fail-then-pass: 2a/2b hung 10s (`Open did not return; key left busy`); 2c child `exit status 2` from AfterFunc; 2d Close never ran. After `2e24a03` those four tests pass in 0.19s; `go test -short ./...` passed.
 
-Is this the best way to solve the issue? Not applied yet. The agreed recover is at the table that owns `slotBusy`/`ready`.
+Is this the best way to solve the issue? Yes versus `origin/master`. The table owns `slotBusy`/`ready`; a silent swallow in the runners would look like success.
 
 ### Evidence
 What I checked:
-- Change `reclaim-hook-panic-recovery` validates (`openspec validate --strict`)
-- FindSpecHost fold into `std_go_reclaim_context-lease` and `std_go_reclaim_value-lifecycle`
-- One OPEN PR #49
+- Fail: `go test -run TestTable_CreatePanicUnsticksKey|...` on `1baff53` (tests only) — 4 FAIL
+- Pass: same four tests after `2e24a03`; `go test -short -timeout 2m -count=1 ./...` passed
+- CI run 34742235082 queued (GitHub MCP)
 
 ### Rank-up moves
 None.
