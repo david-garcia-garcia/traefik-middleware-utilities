@@ -18,3 +18,9 @@ findings: FindSpecHost fold allow + lua-eval; change tokenbucket-last-not-rewind
 fixed: proposal, specs, design, tasks
 skipped: product apply
 
+## implement (2026-09-13)
+phase: implement
+findings: persist-max consumeOne + Lua HSET; Memory now after lock; FAIL then PASS with Hour TTL
+fixed: clock.go, lua.go, memory.go, repro test, usage gotcha
+skipped: builtin max (Yaegi undefined)
+

@@ -3,16 +3,14 @@ package tokenbucket
 import (
 	"context"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-// TestRepro_StaleNowRewindsLastDoubleRefill: consumeOne persists nowMicro as last
-// even when nowMicro < last. A later sample then refills an interval already
-// applied. Memory samples now() outside the mutex, so a stale timestamp can
-// overwrite a newer last.
+// TestRepro_StaleNowRewindsLastDoubleRefill proves persisted last does not
+// rewind: sequential backward now keeps last at t2, overlapping Allows cannot
+// sample now before mu, and Lua HSET last is persist-max not raw t.
 func TestRepro_StaleNowRewindsLastDoubleRefill(t *testing.T) {
 	t0 := time.Unix(1_700_000_000, 0)
 	t1 := t0.Add(5 * time.Second)
@@ -45,33 +43,40 @@ func TestRepro_StaleNowRewindsLastDoubleRefill(t *testing.T) {
 		limiter.SetNowForTest(func() time.Time { return t0 })
 		mustAllow(t, limiter, "k", true, "init at t0")
 
-		// Dest sampled now before mu, so a wait inside now() let a later
-		// consume finish first and then stored t1. After now() runs under
-		// mu, that wait deadlocks. Overlap two Allows without parking in now();
-		// persist-max plus lock-order keep last at the later sample.
-		started := make(chan struct{})
-		var startedOnce sync.Once
+		firstInNow := make(chan struct{})
+		proceed := make(chan struct{})
 		var nowCalls atomic.Int64
 		limiter.SetNowForTest(func() time.Time {
-			startedOnce.Do(func() { close(started) })
 			if nowCalls.Add(1) == 1 {
+				close(firstInNow)
+				<-proceed
 				return t1
 			}
 			return t2
 		})
 
-		staleDone := make(chan struct{})
+		firstDone := make(chan struct{})
 		go func() {
-			defer close(staleDone)
+			defer close(firstDone)
 			_, _, _ = limiter.Allow(context.Background(), "k")
 		}()
-		<-started
-		_, _, _ = limiter.Allow(context.Background(), "k")
+		<-firstInNow
+		secondDone := make(chan struct{})
+		go func() {
+			defer close(secondDone)
+			_, _, _ = limiter.Allow(context.Background(), "k")
+		}()
 		select {
-		case <-staleDone:
-		case <-time.After(2 * time.Second):
-			t.Fatal("Allow deadlock: now() must not wait while holding mu")
+		case <-secondDone:
+			close(proceed)
+			<-firstDone
+			t.Fatal("second Allow finished while first now() was waiting; now() sampled before mu")
+		case <-time.After(500 * time.Millisecond):
+			// Second Allow is blocked: first now() still holds mu.
 		}
+		close(proceed)
+		<-firstDone
+		<-secondDone
 
 		limiter.SetNowForTest(func() time.Time { return t2 })
 		allowed, _, err := limiter.Allow(context.Background(), "k")
