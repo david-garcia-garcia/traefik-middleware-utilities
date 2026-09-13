@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Buffered Take refreshes previous when local_delta is zero
-When `sync_rate` is greater than zero, Take SHALL GET the previous-window key when that key is already in this instance's buffer and `local_delta` is 0, then set `redis_known` from that GET (`redis:miss` counts as zero). When `local_delta` is greater than 0, Take SHALL keep the memory count and MUST NOT GET that key (Redis does not hold this instance's unflushed delta). Take MUST NOT INCR the previous-window key. A failed GET SHALL return on Take the same way a current-window GET failure does. This GET MUST NOT be stored as a retained flush error or deferred to the missed-`sync_rate` probe.
+When `sync_rate` is greater than zero, Take SHALL GET the previous-window key when that key is already in this instance's buffer as a window it has counted (`expire_at` set) and `local_delta` is 0, then set `redis_known` from that GET (`redis:miss` counts as zero). When `local_delta` is greater than 0, Take SHALL keep the memory count and MUST NOT GET that key (Redis does not hold this instance's unflushed delta). Take MUST NOT GET a previous-window key on every call merely because it was GET-seeded (never counted as current). Take MUST NOT INCR the previous-window key. A failed GET SHALL return on Take the same way a current-window GET failure does. This GET MUST NOT be stored as a retained flush error or deferred to the missed-`sync_rate` probe.
 
 #### Scenario: Two clients then next-window Take denies at three
 - **WHEN** two limiter instances with two SimpleRedis clients share one opaque key and `sync_rate` greater than zero
