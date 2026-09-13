@@ -213,21 +213,24 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 		return nil, errIssue
 	}
 	// Do not make(length+2): an in-cap header with no payload would allocate tens of MiB from a handful of bytes.
+	// Read a first chunk instead, so a lying header costs at most bulkReadChunk.
 	need := length + 2
-	var data []byte
-	for len(data) < need {
-		want := need - len(data)
-		if want > bulkReadChunk {
-			want = bulkReadChunk
-		}
-		chunk := make([]byte, want)
-		if _, err := io.ReadFull(reader, chunk); err != nil {
+	first := need
+	if first > bulkReadChunk {
+		first = bulkReadChunk
+	}
+	data := make([]byte, first)
+	if _, err := io.ReadFull(reader, data); err != nil {
+		return nil, err
+	}
+	if need > first {
+		// The peer delivered the first chunk, so size the remainder in one step. Growing by
+		// repeated append instead would recopy the payload and cost several times its size.
+		full := make([]byte, need)
+		copy(full, data)
+		data = full
+		if _, err := io.ReadFull(reader, data[first:]); err != nil {
 			return nil, err
-		}
-		if data == nil {
-			data = chunk
-		} else {
-			data = append(data, chunk...)
 		}
 	}
 	// Trailer must be CRLF; otherwise the stream is off a reply boundary.
