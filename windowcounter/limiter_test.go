@@ -79,6 +79,13 @@ func TestTake_ExpireOnFirstHit(t *testing.T) {
 	if len(got) < 3 || got[0] != "EXPIRE" || got[2] != "20" {
 		t.Fatalf("expire argv %v want EXPIRE … 20", got)
 	}
+	afterFirst := fake.expireCommandCount()
+	if _, _, err := limiter.Take(context.Background(), "k", 5, window); err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.expireCommandCount(); got != afterFirst {
+		t.Fatalf("second Take expire count %d want %d (TTL already set)", got, afterFirst)
+	}
 }
 
 func TestTake_SlidingBoundaryDoesNotDouble(t *testing.T) {

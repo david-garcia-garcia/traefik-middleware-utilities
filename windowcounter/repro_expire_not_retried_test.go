@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-// TestRepro_ExactExpireNotRetriedAfterFailure proves takeExact never retries EXPIRE after the first-hit EXPIRE fails.
+// TestRepro_ExactExpireNotRetriedAfterFailure proves a later Take still sets TTL after the first-hit EXPIRE fails.
 func TestRepro_ExactExpireNotRetriedAfterFailure(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
 	fake.failNextExpireCommands(1)
