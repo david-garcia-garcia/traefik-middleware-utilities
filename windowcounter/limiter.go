@@ -184,7 +184,7 @@ func (l *Limiter) takeBuffered(ctx context.Context, currentKey, previousKey stri
 	if err != nil {
 		return false, 0, err
 	}
-	previous, err := l.bufferedCountLocked(ctx, previousKey)
+	previous, err := l.takeBufferedPreviousLocked(ctx, previousKey)
 	if err != nil {
 		return false, 0, err
 	}
@@ -271,6 +271,36 @@ func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt in
 	state = &windowState{redisKnown: known, expireAt: expireAt}
 	l.windows[redisKey] = state
 	return state, nil
+}
+
+// takeBufferedPreviousLocked is redis_known + local_delta for previous on Take.
+// GET when this instance already counted that key (expireAt set) and localDelta is 0,
+// so a later flush from another instance is visible after Sleep.
+// Keep memory when localDelta is greater than 0, or when the key was only GET-seeded as previous
+// (expireAt 0): GET every Take would GET Redis on every buffered call.
+// Do not write current-window expireAt onto this key.
+func (l *Limiter) takeBufferedPreviousLocked(ctx context.Context, redisKey string) (int64, error) {
+	state := l.windows[redisKey]
+	if state != nil {
+		if state.localDelta == 0 && state.expireAt > 0 {
+			// Shared Redis may have moved since this node's last flush of this key.
+			known, err := l.getCount(ctx, redisKey)
+			if err != nil {
+				return 0, err
+			}
+			l.lastRedisOK = l.now()
+			state.redisKnown = known
+		}
+		return state.redisKnown + state.localDelta, nil
+	}
+	// Seed redis_known from Redis on first sight of this previous-window key.
+	known, err := l.getCount(ctx, redisKey)
+	if err != nil {
+		return 0, err
+	}
+	l.lastRedisOK = l.now()
+	l.windows[redisKey] = &windowState{redisKnown: known}
+	return known, nil
 }
 
 // bufferedCountLocked is redis_known + local_delta, GET-seeding a key the limiter has not seen.

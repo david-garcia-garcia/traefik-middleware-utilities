@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-windowcounter-bug-stale-previous
+jobName: 2026-09-13-windowcounter-bug-stale-previous
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 0d4d17aea869782a08e50e360a3375fa65c69e6f8f47ca5f042b919053ef86e5
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: windowcounter-stale-previous
+pr:
+  id: 63
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/63
