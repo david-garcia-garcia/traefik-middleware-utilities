@@ -8,7 +8,7 @@ JobName: 2026-09-13-windowcounter-bug-stale-previous
 | explore | [x] | [x] | 2026-09-13T07:11:48Z |
 | propose | [x] | [x] | 2026-09-13T07:15:38Z |
 | implement | [x] | [x] | 2026-09-13T07:20:24Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
