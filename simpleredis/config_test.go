@@ -57,7 +57,7 @@ func TestNewRejectsMaxIdleConnsAbovePoolSize(t *testing.T) {
 		cfg  Config
 	}{
 		{"explicit idle above pool", Config{Host: "127.0.0.1:1", PoolSize: 4, MaxIdleConns: 100}},
-		{"default idle above a smaller pool", Config{Host: "127.0.0.1:1", PoolSize: 2}},
+		{"explicit idle one above pool", Config{Host: "127.0.0.1:1", PoolSize: 4, MaxIdleConns: 5}},
 	}
 	for _, row := range rows {
 		row := row
@@ -85,6 +85,9 @@ func TestNewKeepsValidPoolIdleKnobs(t *testing.T) {
 		{"explicit idle equal to pool is kept", Config{Host: "127.0.0.1:1", PoolSize: 3, MaxIdleConns: 3}, 3, 3},
 		{"zero Config keeps both defaults", Config{Host: "127.0.0.1:1"}, defaultPoolSize, defaultMaxIdleConns},
 		{"default pool keeps a smaller explicit idle", Config{Host: "127.0.0.1:1", MaxIdleConns: 3}, defaultPoolSize, 3},
+		// A caller who only shrinks PoolSize never asked for an idle trim of 8, so it follows the pool.
+		{"default idle follows a smaller pool", Config{Host: "127.0.0.1:1", PoolSize: 2}, 2, 2},
+		{"default idle follows a pool of one", Config{Host: "127.0.0.1:1", PoolSize: 1}, 1, 1},
 	}
 	for _, row := range rows {
 		row := row

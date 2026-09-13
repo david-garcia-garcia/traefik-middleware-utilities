@@ -16,14 +16,14 @@ const (
 	defaultMaxRetries   = 1
 )
 
-// ErrMaxIdleConnsAbovePoolSize is New when, after defaults, MaxIdleConns is above PoolSize.
+// ErrMaxIdleConnsAbovePoolSize is New when an explicit MaxIdleConns is above PoolSize.
 // The idle list cannot hold more sockets than the live cap, so that Config cannot build a client.
 var ErrMaxIdleConnsAbovePoolSize = errors.New("simpleredis: MaxIdleConns must not exceed PoolSize")
 
 // Config is the freeze-at-New settings for a SimpleRedis client.
 // New copies these values onto the client. Later writes to this struct do not change a client that already ran New.
 // A zero Config uses the package defaults (live cap 8, idle trim 8, 200ms pool wait, 30s idle reuse gate, 200ms dial, 100ms I/O, 1 extra retry).
-// After those defaults, New returns ErrMaxIdleConnsAbovePoolSize and no client when MaxIdleConns is above PoolSize (explicit trim, or default 8 against a smaller PoolSize). A trim below PoolSize stays as written: that trades a smaller idle footprint for closing (and later re-dialling) every socket released above the trim.
+// An explicit MaxIdleConns above PoolSize returns ErrMaxIdleConnsAbovePoolSize and no client. A zero MaxIdleConns is not a request for 8: it follows a smaller PoolSize, so PoolSize alone still builds. A trim below PoolSize stays as written: that trades a smaller idle footprint for closing (and later re-dialling) every socket released above the trim.
 // Worst-case command wait is (MaxRetries+1)*(DialTimeout+IOTimeout) (600ms at those defaults). Min/max backoff keep go-redis sentinels: 0 means 8ms / 512ms; -1 means off. MaxRetries 0 at New means 1 extra retry; -1 means none.
 type Config struct {
 	// Host is the TCP address New stores (host:port). New does not dial.
@@ -35,7 +35,7 @@ type Config struct {
 
 	// PoolSize is the live-socket cap (idle plus in-use). 0 means 8.
 	PoolSize int
-	// MaxIdleConns is how many unused sockets release will keep. 0 means 8.
+	// MaxIdleConns is how many unused sockets release will keep. 0 means 8, or PoolSize when that is smaller.
 	// New rejects the Config when the value after that default is above PoolSize.
 	MaxIdleConns int
 	// PoolTimeout is how long a waiter past PoolSize blocks. 0 means 200ms.
@@ -55,13 +55,19 @@ type Config struct {
 	MaxRetryBackoff time.Duration
 }
 
-// applyDefaults fills zero pool, timeout, and MaxRetries knobs, then rejects MaxIdleConns above PoolSize. Min/max backoff sentinels stay 0/-1 for retryLimits.
+// applyDefaults fills zero pool, timeout, and MaxRetries knobs, clamps a defaulted MaxIdleConns to PoolSize, and rejects an explicit MaxIdleConns above PoolSize. Min/max backoff sentinels stay 0/-1 for retryLimits.
 func (cfg Config) applyDefaults() (Config, error) {
 	if cfg.PoolSize <= 0 {
 		cfg.PoolSize = defaultPoolSize
 	}
 	if cfg.MaxIdleConns <= 0 {
+		// Unset is not a request for 8: follow a smaller PoolSize instead of rejecting the Config.
 		cfg.MaxIdleConns = defaultMaxIdleConns
+		if cfg.MaxIdleConns > cfg.PoolSize {
+			cfg.MaxIdleConns = cfg.PoolSize
+		}
+	} else if cfg.MaxIdleConns > cfg.PoolSize {
+		return Config{}, fmt.Errorf("%w (MaxIdleConns=%d PoolSize=%d)", ErrMaxIdleConnsAbovePoolSize, cfg.MaxIdleConns, cfg.PoolSize)
 	}
 	if cfg.PoolTimeout <= 0 {
 		cfg.PoolTimeout = defaultPoolTimeout
@@ -77,9 +83,6 @@ func (cfg Config) applyDefaults() (Config, error) {
 	}
 	if cfg.MaxRetries == 0 {
 		cfg.MaxRetries = defaultMaxRetries
-	}
-	if cfg.MaxIdleConns > cfg.PoolSize {
-		return Config{}, fmt.Errorf("%w (MaxIdleConns=%d PoolSize=%d)", ErrMaxIdleConnsAbovePoolSize, cfg.MaxIdleConns, cfg.PoolSize)
 	}
 	return cfg, nil
 }
