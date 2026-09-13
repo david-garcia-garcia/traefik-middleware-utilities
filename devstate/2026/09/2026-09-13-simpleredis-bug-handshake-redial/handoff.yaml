@@ -1,0 +1,13 @@
+issueKey: 2026-09-13-simpleredis-bug-handshake-redial
+jobName: 2026-09-13-simpleredis-bug-handshake-redial
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
