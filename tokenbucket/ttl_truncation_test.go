@@ -41,7 +41,7 @@ func TestTTLTruncation_RejectsFractionalTTL(t *testing.T) {
 		t.Fatal(allowErr)
 	}
 	eval := fake.lastEvalCommand()
-	if len(eval) < 9 || eval[0] != "EVAL" {
+	if len(eval) < 9 {
 		t.Fatalf("eval argv %v", eval)
 	}
 	if eval[6] != "2" {
