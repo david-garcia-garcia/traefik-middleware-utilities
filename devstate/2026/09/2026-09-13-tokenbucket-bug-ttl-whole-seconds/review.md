@@ -42,4 +42,10 @@ findings: fold allow and lua-eval
 fixed: live specs synced; change moved to archive/2026-09-13-tokenbucket-ttl-whole-seconds
 skipped: none
 
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: CI run 34743541102 success; lint goconst on extra EVAL literal fixed
+fixed: PR title ready; final card
+skipped: none
+
 

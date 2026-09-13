@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T06:31:59Z
+Developer review: ready for review — 2026-09-13T06:48:58Z
 
 ## What this changes
 **Operators.** None.
@@ -29,27 +29,27 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Apply landed locally; CI on the apply head is still running. Seven-axis review is clean.
+CI succeeded on the apply head. Ready for review.
 
 Priority: P2 — stores can expire the same key at different times when ttl is not a whole second
-Reviewed head: ce94276
+Reviewed head: 945a231
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI in progress after the apply |
-| CI proof | 3/6 | Checks queued on the stub PR |
+| Overall readiness | 6/6 | CI succeeded; local tests passed; no open review comments |
+| CI proof | 6/6 | All required checks succeeded |
 | Local tests proof | N/A | Remote PR; CI covers proof (`localTests: passed`) |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-tokenbucket-bug-ttl-whole-seconds pushed | `git push` `7e02c79` |
-| OpenSpec | tokenbucket-ttl-whole-seconds | `openspec/changes/tokenbucket-ttl-whole-seconds/` |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/57 | pr-host Create |
-| CI | build 34742666190 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742666190 | pr-host CI (head `7e02c79`) |
+| Branch | 2026-09-13-tokenbucket-bug-ttl-whole-seconds pushed | `git push` `945a231` |
+| OpenSpec | tokenbucket-ttl-whole-seconds (archived) | `openspec/changes/archive/2026-09-13-tokenbucket-ttl-whole-seconds/` |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/57 | pr-host reuse |
+| CI | build 34743541102 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743541102 | pr-host CI (head `945a231`) |
 | Local tests | passed | `go test -short -count=1 ./...` |
 | PR comments | no comments | inventory empty |
 
@@ -64,7 +64,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-ttl-whole-seconds`, stub PR #57. Apply rejected fractional ttl at `validateClock`. Seven-axis review is clean. Devdocs impact is next.
+Local ticket, branch `2026-09-13-tokenbucket-bug-ttl-whole-seconds`, PR #57. Fractional ttl is rejected at `validateClock`. CI on `945a231` succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -74,8 +74,7 @@ Local ticket, branch `2026-09-13-tokenbucket-bug-ttl-whole-seconds`, stub PR #57
 | Is NewRedis(1500ms) a dedicated case or only Memory plus shared `validateClock`? | additive asked | assumed — both constructors call `validateClock`; the test calls both NewMemory and NewRedis with 1500ms and `errors.Is(..., errTTL)`. 2s still succeeds on both. Dest ARGV/`+1200ms` proof exists only in the failing-first version of that test. | explore |
 
 ## Before merge
-- [x] Land tokenbucket tests that fail on dest for New(1500ms) accepted, Redis ARGV ttl 1, Memory still live at +1200ms, then reject fractional ttl at validateClock and keep 2s accepted
-- [x] Archive whole-second ttl into the live tokenbucket allow and lua-eval specs
+None.
 
 ## Findings
 None.
@@ -96,7 +95,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | ce942761 | Card must match the branch you measured |
+| Reviewed head | 945a231ad1a28c0fa51ba6a54ef5b758af9365fb | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -112,9 +111,9 @@ Is this the best way to solve the issue? Yes — PEXPIRE or flooring Memory whil
 What I checked:
 - Dest FAIL `TestTTLTruncation_MemoryVsRedis` (`fbfed5c`): ARGV ttl=`"1"`; Memory at +1200ms admitted 1 want 2
 - Apply `3afcc2e`: `validateClock` `ttl < time.Second || ttl%time.Second != 0`; reshaped test `TestTTLTruncation_RejectsFractionalTTL`
+- Lint fix `945a231`: dropped the third `"EVAL"` literal (goconst)
 - `go test -short -count=1 ./...` passed
-- `openspec validate tokenbucket-ttl-whole-seconds --type change --strict` valid
-- CI run 34742666190 queued
+- CI run 34743541102: Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly all success
 
 ### Rank-up moves
 None.

@@ -11,4 +11,4 @@ JobName: 2026-09-13-tokenbucket-bug-ttl-whole-seconds
 | codereview | [x] | [x] | 2026-09-13T06:29:15Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T06:31:59Z |
 | archive | [x] | [x] | 2026-09-13T06:31:59Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-13T06:48:58Z |
