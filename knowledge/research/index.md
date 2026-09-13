@@ -39,3 +39,8 @@ description: Kong Gateway rate-limiting window types and Redis sync_rate behavio
 priority: normal
 local: index_ext_go-redis.md
 description: Official go-redis client pool, option, and proto.Reader behavior this product copies the shape of, without importing the library.
+
+## go
+priority: normal
+local: index_ext_go.md
+description: Official Go standard-library contracts this product relies on (net.Conn deadlines).

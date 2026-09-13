@@ -14,3 +14,8 @@ description: How go-redis proto.Reader.readLine uses ReadSlice and handles bufio
 priority: normal
 local: ext_go-redis_proto_reader-limit/
 description: Whether go-redis proto.Reader caps bulk-string or array allocations taken from a reply header.
+
+## Idle conn unread-data check
+priority: normal
+local: ext_go-redis_pool_conn-check/
+description: How go-redis isHealthyConn/connCheck peeks the kernel receive queue on Unix and is a no-op on Windows.
