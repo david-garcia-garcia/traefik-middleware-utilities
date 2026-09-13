@@ -193,6 +193,7 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 // dial opens TCP to host, then AUTH and SELECT when those New fields are set.
 // Dialer.Timeout is the per-attempt cap; DialContext also honors ctx (overall budget or caller).
 // handshakeFailed is true when TCP succeeded and AUTH or SELECT then failed; exec must not retry that error.
+//
 //nolint:revive // error stays before handshakeFailed; reordering would collide with in-flight SimpleRedis PRs.
 func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, handshakeFailed bool) {
 	if err := contextStop(ctx); err != nil {
