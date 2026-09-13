@@ -57,10 +57,10 @@ Waiters that bound when `ready` closed still keep the incarnation alive: creator
 
 - Q: Does implement also add the optional pre-create `ctx.Err()` check?
   Rank: additive asked — ticket: that check may be added as an extra, not instead
-  Decision: assumed — add `if err := ctx.Err(); err != nil { return nil, err }` at the start of `put` (before `create`) **and** keep the post-create bind check. Do not treat the pre-create check as the fix. Skip a redundant pre-check on awake bind / reclaim: those sites already check at bind, and a canceled ctx that reaches them still must drop a holder that was incremented.
-  By: explore
+  Decision: assumed — do not abort `put` before `create`. That would leave `ready` waiters parked (deadlock) or replay `createErr` to a live waiter. The extra does not replace bind-time drop after create, awake bind, and reclaim. A canceled ctx on a sleeping key still reclaims (wake) then drops, so Open-entry return is not used either.
+  By: implement
 
 - Q: How do we cover waiters that still get the live value without a flake?
   Rank: additive asked — criterion 3 names waiters that bound when ready closed
-  Decision: assumed — one test: two first Opens, create blocks until the second is waiting on `ready`, then cancel the creator ctx and return the value. Assert creator Open returns `ctx.Err()` and a nil pointer; the waiter Open returns that same pointer with nil error and Close has not run while the waiter holds it. If dest currently returns the pointer from the creator, this fails before the fix.
-  By: explore
+  Decision: assumed — two first Opens, create blocks until the second waits on `ready`, then cancel the creator. Waiter’s table uses positive grace so a lost awake-bind race still reclaims the same pointer instead of creating at zero grace.
+  By: implement
