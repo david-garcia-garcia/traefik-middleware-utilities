@@ -9,6 +9,6 @@ JobName: 2026-09-13-simpleredis-desync-boundary-check
 | propose | [x] | [x] | 2026-09-13T09:06:06Z |
 | implement | [x] | [x] | 2026-09-13T09:12:31Z |
 | codereview | [x] | [x] | 2026-09-13T09:25:49Z |
-| devdocsimpact | [x] | [ ] | |
-| archive | [ ] | [ ] | |
+| devdocsimpact | [x] | [x] | 2026-09-13T09:27:34Z |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
