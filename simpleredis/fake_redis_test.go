@@ -887,14 +887,14 @@ func (f *strayExtraReplyFake) connections() int {
 }
 
 // startStrayExtraReplyFake answers GET kN with vN and, every nth command, appends one extra bulk.
-func startStrayExtraReplyFake(t *testing.T, nth int) (*strayExtraReplyFake, string) {
+func startStrayExtraReplyFake(t *testing.T, nth int) (fake *strayExtraReplyFake, listenAddr string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	fake := &strayExtraReplyFake{}
+	fake = &strayExtraReplyFake{}
 	go func() {
 		for {
 			conn, acceptErr := listener.Accept()

@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: Make simpleredis release idleConnsMu via defer
+url: none
+number: none

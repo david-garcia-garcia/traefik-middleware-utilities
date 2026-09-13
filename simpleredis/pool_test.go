@@ -522,6 +522,34 @@ func TestReleaseKeepsSocketWhenLiveUnderCap(t *testing.T) {
 	}
 }
 
+// TestReleaseClosesWhenIdleFullAtLiveCap proves a reusable socket is closed, not parked, when idle is already MaxIdleConns and live is at PoolSize.
+func TestReleaseClosesWhenIdleFullAtLiveCap(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.mu.Lock()
+	fake.getDelay = 20 * time.Millisecond
+	fake.mu.Unlock()
+	redis := New(Config{Host: addr, PoolSize: 2, MaxIdleConns: 1})
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := redis.Get(context.Background(), "hit"); err != nil {
+				t.Errorf("Get: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+	if got := pooledIdle(redis); got != 1 {
+		t.Fatalf("idle %d after overlapping Gets with MaxIdleConns 1 PoolSize 2, want 1", got)
+	}
+	if got := fake.connections(); got != 2 {
+		t.Fatalf("opened %d connections, want 2", got)
+	}
+	assertTurnsFullAndNoOverFrees(t, redis)
+}
+
 func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
 	// ReadSlice takes the complete `$100` head; io.ReadFull then fails on the 40-byte payload.
 	truncated := append([]byte("$100\r\n"), bytes.Repeat([]byte("x"), 40)...)
