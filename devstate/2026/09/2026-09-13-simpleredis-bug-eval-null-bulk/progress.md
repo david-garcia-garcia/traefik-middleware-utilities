@@ -9,6 +9,6 @@ JobName: 2026-09-13-simpleredis-bug-eval-null-bulk
 | propose | [x] | [x] | 2026-09-13T05:58:57Z |
 | implement | [x] | [x] | 2026-09-13T06:02:52Z |
 | codereview | [x] | [x] | 2026-09-13T06:08:07Z |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
+| devdocsimpact | [x] | [x] | 2026-09-13T06:10:09Z |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |

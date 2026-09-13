@@ -43,3 +43,19 @@ fixed: parseLen optional minus is negative length, not miss (64dba6a)
 skipped: none
 verdict: in progress
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/46
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage SimpleRedis and RESP decode (already produced in implement)
+fixed: usage packets already matched decode nil-slot / Get miss
+skipped: none
+verdict: in progress
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/46
+
+## archive (2026-09-13)
+phase: archive
+findings: none
+fixed: folded decode and commands deltas into live specs; archived change
+skipped: none
+verdict: in progress
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/46
