@@ -8,7 +8,7 @@ JobName: 2026-09-13-windowcounter-bug-lock-during-get
 | explore | [x] | [x] | 2026-09-13T07:07:41Z |
 | propose | [x] | [x] | 2026-09-13T07:10:45Z |
 | implement | [x] | [x] | 2026-09-13T07:15:25Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |

@@ -402,7 +402,7 @@ func (l *Limiter) flushPending(ctx context.Context) error {
 	return l.flushPendingLocked(ctx)
 }
 
-// flushPendingLocked is flushPending while the caller already holds l.mu.
+// flushPendingLocked copies in-flight deltas, EVAL without l.mu, then subtracts flushed amount. Caller holds l.mu. A second flusher skips a key whose flushDelta is set.
 func (l *Limiter) flushPendingLocked(ctx context.Context) error {
 	// pendingFlush is one window's EVAL snapshot copied under l.mu.
 	type pendingFlush struct {
@@ -424,6 +424,7 @@ func (l *Limiter) flushPendingLocked(ctx context.Context) error {
 		}
 	}
 	var firstErr error
+	// EVAL each snapshot unlocked; on success redisKnown = n and localDelta -= flushedDelta.
 	for _, job := range pending {
 		values, err := l.flushEvalUnlocked(ctx, job.redisKey, job.delta, job.expireAt)
 		state := l.windows[job.redisKey]

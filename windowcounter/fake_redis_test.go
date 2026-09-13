@@ -70,39 +70,17 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 			f.getCalls++
 			redisKey := args[1]
 			reply := testBulk(f.store, redisKey)
-			hold := time.Duration(0)
+			timedHold := time.Duration(0)
+			waitUntilRelease := false
 			entered := f.getEntered
 			release := f.getRelease
 			if f.getBlockPrefix != "" && strings.HasPrefix(redisKey, f.getBlockPrefix) {
-				hold = f.getHold
-				if hold == 0 && release != nil {
-					hold = -1
-				}
+				timedHold = f.getHold
+				waitUntilRelease = f.getHold == 0 && release != nil
 				f.getBlockPrefix = ""
 			}
-			// Drop f.mu during the hold so other keys are not stalled by the fake.
 			f.mu.Unlock()
-			if hold != 0 {
-				f.getEnteredOnce.Do(func() {
-					if entered != nil {
-						close(entered)
-					}
-				})
-				if hold > 0 {
-					timer := time.NewTimer(hold)
-					if release != nil {
-						select {
-						case <-release:
-							timer.Stop()
-						case <-timer.C:
-						}
-					} else {
-						<-timer.C
-					}
-				} else {
-					<-release
-				}
-			}
+			f.waitGetHold(timedHold, waitUntilRelease, entered, release)
 			_, _ = io.WriteString(conn, reply)
 			f.mu.Lock()
 		case "INCR":
@@ -263,4 +241,30 @@ func readTestCommand(reader *bufio.Reader) ([]string, error) {
 		args[i] = string(buf[:length])
 	}
 	return args, nil
+}
+
+// waitGetHold waits out a timed GET hold or until unblockGet. Caller has released f.mu so other keys are not stalled.
+func (f *testFakeRedis) waitGetHold(timedHold time.Duration, waitUntilRelease bool, entered, release chan struct{}) {
+	if timedHold == 0 && !waitUntilRelease {
+		return
+	}
+	f.getEnteredOnce.Do(func() {
+		if entered != nil {
+			close(entered)
+		}
+	})
+	if waitUntilRelease {
+		<-release
+		return
+	}
+	timer := time.NewTimer(timedHold)
+	if release != nil {
+		select {
+		case <-release:
+			timer.Stop()
+		case <-timer.C:
+		}
+		return
+	}
+	<-timer.C
 }
