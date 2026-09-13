@@ -24,3 +24,22 @@ findings: dest apply landed; CI lint failed once on gofmt blank before dial noli
 fixed: gofmt blank comment before dial //nolint (8c2ec1d)
 skipped: testpackage, goimports, gofumpt; error last reorder on borrow/dial
 
+## codereview (2026-09-13)
+phase: codereview
+findings: Spec 2 extra (run.timeout already on dest; identity == usage sentence beyond task 5.1). Other axes none.
+fixed: none
+skipped: both Spec extras (timeout kept; identity gotcha kept in usage)
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: none — std_go_test-suites already records pin, testpackage, goimports/gofumpt, checkExported, identity ==
+fixed: none
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: folded three ADDED requirements into openspec/specs/std_go_ci_test-suites/spec.md; moved change to archive/2026-09-13-harden-golangci-lint
+fixed: none
+skipped: dest catalog still lacks ## Requirements (pre-existing; live-e2e same)
+
+
