@@ -27,12 +27,12 @@ The four events the table drives on one stored value: `create -> (sleep -> wake)
 _Avoid_: a house `dispose func(any)` on `Open`; cleanup in `Close` that `Sleep` already did
 
 **Sleep**:
-Optional `Hooks.Sleep`, called when the last holder's context is Done. The value stays stored and keeps its identity, and releases what is expensive to hold idle. It is not a close: the value must be resumable.
+Optional `Hooks.Sleep`, called when the last holder's context is Done. The value stays stored and keeps its identity, and releases what is expensive to hold idle. It is not a close: the value must be resumable. If Sleep panics, the table does not park the value asleep: it Closes that incarnation and unmaps the key so a later Open creates.
 _Avoid_: releasing something in `Sleep` that `Wake` cannot get back
 
 **Wake**:
-Optional `Hooks.Wake`, called when an `Open` finds a stored, sleeping value. `Open` does not return until `Wake` has returned, so a caller never receives a sleeping value. `Wake` cannot fail: a value that cannot guarantee resume simply does not pass Sleep and Wake hooks.
-_Avoid_: an error return or a create-fallback on wake; work in `Wake` slow enough to stall a Traefik reload
+Optional `Hooks.Wake`, called when an `Open` finds a stored, sleeping value. `Open` does not return until `Wake` has returned, so a caller never receives a sleeping value. `Wake` has no resume-failure path: a value that cannot guarantee resume simply does not pass Sleep and Wake hooks. If Wake panics, that is a broken hook: `Open` returns an error wrapping the panic, not the pointer, and the incarnation is Closed and unmapped.
+_Avoid_: an error return or a create-fallback on a Wake that returns; work in `Wake` slow enough to stall a Traefik reload
 
 **Close**:
 Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table waits until it has returned before `reclaim_dispose`.
@@ -86,6 +86,7 @@ w := stored.(*BIN)
 - A second `Open` while the incarnation is live or in grace returns the same value.
 - Tests assert the `msg` constants. A test that cancels a holder and immediately calls `Open` is usually not testing the wake branch — wait for `reclaim_orphan` first.
 - `Open` blocks for as long as `Wake` takes. Keep `Wake` cheap.
+- A panicking `create`, Sleep, or Wake unsticks the key (later `Open` can create). AfterFunc recovers Sleep and Close panics so they cannot kill the process.
 - A Close hook that blocks blocks the drop or `Reset` goroutine. Keep Close cheap.
 - At zero grace an `Open` that races the orphan log is a plain bind, not a reclaim.
 - `Reset` is tests only. It must not race an `Open` on the same key.

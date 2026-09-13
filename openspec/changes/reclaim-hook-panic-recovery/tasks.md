@@ -8,13 +8,13 @@
 
 ## 2. Recover
 
-- [ ] 2.1 In `put`: recover nil create and panic in create; same as create error (`createErr`, `slotGone`, unmap, `close(ready)`). No Close.
-- [ ] 2.2 In `drop`: recover Sleep panic; Close, unmap, `slotGone`, `close(ready)`; do not set `createErr`; skip `reclaim_orphan`.
-- [ ] 2.3 Change `reclaimLocked` to `(any, error)`; recover Wake panic; Close, unmap, `slotGone`, `close(ready)`, set `createErr`; return wrapped error.
-- [ ] 2.4 In `dispose`: recover Close panic. In `Reset`: same recover around Sleep and Close.
-- [ ] 2.5 Do not recover inside `runSleep` / `runWake` / `runClose`. Do not re-panic after unstick.
-- [ ] 2.6 Run `go test -count=1 -timeout 60s ./reclaim/`: 1.1–1.4 pass; existing reclaim tests stay green. Commit the recover.
+- [x] 2.1 In `put`: recover nil create and panic in create; same as create error (`createErr`, `slotGone`, unmap, `close(ready)`). No Close.
+- [x] 2.2 In `drop`: recover Sleep panic; Close, unmap, `slotGone`, `close(ready)`; do not set `createErr`; skip `reclaim_orphan`.
+- [x] 2.3 Change `reclaimLocked` to `(any, error)`; recover Wake panic; Close, unmap, `slotGone`, `close(ready)`, set `createErr`; return wrapped error.
+- [x] 2.4 In `dispose`: recover Close panic. In `Reset`: same recover around Sleep and Close.
+- [x] 2.5 Do not recover inside `runSleep` / `runWake` / `runClose`. Do not re-panic after unstick.
+- [x] 2.6 Run `go test -count=1 -timeout 60s ./reclaim/`: 1.1–1.4 pass; existing reclaim tests stay green. Commit the recover.
 
 ## 3. Usage packet
 
-- [ ] 3.1 Update `knowledge/devdocs/std_go_reclaim.md` Wake/Sleep language: panicking Wake returns an error and ends the incarnation; panicking Sleep does not park asleep.
+- [x] 3.1 Update `knowledge/devdocs/std_go_reclaim.md` Wake/Sleep language: panicking Wake returns an error and ends the incarnation; panicking Sleep does not park asleep.
