@@ -32,6 +32,11 @@ const nextIncarnation = "second"
 // graceNoRace is long enough that a test asserting the reclaim branch cannot lose the grace race.
 const graceNoRace = 5 * time.Second
 
+// NewTable builds a table for tests. Production callers use New(Config).
+func NewTable(grace time.Duration) *Table {
+	return New(Config{Grace: grace})
+}
+
 // box is a disposable stand-in stored on the table in tests.
 type box struct {
 	n     int

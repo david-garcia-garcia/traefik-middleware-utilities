@@ -1,7 +1,7 @@
 ## 1. Tests that fail on dest
 
-- [ ] 1.1 Add test-only `NewTable` in `reclaim/table_test.go` wrapping `New(Config{Grace: grace})`. Do not add it to `table.go`
-- [ ] 1.2 Copy `reclaim/repro_nildone_watcher_test.go` verbatim from the caller checkout (`D:/repositories/traefik-middleware-utilities/reclaim/repro_nildone_watcher_test.go`). Do not rewrite or weaken it
+- [x] 1.1 Add test-only `NewTable` in `reclaim/table_test.go` wrapping `New(Config{Grace: grace})`. Do not add it to `table.go`
+- [x] 1.2 Copy `reclaim/repro_nildone_watcher_test.go` verbatim from the caller checkout (`D:/repositories/traefik-middleware-utilities/reclaim/repro_nildone_watcher_test.go`). Do not rewrite or weaken it
 - [ ] 1.3 Run `go test ./reclaim -run TestRepro_ -count=1 -v` and confirm it FAILS (watchers still polling after Reset)
 
 ## 2. Watcher exit on incarnation end
