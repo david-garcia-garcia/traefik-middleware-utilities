@@ -1,10 +1,14 @@
 package simpleredis
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"io"
+	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -221,6 +225,97 @@ func TestHandshakeSelectRejectedAfterAuthIsNotPooled(t *testing.T) {
 	if auths != 1 || selects != 1 || gets != 0 {
 		t.Fatalf("AUTH=%d SELECT=%d GET=%d, want 1, 1, 0", auths, selects, gets)
 	}
+}
+
+func TestHandshakeAuthEOFMustNotOpenSecondConnection(t *testing.T) {
+	accepts, addr := startAcceptFake(t, func(_ net.Conn, reader *bufio.Reader) {
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		// close with no AUTH reply
+	})
+	client := New(Config{Host: addr, Pass: "secret", MaxRetries: 1, MinRetryBackoff: -1})
+	_, err := client.Get(context.Background(), "k")
+	if err == nil {
+		t.Fatal("want error after AUTH EOF")
+	}
+	if atomic.LoadInt32(accepts) != 1 {
+		t.Fatalf("TCP accepts = %d, want 1; err=%v", atomic.LoadInt32(accepts), err)
+	}
+}
+
+func TestHandshakeSelectEOFMustNotOpenSecondConnection(t *testing.T) {
+	accepts, addr := startAcceptFake(t, func(conn net.Conn, reader *bufio.Reader) {
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		if _, err := io.WriteString(conn, statusOKReply); err != nil {
+			return
+		}
+		if _, err := readCommand(reader); err != nil {
+			return
+		}
+		// close with no SELECT reply
+	})
+	client := New(Config{Host: addr, Pass: "secret", Database: "2", MaxRetries: 1, MinRetryBackoff: -1})
+	_, err := client.Get(context.Background(), "k")
+	if err == nil {
+		t.Fatal("want error after SELECT EOF")
+	}
+	if atomic.LoadInt32(accepts) != 1 {
+		t.Fatalf("TCP accepts = %d, want 1; err=%v", atomic.LoadInt32(accepts), err)
+	}
+}
+
+func TestHandshakeAuthLoadingMustNotOpenSecondConnection(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"k": "t"})
+	fake.setHandshakeReplies("-LOADING Redis is loading the dataset in memory\r\n", statusOKReply)
+	client := New(Config{Host: addr, Pass: "secret", MaxRetries: 1, MinRetryBackoff: -1})
+	_, err := client.Get(context.Background(), "k")
+	if err == nil || err.Error() != "LOADING Redis is loading the dataset in memory" {
+		t.Fatalf("Get = %v, want LOADING Redis is loading the dataset in memory", err)
+	}
+	if fake.connections() != 1 {
+		t.Fatalf("TCP accepts = %d, want 1; err=%v", fake.connections(), err)
+	}
+}
+
+func TestHandshakeAuthMaxClientsMustNotOpenSecondConnection(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"k": "t"})
+	fake.setHandshakeReplies("-ERR max number of clients reached\r\n", statusOKReply)
+	client := New(Config{Host: addr, Pass: "secret", MaxRetries: 1, MinRetryBackoff: -1})
+	_, err := client.Get(context.Background(), "k")
+	if err == nil || err.Error() != "ERR max number of clients reached" {
+		t.Fatalf("Get = %v, want ERR max number of clients reached", err)
+	}
+	if fake.connections() != 1 {
+		t.Fatalf("TCP accepts = %d, want 1; err=%v", fake.connections(), err)
+	}
+}
+
+// startAcceptFake listens locally and runs handle on each accepted socket, then closes it.
+func startAcceptFake(t *testing.T, handle func(conn net.Conn, reader *bufio.Reader)) (*int32, string) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
+	var accepts int32
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			atomic.AddInt32(&accepts, 1)
+			go func(conn net.Conn) {
+				defer conn.Close()
+				handle(conn, bufio.NewReader(conn))
+			}(conn)
+		}
+	}()
+	return &accepts, listener.Addr().String()
 }
 
 func TestIdleTimeoutOpensANewConnection(t *testing.T) {
