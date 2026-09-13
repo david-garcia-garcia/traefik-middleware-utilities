@@ -24,8 +24,8 @@ findings: Standards 2, Nitpicks 1, Performance 1, Coverage 3 (1 skipped judgemen
 fixed: defer around dial; serialize refill under turnRecoverMu through dial; panic-in-do and hung-dial tests; rename test client redis
 skipped: two-waiter LostTurns equality (judgement)
 
-## archive (2026-09-13T09:28:36Z)
-phase: archive
+## devdocsimpact (2026-09-13T09:28:36Z)
+phase: devdocsimpact
 findings: stale-usage SimpleRedis — std_go_simpleredis gotcha already names LostTurns refill
 fixed: none this phase (packet already produced)
 skipped: none
@@ -34,4 +34,10 @@ skipped: none
 phase: archive
 findings: none
 fixed: folded LostTurns into std_go_simpleredis_tcp-session; moved change to archive/2026-09-13-simpleredis-lost-turn-recovery
+skipped: none
+
+## pullrequest (2026-09-13T09:39:20Z)
+phase: pullrequest
+findings: none
+fixed: title dropped WIP; CI 34749762357 all eight checks succeeded; live pool-wait now holds inside do
 skipped: none
