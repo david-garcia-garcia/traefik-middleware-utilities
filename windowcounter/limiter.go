@@ -39,9 +39,8 @@ type Limiter struct {
 	stop    chan struct{}
 	wg      sync.WaitGroup
 
-	lastFlushErr  error     // last failed flush or GET; buffered Take/Peek skip Redis while set
-	flushFailedAt time.Time // when lastFlushErr was stored
-	lastRedisOK   time.Time // last successful Redis GET or flush
+	lastOutageErr error     // last failed flush or GET; buffered Take/Peek skip Redis while set
+	lastOutageAt  time.Time // when lastOutageErr was stored
 }
 
 // windowState is the buffered count for one Redis window key.
@@ -228,7 +227,6 @@ func (l *Limiter) peekCountLocked(ctx context.Context, redisKey string, expireAt
 		l.rememberOutageLocked(err)
 		return l.seedEmptyWindowLocked(redisKey, expireAt).redisKnown
 	}
-	l.lastRedisOK = l.now()
 	l.windows[redisKey] = &windowState{redisKnown: known, expireAt: expireAt}
 	return known
 }
@@ -247,7 +245,6 @@ func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt in
 				l.rememberOutageLocked(err)
 				return state
 			}
-			l.lastRedisOK = l.now()
 			state.redisKnown = known
 		}
 		return state
@@ -261,7 +258,6 @@ func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt in
 		l.rememberOutageLocked(err)
 		return l.seedEmptyWindowLocked(redisKey, expireAt)
 	}
-	l.lastRedisOK = l.now()
 	state = &windowState{redisKnown: known, expireAt: expireAt}
 	l.windows[redisKey] = state
 	return state
@@ -282,20 +278,19 @@ func (l *Limiter) bufferedCountLocked(ctx context.Context, redisKey string) int6
 		l.rememberOutageLocked(err)
 		return l.seedEmptyWindowLocked(redisKey, 0).redisKnown
 	}
-	l.lastRedisOK = l.now()
 	l.windows[redisKey] = &windowState{redisKnown: known}
 	return known
 }
 
 // skipRedisContactLocked is true when a stored flush or GET failure means Take/Peek must not GET Redis.
 func (l *Limiter) skipRedisContactLocked() bool {
-	return l.lastFlushErr != nil
+	return l.lastOutageErr != nil
 }
 
 // rememberOutageLocked stores err so later buffered Take/Peek skip Redis instead of retrying GET.
 func (l *Limiter) rememberOutageLocked(err error) {
-	l.lastFlushErr = err
-	l.flushFailedAt = l.now()
+	l.lastOutageErr = err
+	l.lastOutageAt = l.now()
 }
 
 // seedEmptyWindowLocked stores a zero redisKnown buffer for redisKey.
@@ -432,8 +427,7 @@ func (l *Limiter) flushPendingLocked(ctx context.Context) error {
 				} else {
 					state.redisKnown = n
 					state.localDelta = 0
-					l.lastRedisOK = l.now()
-					l.lastFlushErr = nil
+					l.lastOutageErr = nil
 				}
 			}
 		}
@@ -442,8 +436,8 @@ func (l *Limiter) flushPendingLocked(ctx context.Context) error {
 		}
 	}
 	if firstErr != nil {
-		l.lastFlushErr = firstErr
-		l.flushFailedAt = l.now()
+		l.lastOutageErr = firstErr
+		l.lastOutageAt = l.now()
 	}
 	return firstErr
 }

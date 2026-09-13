@@ -515,10 +515,10 @@ func TestPeek_Unreachable(t *testing.T) {
 }
 
 // takeUntilLocalDeny takes until this node's sliding estimate exceeds limit, requiring a nil error on every call.
-func takeUntilLocalDeny(t *testing.T, limiter *Limiter, key string, already, limit int64, window time.Duration) {
+func takeUntilLocalDeny(t *testing.T, limiter *Limiter, key string, hitsTaken, limit int64, window time.Duration) {
 	t.Helper()
 	ctx := context.Background()
-	for hit := already; hit < limit; hit++ {
+	for hit := hitsTaken; hit < limit; hit++ {
 		allowed, estimated, err := limiter.Take(ctx, key, limit, window)
 		if err != nil {
 			t.Fatalf("buffered take after outage err %v want nil, estimated %v", err, estimated)
@@ -578,7 +578,7 @@ func TestTake_BufferedPendingDeltaOutage(t *testing.T) {
 	peekNilError(t, limiter, "k", limit, window)
 }
 
-func TestTake_BufferedFlushThenKillFailsClosed(t *testing.T) {
+func TestTake_BufferedFlushThenKillKeepsLocalCap(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
 	client := newSimpleRedisForTest(t, addr)
 	limiter, err := New(client, minSyncRate)
@@ -610,6 +610,38 @@ func TestTake_BufferedFlushThenKillFailsClosed(t *testing.T) {
 	fake.Kill()
 	takeUntilLocalDeny(t, limiter, "k", 1, limit, window)
 	peekNilError(t, limiter, "k", limit, window)
+}
+
+func TestTake_BufferedStoredOutageSkipsShareRefreshGET(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	client := newSimpleRedisForTest(t, addr)
+	limiter, err := New(client, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { limiter.Close() })
+	const limit int64 = 5
+	window := time.Minute
+	if _, _, err := limiter.Take(context.Background(), "k", limit, window); err != nil {
+		t.Fatal(err)
+	}
+	if err := limiter.flushPending(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	getsBeforeOutage := fake.getCallCount()
+	limiter.mu.Lock()
+	limiter.rememberOutageLocked(errors.New(simpleredis.RedisUnreachable))
+	limiter.mu.Unlock()
+	allowed, estimated, err := limiter.Take(context.Background(), "k", limit, window)
+	if err != nil {
+		t.Fatalf("buffered take with stored outage err %v want nil, estimated %v", err, estimated)
+	}
+	if !allowed {
+		t.Fatalf("buffered take denied while under limit, estimated %v", estimated)
+	}
+	if fake.getCallCount() != getsBeforeOutage {
+		t.Fatal("share-refresh GET while lastOutageErr is stored")
+	}
 }
 
 func TestTake_BufferedTwoInstancesOutage(t *testing.T) {
