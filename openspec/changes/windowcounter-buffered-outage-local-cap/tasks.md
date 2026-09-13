@@ -9,7 +9,7 @@
 
 - [x] 2.1 On buffered GET error, use existing `redisKnown + localDelta` (seed 0 on first sight) and return `err=nil`; store the outage on `lastFlushErr` so later Take/Peek skip share-refresh GET
 - [x] 2.2 Stop returning `lastFlushErr` from buffered Take/Peek; remove `bufferedOutageErrorLocked` as an error-returning helper; keep storing a failed flush in `flushPendingLocked`. Do not change `takeBuffered` to fail-closed. Do not GET or INCR every buffered Take to probe. Do not return `redis:unreachable` because `localDelta > 0` skipped GET
-- [ ] 2.3 Update `New` comment, `README.md`, and `knowledge/devdocs/std_go_windowcounter.md` (`sync_rate` Language + How to use + Gotcha): buffered outage is per-node `limit` with nil error; exact mode still returns Redis errors. Do not tell operators to check `err` to fail closed on this path
+- [x] 2.3 Update `New` comment, `README.md`, and `knowledge/devdocs/std_go_windowcounter.md` (`sync_rate` Language + How to use + Gotcha): buffered outage is per-node `limit` with nil error; exact mode still returns Redis errors. Do not tell operators to check `err` to fail closed on this path
 
 ## 3. Confirm PASS
 
