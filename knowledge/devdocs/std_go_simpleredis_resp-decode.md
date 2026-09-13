@@ -24,7 +24,7 @@ SimpleRedis reads each RESP line with `ReadSlice('\n')` so short headers do not 
 - Copy a `+` or `:` payload with `append([]byte(nil), payload...)` before the next read and before `release`.
 - Parse bulk and array lengths from the bytes after the type byte (`parseLen`). Accept optional leading minus (`$-1` nil slot, `*-1` negative array). Empty or non-digits is `redis:issue?`. Do not use `unsafe` or `strconv.Atoi(string(...))`.
 - After the bulk miss check, reject a bulk length above `maxBulkLength` (`64 << 20`) and an array count above `maxArrayCount` (`1 << 20`) as `redis:issue?` before any `make`. Do not put those caps on `Config`.
-- For an accepted bulk length, leave `readBulk` as `make([]byte, length+2)` plus `io.ReadFull`. After a complete read, the last two bytes must be CRLF; otherwise return `redis:issue?` so the socket is not pooled. Do not keep a `$` or `*` header slice across a later read.
+- Do not `make` an in-cap `$` payload or `*` slot slice from the declared length before bytes or elements arrive. Grow as they arrive, still capped. After a complete bulk, the last two bytes must be CRLF; otherwise return `redis:issue?` so the socket is not pooled. Do not keep a `$` or `*` header slice across a later read.
 
 ## Pattern snippet
 
@@ -42,7 +42,7 @@ return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 ## Key files
 
 - `simpleredis/resp.go` — `readLine`, `readReply`, `readBulk`, `parseLen`
-- `simpleredis/resp_test.go` — copy-on-escape, `ErrBufferFull` (`redis:issue?`, ≤4096 bytes from the peer), over-cap `$`/`*` headers
+- `simpleredis/resp_test.go` — copy-on-escape, `ErrBufferFull` (`redis:issue?`, ≤4096 bytes from the peer), over-cap `$`/`*` headers, `TestAllocAmpInCapHeaderDoesNotAllocateAnnouncedSize`
 - `simpleredis/resp_fuzz_test.go` — `FuzzReadReply` (no panic, no values on a dirty stream) and `FuzzParseLen` (no `length+2` overflow)
 - `simpleredis/fake_redis_test.go` — `startSequentialRedis` for distinct later-read payloads
 - `simpleredis/bench_test.go` — `BenchmarkDecodeBulk`, `BenchmarkDecodeArray10`, `BenchmarkDecodeInteger`
@@ -55,5 +55,6 @@ return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 - Identical EVAL `:0` replies hide aliasing. Prove copy-on-escape with distinct payloads on one connection.
 - `parseLen` overflow is `false` (`redis:issue?`), not a wrap.
 - A `$` or `*` length that fits in `int` but is above the package cap is also `redis:issue?`. Do not `make` first: a later short `ReadFull` is EOF → `redis:unreachable` and retries.
+- An in-cap `$` or `*` header with no payload must not `make` the announced size either. Grow from arrived bytes; dest one-shot `make(length+2)` is the amplification.
 - A full bulk whose trailer is not CRLF is `redis:issue?`, not a clean payload. Short `ReadFull` stays `redis:unreachable`. Do not pool that socket.
 - A panic in `readReply` leaks a pool turn forever because `exec` releases without `defer`. Prove with `FuzzReadReply` (never panic; never return values when `clean == false`) and `FuzzParseLen` (never overflow `length+2`).

@@ -666,6 +666,45 @@ func TestReadReply256MiBHeaderDoesNotAllocatePayload(t *testing.T) {
 	}
 }
 
+// allocAmpMaxGrew is well above a 128 KiB first chunk plus 16 array slot headers, and well below dest's announced make.
+const allocAmpMaxGrew = 2 << 20
+
+func allocAmpBulkHeader() string {
+	return "$" + strconv.Itoa(maxBulkLength) + "\r\n"
+}
+
+func allocAmpArrayHeader() string {
+	return "*" + strconv.Itoa(maxArrayCount) + "\r\n"
+}
+
+// TestAllocAmpInCapHeaderDoesNotAllocateAnnouncedSize fails if an in-cap $ or * header with no payload still made the announced size.
+func TestAllocAmpInCapHeaderDoesNotAllocateAnnouncedSize(t *testing.T) {
+	tests := []struct {
+		name string
+		wire string
+	}{
+		{name: "bulk at cap", wire: allocAmpBulkHeader()},
+		{name: "array at cap", wire: allocAmpArrayHeader()},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			runtime.GC()
+			var before runtime.MemStats
+			runtime.ReadMemStats(&before)
+			values, clean, err := readReply(bufio.NewReader(strings.NewReader(test.wire)))
+			var after runtime.MemStats
+			runtime.ReadMemStats(&after)
+			if clean || values != nil || err == nil || err == errIssue { //nolint:errorlint // short header-only read is IO, not the issue sentinel
+				t.Fatalf("%s: values=%q clean=%v err=%v, want dirty unreachable-class IO", test.name, values, clean, err)
+			}
+			grew := after.TotalAlloc - before.TotalAlloc
+			if grew >= allocAmpMaxGrew {
+				t.Fatalf("%s: TotalAlloc grew by %d, announced-size make still ran", test.name, grew)
+			}
+		})
+	}
+}
+
 // TestGetOverCapBulkIsIssue proves Get maps an over-cap $ header to redis:issue? and does not pool.
 func TestGetOverCapBulkIsIssue(t *testing.T) {
 	addr := startStaticRedis(t, "$"+strconv.Itoa(maxBulkLength+1)+"\r\n")

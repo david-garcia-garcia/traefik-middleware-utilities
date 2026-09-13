@@ -152,7 +152,12 @@ func readReply(reader *bufio.Reader) (values [][]byte, clean bool, err error) {
 		if count > maxArrayCount {
 			return nil, false, errIssue
 		}
-		values := make([][]byte, count)
+		// Do not make(count): a *1048576 header with no elements would allocate ~24 MiB of slot headers.
+		startCap := count
+		if startCap > arrayGrowChunk {
+			startCap = arrayGrowChunk
+		}
+		values := make([][]byte, 0, startCap)
 		for i := 0; i < count; i++ {
 			head, headErr := readLine(reader)
 			if headErr != nil {
@@ -165,14 +170,15 @@ func readReply(reader *bufio.Reader) (values [][]byte, clean bool, err error) {
 			case '$':
 				data, bulkErr := readBulk(reader, head)
 				if bulkErr == errMiss { //nolint:errorlint // readBulk returns errMiss as the exact $-1 sentinel; a wrap is not that decode miss
+					values = append(values, nil)
 					continue
 				}
 				if bulkErr != nil {
 					return nil, false, bulkErr
 				}
-				values[i] = data
+				values = append(values, data)
 			case ':', '+':
-				values[i] = append([]byte(nil), head[1:]...)
+				values = append(values, append([]byte(nil), head[1:]...))
 			default:
 				// Nested array, error-in-array, or other element type this decoder does not decode.
 				return nil, false, errUnsupportedReply
@@ -206,9 +212,23 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if length > maxBulkLength {
 		return nil, errIssue
 	}
-	data := make([]byte, length+2)
-	if _, err := io.ReadFull(reader, data); err != nil {
-		return nil, err
+	// Do not make(length+2): an in-cap header with no payload would allocate tens of MiB from a handful of bytes.
+	need := length + 2
+	var data []byte
+	for len(data) < need {
+		want := need - len(data)
+		if want > bulkReadChunk {
+			want = bulkReadChunk
+		}
+		off := len(data)
+		if data == nil {
+			data = make([]byte, want)
+		} else {
+			data = append(data, make([]byte, want)...)
+		}
+		if _, err := io.ReadFull(reader, data[off:]); err != nil {
+			return nil, err
+		}
 	}
 	// Trailer must be CRLF; otherwise the stream is off a reply boundary.
 	if data[length] != '\r' || data[length+1] != '\n' {
@@ -234,9 +254,11 @@ func readLine(reader *bufio.Reader) ([]byte, error) {
 }
 
 const (
-	maxBulkLength = 64 << 20 // largest $ payload this decoder will allocate
-	maxArrayCount = 1 << 20  // largest * count this decoder will allocate
-	maxParseLen   = int(^uint(0) >> 1)
+	maxBulkLength  = 64 << 20 // largest $ payload this decoder will allocate
+	maxArrayCount  = 1 << 20  // largest * count this decoder will allocate
+	maxParseLen    = int(^uint(0) >> 1)
+	bulkReadChunk  = 128 << 10 // first make is min(need, this); a 64 MiB header must not make 64 MiB
+	arrayGrowChunk = 16        // * start cap; a 1 Mi header must not make 1 Mi slot headers
 )
 
 // parseLen parses a RESP length from the bytes after the type byte.
