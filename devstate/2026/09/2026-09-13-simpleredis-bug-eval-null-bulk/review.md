@@ -26,3 +26,12 @@ verdict: in progress
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/46
 change: simpleredis-eval-null-bulk-not-miss
 specs: modified std_go_simpleredis_resp-decode, std_go_simpleredis_resp-commands
+
+## implement (2026-09-13)
+phase: implement
+findings: none
+fixed: decode top-level $-1 is a nil slot; Get maps miss; Eval $-1 is not ErrMiss
+skipped: none
+verdict: in progress
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/46
+localTests: passed
