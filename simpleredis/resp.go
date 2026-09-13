@@ -220,14 +220,14 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 		if want > bulkReadChunk {
 			want = bulkReadChunk
 		}
-		off := len(data)
-		if data == nil {
-			data = make([]byte, want)
-		} else {
-			data = append(data, make([]byte, want)...)
-		}
-		if _, err := io.ReadFull(reader, data[off:]); err != nil {
+		chunk := make([]byte, want)
+		if _, err := io.ReadFull(reader, chunk); err != nil {
 			return nil, err
+		}
+		if data == nil {
+			data = chunk
+		} else {
+			data = append(data, chunk...)
 		}
 	}
 	// Trailer must be CRLF; otherwise the stream is off a reply boundary.
