@@ -7,7 +7,7 @@ repoSlug: traefik-middleware-utilities
 destBranch: 2026-09-13-simpleredis-lost-turn-recovery
 qualify: qualified
 src: 8c9a2b17a3d88e7016b1ceeb183fca6dfbec9e8f7f1a046636fc2027c471db9d
-localTests: none
+localTests: passed
 requirement: requirement.md
 comments: none
 explore: explore.md
