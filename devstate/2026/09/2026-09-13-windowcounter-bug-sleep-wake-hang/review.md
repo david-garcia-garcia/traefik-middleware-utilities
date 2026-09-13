@@ -24,3 +24,21 @@ findings: stopping flag; race test FAIL then pass; localTests passed
 fixed: limiter.go Wake/stopFlushAndWait; TestRepro_SleepWakeRaceHangs; TestWake_StartsTickerAfterSleep; usage gotcha
 skipped: none in scope
 
+## codereview (2026-09-13)
+phase: codereview
+findings: coverage 1 hard (already-stopped Sleep then Wake); six axes none
+fixed: TestWake_StartsTickerAfterSleep second Sleep
+skipped: none
+
+## impact (2026-09-13)
+phase: devdocsimpact
+findings: none — std_go_windowcounter Gotchas already name Sleep-wins
+fixed: none
+skipped: Language (no new term)
+
+## archive (2026-09-13)
+phase: archive
+findings: fold std_go_windowcounter_sync-flush; moved archive/2026-09-13-windowcounter-sleep-wins-wake
+fixed: live spec Sleep Wake Close; folder move
+skipped: none
+
