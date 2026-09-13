@@ -8,7 +8,7 @@ JobName: 2026-09-13-reclaim-owned-table
 | explore | [x] | [x] | 2026-09-13T08:10:33Z |
 | propose | [x] | [x] | 2026-09-13T08:14:27Z |
 | implement | [x] | [x] | 2026-09-13T08:18:34Z |
-| codereview | [ ] | [ ] | |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-13T08:23:58Z |
+| devdocsimpact | [x] | [x] | 2026-09-13T08:23:58Z |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
