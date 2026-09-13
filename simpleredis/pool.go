@@ -135,6 +135,10 @@ func (sr *SimpleRedis) borrowAfterPoolWait(ctx context.Context) (*pooledConn, er
 }
 
 // recoverLostTurnsLocked refills inUseTurns when idle is empty and heldSockets is 0.
+// heldSockets covers a socket only while a command is running on it, so a socket in the
+// borrow-to-do or do-to-release gap is not counted and a simultaneous pool-wait expiry
+// can refill spuriously. The overshoot is bounded by PoolSize and self-corrects via
+// OverFrees when holders release.
 // Caller holds turnRecoverMu.
 func (sr *SimpleRedis) recoverLostTurnsLocked() {
 	if sr.inUseTurns == nil || sr.closed.Load() {

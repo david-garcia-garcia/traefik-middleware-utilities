@@ -41,3 +41,9 @@ phase: pullrequest
 findings: none
 fixed: title dropped WIP; CI 34749762357 all eight checks succeeded; live pool-wait now holds inside do
 skipped: none
+
+## residuals (2026-09-13T09:46:37Z)
+phase: pullrequest
+findings: heldSockets gap can refill spuriously; panic-leaked fd never closed
+fixed: comments; live spec scopes PoolSize; two knowledge/debt notes
+skipped: lease token redesign; closing leaked fds

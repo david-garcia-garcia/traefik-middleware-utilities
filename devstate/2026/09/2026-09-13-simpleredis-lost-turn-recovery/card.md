@@ -5,7 +5,7 @@ Developer review: ready for review — 2026-09-13T09:39:20Z
 
 **Admin users.** None.
 
-**Developers.** SimpleRedis restores missing in-use turns at pool-wait when idle is empty and no still-running command holds a socket, exposes read-only `LostTurns()`, and does not defer `release`. Spec `std_go_simpleredis_tcp-session` treats wait-not-dial as backpressure only when sockets are actually owned.
+**Developers.** SimpleRedis restores missing in-use turns at pool-wait when idle is empty and no still-running command holds a socket, exposes read-only `LostTurns()`, and does not defer `release`. Spec `std_go_simpleredis_tcp-session` treats wait-not-dial as backpressure only when sockets are actually owned, and `PoolSize` as the live-socket cap except for a bounded transient overshoot when leaked-turn recovery fires.
 
 **End users.** None.
 
@@ -48,7 +48,8 @@ Owner decision: Required. See Explore Decisions.
 None.
 
 ## Follow-up issues
-None.
+- [ ] [Lease checked-out sockets so recovery cannot refill while a socket is live](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-lost-turn-recovery/knowledge/debt/2026-09-13-simpleredis-held-socket-lease.md) — recovery can briefly exceed PoolSize when every holder sits in the borrow-to-do or do-to-release gap
+- [ ] [Close sockets abandoned by a panic between borrow and release](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-lost-turn-recovery/knowledge/debt/2026-09-13-simpleredis-close-panic-leaked-fd.md) — a recovered panic leaks the fd forever; recovery dials a new socket
 
 ## How this fits together
 Local ticket → branch `2026-09-13-simpleredis-lost-turn-recovery` → PR 66 → CI 34749762357 green.
@@ -104,4 +105,4 @@ What I checked:
 - PR 29 owner: discarded defer-release as too much complexity for Yaegi recovering the request while the turn stays lost
 
 ### Rank-up moves
-- TCP fds left behind when borrow returns a conn that is never released stay leaked, as on DestBranch. Refill dials a new socket.
+None.

@@ -65,7 +65,9 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 }
 
 // doWithHeldSocket runs do while counting the socket as owned, so a pool-wait waiter can tell
-// a busy pool from a leaked turn. The defer restores the count if do panics; release is still not deferred.
+// a busy pool from a leaked turn. heldSockets covers the socket only while do is running:
+// not after borrow returns and not after this defer until release. The defer restores the
+// count if do panics; release is still not deferred.
 func (sr *SimpleRedis) doWithHeldSocket(ctx context.Context, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
 	sr.heldSockets.Add(1)
 	defer sr.heldSockets.Add(-1)
