@@ -59,6 +59,11 @@ the panic (`fmt.Errorf("reclaim: wake %q: panic: %v", key, recovered)`), SHALL N
 stored pointer, and SHALL end the incarnation (Close, unmap). Concurrent waiters on that
 transition SHALL receive the same error. A later `Open` SHALL be free to create.
 
+When the ending incarnation stored `Hooks.EnforceCloseBeforeOpen`, an `Open` that arrives while
+`close` is in flight for that key SHALL wait for Close to return (or for its panic to be
+recovered) before it creates. When that field is false (the zero value), a concurrent `Open` MAY
+create while Close is still in flight.
+
 #### Scenario: Open returns only after wake returned
 - **WHEN** a key holds a sleeping value whose `wake` blocks
 - **AND** `Open` is called for that key
@@ -78,6 +83,19 @@ transition SHALL receive the same error. A later `Open` SHALL be free to create.
 - **AND** Close of that incarnation runs
 - **AND** a later `Open` for that key is free to create
 
+#### Scenario: Open waits until close returns before creating
+- **WHEN** the last holder for a key is Done and `close` is in flight
+- **AND** that incarnation stored `Hooks.EnforceCloseBeforeOpen`
+- **AND** `Open` is called for that key
+- **THEN** `create` does not run until `close` has returned
+- **AND** the value returned is a new incarnation, not the one that was closing
+
+#### Scenario: Open creates during close by default
+- **WHEN** the last holder for a key is Done and `close` is in flight
+- **AND** that incarnation did not store `Hooks.EnforceCloseBeforeOpen`
+- **AND** `Open` is called for that key
+- **THEN** `Open` returns a new incarnation while Close is still blocked
+
 ### Requirement: Close is always preceded by sleep
 Every ending path SHALL call `sleep` before `close`, so `close` never has to handle the live
 state and cleanup is not duplicated between the two. That holds when grace expires on a value
@@ -85,6 +103,13 @@ that is already sleeping (it SHALL NOT be slept twice), when the table is reset 
 incarnation is live (sleep, then close), and when grace is zero (create, sleep, close back to
 back). At zero grace the value SHALL NOT be kept, because there is no window in which a sleeping
 value could be woken.
+
+When the ending incarnation stored `Hooks.EnforceCloseBeforeOpen`, the key SHALL remain stored
+until `close` has returned, then SHALL NOT be stored. Unmapping the key before `close` returns
+MUST NOT happen on that incarnation's zero-grace ending path or when grace elapses. When that
+field is false (the zero value), the table SHALL unmap the key before Close, so a concurrent
+`Open` MAY create while Close is in flight. Tests-only `Reset` MAY unmap first regardless of
+the field.
 
 #### Scenario: Grace expiry does not sleep a sleeping value twice
 - **WHEN** the last holder for a key is Done and grace elapses without a new `Open`
@@ -100,12 +125,22 @@ value could be woken.
 - **THEN** the value received `sleep` and then `close`
 - **AND** the key is no longer stored
 
+#### Scenario: Enforced close keeps the key stored until close returns
+- **WHEN** a table with zero grace has its last holder for a key go Done
+- **AND** that incarnation stored `Hooks.EnforceCloseBeforeOpen`
+- **THEN** the key stayed stored until `close` returned
+
 ### Requirement: Lifecycle events are optional Hooks passed to Open
 `sleep`, `wake`, and `close` SHALL be carried by optional `func()` fields on a `Hooks` value
 passed to `Open` (`Sleep`, `Wake`, `Close`). A nil field SHALL skip that event. A caller MAY
 pass any subset. `create` SHALL keep the signature `func() (any, error)` and SHALL take no
 arguments. The table MUST NOT discover those events by type-switching or asserting the stored
 `any`.
+
+`Hooks.EnforceCloseBeforeOpen` SHALL be a bool on that same value. The zero value is false: the
+table unmaps the key before Close. When true, the table keeps the key mapped until Close
+returns. The table SHALL read that field from the stored hooks of the incarnation that is
+ending, never from a later `Open`'s argument.
 
 #### Scenario: Empty Hooks still runs the full table lifecycle
 - **WHEN** a value is stored with all-nil `Hooks` and later ends
@@ -122,9 +157,9 @@ arguments. The table MUST NOT discover those events by type-switching or asserti
 - **THEN** create, sleep, wake, and close run in the order this spec requires
 
 ### Requirement: Slot stores Hooks at put
-The table SHALL store the `Hooks` from the `Open` that creates the incarnation. A later `Open`
-for that key (bind or reclaim) SHALL use the stored funcs and MUST NOT replace them with the
-argument from that later call.
+The table SHALL store the `Hooks` from the `Open` that creates the incarnation, including
+`EnforceCloseBeforeOpen`. A later `Open` for that key (bind or reclaim) SHALL use the stored
+funcs and that stored flag and MUST NOT replace them with the argument from that later call.
 
 #### Scenario: Later Open does not replace incarnation hooks
 - **WHEN** a key is created with Sleep, Wake, and Close funcs
@@ -148,7 +183,9 @@ func() (any, error)`: a type-switch to a Sleep method on the returned `any` does
 
 ### Requirement: Close panic does not crash the process
 If Close panics, the table SHALL recover so a production `AfterFunc` goroutine SHALL NOT kill the
-process. `ready` SHALL already have been closed before Close runs. A shared hook runner MAY perform
+process. `ready` SHALL already have been closed before Close runs when `Hooks.EnforceCloseBeforeOpen`
+is false (the zero value). When that field is true, `ready` SHALL stay open across Close and SHALL
+be closed after Close returns or after a recovered Close panic. A shared hook runner MAY perform
 the recover, provided it hands the panic value back to its caller and that caller decides the
 outcome; no runner SHALL swallow a panic as a silent success, and the table SHALL NOT continue as
 if a panicking hook succeeded. Every recovered panic SHALL be surfaced exactly once and SHALL NOT
