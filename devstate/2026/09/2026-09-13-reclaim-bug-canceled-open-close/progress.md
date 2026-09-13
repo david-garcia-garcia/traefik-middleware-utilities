@@ -6,7 +6,7 @@ JobName: 2026-09-13-reclaim-bug-canceled-open-close
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-13T06:01:02Z |
 | explore | [x] | [x] | 2026-09-13T06:06:56Z |
-| propose | [x] | [ ] | |
+| propose | [x] | [x] | 2026-09-13T06:11:03Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
