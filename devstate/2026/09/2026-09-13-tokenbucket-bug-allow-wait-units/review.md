@@ -11,3 +11,10 @@ phase: explore
 findings: dest fail-open reproduced on four cases
 fixed: none
 skipped: product hunk (explore only)
+
+## propose (2026-09-13)
+
+phase: propose
+findings: none
+fixed: none
+skipped: production hunk (propose only)
