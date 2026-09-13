@@ -25,3 +25,24 @@ findings: none
 fixed: inner handshake error + handshakeFailed bool; Yaegi tests pass after FAIL-before
 skipped: none
 localTests: passed (go vet ./simpleredis/; go test -count=1 -timeout 300s ./simpleredis/ ok 12.101s)
+
+## codereview (2026-09-13T09:20:53Z)
+phase: codereview
+findings: none
+fixed: none
+skipped: none
+axes: all none. (0 total)
+
+## devdocsimpact (2026-09-13T09:20:53Z)
+phase: devdocsimpact
+findings: stale-usage already produced on std_go_simpleredis
+fixed: none
+skipped: none
+
+## archive (2026-09-13T09:20:53Z)
+phase: archive
+findings: none
+fixed: none
+skipped: none
+archived: openspec/changes/archive/2026-09-13-simpleredis-handshake-sentinel-match/
+validate: spec_map OK, artifact_names OK
