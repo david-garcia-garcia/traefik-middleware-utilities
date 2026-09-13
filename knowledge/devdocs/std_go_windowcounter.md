@@ -60,7 +60,7 @@ _, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 
 ## Gotchas
 
-- Window length is whole seconds (Redis TTL is integer seconds).
+- Window length is whole seconds (Redis TTL is integer seconds). Take and Peek reject a window that is shorter than one second or not an integer number of seconds (for example 1500ms); they do not truncate into second buckets.
 - Denied Takes still increment. Peek does not.
 - `Sleep` flushes pending deltas then stops the ticker. After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's.
 - EVAL scripts must list keys in `KEYS` (Dragonfly).
