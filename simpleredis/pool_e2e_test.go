@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"context"
 	"testing"
+	"time"
 )
 
 // TestLive_PoolWait proves a waiter is redis:unreachable when the only in-use turn is held.
@@ -45,23 +46,35 @@ func TestLive_WrongPassword(t *testing.T) {
 	})
 }
 
-// runLivePoolBackend builds a live client then holds the only in-use turn
-// so a waiter is redis:unreachable without a Lua BUSY on the shared CI Redis.
+// runLivePoolBackend holds the only socket inside do (BLPOP, not Lua) so a waiter
+// is redis:unreachable. A raw borrow hold looks like a leaked turn (idle empty,
+// heldSockets 0) and would refill instead of applying backpressure.
 func runLivePoolBackend(t *testing.T, addr string) {
 	t.Helper()
 	client := waitLiveSimpleRedis(t, addr)
 	t.Cleanup(client.Close)
 
 	t.Run("waiterIsUnreachable", func(t *testing.T) {
-		conn, err := client.borrow(context.Background())
-		if err != nil {
-			t.Fatalf("borrow: %v", err)
+		started := make(chan struct{})
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			close(started)
+			_, _ = client.exec(context.Background(), []byte("BLPOP"), []byte("simpleredis-live-hold"), []byte("2"))
+		}()
+		<-started
+		deadline := time.Now().Add(time.Second)
+		for client.heldSockets.Load() == 0 {
+			if time.Now().After(deadline) {
+				t.Fatal("holder did not enter do")
+			}
+			time.Sleep(time.Millisecond)
 		}
-		defer client.release(conn, true)
-		err = client.Set(context.Background(), "simpleredis-live-waiter", []byte("1"), 60)
+		err := client.Set(context.Background(), "simpleredis-live-waiter", []byte("1"), 60)
 		if err == nil || err.Error() != RedisUnreachable {
 			t.Fatalf("waiter Set = %v, want %s", err, RedisUnreachable)
 		}
+		<-done
 	})
 }
 
