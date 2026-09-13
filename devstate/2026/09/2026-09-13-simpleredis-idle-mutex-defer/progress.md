@@ -8,7 +8,7 @@ JobName: 2026-09-13-simpleredis-idle-mutex-defer
 | explore | [x] | [x] | 2026-09-13T15:33:18Z |
 | propose | [x] | [x] | 2026-09-13T15:36:31Z |
 | implement | [x] | [x] | 2026-09-13T15:43:03Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
