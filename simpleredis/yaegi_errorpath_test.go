@@ -173,6 +173,9 @@ func TestYaegiErrorpath_CancelMidCommand(t *testing.T) {
 
 // TestYaegiErrorpath_PoolWait proves interpreted Get on a full pool returns redis:unreachable and IsPoolWait.
 func TestYaegiErrorpath_PoolWait(t *testing.T) {
+	if raceDetectorOn {
+		t.Skip("race is inside github.com/traefik/yaegi/interp (_select / itype.refType), not this client; Unit without -race still runs this")
+	}
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.mu.Lock()
 	fake.getDelay = 300 * time.Millisecond

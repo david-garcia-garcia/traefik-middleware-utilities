@@ -9,6 +9,7 @@ import (
 
 // TestConcurrentMSetEXUnknownCommandFallback locks that overlapping MSetEX
 // unknown-command fallbacks stay successful and do not leak turns.
+// Stays on under -race: the detector is the proof the groupWrite cache interleaving is safe.
 func TestConcurrentMSetEXUnknownCommandFallback(t *testing.T) {
 	workers := 16
 	callsPerWorker := 25
