@@ -5,7 +5,7 @@ Defines the optional structured slog events a SimpleRedis client emits so operat
 ## ADDED Requirements
 
 ### Requirement: Events use reclaim-shaped slog constants
-The session SHALL export message-name constants whose values are `simpleredis_` event strings (`simpleredis_panic`, `simpleredis_noauth`, `simpleredis_not_from_new`, `simpleredis_over_free`, `simpleredis_pool_exhausted`, `simpleredis_short_bulk`, `simpleredis_bad_reply`, `simpleredis_handshake_failed`, `simpleredis_dial`, `simpleredis_idle_swept`, `simpleredis_retry`, `simpleredis_timeout`, `simpleredis_canceled`, `simpleredis_socket_closed`, `simpleredis_capability`, `simpleredis_noscript`, `simpleredis_open`, `simpleredis_close`). Each emit SHALL be slog key/value attributes at Error, Warn, or Debug. The session MUST NOT emit an Info-level event. Constants `MsgSocketPoisoned` (`simpleredis_socket_poisoned`) and `MsgAuthLeftover` (`simpleredis_auth_leftover`) MAY be declared; this change MUST NOT invent leftover-RESP detection in order to fire them.
+The session SHALL export message-name constants whose values are `simpleredis_` event strings (`simpleredis_panic`, `simpleredis_noauth`, `simpleredis_not_from_new`, `simpleredis_over_free`, `simpleredis_socket_poisoned`, `simpleredis_auth_leftover`, `simpleredis_pool_exhausted`, `simpleredis_short_bulk`, `simpleredis_bad_reply`, `simpleredis_handshake_failed`, `simpleredis_dial`, `simpleredis_idle_swept`, `simpleredis_retry`, `simpleredis_timeout`, `simpleredis_canceled`, `simpleredis_socket_closed`, `simpleredis_capability`, `simpleredis_noscript`, `simpleredis_open`, `simpleredis_close`). Each emit SHALL be slog key/value attributes at Error, Warn, or Debug. The session MUST NOT emit an Info-level event. `MsgSocketPoisoned` SHALL fire at the post-reply leftover check in `do`. `MsgAuthLeftover` SHALL fire at the pre-write leftover check in `do` when the next verb is AUTH or SELECT.
 
 #### Scenario: Panic is Error then re-raised
 - **WHEN** `do` panics inside `runOnConn`
@@ -36,6 +36,14 @@ The session SHALL export message-name constants whose values are `simpleredis_` 
 #### Scenario: Malformed RESP is Warn
 - **WHEN** the peer sends malformed or unsupported RESP (`redis:issue?` or `redis:unsupported-reply`)
 - **THEN** the client emits `simpleredis_bad_reply` at Warn with attributes `error` and `host`
+
+#### Scenario: Post-reply leftover is Warn
+- **WHEN** unread RESP remains in the connection reader after a complete reply
+- **THEN** the client emits `simpleredis_socket_poisoned` at Warn with attributes `buffered` and `host`
+
+#### Scenario: Handshake leftover is Warn
+- **WHEN** unread bytes remain in the reader before AUTH or SELECT is written
+- **THEN** the client emits `simpleredis_auth_leftover` at Warn with attributes `buffered` and `host`
 
 #### Scenario: Non-auth handshake failure is Warn
 - **WHEN** AUTH or SELECT fails for a reason that is not AUTH-class (`LOADING`, max clients)
