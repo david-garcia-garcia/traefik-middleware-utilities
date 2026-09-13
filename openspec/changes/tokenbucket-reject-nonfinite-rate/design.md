@@ -23,7 +23,7 @@
 
 3. **Keep `errRate` string.** Callers match `errors.Is`. Alternative: mention "finite" in the message — rejected; explore assumed keep the string.
 
-4. **Named repro files, dest Allow signature.** `repro_nan_rate_test.go` (`TestRepro_NaNRateRejected`, `TestRepro_NaNRateAllowFailOpen` Skip-after-fix) and `repro_hunt_inf_rate_nan_test.go` (New rejects Inf, including -Inf as a dest-green case). Drop Inf-always-allow. Tests MUST use `Allow(ctx, key) (bool, time.Duration, error)`. Alternative: fold into `limiter_test.go` — rejected; ticket copy/adapt names those files.
+4. **Named repro files, dest Allow signature.** `repro_nan_rate_test.go` (`TestRepro_NaNRateRejected`, `TestRepro_NaNRateAllowFailOpen` Skip-after-fix) and `repro_inf_rate_test.go` (`TestRepro_InfRateRejected`, including -Inf as a dest-green case). Drop Inf-always-allow. Tests MUST use `Allow(ctx, key) (bool, time.Duration, error)`. Alternative: fold into `limiter_test.go` — rejected; ticket copy/adapt names those files. Review renamed the Inf file so `hunt`/`nan` do not hide the constructor-reject job.
 
 5. **Tests first.** Write the tests, `go test -short ./tokenbucket` FAIL, then change `validateClock`, then PASS. Do not weaken assertions to pass on dest.
 

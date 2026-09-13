@@ -21,6 +21,6 @@
 ## Impact
 
 - `tokenbucket/clock.go` — `validateClock` finite-rate gate; import `math`.
-- `tokenbucket/repro_nan_rate_test.go` and `tokenbucket/repro_hunt_inf_rate_nan_test.go` — fail-then-pass constructor tests; dest `Allow` three-value signature.
+- `tokenbucket/repro_nan_rate_test.go` and `tokenbucket/repro_inf_rate_test.go` — fail-then-pass constructor tests; dest `Allow` three-value signature.
 - `openspec/specs/std_go_tokenbucket_allow/spec.md` after archive.
 - `knowledge/devdocs/std_go_tokenbucket.md` — gotcha: non-finite rate fails New.

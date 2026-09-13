@@ -8,9 +8,8 @@ import (
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
-// TestRepro_InfRateElapsedZeroNaNFailOpen asserts New rejects +Inf and -Inf.
-// Dest used to accept +Inf; the second Allow at elapsed=0 then did Inf*0=NaN and fail-opened.
-func TestRepro_InfRateElapsedZeroNaNFailOpen(t *testing.T) {
+// TestRepro_InfRateRejected asserts NewMemory and NewRedis reject +Inf and -Inf.
+func TestRepro_InfRateRejected(t *testing.T) {
 	t.Run("NewMemory/+Inf", func(t *testing.T) {
 		limiter, err := NewMemory(math.Inf(1), 1, 0, testTTL)
 		if err == nil {
