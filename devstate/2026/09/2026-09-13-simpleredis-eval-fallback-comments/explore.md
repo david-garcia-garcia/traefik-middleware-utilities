@@ -34,8 +34,8 @@ Usage packet `knowledge/devdocs/std_go_simpleredis.md` still says worst-case wai
 
 - Q: What compiled-test shape documents the intended per-hop budget while still passing on dest?
   Rank: additive asked — Desired step 1 names compiled tests that pass on current dest or comments-only plus Eval NOSCRIPT success
-  Decision: assumed — comment `TestEvalArgvAndIntegerReply` and `TestMSetEXUnknownCommandFallsBackAndCaches` (both already succeed on dest) so they record that each hop is its own `exec` with a full command budget; add one small compiled test that Eval NOSCRIPT fallback still succeeds if those comments are not enough for a new assertion. Do not assert elapsed against one public-command budget. Do not add first-hop delay + stall.
-  By: explore
+  Decision: resolved — commented TestEvalArgvAndIntegerReply and TestMSetEXUnknownCommandFallsBackAndCaches; added TestEvalNoscriptFallbackIsOwnExec (EVALSHA then EVAL both run, Eval succeeds). No elapsed assert.
+  By: implement
 
 - Q: Does this change rewrite `std_go_simpleredis_tcp-session` “Whole command has an overall deadline” to admit per-hop budgets?
   Rank: additive asked — Desired is comments-only; Out of scope lists rewriting that leaf
