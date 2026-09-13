@@ -18,3 +18,10 @@ findings: none
 fixed: none
 skipped: none
 change: simpleredis-handshake-sentinel-match (strict valid)
+
+## implement (2026-09-13T09:10:08Z)
+phase: implement
+findings: none
+fixed: inner handshake error + handshakeFailed bool; Yaegi tests pass after FAIL-before
+skipped: none
+localTests: passed (go vet ./simpleredis/; go test -count=1 -timeout 300s ./simpleredis/ ok 12.101s)
