@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-simpleredis-idle-socket-reaper
+jobName: 2026-09-13-simpleredis-idle-socket-reaper
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 27f5fb9259f07bb29cb3880eba8af36b8fe105cfd82e7cba3a66a72bf8a0cbe9
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 88
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/88
