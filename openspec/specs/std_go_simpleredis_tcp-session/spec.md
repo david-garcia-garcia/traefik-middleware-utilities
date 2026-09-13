@@ -328,7 +328,7 @@ When a command’s reply is a short bulk read (the peer announces more payload b
 - **AND** the idle pool was empty after the truncated call
 
 ### Requirement: Leftover unread reply is not returned to the idle pool
-When a command’s reply is one complete RESP value and unread bytes remain in that connection’s reader at the reply boundary, the session SHALL return that decoded value to the caller and SHALL NOT return that socket to the idle pool. The session MUST NOT drain leftover bytes to resynchronise. This requirement covers leftover already pulled into the reader. It does not cover an unsolicited reply that arrives only into the kernel receive buffer while the socket is idle. A later command on the same client SHALL dial a new connection when the idle pool is empty after that discard. A sequential burst of Gets against a peer that writes exactly one complete reply per command SHALL still reuse one connection. When unread bytes remain in the reader before the next command is written on the same connection (AUTH then SELECT on a newly dialed socket), the session SHALL NOT write that next command on that socket.
+When a command’s reply is one complete RESP value and unread bytes remain in that connection’s reader at the reply boundary, the session SHALL return that decoded value to the caller and SHALL NOT return that socket to the idle pool. The session MUST NOT drain leftover bytes to resynchronise. This requirement covers leftover already pulled into the reader. It does not cover an unsolicited reply that arrives only into the kernel receive buffer while the socket is idle. A later command on the same client SHALL dial a new connection when the idle pool is empty after that discard. A sequential burst of Gets against a peer that writes exactly one complete reply per command SHALL still reuse one connection. When unread bytes remain in the reader before the next command is written on the same connection (AUTH then SELECT on a newly dialed socket), the session SHALL NOT write that next command on that socket. That pre-write refusal SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT return `redis:issue?`, same as a short bulk read: the peer damaged the protocol, the socket is destroyed and not pooled, and the command fails. A handshake AUTH leftover that trips that refusal SHALL still surface one error and MUST NOT open a second TCP connection for that command (handshake failure is not retried).
 
 #### Scenario: Stray extra bulk is not pooled
 - **WHEN** `MaxRetries` is `-1`
@@ -342,6 +342,21 @@ When a command’s reply is one complete RESP value and unread bytes remain in t
 - **AND** a later Get is issued for another key against a peer that writes one complete bulk per command
 - **THEN** that Get returns the bytes for its own key
 - **AND** the peer accepted a new TCP connection for that later Get
+
+#### Scenario: AUTH leftover is unreachable and SELECT is not written
+- **WHEN** `MaxRetries` is `-1`
+- **AND** the client is created with a password and a database
+- **AND** AUTH receives a complete `+OK` plus one extra well-formed bulk
+- **THEN** the command returns `redis:unreachable`
+- **AND** the error is not `redis:issue?`
+- **AND** SELECT was not written
+- **AND** the idle pool is empty
+
+#### Scenario: AUTH leftover is not retried on a second dial
+- **WHEN** `MaxRetries` is `1`
+- **AND** AUTH leftover is as in the previous scenario
+- **THEN** the fake accepted exactly one TCP connection
+- **AND** AUTH ran once and SELECT was not written
 
 #### Scenario: Compliant sequential Gets reuse one connection
 - **WHEN** a client issues 25 sequential Gets against a peer that writes exactly one complete reply per command
@@ -520,4 +535,22 @@ Compiled proof MUST panic inside command I/O while the TCP socket remains a heal
 - **AND** the compiled caller recovers Traefik-style
 - **THEN** the deferred restore has run for each of those three panics
 - **AND** the turn counter is 0
+
+### Requirement: Panic inside idle keep-or-close still unlocks the idle list
+When the session decides whether a reusable socket returns to the idle pool, that decision SHALL run under the idle-list mutex, and that mutex SHALL be released even if the decision panics. The session MUST NOT hold that mutex across a socket close or an in-use-turn return. The in-use-turn return SHALL run after that decision returns, on every path, including when the socket is not reusable. The keep-or-close arithmetic SHALL still count this socket as in-use (its turn still held) while the decision runs. Extra turn returns SHALL stay 0. Session source MUST NOT add a production hook solely to panic inside that locked decision.
+
+The close decision SHALL stay: close when the client is closed, or when the idle list is already at `MaxIdleConns` and live sockets are at `PoolSize`. Otherwise park. `lastUsed` SHALL still be stamped on the reusable path before the socket is parked, including when the later verdict is close.
+
+#### Scenario: Reusable socket parks then the turn is returned
+- **WHEN** a reusable socket is released while idle is under `MaxIdleConns` and live sockets are under `PoolSize`
+- **THEN** that socket is in the idle list
+- **AND** `lastUsed` was stamped before it was parked
+- **AND** the in-use-turn channel is not short that turn
+- **AND** extra turn returns stay 0
+
+#### Scenario: Full idle at live cap closes then the turn is returned
+- **WHEN** a reusable socket is released while idle is already at `MaxIdleConns` and live sockets are at `PoolSize`
+- **THEN** that socket is closed, not parked
+- **AND** the in-use-turn is returned after the idle-list mutex is released
+- **AND** extra turn returns stay 0
 
