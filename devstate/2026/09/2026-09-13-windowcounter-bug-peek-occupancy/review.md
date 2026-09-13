@@ -23,3 +23,9 @@ phase: implement
 findings: occupancy lock passes; Peek godoc and usage occupancy; compare unchanged
 fixed: repro_peek_take_boundary_test.go; limiter.go godoc; std_go_windowcounter.md
 skipped: Peek compare change
+
+## codereview (2026-09-13)
+phase: codereview
+findings: Nitpicks 1 hard Name; other axes none
+fixed: peekAllowed/peekEstimated/takeAllowed/takeEstimated
+skipped: none
