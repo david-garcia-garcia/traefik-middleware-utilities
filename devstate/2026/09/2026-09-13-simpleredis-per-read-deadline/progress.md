@@ -11,4 +11,4 @@ JobName: 2026-09-13-simpleredis-per-read-deadline
 | codereview | [x] | [x] | 2026-09-13T17:20:35Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T17:20:35Z |
 | archive | [x] | [x] | 2026-09-13T17:20:35Z |
-| pullrequest | [x] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-13T17:24:36Z |
