@@ -28,8 +28,8 @@ Get → exec → borrow → dial
 
 - Q: What is the handshake mark type name and file?
   Rank: additive asked — new type this change creates; Desired item 3 names the mark at dial return after AUTH/SELECT do()
-  Decision: assumed — unexported `handshakeFailure` in `simpleredis/pool.go` next to `dial` (DTO that exists only to feed `shouldRetry`). `Error()` and `Unwrap()` delegate to inner. `shouldRetry` in `commands_exec.go` uses `errors.As` and returns false before `isUnreachable` / `isRetryableRedisReply`. Two call sites of `shouldRetry` (borrow error and command `do` error in `exec`).
-  By: explore
+  Decision: assumed — unexported `handshakeFailure` in `simpleredis/pool.go` next to `dial` (DTO that exists only to feed `shouldRetry`). `Error()` and `Unwrap()` delegate to inner. `shouldRetry` in `commands_exec.go` type-asserts `handshakeFailure` (not `errors.As`: Yaegi panics `*target must implement error`) and returns false before `isUnreachable` / `isRetryableRedisReply`. Two call sites of `shouldRetry` (borrow error and command `do` error in `exec`).
+  By: implement
 
 - Q: Where do AUTH/SELECT close-without-reply listeners live?
   Rank: additive asked — test helpers this change creates; Desired item 1 prefers pool_test.go
