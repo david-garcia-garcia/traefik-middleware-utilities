@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T08:50:29Z
+Developer review: in progress — 2026-09-13T09:02:12Z
 
 ## What this changes
 **Operators.** None.
@@ -10,51 +10,48 @@ Developer review: in progress — 2026-09-13T08:50:29Z
 **End users.** None.
 
 ## Motivation
-SimpleRedis gates concurrent sockets with a `PoolSize` turn channel filled once at `New`. `exec` returns a turn only by calling `release` after `do`. DestBranch does not defer that call (PR 29 discarded defer-release as too much complexity under Yaegi). A panic between `borrow` and `release` drops the token for the life of the process.
+SimpleRedis returns an in-use-turn only by calling `release` after `do`. On DestBranch that call is not deferred (PR 29 discarded defer-release). A panic between `borrow` and `release` drops one turn forever. There is no reaper and `OverFrees()` only counts extra returns, so it cannot restore a missing one.
 
-Traefik recovers a panicking middleware per request and keeps serving. After `PoolSize` recovered panics the channel is empty, idle is empty, and every later command waits one `PoolTimeout` then returns `redis:unreachable` even when Redis is healthy and no sockets are open. Restarting Redis does not recover it. The lookalike is a backend outage.
+Measured on this DestBranch with `PoolSize` 2: one warm socket, then two recovered panics after `borrow` (`TestBugLostInUseTurnBricksPoolPermanently` from `origin/bugfixes20260913`). `inUseTurns` ended 0/2, idle 0, TCP accepts 2, next `Get` returned `redis:unreachable` while Redis was healthy.
 
-No reachable panic was found in compiled Go (`readReply` fuzzed 7.04M execs / 91s; `parseLen` is capped by `maxBulkLength` before `length+2`). This is a latent hazard with unbounded blast radius, not a live compiled crash. Yaegi panics are already documented in this package (`errors.As` on a package-local struct, a `net.Error` type assert, `interp._select` on a context channel). If this does not merge, each recovered panic permanently shrinks concurrency until the Traefik process is restarted.
+If this does not merge, `PoolSize` recovered panics convert a live client into a permanent outage that looks like a Redis failure. No reachable panic was found in compiled Go (`readReply` fuzz 7.04M execs / 91s), so this is a latent hazard with unbounded blast radius, not a live crash. Yaegi panics are already documented in this package, and Traefik recovers the request so the process stays up.
 
 ```mermaid
 sequenceDiagram
-  participant Traefik
   participant exec
   participant pool
   participant do
-  Traefik->>exec: request
   exec->>pool: borrow take turn
   exec->>do: command
   do-->>exec: panic
-  Traefik->>Traefik: recover request
-  Note over exec: release never runs
+  Note over exec: Traefik recovers, release never runs
   Note over pool: turn gone until process restart
 ```
 
 ## Merge readiness
-Prepare is qualified. Product delta versus `master` is the empty start commit. Explore has not run. 3 items remain.
+Explore is recorded. Product apply has not started. 5 items remain.
 
-Priority: P2 — latent (no compiled panic), but a recovered panic permanently bricks the client until process restart
-Reviewed head: 6549b58
-Owner decision: None.
+Priority: P2 — latent operator outage with a restart workaround, not a live compiled crash today
+Reviewed head: 5579d5c
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI still in progress on the stub PR |
-| CI proof | 3/6 | in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34748485042 (Lint success; Unit, Unit race, Go E2E, Integration still running) |
-| Local tests proof | N/A | before implement; remote CI is the proof axis |
+| Overall readiness | 3/6 | Explore done; apply not started; CI on the explore push is still running |
+| CI proof | 3/6 | build 34748819631 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34748819631 |
+| Local tests proof | N/A | before implement (`localTests: none`); remote CI is the proof axis |
 | Review resolution | 6/6 | OPEN PR 66, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-simpleredis-lost-turn-recovery pushed | `git` / GitHub |
+| Branch | 2026-09-13-simpleredis-lost-turn-recovery pushed | `git` |
 | OpenSpec | none | `openspec/` |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/66 | GitHub Create |
-| CI | build 34748485042 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34748485042 | GitHub check runs |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/66 | GitHub |
+| CI | build 34748819631 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34748819631 | GitHub check runs |
 | Local tests | none | handoff.yaml localTests |
-| PR comments | no comments | Comment-List empty |
+| PR comments | no comments | comments: none |
 
 ## Specs
 None.
@@ -66,18 +63,25 @@ None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-13-simpleredis-lost-turn-recovery` → stub PR 66 → CI run 34748485042 in progress.
+Local ticket → branch `2026-09-13-simpleredis-lost-turn-recovery` → PR 66 → explore recorded; apply next.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| Refill missing turns at errPoolWait when owned live sockets are zero, or make the turn a leased resource with a reaper? | additive asked | assumed — refill at errPoolWait when idle is empty and heldSockets is 0; no lease object and no goroutine reaper | explore |
+| Where is the dialed-but-not-yet-released counter incremented so a recovered panic looks like zero owned sockets and a busy Get does not? | additive asked | assumed — heldSockets atomic, increment in exec after borrow with defer decrement, and around dial inside borrow. Do not increment at turn-take (leaks like the turn). Direct borrow then panic never enters exec so refill is correct | explore |
+| Does the nanosecond window after taking a turn and before heldSockets increments let recovery fire and dial past PoolSize? | additive incidental | assumed — do not add a mutex or reaper for that window; hung TCP is covered by the dial increment | explore |
+| Should this change also close TCP fds left behind when borrow returns a conn that is never released? | additive incidental | assumed — do not track or close those fds; refill lets the next command dial | explore |
 
 ## Before merge
-- [ ] Explore recovery (refill at pool-wait vs leased turn) without firing while sockets are genuinely busy [P2]
-- [ ] Land permanence fix plus the three default-suite tests; do not `defer sr.release` unless arguing PR 29's discard comment [P2]
-- [x] Stub PR 66 opened against `master`
+- [ ] [P2] Refill leaked in-use turns at pool-wait when owned live sockets are zero, without breaching PoolSize while commands are busy
+- [ ] [P2] Port TestBugLostInUseTurnBricksPoolPermanently into the default suite so it passes; add busy-pool and LostTurns() tests
+- [ ] Expose read-only LostTurns() next to OverFrees()
+- [ ] Spec: wait-not-dial is backpressure only when sockets are actually live at PoolSize
+- [ ] Do not defer sr.release (PR 29 discarded that)
 
 ## Findings
-None.
+- [P2] DestBranch bricks after PoolSize recovered panics — reproduced `TestBugLostInUseTurnBricksPoolPermanently` (turns=0/2, idle=0, accepts=2, next Get redis:unreachable). Path: `simpleredis/pool.go` `borrow` / `simpleredis/commands_exec.go` `exec`. Reply none.
 
 ## Axis review
 None.
@@ -89,24 +93,23 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 6549b58f6006e7d57fe046f9ecf2a7ddce8f5bbc | Card must match the branch you measured |
+| Reviewed head | 5579d5c06d85f06444c4c803fb55535171d76571 | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not yet applied. Ticket: fix permanence (refill when zero live sockets, or a recoverable lease) and expose `LostTurns()`. Do not `defer sr.release` unless later work argues against PR 29's discard.
+Best possible solution: not applied yet. Explore chose refill-on-empty-owned-sockets over defer-release (PR 29) and over a leased-turn reaper.
 
-Do we have a high-confidence way to reproduce? Yes. `origin/bugfixes20260913:simpleredis/bugs_repro_test.go` `TestBugLostInUseTurnBricksPoolPermanently` (`borrow` then panic, caller `recover()`).
+Do we have a high-confidence way to reproduce? Yes. `TestBugLostInUseTurnBricksPoolPermanently` failed on this DestBranch for the stated reason.
 
-Is this the best way to solve the issue? Yes versus DestBranch for permanence: DestBranch never restores a missing turn. Defer was tried on PR 29 and discarded.
+Is this the best way to solve the issue? Not applied yet. Refill at pool-wait when idle and heldSockets are zero preserves PR 29 and the live cap.
 
 ### Evidence
 What I checked:
-- `git ls-tree origin/master` contains `simpleredis`
-- PR 29 closed unmerged; owner discard comment 5646712668
-- GitHub check runs on 34748485042: Lint success; others in progress
-- One OPEN PR 66; Comment-List empty
+- `go test -tags bugrepro -count=1 -timeout 120s -run TestBugLostInUseTurnBricksPoolPermanently ./simpleredis/` failed: turns=0/2, idle=0, accepts=2, Get redis:unreachable
+- PR 29 owner comment: discarded defer-release as too much complexity for Yaegi recovering the request while the in-use-turn stays lost
+- Check runs on 34748819631: queued / in progress after the explore push
 
 ### Rank-up moves
 None.
