@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T06:30:04Z
+Developer review: ready for review — 2026-09-13T06:50:25Z
 
 ## What this changes
 **Operators.** None.
@@ -32,17 +32,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Apply landed locally (`localTests: passed`). Seven-axis review is clean. CI on PR 56 is still queued. 1 item remains.
+Apply landed. Seven-axis review is clean. CI on PR 56 succeeded. 0 items remain.
 
 Priority: P2 — real under-grant on new keys when elapsed-from-epoch cannot cover burst; typical small burst at wall-clock now coincidentally fills
-Reviewed head: 931e93f
+Reviewed head: 81db278
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Apply landed; seven-axis clean; CI in progress |
-| CI proof | 3/6 | Checks queued on run 34742681273 |
+| Overall readiness | 6/6 | Apply landed; seven-axis clean; CI succeeded |
+| CI proof | 6/6 | All 8 checks succeeded on run 34743045134 |
 | Local tests proof | N/A | Remote PR; CI proof covers remote |
 | Review resolution | 6/6 | OPEN PR; no review comments |
 
@@ -52,7 +52,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-13-tokenbucket-bug-idle-fill-burst pushed | `git` origin/2026-09-13-tokenbucket-bug-idle-fill-burst |
 | OpenSpec | 2026-09-13-fill-new-key-to-burst (archived) | `openspec/changes/archive/2026-09-13-fill-new-key-to-burst/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/56 | pr-host List |
-| CI | build 34742681273 queued https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742681273 | pr-host CI |
+| CI | build 34743045134 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34743045134 | pr-host CI |
 | Local tests | passed | `go test -short -count=1 -timeout 60s ./tokenbucket` ok after 5ba03a1 |
 | PR comments | no comments | no comments.md |
 
@@ -67,7 +67,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from origin/master. Stub PR 56 is the durable card host. Change archived to `openspec/changes/archive/2026-09-13-fill-new-key-to-burst`. Waiting on CI.
+Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from origin/master. PR 56 is the durable card host. Change archived; CI succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -76,13 +76,7 @@ Local ticket 2026-09-13-tokenbucket-bug-idle-fill-burst is on its branch from or
 | Does TTL-delete need its own epoch subtest? | additive asked | assumed — no extra epoch TTL subtest; one `memEntry` constructor then seed burst/`nowMicro`; existing TTL test stays as delete-then-Allow | explore |
 
 ## Before merge
-- [x] Tests that fail on dest (`epoch_clock` burst 5; `huge_burst_elapsed_below_burst` burst 1e12), then Lua empty-hash and Memory new-entry fill, then PASS
-- [x] Memory and Redis/fake still agree under `-short`
-- [ ] CI succeeded on PR 56
-- [x] Stub PR open
-- [x] Requirement grounded on dest Lua and Memory
-- [x] Dest failure reproduced (Memory epoch/huge; fake Redis epoch)
-- [x] OpenSpec change `fill-new-key-to-burst` apply-ready
+None.
 
 ## Findings
 None.
@@ -103,7 +97,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 931e93f59e008de25e643af7865b1e4996efe4a6 | Card must match the branch you measured |
+| Reviewed head | 81db2782d26ff86ed09d7d532ebd88368398728a | Card must match the branch you measured |
 
 ### Stored data model
 - Changed: Redis hash per Allow key / field `last` — Unix microseconds string — sample at epoch miss `0` → now (`t`). Upgrade: existing hashes still valid; missing hash rewritten on next Allow.
@@ -122,7 +116,7 @@ What I checked:
 - PASS same test and `go test -short -count=1 -timeout 60s ./tokenbucket` after 5ba03a1
 - MIT notice kept in `tokenbucket/lua.go`
 - `openspec validate fill-new-key-to-burst --strict` valid
-- OPEN PR 56; CI run 34742681273 queued
+- OPEN PR 56; CI run 34743045134 succeeded (Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly)
 
 ### Rank-up moves
 None.

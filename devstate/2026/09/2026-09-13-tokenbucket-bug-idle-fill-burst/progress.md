@@ -11,4 +11,4 @@ JobName: 2026-09-13-tokenbucket-bug-idle-fill-burst
 | codereview | [x] | [x] | 2026-09-13T06:30:04Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T06:33:14Z |
 | archive | [x] | [x] | 2026-09-13T06:33:14Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-13T06:50:25Z |

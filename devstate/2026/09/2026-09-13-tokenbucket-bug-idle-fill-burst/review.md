@@ -39,3 +39,9 @@ phase: archive
 findings: none
 fixed: none
 skipped: none
+
+## pullrequest (2026-09-13T06:50:25Z)
+phase: pullrequest
+findings: CI succeeded run 34743045134
+fixed: none
+skipped: none
