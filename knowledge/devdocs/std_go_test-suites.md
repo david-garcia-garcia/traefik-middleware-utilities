@@ -3,8 +3,8 @@
 ## Language
 
 **Lint**:
-The CI job that runs golangci-lint. It does not execute tests and does not start Redis or Dragonfly.
-_Avoid_: calling lint “test”; treating a green lint job as proof of Redis behaviour
+The CI job that runs golangci-lint v1.63.4. It does not execute tests and does not start Redis or Dragonfly.
+_Avoid_: calling lint “test”; treating a green lint job as proof of Redis behaviour; enabling `testpackage`; using golangci-lint `latest` or v2
 
 **Unit Go**:
 Compiled `go test` against in-process fakes (fake TCP Redis, in-memory limiters). Needs no backend services. CI job `test` (`Unit`) passes `-short` so live files skip and `TestAlloc*` run. Ubuntu CI has gcc; local Windows without gcc cannot run `-race`.
@@ -44,9 +44,9 @@ Four suites, eight jobs (`test` and `race` are both unit; Go E2E is Redis and Dr
 
 ## How to use
 
-- Lint: `.github/workflows/ci.yml` job `lint` (`.golangci.yml`).
-- Unit: `go test -short ./...`. CI job `test` (`Unit`): `go test -short -timeout 2m -count=1 -v ./...`. Files `{domain}_test.go` (and `{domain}_yaegi_test.go` against a compiled fake).
-- Unit race: CI job `race`: `go test -race -short -timeout 10m -count=1 -v ./...`. Same files as unit. `TestAlloc*` skip.
+- Lint: `.github/workflows/ci.yml` job `lint` (`.golangci.yml`). CI pins golangci-lint **v1.63.4** (`version: v1.63.4`, not `latest`; not v2). `gofmt` is on; `goimports`/`gofumpt` are omitted because they need a `diff` binary Windows contributors lack. `testpackage` stays off: tests are in-package white-box (`sr.borrow`, `sr.inUseTurns`). `gocritic` `unnamedResult.checkExported: false` is the stronger setting (`true` checks exported functions only).
+- Unit: `go test -short ./...`. CI job `test` (`Unit`): `go test -short -timeout 2m -count=1 -v ./...`. Files `{domain}_test.go` (and `{domain}_yaegi_test.go` against a compiled fake). SimpleRedis chaos pool and lifecycle stress skip under `-short`; they run on a default `go test ./simpleredis/` and on Go E2E (no `-short`).
+- Unit race: CI job `race`: `go test -race -short -timeout 10m -count=1 -v ./...`. Same files as unit. `TestAlloc*` skip. Concurrent MSetEX fallback stays on (4×8). Skip only `TestYaegiErrorpath_PoolWait`: race stacks are in `github.com/traefik/yaegi/interp` (`_select` / `itype.refType`), not this client. Other interpreted error paths stay on.
 - Go E2E: `go test ./...` with the LIVE addrs for the engines to hit. Files `{domain}_e2e_test.go` and `{domain}_yaegi_e2e_test.go` sit next to that domain’s `.go` and `{domain}_test.go`. Shared skip/wait helpers that are not one domain live in `{package}_e2e_test.go` (same job as `fake_redis_test.go` for the fake peer). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` with the same one-or-both rule. CI job `e2e-redis` sets Redis addrs only; `e2e-dragonfly` sets Dragonfly addrs only.
 - Pester: `./Test-Integration.ps1`. Docker required. Domain files are `scripts/integration-tests.<domain>.Tests.ps1` (reclaim, simpleredis). Helpers are `scripts/integration-tests.utils/*.ps1` (not `*Tests.ps1`). `-Suite reclaim` is reclaim only. `-Suite simpleredis -Engine redis|dragonfly` sets `INTEGRATION_ENGINE` and runs the SimpleRedis file once. Default (`-Suite all`) runs reclaim then both engines. CI jobs `integration`, `integration-redis`, and `integration-dragonfly` match those three slices.
 - Do not dump every live case into one `live_test.go`. Name the file for the domain it proves (`commands_e2e_test.go` beside `commands.go` / `commands_test.go`).
@@ -64,7 +64,7 @@ limiter_yaegi_e2e_test.go # interpreted, live
 
 ## Key files
 
-- `.github/workflows/ci.yml` — jobs `lint`, `test` (`Unit`, `-short`, no `-race`, no services), `race` (`Unit race`, `-race -short`), `e2e-redis` (`Go E2E Redis`, no `-race`), `e2e-dragonfly` (`Go E2E Dragonfly`, no `-race`), `integration` (Pester reclaim), `integration-redis` (Pester SimpleRedis Redis), `integration-dragonfly` (Pester SimpleRedis Dragonfly)
+- `.github/workflows/ci.yml` — jobs `lint` (golangci-lint **v1.63.4**), `test` (`Unit`, `-short`, no `-race`, no services), `race` (`Unit race`, `-race -short`), `e2e-redis` (`Go E2E Redis`, no `-race`), `e2e-dragonfly` (`Go E2E Dragonfly`, no `-race`), `integration` (Pester reclaim), `integration-redis` (Pester SimpleRedis Redis), `integration-dragonfly` (Pester SimpleRedis Dragonfly)
 - `simpleredis/commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, `simpleredis_e2e_test.go`, `yaegi_e2e_test.go`
 - `windowcounter/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
 - `tokenbucket/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
@@ -73,7 +73,9 @@ limiter_yaegi_e2e_test.go # interpreted, live
 ## Gotchas
 
 - Unit CI does not start Redis. A test that needs a live engine belongs in `*_e2e_test.go`, not `{domain}_test.go`.
-- Unit CI on Ubuntu runs `test` without `-race` (`TestAlloc*` run) and `race` with `-race` (`TestAlloc*` skip). A green race job does not prove `inUseTurns` length or idle-cap accounting.
+- Unit CI on Ubuntu runs `test` without `-race` (`TestAlloc*` run) and `race` with `-race` (`TestAlloc*` skip). A green race job does not prove `inUseTurns` length or idle-cap accounting. SimpleRedis chaos/lifecycle are not in the `-short` jobs; prove them with a default `go test ./simpleredis/`.
 - Pester `scripts/integration-tests.simpleredis.Tests.ps1` drives `/<engine>/<verb>` (status + body) for `INTEGRATION_ENGINE`. Exact `/redis` and `/dragonfly` are health Set+Get. Reclaim is `scripts/integration-tests.reclaim.Tests.ps1` and CI `integration`. Compiled `*_e2e_test.go` is the client/limiter proof.
 - Auth/SELECT handshake failure is Go E2E: SELECT 99 on dest engines (`pool_e2e_test.go`); WRONGPASS on `SIMPLEREDIS_LIVE_*_AUTH`. Malformed RESP and LOADING retry stay on fake TCP.
-- Reclaim has no Redis client; it has no Go E2E files. Backend backoff has no store; it has no Go E2E files and no `*_LIVE_*` variable.
+- `testpackage` is off on purpose. Tests live in `package reclaim` / `package simpleredis` / … so they can reach unexported pool state. Do not move them to `foo_test`.
+- `unnamedResult.checkExported: false` is stronger than `true`. `true` means exported functions only. Do not “tighten” it.
+- Identity `==` on SimpleRedis retry/decode sentinels is required (`errUnreachable` so pool wait is not retried). `//nolint:errorlint` at those sites; do not rewrite to `errors.Is`.

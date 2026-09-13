@@ -40,6 +40,8 @@ var (
 	errNoAuth           = ErrNoAuth
 	errIssue            = ErrIssue
 	errUnsupportedReply = ErrUnsupportedReply
+	// errNotFromNew is a client that did not come from New (nil in-use-turn channel). Error() is redis:unreachable. Distinct from errUnreachable so MaxRetries does not sleep a programming error. Wraps ErrUnreachable so IsUnreachable stays true.
+	errNotFromNew = fmt.Errorf("%w", ErrUnreachable)
 )
 
 // IsMiss reports whether err is a Redis miss, including wrapping.

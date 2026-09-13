@@ -3,6 +3,7 @@ package tokenbucket
 
 import (
 	"errors"
+	"math"
 	"time"
 )
 
@@ -24,9 +25,9 @@ type clockConfig struct {
 	ttl      time.Duration
 }
 
-// validateClock rejects rate, burst, maxDelay, and ttl that would divide by zero, expire immediately, or disagree with Redis EXPIRE seconds.
+// validateClock rejects non-positive or non-finite rate, burst below 1, negative maxDelay, and ttl that would expire immediately or disagree with Redis EXPIRE seconds.
 func validateClock(rate float64, burst int64, maxDelay, ttl time.Duration) error {
-	if rate <= 0 {
+	if rate <= 0 || math.IsNaN(rate) || math.IsInf(rate, 0) {
 		return errRate
 	}
 	if burst < 1 {
@@ -53,28 +54,34 @@ func (c clockConfig) ttlSeconds() int64 {
 
 // consumeOne applies one Traefik Lua consume. last and now are Unix microseconds.
 func consumeOne(tokens float64, last int64, limitPerMicro, burst float64, nowMicro, maxDelayMicro int64) (newTokens float64, newLast int64, waitMicro float64) {
+	previousLast := last
 	// Clamp last so a clock jump backward does not invent negative elapsed.
 	if nowMicro < last {
 		last = nowMicro
 	}
 	// Refill from last, cap at burst, then consume this Allow.
 	elapsed := float64(nowMicro - last)
-	tokens = tokens + limitPerMicro*elapsed
+	tokens += limitPerMicro * elapsed
 	if tokens > burst {
 		tokens = burst
 	}
-	tokens = tokens - 1
+	tokens--
 	// Wait is how long until tokens reach 0. Refund when that wait exceeds maxDelay.
 	if tokens < 0 {
 		waitMicro = -tokens / limitPerMicro
 		if waitMicro > float64(maxDelayMicro) {
-			tokens = tokens + 1
+			tokens++
 			if tokens > burst {
 				tokens = burst
 			}
 		}
 	}
-	return tokens, nowMicro, waitMicro
+	// Persist the later of previous last and now so a backward clock does not rewind last.
+	persistLast := nowMicro
+	if previousLast > persistLast {
+		persistLast = previousLast
+	}
+	return tokens, persistLast, waitMicro
 }
 
 // waitDuration converts Lua wait microseconds to a Go duration.

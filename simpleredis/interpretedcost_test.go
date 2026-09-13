@@ -211,6 +211,7 @@ func BenchmarkCompiledParseIntUnsafe(b *testing.B) {
 
 // benchmarkYaegiConvert runs one interpreted conversion loop from convertprobe.
 func benchmarkYaegiConvert(b *testing.B, loopName string) {
+	b.Helper()
 	goPath := b.TempDir()
 	writeGopathFile(b, goPath, "convertprobe", "convert.go", convertprobeSrc)
 
@@ -294,6 +295,7 @@ func UnsafeLoop(count int) int {
 
 // benchmarkYaegiEncode runs one interpreted encode loop from encodeprobe.
 func benchmarkYaegiEncode(b *testing.B, loopName string) {
+	b.Helper()
 	goPath := b.TempDir()
 	writeGopathFile(b, goPath, "encodeprobe", "encode.go", encodeprobeSrc)
 

@@ -12,9 +12,10 @@ import (
 	"time"
 )
 
-// do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty.
-// Any panic here loses the in-use-turn when this client runs in a Traefik middleware: Traefik recovers the request and release never runs.
-func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
+// do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty,
+// leftover bytes remain after a complete value, or unread bytes were already in the reader before the write.
+// exec calls do from runOnConn, which defers release so a panic still returns the in-use turn and closes the socket.
+func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) (reply [][]byte, reusable bool, err error) {
 	if err := contextStop(ctx); err != nil {
 		return nil, false, err
 	}
@@ -31,6 +32,11 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before SetDeadline.
 	stopWatch := watchConnClose(ctx, conn.netConn)
 	defer stopWatch()
+	// Unread leftover from a prior command on this socket must not be parsed as this command's reply.
+	// Buffered() covers leftover already in the reader, not a stray that arrives while the socket is idle: it does not see the kernel receive buffer.
+	if conn.reader.Buffered() != 0 {
+		return nil, false, errIssue
+	}
 	if err := writeCommand(conn.writer, args); err != nil {
 		return nil, false, ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
 	}
@@ -43,6 +49,11 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 			return nil, false, err
 		}
 		return nil, false, ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
+	}
+	// Extra well-formed RESP after this reply means the peer is ahead; return the value and destroy the socket.
+	// Same limit as the pre-write check: leftover already in the reader, not a stray still only in the kernel buffer.
+	if conn.reader.Buffered() != 0 {
+		return values, false, err
 	}
 	return values, true, err
 }
@@ -104,7 +115,7 @@ func writeCommand(writer *bufio.Writer, args [][]byte) error {
 }
 
 // readReply parses one RESP value. clean is false when the stream is no longer usable.
-func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
+func readReply(reader *bufio.Reader) (values [][]byte, clean bool, err error) {
 	line, err := readLine(reader)
 	if err != nil {
 		return nil, false, err
@@ -121,7 +132,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		return nil, true, replyError(line[1:])
 	case '$':
 		data, bulkErr := readBulk(reader, line)
-		if bulkErr == errMiss {
+		if bulkErr == errMiss { //nolint:errorlint // readBulk returns errMiss as the exact $-1 sentinel; a wrap is not that decode miss
 			return [][]byte{nil}, true, nil
 		}
 		if bulkErr != nil {
@@ -150,7 +161,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 			switch head[0] {
 			case '$':
 				data, bulkErr := readBulk(reader, head)
-				if bulkErr == errMiss {
+				if bulkErr == errMiss { //nolint:errorlint // readBulk returns errMiss as the exact $-1 sentinel; a wrap is not that decode miss
 					continue
 				}
 				if bulkErr != nil {
@@ -173,7 +184,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 
 // isDirtyProtocolError is a framing or unsupported-type sentinel. It must not become redis:unreachable.
 func isDirtyProtocolError(err error) bool {
-	return err == errIssue || err == errUnsupportedReply
+	return err == errIssue || err == errUnsupportedReply //nolint:errorlint // dirty-protocol sentinels this decoder returns exactly; a wrap would be a different I/O failure
 }
 
 // readBulk reads a $ payload (or a miss when length is negative) and requires a CRLF trailer.
@@ -208,7 +219,7 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 func readLine(reader *bufio.Reader) ([]byte, error) {
 	line, err := reader.ReadSlice('\n')
 	if err != nil {
-		if err == bufio.ErrBufferFull {
+		if err == bufio.ErrBufferFull { //nolint:errorlint // ReadSlice returns ErrBufferFull exactly; a wrap would be I/O and must stay unreachable
 			return nil, errIssue
 		}
 		return nil, err

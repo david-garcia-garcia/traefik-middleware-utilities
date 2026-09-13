@@ -195,6 +195,24 @@ The session SHALL keep at most `poolSize` live TCP connections (idle plus in use
 - **AND** a later Get returns `redis:unreachable`
 - **AND** no new TCP connection is opened
 
+### Requirement: Client not from New fails immediately
+A command on a `SimpleRedis` that did not come from `New` SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT be retried (MUST NOT sleep retry backoff). `New` remains the only constructor of the in-use-turn channel. `Close` on that client SHALL be idempotent and MUST NOT panic. Empty `MGet` and empty or mismatched `MSetEX` / `MSetEXAt` stay pre-dial validation and MUST NOT panic.
+
+#### Scenario: Zero-value Get does not retry
+- **WHEN** `Get` is called on `&SimpleRedis{}`
+- **THEN** the command returns `redis:unreachable`
+- **AND** it returns in under the default minimum retry backoff (8 milliseconds)
+
+#### Scenario: Zero-value exported methods do not panic
+- **WHEN** every exported command and `Close` is called on `&SimpleRedis{}` (non-empty `MGet` / `MSetEX` / `MSetEXAt` so they reach the session)
+- **AND** `Close` is called a second time
+- **THEN** no call panics
+- **AND** each command that reaches the session returns `redis:unreachable`
+
+#### Scenario: New remains the only in-use-turn constructor
+- **WHEN** a client is `&SimpleRedis{}` and `New` has not run
+- **THEN** that client has no in-use-turn channel
+
 ### Requirement: I/O deadline is timeout, not a net.Error assert
 When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `IOTimeout` default is 100 milliseconds). A timeout on a reused connection MUST NOT open a second connection.
 
@@ -222,13 +240,14 @@ A Traefik local plugin SHALL import this module’s `simpleredis` package. Traef
 - **THEN** it does not stop `whoami-a` or `whoami-b`
 
 ### Requirement: Handshake AUTH or SELECT failure closes and is not pooled
-When AUTH on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool. AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. When SELECT on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool, and SHALL return that error text. `ERR DB index is out of range` MUST NOT map to `redis:noauth`. AUTH SHALL run before SELECT when both password and database are non-empty. A handshake failure SHALL surface one error to the caller and MUST NOT open a second TCP connection for that command. That MUST NOT-redial rule includes AUTH or SELECT peer close with no reply, AUTH `-LOADING Redis is loading the dataset in memory`, and AUTH `-ERR max number of clients reached`. TCP dial refuse before AUTH/SELECT MAY still retry. A command that receives `LOADING ` after a successful handshake MAY still retry. In-process handshake-failure tests SHALL use a fake whose AUTH and SELECT replies are configurable (default success so existing success tests stay). Live Redis and Dragonfly tests SHALL prove the cases each dest engine supports and SHALL skip when those engines are unset.
+When AUTH on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool. AUTH-class prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth` and SHALL match `errors.Is(err, ErrNoAuth)` for both compiled and Yaegi-interpreted callers. When SELECT on a new dial returns an error, the session SHALL close that socket and MUST NOT append it to the idle pool, and SHALL return that error text. `ERR DB index is out of range` MUST NOT map to `redis:noauth`. AUTH SHALL run before SELECT when both password and database are non-empty. A handshake failure SHALL surface one error to the caller and MUST NOT open a second TCP connection for that command. That MUST NOT-redial rule includes AUTH or SELECT peer close with no reply, AUTH `-LOADING Redis is loading the dataset in memory`, and AUTH `-ERR max number of clients reached`. AUTH or SELECT peer close SHALL return `redis:unreachable` and SHALL match `IsUnreachable` for both compiled and Yaegi-interpreted callers. The session MUST NOT wrap that error in a package-local type whose `Unwrap` compiled `errors.Is` cannot see under Yaegi. TCP dial refuse before AUTH/SELECT MAY still retry. A command that receives `LOADING ` after a successful handshake MAY still retry. In-process handshake-failure tests SHALL use a fake whose AUTH and SELECT replies are configurable (default success so existing success tests stay). Live Redis and Dragonfly tests SHALL prove the cases each dest engine supports and SHALL skip when those engines are unset.
 
 #### Scenario: Fake AUTH rejected maps to redis:noauth and is not pooled
 - **WHEN** the client is created with `New` with a non-empty password and an empty database
 - **AND** the fake replies to AUTH with an AUTH-class prefix (`NOAUTH`, `WRONGPASS`, `NOPERM`, or `ERR Client sent AUTH`)
 - **AND** a command is issued
 - **THEN** the command returns `redis:noauth`
+- **AND** `errors.Is` matches `ErrNoAuth` for a compiled caller
 - **AND** the idle pool is empty
 - **AND** the fake observes that the client closed the socket
 - **AND** the fake accepted one TCP connection
@@ -247,14 +266,16 @@ When AUTH on a new dial returns an error, the session SHALL close that socket an
 - **WHEN** the client is created with `New` with a non-empty password, `MaxRetries: 1`, and MinRetryBackoff off
 - **AND** the peer accepts TCP, reads AUTH, and closes with no reply
 - **AND** a command is issued
-- **THEN** the command returns an error
+- **THEN** the command returns `redis:unreachable`
+- **AND** `IsUnreachable` is true for a compiled caller
 - **AND** the peer accepted one TCP connection
 
 #### Scenario: Fake SELECT close without reply after AUTH is not redialed
 - **WHEN** the client is created with `New` with a password, a database, `MaxRetries: 1`, and MinRetryBackoff off
 - **AND** the peer accepts TCP, replies `+OK` to AUTH, reads SELECT, and closes with no reply
 - **AND** a command is issued
-- **THEN** the command returns an error
+- **THEN** the command returns `redis:unreachable`
+- **AND** `IsUnreachable` is true for a compiled caller
 - **AND** the peer accepted one TCP connection
 
 #### Scenario: Fake AUTH LOADING is not redialed
@@ -285,6 +306,7 @@ When AUTH on a new dial returns an error, the session SHALL close that socket an
 - **AND** the client is created with `New` with a wrong password
 - **AND** a command is issued
 - **THEN** each engine returns `redis:noauth`
+- **AND** `errors.Is` matches `ErrNoAuth`
 - **AND** the idle pool is empty
 - **WHEN** those passworded engines are unset
 - **THEN** the live wrong-password tests skip
@@ -304,6 +326,26 @@ When a command’s reply is a short bulk read (the peer announces more payload b
 - **AND** a later Get is issued for a key whose next reply is a complete bulk of known bytes
 - **THEN** that Get returns those bytes
 - **AND** the idle pool was empty after the truncated call
+
+### Requirement: Leftover unread reply is not returned to the idle pool
+When a command’s reply is one complete RESP value and unread bytes remain in that connection’s reader at the reply boundary, the session SHALL return that decoded value to the caller and SHALL NOT return that socket to the idle pool. The session MUST NOT drain leftover bytes to resynchronise. This requirement covers leftover already pulled into the reader. It does not cover an unsolicited reply that arrives only into the kernel receive buffer while the socket is idle. A later command on the same client SHALL dial a new connection when the idle pool is empty after that discard. A sequential burst of Gets against a peer that writes exactly one complete reply per command SHALL still reuse one connection. When unread bytes remain in the reader before the next command is written on the same connection (AUTH then SELECT on a newly dialed socket), the session SHALL NOT write that next command on that socket.
+
+#### Scenario: Stray extra bulk is not pooled
+- **WHEN** `MaxRetries` is `-1`
+- **AND** `PoolSize` is `1`
+- **AND** a Get receives a complete bulk for its own key plus one extra well-formed bulk
+- **THEN** that Get returns the bytes for its own key
+- **AND** the idle pool is empty after that call
+
+#### Scenario: Next command after leftover dials a new connection
+- **WHEN** that leftover Get has returned
+- **AND** a later Get is issued for another key against a peer that writes one complete bulk per command
+- **THEN** that Get returns the bytes for its own key
+- **AND** the peer accepted a new TCP connection for that later Get
+
+#### Scenario: Compliant sequential Gets reuse one connection
+- **WHEN** a client issues 25 sequential Gets against a peer that writes exactly one complete reply per command
+- **THEN** the peer accepted exactly one TCP connection
 
 ### Requirement: Peer-closed idle socket is retried
 When a pooled idle TCP connection is closed by the Redis or Dragonfly peer while it is still younger than thirty seconds, the next command SHALL treat that failure as a dead connection (not a timeout) and SHALL retry on a new dial under the go-redis-shaped `MaxRetries` policy. An I/O end-of-file on that reused socket MUST map to an error whose `Error()` text is `redis:unreachable`. A timeout MUST NOT be retried. Closing the client-side file descriptor of a pooled socket is a distinct failure and MUST remain a separate proof; that path MUST NOT stand in for peer close. If the retry cannot obtain a connection, the command SHALL return `redis:unreachable`. The dead socket MUST NOT be returned to the idle pool.
@@ -428,4 +470,54 @@ The SimpleRedis session source SHALL convert command names, scripts, and decimal
 - **WHEN** the session source converts a string key, script, or decimal argument to bytes, or a bulk integer payload to a string
 - **THEN** that conversion is `[]byte(...)` or `string(...)`
 - **AND** session source has no unsafe pointer or header cast that aliases string and `[]byte`
+
+### Requirement: Chaos pool stays within live cap and does not mix keys
+Compiled unit tests SHALL drive concurrent Gets against a peer that, per command, randomly replies honestly, delays a few milliseconds, closes with no reply, replies LOADING, or writes a short bulk then closes. After those callers stop, at rest the in-use-turn channel SHALL be full, extra turn returns SHALL be zero, and settled server-side open sockets SHALL be at most PoolSize. A non-error Get MUST return that key’s own value. Tests MUST NOT assert a peak live-socket count. Tests that sample idle length then in-use-turn length as a live-socket metric are invalid. `go test -short` MUST skip this stress.
+
+#### Scenario: Chaos Get does not return another key
+- **WHEN** many goroutines Get keys k0..k63 against that chaotic peer for a bounded duration
+- **THEN** every Get that returns no error returns that key’s own value
+- **AND** after quiescence the in-use-turn channel is full
+- **AND** extra turn returns are zero
+- **AND** settled server-side open sockets are at most PoolSize
+
+#### Scenario: Short skips chaos stress
+- **WHEN** `go test -short` runs the package
+- **THEN** the chaos pool stress does not run
+
+### Requirement: Close cycles do not leak goroutines or sockets
+Compiled unit tests SHALL run many New / use / Close cycles and SHALL prove goroutine count is flat and server-side open sockets are zero. When N Gets are held, Close, then those Gets are released, idle SHALL be empty, server-side open sockets SHALL be zero, and the in-use-turn channel SHALL be full. `go test -short` MUST skip this stress.
+
+#### Scenario: Repeated New use Close leaves no sockets
+- **WHEN** a test constructs a client, issues commands, and Closes, many times
+- **THEN** after the last Close, server-side open sockets are zero
+- **AND** goroutine count is not higher than before the cycles
+
+#### Scenario: Close during held Gets returns every turn
+- **WHEN** N Gets are held at the peer, the client is Closed, and the holds are released
+- **THEN** idle is empty
+- **AND** server-side open sockets are zero
+- **AND** the in-use-turn channel is full
+
+### Requirement: Panic between borrow and release returns the turn and closes the socket
+When a command panics after the session has taken an in-use turn and before that turn is returned, the session SHALL still return the turn and SHALL close that socket. The panicked socket MUST NOT return to the idle pool. After `PoolSize` recovered panics on one client, a later command on that client SHALL still obtain a turn against a healthy peer. Extra turn returns SHALL stay 0. Session source MUST NOT grow leak-detection or turn-refill counters.
+
+A panic inside the session's command I/O SHALL be treated the same as a dirty reply: the socket is destroyed. A panic while obtaining a socket, after the turn is taken and before the socket is handed to the caller, SHALL return the turn without leaving a live socket checked out.
+
+Compiled proof MUST panic inside command I/O while the TCP socket remains a healthy peer the session can close. Interpreted proof MUST show that a deferred restore runs under Yaegi v0.16.1 for an explicit interpreted panic, the interpreter `errors.As` panic on a package-local struct, and a nil-map write.
+
+#### Scenario: Recovered panics return every turn and the client still serves
+- **WHEN** a client is created with `PoolSize` 2
+- **AND** one idle socket is warmed
+- **AND** two commands panic inside command I/O after taking a turn, and the caller recovers each panic
+- **THEN** after those panics the in-use-turn channel `len` equals `cap`
+- **AND** idle is empty
+- **AND** extra turn returns are 0
+- **AND** a later Get on that client returns the stored value
+
+#### Scenario: Interpreted defer restores on panic
+- **WHEN** interpreted code takes a turn counter, registers a deferred restore, then panics by explicit panic, by `errors.As` on a package-local struct, or by a nil-map write
+- **AND** the compiled caller recovers Traefik-style
+- **THEN** the deferred restore has run for each of those three panics
+- **AND** the turn counter is 0
 

@@ -5,7 +5,7 @@ Redis EVAL of Traefik's token-bucket script so in-process and Redis/Dragonfly Al
 ## Requirements
 
 ### Requirement: Eval runs the copied Traefik script
-The Redis store SHALL admit via `simpleredis.Eval` of the copied Traefik `AllowTokenBucketRaw` script (Traefik Labs MIT notice kept). The hash key SHALL be listed in `KEYS`. The script SHALL use `#rl_source == 4` (not `table.maxn`). Go MUST NOT GET or SET that hash. v1 MUST NOT use EVALSHA. ARGV SHALL pass `rate/1e6`, burst, ttl seconds, Unix microseconds, and maxDelay microseconds.
+The Redis store SHALL admit via `simpleredis.Eval` of the Traefik `AllowTokenBucketRaw` script with Traefik Labs MIT notice kept, plus this product's empty-hash fill and last-field persist: when `HGETALL` is not four fields (`#rl_source ~= 4`), the script SHALL set tokens to burst and last to now (elapsed 0) before the existing refill and consume; persisted `last` SHALL be the later of the previous hash `last` and ARGV now `t`. Elapsed SHALL still treat `t` behind `last` as zero elapsed. The hash key SHALL be listed in `KEYS`. The script SHALL use `#rl_source == 4` (not `table.maxn`). Go MUST NOT GET or SET that hash. v1 MUST NOT use EVALSHA. ARGV SHALL pass `rate/1e6`, burst, ttl seconds, Unix microseconds, and maxDelay microseconds.
 
 #### Scenario: Dragonfly dense HGETALL length
 - **WHEN** Allow runs the script on Dragonfly
@@ -17,6 +17,26 @@ The Redis store SHALL admit via `simpleredis.Eval` of the copied Traefik `AllowT
 - **WHEN** Allow updates last and tokens
 - **THEN** those fields change only inside the Eval script
 - **AND** Go MUST NOT issue GET or SET on that key for the bucket
+
+#### Scenario: Empty hash fills to burst then consume 1
+- **WHEN** the hash is missing or `HGETALL` is not four fields
+- **AND** Allow is called
+- **THEN** the script treats tokens as burst and last as now before consume 1
+- **AND** remaining tokens after that Allow are at least `burst - 1` when burst is at least 1
+- **AND** that fill MUST NOT depend on last 0 plus elapsed since Unix epoch
+
+#### Scenario: HSET last is persist-max
+- **WHEN** the script has a previous hash last and ARGV `t` is earlier than that last
+- **THEN** elapsed is clamped so refill is not negative
+- **AND** HSET last is the previous last, not raw `t`
+
+### Requirement: Script last does not rewind
+The Eval script SHALL persist `last` as the later of the previous bucket `last` and ARGV `t`. Tests SHALL assert the script text does not HSET last as raw `t` after the elapsed clamp.
+
+#### Scenario: Script text persists max last
+- **WHEN** unit tests inspect the Eval script
+- **THEN** HSET last is the persist-max of previous last and `t`
+- **AND** MUST NOT write raw `t` as last when `t` is behind previous last
 
 ### Requirement: Two instances share one key
 Two limiter instances with two SimpleRedis clients SHALL share burst and wait for the same opaque Redis key. The second instance MUST NOT grant a second full burst while the first has already consumed it.

@@ -295,7 +295,7 @@ func TestHandshakeAuthMaxClientsMustNotOpenSecondConnection(t *testing.T) {
 }
 
 // startAcceptFake listens locally and runs handle on each accepted socket, then closes it.
-func startAcceptFake(t *testing.T, handle func(conn net.Conn, reader *bufio.Reader)) (*int32, string) {
+func startAcceptFake(t *testing.T, handle func(conn net.Conn, reader *bufio.Reader)) (acceptCount *int32, listenAddr string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
