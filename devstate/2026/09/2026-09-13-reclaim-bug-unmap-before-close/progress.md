@@ -9,6 +9,6 @@ JobName: 2026-09-13-reclaim-bug-unmap-before-close
 | propose | [x] | [x] | 2026-09-13T06:08:28Z |
 | implement | [x] | [x] | 2026-09-13T06:13:23Z |
 | codereview | [x] | [x] | 2026-09-13T06:22:29Z |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
+| devdocsimpact | [x] | [x] | 2026-09-13T06:22:29Z |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
