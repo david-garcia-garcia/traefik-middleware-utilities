@@ -11,7 +11,7 @@ localTests: none
 requirement: requirement.md
 comments: none
 explore: explore.md
-change: none
+change: tokenbucket-last-not-rewind
 pr:
   id: 55
   url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/55
