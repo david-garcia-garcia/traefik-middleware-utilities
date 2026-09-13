@@ -106,7 +106,7 @@ Owner levels are implemented as specified. No disagreement on Error vs Warn vs D
 
 - Q: `MsgSocketClosed` idle-cap is decided inside `release`; the ticket forbids logging inside `release` and forbids changing its signature. Where does that event go?
   Rank: additive asked — inventory names idle cap; dest close lives in `release` (`pool.go`); signature change is Out of scope
-  Decision: assumed — dest #79 moved the idle-cap decision into `parkIdleConn`. Emit `MsgSocketClosed` reason `idle_cap` there (the detection site). `release` still has signature `(conn, reusable bool)` and does not log from the generic `!reusable` arm.
+  Decision: assumed — dest #27 parks only when unused sockets are under maxIdleConns (no live-cap conjunct). Emit `MsgSocketClosed` reason `idle_cap` when `parkIdleConn` refuses because idle is already at the cap. `release` signature stays `(conn, reusable bool)`.
   By: implement
 
 - Q: Caller `DeadlineExceeded` (not library budget, not `Canceled`) — `MsgTimeout` or silence?

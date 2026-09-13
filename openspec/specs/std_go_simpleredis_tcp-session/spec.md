@@ -60,7 +60,7 @@ When `pass` is non-empty, each new dial SHALL send `AUTH` with that password bef
 - **AND** they are not sent again on those Gets
 
 ### Requirement: Idle connections are pooled
-The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdleConns` (const default 8). Live sockets (idle plus checked out) SHALL not exceed `PoolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `PoolSize`, a caller SHALL wait for a released socket instead of dialing. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `PoolSize` connections, including when more callers overlap than `PoolSize`. An idle connection older than `IdleTimeout` (const default thirty seconds) SHALL not be reused. On the next command that borrows, every idle socket older than `IdleTimeout` SHALL be closed, including those behind a younger tail that is reused. If no younger idle socket remains, the next command SHALL dial a new one if live sockets are under `PoolSize`. `New` MUST NOT start a goroutine to close idle sockets. A client that issues no later command MAY keep idle sockets past `IdleTimeout` until `Close`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. `release` MUST NOT close a reusable socket solely because the idle list is full while live sockets are under `PoolSize`.
+The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdleConns` (const default 8). Live sockets (idle plus checked out) SHALL not exceed `PoolSize` (`liveCap()`; const default 8). When idle is empty and live sockets are already at `PoolSize`, a caller SHALL wait for a released socket instead of dialing. A sequential burst of Gets on one client SHALL reuse one connection. Concurrent commands SHALL not open more than `PoolSize` connections, including when more callers overlap than `PoolSize`. An idle connection older than `IdleTimeout` (const default thirty seconds) SHALL not be reused. On the next command that borrows, every idle socket older than `IdleTimeout` SHALL be closed, including those behind a younger tail that is reused. If no younger idle socket remains, the next command SHALL dial a new one if live sockets are under `PoolSize`. `New` MUST NOT start a goroutine to close idle sockets. A client that issues no later command MAY keep idle sockets past `IdleTimeout` until `Close`. Dirty sockets MUST NOT return to idle (`reusable=false`); that is not a retry. When unused sockets already equal `MaxIdleConns`, `release` SHALL close a reusable socket instead of growing the idle pool, even while live sockets are under `PoolSize`. After a burst of returns, unused sockets SHALL equal `min(MaxIdleConns, PoolSize)` and the peer's still-open sockets SHALL equal that idle count.
 
 Every command (GET, MGET, SET, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL) SHALL use go-redis-shaped command retry. `MaxRetries`, `MinRetryBackoff`, and `MaxRetryBackoff` live on `Config` and are copied at `New`. The retry loop SHALL be `for attempt := 0; attempt <= maxRetries; attempt++` (zero Config means 1 extra retry, at most two sends). Backoff SHALL wait only between retries (`attempt > 0`), using go-redis `RetryBackoff` (`math/rand` `Int63n` jitter), and MUST return when the command context is done or the overall command deadline has passed. Construction is `New(Config)`.
 
@@ -80,6 +80,31 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **WHEN** more concurrent commands than the default `poolSize` (8) overlap against a live fake Redis
 - **THEN** the fake observes at most the default `poolSize` (8) TCP connections
 - **AND** waiters reuse a released socket rather than dialing past `poolSize`
+
+#### Scenario: Sequential returns honour MaxIdleConns below PoolSize
+- **WHEN** `PoolSize` sockets are checked out then returned one by one against a fake Redis
+- **AND** `PoolSize` is 8 and `MaxIdleConns` is 2
+- **THEN** unused sockets equal 2 after the last return
+- **AND** after waiting for peer close, still-open sockets equal 2
+- **WHEN** `PoolSize` is 16 and `MaxIdleConns` is 1
+- **THEN** unused sockets equal 1 after the last return
+- **AND** after waiting for peer close, still-open sockets equal 1
+
+#### Scenario: Sequential returns honour MaxIdleConns at or above PoolSize
+- **WHEN** `PoolSize` sockets are checked out then returned one by one against a fake Redis
+- **AND** `PoolSize` is 2 and `MaxIdleConns` is 8
+- **THEN** unused sockets equal 2 after the last return
+- **AND** after waiting for peer close, still-open sockets equal 2
+- **WHEN** `PoolSize` is 8 and `MaxIdleConns` is 8
+- **THEN** unused sockets equal 8 after the last return
+- **AND** after waiting for peer close, still-open sockets equal 8
+
+#### Scenario: Concurrent commands quiesce at MaxIdleConns
+- **WHEN** more concurrent Gets than `MaxIdleConns` overlap against a fake Redis
+- **AND** `PoolSize` is 16 and `MaxIdleConns` is the default 8
+- **THEN** after those Gets finish, unused sockets equal 8
+- **AND** after waiting for peer close, still-open sockets equal 8
+- **AND** a later Get reuses an idle socket and the fake's accept count does not increase
 
 #### Scenario: Stale idle head is closed while the tail stays hot
 - **WHEN** a client has two idle sockets
@@ -519,19 +544,19 @@ Compiled proof MUST panic inside command I/O while the TCP socket remains a heal
 - **AND** the turn counter is 0
 
 ### Requirement: Panic inside idle keep-or-close still unlocks the idle list
-When the session decides whether a reusable socket returns to the idle pool, that decision SHALL run under the idle-list mutex, and that mutex SHALL be released even if the decision panics. The session MUST NOT hold that mutex across a socket close or an in-use-turn return. The in-use-turn return SHALL run after that decision returns, on every path, including when the socket is not reusable. The keep-or-close arithmetic SHALL still count this socket as in-use (its turn still held) while the decision runs. Extra turn returns SHALL stay 0. Session source MUST NOT add a production hook solely to panic inside that locked decision.
+When the session decides whether a reusable socket returns to the idle pool, that decision SHALL run under the idle-list mutex, and that mutex SHALL be released even if the decision panics. The session MUST NOT hold that mutex across a socket close or an in-use-turn return. The in-use-turn return SHALL run after that decision returns, on every path, including when the socket is not reusable. Extra turn returns SHALL stay 0. Session source MUST NOT add a production hook solely to panic inside that locked decision.
 
-The close decision SHALL stay: close when the client is closed, or when the idle list is already at `MaxIdleConns` and live sockets are at `PoolSize`. Otherwise park. `lastUsed` SHALL still be stamped on the reusable path before the socket is parked, including when the later verdict is close.
+The close decision SHALL stay the idle-only rule already required above: close when the client is closed, or when the idle list is already at `MaxIdleConns`. Otherwise park. `lastUsed` SHALL still be stamped on the reusable path before the socket is parked, including when the later verdict is close.
 
 #### Scenario: Reusable socket parks then the turn is returned
-- **WHEN** a reusable socket is released while idle is under `MaxIdleConns` and live sockets are under `PoolSize`
+- **WHEN** a reusable socket is released while idle is under `MaxIdleConns`
 - **THEN** that socket is in the idle list
 - **AND** `lastUsed` was stamped before it was parked
 - **AND** the in-use-turn channel is not short that turn
 - **AND** extra turn returns stay 0
 
-#### Scenario: Full idle at live cap closes then the turn is returned
-- **WHEN** a reusable socket is released while idle is already at `MaxIdleConns` and live sockets are at `PoolSize`
+#### Scenario: Full idle closes then the turn is returned
+- **WHEN** a reusable socket is released while idle is already at `MaxIdleConns`
 - **THEN** that socket is closed, not parked
 - **AND** the in-use-turn is returned after the idle-list mutex is released
 - **AND** extra turn returns stay 0
