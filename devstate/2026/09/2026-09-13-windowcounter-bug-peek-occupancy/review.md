@@ -29,3 +29,9 @@ phase: codereview
 findings: Nitpicks 1 hard Name; other axes none
 fixed: peekAllowed/peekEstimated/takeAllowed/takeEstimated
 skipped: none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: none — Window counter packet already occupancy
+fixed: none
+skipped: produce (already applied)
