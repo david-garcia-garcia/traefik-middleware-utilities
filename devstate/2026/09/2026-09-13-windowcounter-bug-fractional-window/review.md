@@ -17,3 +17,10 @@ phase: propose
 findings: fold std_go_windowcounter_sliding-take; change windowcounter-reject-fractional-window
 fixed: none
 skipped: none
+
+## implement — 2026-09-13T07:10:52Z
+
+phase: implement
+findings: 1500ms Take now errors; weight denom windowSec; package tests passed
+fixed: slidingAt remainder reject + usage gotcha
+skipped: none

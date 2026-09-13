@@ -7,7 +7,7 @@ JobName: 2026-09-13-windowcounter-bug-fractional-window
 | prepare | [x] | [x] | 2026-09-13T07:00:23Z |
 | explore | [x] | [x] | 2026-09-13T07:04:23Z |
 | propose | [x] | [x] | 2026-09-13T07:07:44Z |
-| implement | [x] | [ ] | |
+| implement | [x] | [x] | 2026-09-13T07:10:52Z |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
