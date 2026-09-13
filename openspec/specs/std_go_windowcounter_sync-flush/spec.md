@@ -15,7 +15,7 @@ When `sync_rate` is zero, each Take SHALL send Redis `INCR` on the current-windo
 - **THEN** a later Take in a new window admits again
 
 ### Requirement: Buffered mode shares one limit without last-write-wins
-When `sync_rate` is greater than zero, Take SHALL admit from `redis_known + local_delta` (plus the sliding previous-window term) and SHALL NOT `INCR` on every Take. A timer SHALL flush pending deltas with one EVAL of INCRBY plus EXPIREAT when the key did not exist, with the touched key declared in `KEYS`. After a successful flush, `redis_known` SHALL become the EVAL return and `local_delta` SHALL clear. `sync_rate` less than zero SHALL fail construction. `sync_rate` greater than zero and less than 20 ms SHALL floor to 20 ms. Construction and the README SHALL state that exact mode returns Redis errors on every Take, and that buffered mode returns a retained flush error (or a probe after one missed `sync_rate`) instead of a silent nil.
+When `sync_rate` is greater than zero, Take SHALL admit from `redis_known + local_delta` (plus the sliding previous-window term) and SHALL NOT `INCR` on every Take. A timer SHALL flush pending deltas with one EVAL of INCRBY plus EXPIREAT when the key did not exist, with the touched key declared in `KEYS`. After a successful flush, `redis_known` SHALL become the EVAL return and `local_delta` SHALL decrease by the amount sent on that EVAL. A hit counted into `local_delta` while that EVAL was in flight MUST remain in `local_delta`. The same snapshot MUST NOT be EVAL'd twice while it is in flight. `sync_rate` less than zero SHALL fail construction. `sync_rate` greater than zero and less than 20 ms SHALL floor to 20 ms. Construction and the README SHALL state that exact mode returns Redis errors on every Take, and that buffered mode returns a retained flush error (or a probe after one missed `sync_rate`) instead of a silent nil.
 
 #### Scenario: Two clients share the limit
 - **WHEN** two limiter instances with two SimpleRedis clients share one opaque key and `sync_rate` greater than zero
@@ -28,6 +28,24 @@ When `sync_rate` is greater than zero, Take SHALL admit from `redis_known + loca
 - **WHEN** New is called with a negative sync_rate
 - **THEN** construction returns an error
 - **AND** no ticker is started
+
+#### Scenario: Take during flush keeps the new local hit
+- **WHEN** `sync_rate` is greater than zero
+- **AND** a window has a pending `local_delta` of N
+- **AND** flush sends N on EVAL
+- **AND** a Take increments `local_delta` while that EVAL is in flight
+- **AND** the EVAL succeeds with integer return M
+- **THEN** `redis_known` is M
+- **AND** `local_delta` is the amount added during the EVAL, not zero
+
+### Requirement: Flush EVAL does not hold the limiter mutex
+When `sync_rate` is greater than zero, the flush EVAL (INCRBY plus EXPIREAT-if-new) MUST NOT run while the limiter mutex that serializes the local window map is held. A Take on an unrelated opaque key MUST be able to finish while that EVAL is in flight.
+
+#### Scenario: Take during an in-flight flush EVAL
+- **WHEN** `sync_rate` is greater than zero
+- **AND** a flush EVAL for one window key is in flight
+- **AND** a Take on a different opaque key is issued on the same limiter
+- **THEN** that Take returns without waiting for the EVAL to finish
 
 ### Requirement: Failed buffered flush is retained
 When `sync_rate` is greater than zero, a failed flush SHALL be stored on the limiter. `Sleep` and `Close` SHALL store that same error instead of discarding it. A later successful flush SHALL clear the stored error. Take and Peek SHALL return the stored error on their existing error result.
@@ -77,14 +95,28 @@ When a buffered flush EVAL reply is not a single integer, the returned error SHA
 - **AND** the error still matches `redis:issue?`
 
 ### Requirement: Sleep Wake Close reclaim the flush ticker
-The limiter SHALL export `Sleep`, `Wake`, and `Close` suitable for `reclaim.Hooks`. Sleep SHALL flush pending deltas then stop the ticker. Wake SHALL start the ticker when `sync_rate` is greater than zero. Close SHALL run after Sleep and MUST NOT close the injected SimpleRedis client. Exact mode (`sync_rate` zero) SHALL not leak a ticker. The implementation MUST NOT use `time.Tick`.
+The limiter SHALL export `Sleep`, `Wake`, and `Close` suitable for `reclaim.Hooks`. Sleep SHALL flush pending deltas then stop the ticker. Wake SHALL start the ticker when `sync_rate` is greater than zero and Sleep or Close is not waiting for the flush loop to exit. Close SHALL run after Sleep and MUST NOT close the injected SimpleRedis client. Exact mode (`sync_rate` zero) SHALL not leak a ticker. The implementation MUST NOT use `time.Tick`. While Sleep or Close is waiting for the flush loop, a concurrent Wake MUST NOT start a new ticker, and Sleep MUST return. After Sleep returns, a later Wake SHALL start the ticker when `sync_rate` is greater than zero. After Close, Wake MUST NOT start a ticker.
 
 #### Scenario: Close stops the flush goroutine
 - **WHEN** `sync_rate` is greater than zero and the limiter has been constructed
 - **AND** Close is called (after Sleep)
 - **THEN** the flush goroutine has exited
 - **AND** further Takes MUST NOT start a new ticker
+- **AND** further Wake MUST NOT start a new ticker
 - **AND** the SimpleRedis client remains usable by other callers
+
+#### Scenario: Concurrent Wake does not hang Sleep
+- **WHEN** `sync_rate` is greater than zero and the limiter has been constructed
+- **AND** Sleep and Wake run at the same time
+- **THEN** Sleep returns
+- **AND** Wake does not start a flush loop that Sleep waits for
+
+#### Scenario: Wake after Sleep starts the ticker
+- **WHEN** `sync_rate` is greater than zero and the limiter has been constructed
+- **AND** Sleep has returned
+- **AND** Close has not been called
+- **AND** Wake is called
+- **THEN** the flush ticker is running
 
 ### Requirement: Exact-mode Peek reads Redis on every call
 When `sync_rate` is zero, each Peek SHALL `GET` the current-window key and the previous-window key (`redis:miss` counts as zero). Peek MUST NOT `INCR`, MUST NOT set TTL, and MUST NOT use a separate consistency mode from Take.

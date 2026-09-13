@@ -19,8 +19,8 @@ Create-once for a key (`create` takes no args — Yaegi cannot call `func(contex
 _Avoid_: Put vs Bind as two public calls; a nil holder context; assuming `Open` returns fast when the value has a slow `Wake`; type-switch discovery on the stored `any`; type-asserting when `err != nil`
 
 **Hooks**:
-The optional `Sleep`, `Wake`, and `Close` funcs passed to `Open`. A nil field skips that event. They belong to the incarnation created at put, not to the latest holder.
-_Avoid_: optional methods on the stored value; replacing hooks on bind or reclaim
+The optional `Sleep`, `Wake`, and `Close` funcs passed to `Open`, plus `EnforceCloseBeforeOpen`. A nil func skips that event. They belong to the incarnation created at put, not to the latest holder. `EnforceCloseBeforeOpen` defaults off: the table unmaps before Close, so a later `Open` of that key may create while Close is still in flight. Set it when the value owns something exclusive that cannot be held twice (an mmap, a file lock, a listening port, a connection). The cost of turning it on is that a slow or blocking Close now delays the next `create` for that key, which on the Traefik path means delaying a config reload. The ending path reads the stored flag, not a later `Open`'s argument.
+_Avoid_: optional methods on the stored value; replacing hooks on bind or reclaim; putting this knob on `Table` or `NewTable` (production callers use `reclaim.Open` / `Default()`, which have no table config)
 
 **Lifecycle**:
 The four events the table drives on one stored value: `create -> (sleep -> wake)* -> sleep -> close`. `create` and `close` run once. `sleep` and `wake` are a matched, repeating pair. `close` is always preceded by `sleep`, on every ending path, so cleanup is never written twice.
@@ -35,7 +35,7 @@ Optional `Hooks.Wake`, called when an `Open` finds a stored, sleeping value. `Op
 _Avoid_: an error return or a create-fallback on a Wake that returns; work in `Wake` slow enough to stall a Traefik reload
 
 **Close**:
-Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table emits `reclaim_dispose` after Close returns, or after a recovered Close panic (which also logs `reclaim_hook_panic` at error).
+Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table emits `reclaim_dispose` after Close returns, or after a recovered Close panic (which also logs `reclaim_hook_panic` at error). By default the key is unmapped first, so a later `Open` may create during Close. When that incarnation stored `EnforceCloseBeforeOpen`, the key stays mapped until Close returns, so a later `Open` waits and then creates.
 _Avoid_: cleanup in Close that Sleep already did; a Close hook that blocks; Traefik plugin `Close`
 
 **Grace**:
@@ -56,6 +56,7 @@ Because grace costs a sleeping value rather than a live one, a long grace is che
 - `ctx` is the host teardown context (Traefik `New` ctx), not `req.Context()`, not `context.Background()`. `Open` returns `(nil, ctx.Err())` when that context is already done at bind; do not type-assert a nil pointer.
 - Pass `Hooks` that close over a pointer assigned inside `create`. Do not type-switch the stored `any` for Sleep, Wake, or Close.
 - Write the Close hook assuming Sleep already ran. Do not block in Close.
+- Set `Hooks.EnforceCloseBeforeOpen` when the value owns an exclusive resource that cannot be held twice. Leave it off (the default) when overlap is acceptable.
 - Prefix keys when more than one type shares Default.
 
 ## Pattern snippet
@@ -66,9 +67,10 @@ stored, err := reclaim.Open(ctx, "bin:"+hash, logger, func() (any, error) {
 	v = newBIN(cfg)
 	return v, nil
 }, reclaim.Hooks{
-	Sleep: func() { v.Sleep() },
-	Wake:  func() { v.Wake() },
-	Close: func() { v.Close() },
+	Sleep:                  func() { v.Sleep() },
+	Wake:                   func() { v.Wake() },
+	Close:                  func() { v.Close() },
+	EnforceCloseBeforeOpen: true,
 })
 if err != nil {
 	return nil, err
@@ -91,6 +93,6 @@ w := stored.(*BIN)
 - Tests assert the `msg` constants. A test that cancels a holder and immediately calls `Open` is usually not testing the wake branch — wait for `reclaim_orphan` first.
 - `Open` blocks for as long as `Wake` takes. Keep `Wake` cheap.
 - A panicking `create`, Sleep, or Wake unsticks the key (later `Open` can create). AfterFunc recovers Sleep and Close panics so they cannot kill the process.
-- A Close hook that blocks blocks the drop or `Reset` goroutine, and also `Open` when a canceled bind is the last holder at zero grace. Keep Close cheap.
-- At zero grace an `Open` that races the orphan log is a plain bind, not a reclaim.
-- `Reset` is tests only. It must not race an `Open` on the same key.
+- A Close hook that blocks blocks the drop or `Reset` goroutine, and also `Open` when a canceled bind is the last holder at zero grace. When `EnforceCloseBeforeOpen` is set it also blocks any `Open` of that key until it returns. Keep Close cheap.
+- At zero grace an `Open` that races the orphan log is a plain bind, not a reclaim. `reclaim_dispose` of the previous incarnation precedes `reclaim_put` of the next only when that previous incarnation stored `EnforceCloseBeforeOpen`.
+- `Reset` is tests only. It must not race an `Open` on the same key. Reset unmaps first regardless of `EnforceCloseBeforeOpen`.

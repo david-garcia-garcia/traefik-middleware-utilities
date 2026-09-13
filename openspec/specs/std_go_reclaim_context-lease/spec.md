@@ -156,6 +156,7 @@ process table is constructed.
 - **AND** the last holder context is Done
 - **THEN** the value is slept and disposed without waiting
 - **AND** the key is not left stored
+- **AND** there was no window in which an `Open` could wake that value
 
 ### Requirement: Lifecycle events are logged
 The table SHALL emit a structured log line for each of: incarnation created (`Open` create),
@@ -177,7 +178,11 @@ including zero, with no exception for `Reset`.
 
 At zero grace the table keeps no sleeping value, so an `Open` that races the last holder going
 away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), not as
-`reclaim_reclaim`.
+`reclaim_reclaim`. When the previous incarnation stored `Hooks.EnforceCloseBeforeOpen`, that new
+incarnation's `create` SHALL NOT start until Close of the previous incarnation has returned, so
+`reclaim_dispose` for the previous incarnation SHALL precede `reclaim_put` of the next. When that
+field is false (the zero value), `create` MAY start while Close is still in flight, and
+`reclaim_dispose` NEED NOT precede `reclaim_put` of the next.
 
 #### Scenario: Hash change orphan then dispose
 - **WHEN** key A is opened, then all of A's contexts are Done
@@ -198,6 +203,17 @@ away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), n
 - **THEN** that `Open` records `reclaim_put` and `reclaim_bind` for the key
 - **AND** it does not record `reclaim_reclaim`
 
+#### Scenario: Enforced close dispose precedes the next put
+- **WHEN** a table with zero grace has its last holder for a key go Done
+- **AND** that incarnation stored `Hooks.EnforceCloseBeforeOpen`
+- **AND** an `Open` for that key races that drop
+- **THEN** `reclaim_dispose` for the previous incarnation is recorded before that `reclaim_put`
+
+#### Scenario: Recovered hook panic is reported
+- **WHEN** a Sleep or Close hook panics and the table recovers it
+- **THEN** logs include `reclaim_hook_panic` at error level for that key
+- **AND** that line carries which hook panicked and the panic value
+
 #### Scenario: Reset logs orphan then dispose
 - **WHEN** `Reset` is called on a table that still has a live incarnation
 - **THEN** logs include `reclaim_orphan` then `reclaim_dispose` for that key
@@ -211,11 +227,6 @@ away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), n
 - **WHEN** `Open` is called with a logger whose handler level is info
 - **THEN** `reclaim_put` and `reclaim_dispose` are not emitted
 
-#### Scenario: Recovered hook panic is reported
-- **WHEN** a Sleep or Close hook panics and the table recovers it
-- **THEN** logs include `reclaim_hook_panic` at error level for that key
-- **AND** that line carries which hook panicked and the panic value
-
 ### Requirement: Incarnation end closes the stored value before it reports the end
 When an incarnation ends (grace elapsed while sleeping, `Reset`, or a zero-grace drop), the table
 SHALL call the Close hook when that func is non-nil and SHALL wait until it has returned, or until
@@ -225,6 +236,17 @@ process down. The Close hook SHALL be called at most once per incarnation. Becau
 the table waits, a Close hook that blocks blocks whoever ended the incarnation; Close hooks
 SHALL NOT block. Every goroutine the table starts for a key SHALL exit once that key's holder
 contexts are Done and its incarnation has ended.
+
+When the ending incarnation stored `Hooks.EnforceCloseBeforeOpen`, the table SHALL keep the key
+stored until Close has returned, so a concurrent `Open` for that key waits for Close instead of
+creating while it is in flight. After Close returns the key SHALL NOT be stored. When that field
+is false (the zero value), the table SHALL unmap the key before Close, so a concurrent `Open` MAY
+create while Close is still in flight. Close SHALL NOT run while the table mutex is held. The
+Close window SHALL NOT be a sleeping window: an `Open` that arrives during Close MUST NOT wake
+the ending incarnation.
+
+Tests-only `Reset` MAY unmap first regardless of the field. Callers MUST NOT race `Reset` with
+`Open` on the same key.
 
 #### Scenario: Dispose log implies Close has returned
 - **WHEN** a key is orphaned and grace elapses
@@ -245,6 +267,20 @@ contexts are Done and its incarnation has ended.
 #### Scenario: Goroutines do not outlive the incarnation
 - **WHEN** many keys are opened, then every holder context is Done and every incarnation has ended
 - **THEN** the table owns no more goroutines than it did before those `Open` calls
+
+#### Scenario: Create does not start while previous Close is in flight
+- **WHEN** Close is in flight for a key (zero grace, or after grace elapsed)
+- **AND** that incarnation stored `Hooks.EnforceCloseBeforeOpen`
+- **AND** `Open` is called for that key
+- **THEN** `create` does not run until Close has returned
+- **AND** that `Open` does not reclaim the closing value
+
+#### Scenario: Create starts while previous Close is in flight by default
+- **WHEN** Close is in flight for a key (zero grace)
+- **AND** that incarnation did not store `Hooks.EnforceCloseBeforeOpen`
+- **AND** `Open` is called for that key
+- **THEN** `Open` returns a new incarnation while Close is still blocked
+- **AND** that `Open` does not reclaim the closing value
 
 ### Requirement: Library Open loads under Traefik Yaegi
 A Traefik local plugin SHALL import this module's `reclaim` package and call `Open` from `New`

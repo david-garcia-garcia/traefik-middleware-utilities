@@ -251,6 +251,32 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 	}
 }
 
+// TestWake_StartsTickerAfterSleep checks that Wake after a completed Sleep starts the flush ticker again, including a second Sleep while already stopped.
+func TestWake_StartsTickerAfterSleep(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := newSimpleRedisForTest(t, addr)
+	limiter, err := New(client, minSyncRate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer limiter.Close()
+	limiter.Sleep()
+	limiter.Sleep()
+	limiter.mu.Lock()
+	stopped := limiter.stop == nil
+	limiter.mu.Unlock()
+	if !stopped {
+		t.Fatal("Sleep left a ticker running")
+	}
+	limiter.Wake()
+	limiter.mu.Lock()
+	running := limiter.stop != nil
+	limiter.mu.Unlock()
+	if !running {
+		t.Fatal("Wake after Sleep did not start a ticker")
+	}
+}
+
 func TestAllow_IsTake(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
 	client := newSimpleRedisForTest(t, addr)

@@ -157,9 +157,10 @@ func RunHooks() string {
 	_, err := tab.Open(ctx, "k", logger, func() (any, error) {
 		return 1, nil
 	}, reclaim.Hooks{
-		Sleep: func() { sleeps.Add(1) },
-		Wake:  func() { wakes.Add(1) },
-		Close: func() { closes.Add(1) },
+		Sleep:                  func() { sleeps.Add(1) },
+		Wake:                   func() { wakes.Add(1) },
+		Close:                  func() { closes.Add(1) },
+		EnforceCloseBeforeOpen: true,
 	})
 	if err != nil {
 		return "open:" + err.Error()
