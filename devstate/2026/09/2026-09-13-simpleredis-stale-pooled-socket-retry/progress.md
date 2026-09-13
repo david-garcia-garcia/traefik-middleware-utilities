@@ -11,4 +11,4 @@ JobName: 2026-09-13-simpleredis-stale-pooled-socket-retry
 | codereview | [x] | [x] | 2026-09-13T17:39:18Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T17:41:45Z |
 | archive | [x] | [x] | 2026-09-13T17:44:35Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-13T17:55:12Z |

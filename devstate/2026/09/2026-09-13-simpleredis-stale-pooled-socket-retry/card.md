@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T17:44:35Z
+Developer review: ready for review — 2026-09-13T17:55:12Z
 
 ## What this changes
 **Operators.** None.
@@ -30,27 +30,27 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Change archived into the live catalog. Local tests passed. CI is still running on the reviewed head. 2 items remain.
+Ready for review. 0 items remain.
 
 Priority: P1 — sequential commands after a Redis restart fail against a healthy peer
-Reviewed head: 3fa6de8
+Reviewed head: 7663680
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI in progress |
-| CI proof | 3/6 | in progress [CI run 34772498910](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34772498910) |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded [CI run 34772926159](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34772926159) |
 | Local tests proof | N/A | remote PR; localTests passed |
 | Review resolution | 6/6 | OPEN PR #87, no reviewer comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-simpleredis-stale-pooled-socket-retry pushed | `git` HEAD 3fa6de8 |
-| OpenSpec | simpleredis-stale-pooled-socket-retry | `openspec/changes/` |
+| Branch | 2026-09-13-simpleredis-stale-pooled-socket-retry pushed | `git` HEAD 7663680 |
+| OpenSpec | simpleredis-stale-pooled-socket-retry | `openspec/changes/archive/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/87 | GitHub |
-| CI | build 34772498910 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34772498910 | GitHub: 8 checks in progress |
+| CI | build 34772926159 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34772926159 | GitHub: Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly succeeded |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | comments: none |
 
@@ -64,7 +64,7 @@ Owner decision: None.
 None.
 
 ## How this fits together
-Local spec → branch `2026-09-13-simpleredis-stale-pooled-socket-retry` from `origin/master` → GitHub PR #87 → apply on HEAD 3fa6de8 → CI 34772498910 in progress.
+Local spec → branch `2026-09-13-simpleredis-stale-pooled-socket-retry` from `origin/master` → GitHub PR #87 → apply on HEAD 7663680 → CI 34772926159 succeeded.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -79,8 +79,8 @@ Local spec → branch `2026-09-13-simpleredis-stale-pooled-socket-retry` from `o
 - [x] Seven-axis hard findings applied (fake rename, serve comment, leftover `borrow` deleted)
 - [x] SimpleRedis usage packet names skip-idle sequential recovery
 - [x] Catalog requirement Peer-closed idle vintage is recovered sequentially
-- [ ] CI on PR #87 succeeded
-- [ ] Drop WIP from the PR title when ready
+- [x] CI on PR #87 succeeded
+- [x] Drop WIP from the PR title when ready
 
 ## Findings
 None.
@@ -101,7 +101,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 3fa6de80f36fa4497a097848f57f224e5cffd815 | Card must match the branch you measured |
+| Reviewed head | 7663680f3e19e24642d924beeb75300c5dfb3839 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -119,7 +119,7 @@ What I checked:
 - `go test ./simpleredis/ -count=1` passed; `go test ./... -count=1 -short` passed
 - tagged BUG-1: 0 failures at default MaxRetries; MaxRetries -1 still 4 (accepted)
 - `TestLostReplyIncrMaxRetriesOff` still green
-- CI run 34772498910 in progress
+- CI run 34772926159 succeeded (Lint, Unit, Unit race, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly)
 
 ### Rank-up moves
 None.
