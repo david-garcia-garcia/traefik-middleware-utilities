@@ -21,3 +21,21 @@ phase: implement
 findings: none
 fixed: runOnConn deferred release, borrow handedOff, panic_safety_test.go, yaegi_defer_test.go
 skipped: none
+
+## codereview (2026-09-13)
+phase: codereview
+findings: coverage 1 hard skipped (no dest injection for panic inside borrow)
+fixed: none
+skipped: coverage 1
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage Key files
+fixed: Key files panic_safety_test.go and yaegi_defer_test.go
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: none
+fixed: live tcp-session spec panic requirement; change moved to archive/2026-09-13-simpleredis-panic-safe-release
+skipped: none
