@@ -35,3 +35,11 @@ skipped: none
 verdict: in progress
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/46
 localTests: passed
+
+## codereview (2026-09-13)
+phase: codereview
+findings: P3 1 (parseLen comment)
+fixed: parseLen optional minus is negative length, not miss (64dba6a)
+skipped: none
+verdict: in progress
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/46

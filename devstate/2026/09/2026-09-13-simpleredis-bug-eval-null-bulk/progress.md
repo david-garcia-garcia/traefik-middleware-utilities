@@ -8,7 +8,7 @@ JobName: 2026-09-13-simpleredis-bug-eval-null-bulk
 | explore | [x] | [x] | 2026-09-13T05:50:26Z |
 | propose | [x] | [x] | 2026-09-13T05:58:57Z |
 | implement | [x] | [x] | 2026-09-13T06:02:52Z |
-| codereview | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-13T06:08:07Z |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
 | pullrequest | [ ] | [ ] | |
