@@ -44,7 +44,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		}
 		// If do panics under Yaegi, the process does not crash and this in-use-turn is lost.
 		// Not deferred-release: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/29
-		values, reusable, err := sr.do(ctx, conn, args)
+		values, reusable, err := sr.doWithHeldSocket(ctx, conn, args)
 		if stop := contextStop(ctx); stop != nil {
 			sr.release(conn, false)
 			return nil, libraryTimeout(stop, libraryOwnsDeadline)
@@ -62,6 +62,14 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		return nil, libraryTimeout(last, libraryOwnsDeadline)
 	}
 	return nil, errTimeout
+}
+
+// doWithHeldSocket runs do while counting the socket as owned, so a pool-wait waiter can tell
+// a busy pool from a leaked turn. The defer restores the count if do panics; release is still not deferred.
+func (sr *SimpleRedis) doWithHeldSocket(ctx context.Context, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
+	sr.heldSockets.Add(1)
+	defer sr.heldSockets.Add(-1)
+	return sr.do(ctx, conn, args)
 }
 
 // bindCommandDeadline wraps ctx with (maxRetries+1)*(DialTimeout+IOTimeout) when that instant is sooner than the parent.

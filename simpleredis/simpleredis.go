@@ -79,6 +79,12 @@ type SimpleRedis struct {
 	inUseTurns chan struct{}
 	// overFrees counts in-use-turn returns that were dropped because the semaphore was already full.
 	overFrees atomic.Int64
+	// heldSockets is sockets a still-running command holds (exec around do, and dial inside borrow).
+	heldSockets atomic.Int64
+	// lostTurns counts in-use-turn tokens restored after a leak (idle empty and heldSockets is 0).
+	lostTurns atomic.Int64
+	// turnRecoverMu serializes refill of inUseTurns so two waiters do not double-fill.
+	turnRecoverMu sync.Mutex
 
 	// groupWriteMu guards groupWrite (native MSETEX vs Lua fallback). Not idleConnsMu: that lock is the unused-socket list.
 	groupWriteMu sync.Mutex
@@ -138,6 +144,11 @@ func (sr *SimpleRedis) MaxIdleConns() int {
 // OverFrees is how many extra in-use-turn returns were dropped because the semaphore was already full.
 func (sr *SimpleRedis) OverFrees() int64 {
 	return sr.overFrees.Load()
+}
+
+// LostTurns is how many in-use-turn tokens this client restored after a leak.
+func (sr *SimpleRedis) LostTurns() int64 {
+	return sr.lostTurns.Load()
 }
 
 // PoolTimeout is how long a waiter past PoolSize blocks.
