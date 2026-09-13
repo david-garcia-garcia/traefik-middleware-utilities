@@ -38,3 +38,15 @@ findings: none
 fixed: none
 skipped: none
 axes: all none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage std_go_simpleredis
+fixed: How-to and Gotcha per-hop wait
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: none
+fixed: synced std_go_simpleredis_resp-commands; moved change to archive/2026-09-13-simpleredis-eval-fallback-hop-comments
+skipped: none
