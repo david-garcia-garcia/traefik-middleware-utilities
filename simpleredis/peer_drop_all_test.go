@@ -10,9 +10,9 @@ import (
 	"time"
 )
 
-// stalePooledSocketFake is a compliant RESP peer whose accepted sockets can all be dropped at once.
+// peerDropAllFake is a compliant RESP peer whose accepted sockets can all be dropped at once.
 // Sequential Gets after that drop are how dest spends MaxRetries+1 corpses per request.
-type stalePooledSocketFake struct {
+type peerDropAllFake struct {
 	mu       sync.Mutex
 	store    map[string]string
 	conns    []net.Conn
@@ -20,15 +20,15 @@ type stalePooledSocketFake struct {
 	hold     chan struct{}
 }
 
-// startStalePooledSocketFake listens on loopback and serves store over real TCP.
-func startStalePooledSocketFake(t *testing.T, store map[string]string) (fake *stalePooledSocketFake, listenAddr string) {
+// startPeerDropAllFake listens on loopback and serves store over real TCP.
+func startPeerDropAllFake(t *testing.T, store map[string]string) (fake *peerDropAllFake, listenAddr string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	fake = &stalePooledSocketFake{store: store}
+	fake = &peerDropAllFake{store: store}
 	go func() {
 		for {
 			conn, acceptErr := listener.Accept()
@@ -44,7 +44,8 @@ func startStalePooledSocketFake(t *testing.T, store map[string]string) (fake *st
 	return fake, listener.Addr().String()
 }
 
-func (f *stalePooledSocketFake) serve(conn net.Conn) {
+// serve answers GET (and other commands as +OK) on one accepted socket, and can hold GETs to warm idle.
+func (f *peerDropAllFake) serve(conn net.Conn) {
 	defer conn.Close()
 	reader := bufio.NewReader(conn)
 	for {
@@ -73,7 +74,7 @@ func (f *stalePooledSocketFake) serve(conn net.Conn) {
 }
 
 // dropEveryAcceptedSocket closes every server fd the way a restart or CLIENT KILL of the pool does.
-func (f *stalePooledSocketFake) dropEveryAcceptedSocket() {
+func (f *peerDropAllFake) dropEveryAcceptedSocket() {
 	f.mu.Lock()
 	conns := f.conns
 	f.conns = nil
@@ -83,9 +84,9 @@ func (f *stalePooledSocketFake) dropEveryAcceptedSocket() {
 	}
 }
 
-// warmStalePooledSocketIdle parks exactly n sockets by holding n Gets at the server at once.
+// warmPeerDropAllIdle parks exactly n sockets by holding n Gets at the server at once.
 // Sequential Gets would reuse one socket and would not fill the idle vintage.
-func warmStalePooledSocketIdle(t *testing.T, fake *stalePooledSocketFake, sr *SimpleRedis, n int) {
+func warmPeerDropAllIdle(t *testing.T, fake *peerDropAllFake, sr *SimpleRedis, n int) {
 	t.Helper()
 	hold := make(chan struct{})
 	fake.mu.Lock()
@@ -132,16 +133,16 @@ func warmStalePooledSocketIdle(t *testing.T, fake *stalePooledSocketFake, sr *Si
 	}
 }
 
-// TestStalePooledSocketSequentialGetsSucceedAfterPeerDrop proves dest's quiet-path burst is gone:
+// TestPeerDropAllSequentialGetsSucceedAfterPeerDrop proves dest's quiet-path burst is gone:
 // after every idle socket is dropped, sequential Gets still succeed against a peer that stayed up.
-func TestStalePooledSocketSequentialGetsSucceedAfterPeerDrop(t *testing.T) {
+func TestPeerDropAllSequentialGetsSucceedAfterPeerDrop(t *testing.T) {
 	const poolSize = 8
-	fake, addr := startStalePooledSocketFake(t, map[string]string{"hit": "t"})
+	fake, addr := startPeerDropAllFake(t, map[string]string{"hit": "t"})
 	sr := New(Config{Host: addr, PoolSize: poolSize, MaxIdleConns: poolSize,
 		MinRetryBackoff: -1, MaxRetryBackoff: -1})
 	t.Cleanup(sr.Close)
 
-	warmStalePooledSocketIdle(t, fake, sr, poolSize)
+	warmPeerDropAllIdle(t, fake, sr, poolSize)
 	fake.dropEveryAcceptedSocket()
 	time.Sleep(50 * time.Millisecond)
 

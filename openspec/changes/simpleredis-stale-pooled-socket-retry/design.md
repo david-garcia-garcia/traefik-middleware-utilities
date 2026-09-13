@@ -18,7 +18,7 @@ Dest `borrow` returns a reused idle socket or a new dial with the same three val
 
 ## Decisions
 
-1. **`borrow` stays three values; shared body takes `skipIdle`.** Package `borrow(ctx)` calls `borrowSocket(ctx, false)` (name may shift at apply). `exec` calls the shared body with `skipIdle` after a reused unreachable. Tests that already unpack three values stay. Alternative: fourth return or a `borrow(ctx, skipIdle bool)` signature — rejected; sibling PRs and three test call sites unpack three values; the existing nolint is about that order.
+1. **`borrowSocket` is the one borrow path.** `skipIdle` skips the unused list. Tests that used three-value `borrow` call `borrowSocket(ctx, false)` and drop `fromIdle`. Alternative: keep a three-value `borrow` wrapper — rejected; after exec moved, it had no production callers.
 
 2. **Reuse is a return of the shared body, not a field that outlives release.** `exec` reads it in the same iteration that ran `runOnConn`. Alternative: `fromIdle` on `pooledConn` — also fine, but a return does not add a lifetime on the struct. Alternative: epoch on `SimpleRedis` — rejected; moving parts outnumber the bug.
 
@@ -26,7 +26,7 @@ Dest `borrow` returns a reused idle socket or a new dial with the same three val
 
 4. **Leave leftover corpses parked.** Each later sequential command spends one corpse then force-dials. Alternative: wipe idle under the mutex — rejected; park race with a fresh socket, and BUG-6 owns that lock.
 
-5. **Default-suite fake is `stalePooledSocketFake` in `stale_pooled_socket_retry_test.go`.** Prefix is bug-specific so sibling branches' fakes do not collide. Reuse `readCommand`, `bulk`, `statusOKReply`, `pooledIdle`, `assertTurnsFullAndNoOverFrees`. Do not add a `killAll` method on `fakeRedis` (`peerCloseFake` only closes the first accept). Warm with simultaneous in-flight Gets (hold channel), then close every accepted fd from the server.
+5. **Default-suite fake is `peerDropAllFake` in `peer_drop_all_test.go`.** Prefix is bug-specific so sibling branches' fakes do not collide. Reuse `readCommand`, `bulk`, `statusOKReply`, `pooledIdle`, `assertTurnsFullAndNoOverFrees`. Do not add a `killAll` method on `fakeRedis` (`peerCloseFake` only closes the first accept). Warm with simultaneous in-flight Gets (hold channel), then close every accepted fd from the server.
 
 6. **Do not extend `bindCommandDeadline`.** Recovery uses the existing retry slot. `MaxRetries: -1` stays one send.
 

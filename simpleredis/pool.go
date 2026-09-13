@@ -65,19 +65,11 @@ func (sr *SimpleRedis) freeInUseTurn() {
 	}
 }
 
-// borrow waits for an in-use turn, then takes an unused socket younger than idleTimeout, or dials.
+// borrowSocket waits for an in-use turn, then takes an unused socket younger than idleTimeout, or dials.
+// skipIdle skips the unused list: this command already saw a dead unused socket, so idle is not evidence the peer is up.
 // handshakeFailed is true only when a new dial's AUTH or SELECT failed after TCP succeeded.
 //
 //nolint:revive // error stays before handshakeFailed; reordering would collide with in-flight SimpleRedis PRs.
-func (sr *SimpleRedis) borrow(ctx context.Context) (conn *pooledConn, err error, handshakeFailed bool) {
-	conn, err, handshakeFailed, _ = sr.borrowSocket(ctx, false)
-	return
-}
-
-// borrowSocket is borrow, plus whether conn came from idle. skipIdle skips the unused list:
-// this command already saw a dead unused socket, so idle is not evidence the peer is up.
-//
-//nolint:revive // error stays before handshakeFailed to match borrow.
 func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *pooledConn, err error, handshakeFailed bool, fromIdle bool) {
 	// closed is atomic; inUseTurns is written once in New before concurrent use.
 	if sr.closed.Load() {
