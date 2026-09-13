@@ -148,9 +148,14 @@ func() (any, error)`: a type-switch to a Sleep method on the returned `any` does
 
 ### Requirement: Close panic does not crash the process
 If Close panics, the table SHALL recover so a production `AfterFunc` goroutine SHALL NOT kill the
-process. `ready` SHALL already have been closed before Close runs. The table SHALL NOT recover
-inside the Sleep, Wake, or Close runners as a silent swallow that continues as if the hook
-succeeded. It SHALL NOT re-panic after unsticking.
+process. `ready` SHALL already have been closed before Close runs. A shared hook runner MAY perform
+the recover, provided it hands the panic value back to its caller and that caller decides the
+outcome; no runner SHALL swallow a panic as a silent success, and the table SHALL NOT continue as
+if a panicking hook succeeded. Every recovered panic SHALL be surfaced exactly once and SHALL NOT
+be discarded: where the recovering path has a caller to answer (`create`, Wake), as that call's
+returned error; where it has none (Sleep, Close), on a `reclaim_hook_panic` line at error level
+carrying the key, which hook panicked, and the panic value. Recovering a panic SHALL NOT cost the
+operator the diagnostic the crash would have given them. It SHALL NOT re-panic after unsticking.
 
 #### Scenario: AfterFunc Sleep panic does not kill the process
 - **WHEN** a cancellable holder goes Done

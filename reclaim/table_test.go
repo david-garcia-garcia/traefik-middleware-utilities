@@ -182,6 +182,40 @@ func (h *recHandler) events() [][2]string {
 	return out
 }
 
+// hookPanicLine is one recorded reclaim_hook_panic: its level and the attrs a reader needs.
+type hookPanicLine struct {
+	level slog.Level
+	key   string
+	hook  string
+	panic string
+}
+
+// hookPanics is every recorded reclaim_hook_panic line, in order.
+func (h *recHandler) hookPanics() []hookPanicLine {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var out []hookPanicLine
+	for _, r := range h.recs {
+		if r.Message != MsgHookPanic {
+			continue
+		}
+		line := hookPanicLine{level: r.Level}
+		r.Attrs(func(a slog.Attr) bool {
+			switch a.Key {
+			case "key":
+				line.key = a.Value.String()
+			case "hook":
+				line.hook = a.Value.String()
+			case "panic":
+				line.panic = a.Value.String()
+			}
+			return true
+		})
+		out = append(out, line)
+	}
+	return out
+}
+
 // requireLevels fails if any of the five reclaim messages was not logged at debug.
 func (h *recHandler) requireLevels(t *testing.T) {
 	t.Helper()
@@ -1838,5 +1872,86 @@ func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 	}
 	if value != unstuckValue {
 		t.Fatalf("third open value %v, want next", value)
+	}
+}
+
+func TestTable_SleepPanicIsReportedAtError(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
+		Sleep: func() { panic("sleep boom") },
+		Close: func() {},
+	}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgHookPanic, "a")
+
+	lines := h.hookPanics()
+	if len(lines) != 1 {
+		t.Fatalf("%d hook panic lines, want 1", len(lines))
+	}
+	got := lines[0]
+	if got.level != slog.LevelError {
+		t.Errorf("hook panic logged at %v, want error", got.level)
+	}
+	if got.hook != "sleep" || got.panic != "sleep boom" || got.key != "a" {
+		t.Errorf("hook panic line %+v, want key a hook sleep panic sleep boom", got)
+	}
+	// Sleep never returned, so the incarnation was not parked asleep.
+	if n := countKeyMsg(h.events(), MsgOrphan, "a"); n != 0 {
+		t.Errorf("%d orphan lines after a Sleep panic, want 0", n)
+	}
+}
+
+func TestTable_ClosePanicIsReportedAtErrorAndStillDisposes(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(0)
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
+		Close: func() { panic("close boom") },
+	}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgHookPanic, "a")
+	waitKeyMsg(t, h, MsgDispose, "a")
+
+	lines := h.hookPanics()
+	if len(lines) != 1 {
+		t.Fatalf("%d hook panic lines, want 1", len(lines))
+	}
+	got := lines[0]
+	if got.level != slog.LevelError {
+		t.Errorf("hook panic logged at %v, want error", got.level)
+	}
+	if got.hook != "close" || got.panic != "close boom" {
+		t.Errorf("hook panic line %+v, want hook close panic close boom", got)
+	}
+}
+
+func TestTable_WakePanicIsReportedAsErrorNotLogged(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
+		Wake:  func() { panic("wake boom") },
+		Close: func() {},
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgOrphan, "a")
+
+	_, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+		return unstuckValue, nil
+	}, Hooks{})
+	if err == nil {
+		t.Fatal("wake panic did not surface as an Open error")
+	}
+	// Wake had a caller to answer, so the panic travels as that error and is not logged twice.
+	if n := len(h.hookPanics()); n != 0 {
+		t.Errorf("%d hook panic lines for a Wake panic, want 0 (it is the Open error)", n)
 	}
 }

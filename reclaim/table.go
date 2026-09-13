@@ -11,11 +11,12 @@ import (
 const (
 	DefaultGrace = 10 * time.Second
 
-	MsgPut     = "reclaim_put"
-	MsgBind    = "reclaim_bind"
-	MsgOrphan  = "reclaim_orphan"
-	MsgReclaim = "reclaim_reclaim"
-	MsgDispose = "reclaim_dispose"
+	MsgPut       = "reclaim_put"
+	MsgBind      = "reclaim_bind"
+	MsgOrphan    = "reclaim_orphan"
+	MsgReclaim   = "reclaim_reclaim"
+	MsgDispose   = "reclaim_dispose"
+	MsgHookPanic = "reclaim_hook_panic"
 )
 
 // Hooks are the optional sleep, wake, and close funcs for one incarnation. A nil field skips
@@ -122,36 +123,25 @@ func waitCtx(ctx context.Context) {
 	}
 }
 
-// runSleep runs the stored Sleep hook when it is set. Runs outside t.mu.
-func runSleep(hooks Hooks) {
-	if hooks.Sleep != nil {
-		hooks.Sleep()
+// runHook calls one hook and returns what it panicked with, or nil when it is unset or returned.
+// The table finishes the slotBusy protocol either way: a hook runs on an AfterFunc goroutine, so
+// letting the panic out would kill the process. Returning it keeps the caller in charge of the
+// failure — no caller may treat nil-or-not as success. Runs outside t.mu.
+func runHook(hook func()) (recovered any) {
+	if hook == nil {
+		return nil
 	}
+	defer func() { recovered = recover() }()
+	hook()
+	return nil
 }
 
-// runWake runs the stored Wake hook when it is set. Runs outside t.mu, before Open returns.
-func runWake(hooks Hooks) {
-	if hooks.Wake != nil {
-		hooks.Wake()
-	}
-}
-
-// runClose runs the stored Close hook when it is set. Runs outside t.mu, always after runSleep.
-func runClose(hooks Hooks) {
-	if hooks.Close != nil {
-		hooks.Close()
-	}
-}
-
-// dispose runs the Close hook and then reports the end. reclaim_dispose means Close has returned
-// or a Close panic was recovered (AfterFunc must not kill the process). ready is already closed.
+// dispose runs the Close hook and then reports the end. reclaim_dispose means Close has returned;
+// a Close panic is reported on its own line, because ready is already closed and nothing can retry.
 func dispose(key string, hooks Hooks, logger *slog.Logger) {
-	defer func() {
-		if recover() != nil {
-			logger.Debug(MsgDispose, "key", key)
-		}
-	}()
-	runClose(hooks)
+	if recovered := runHook(hooks.Close); recovered != nil {
+		logger.Error(MsgHookPanic, "key", key, "hook", "close", "panic", recovered)
+	}
 	logger.Debug(MsgDispose, "key", key)
 }
 
@@ -179,6 +169,9 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 	}
 	if logger == nil {
 		return nil, fmt.Errorf("reclaim: open %q: nil logger", key)
+	}
+	if create == nil {
+		return nil, fmt.Errorf("reclaim: create %q: nil create", key)
 	}
 	requireContext(ctx)
 
@@ -230,18 +223,9 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 // put runs create for a slot this Open registered, then publishes the value or the failure to
 // every caller waiting on that slot.
 func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
-	var recovered any
 	var value any
 	var err error
-	func() {
-		defer func() { recovered = recover() }()
-		if create == nil {
-			err = fmt.Errorf("reclaim: create %q: nil create", key)
-			return
-		}
-		value, err = create()
-	}()
-	if recovered != nil {
+	if recovered := runHook(func() { value, err = create() }); recovered != nil {
 		err = fmt.Errorf("reclaim: create %q: panic: %v", key, recovered)
 	}
 	if err != nil {
@@ -282,12 +266,9 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 	storedHooks := incarnation.hooks
 	t.mu.Unlock()
 
-	var recovered any
-	func() {
-		defer func() { recovered = recover() }()
-		runWake(storedHooks)
-	}()
-	if recovered != nil {
+	if recovered := runHook(storedHooks.Wake); recovered != nil {
+		// This Open has a caller to answer, so it reports the panic as its error. A waiter parked
+		// on ready replays it from createErr rather than resuming a value Wake left half-done.
 		err := fmt.Errorf("reclaim: wake %q: panic: %v", key, recovered)
 		t.endBusySlot(key, incarnation, err)
 		dispose(key, storedHooks, logger)
@@ -349,12 +330,10 @@ func (t *Table) drop(key string, incarnation *slot) {
 	grace := t.grace
 	t.mu.Unlock()
 
-	var recovered any
-	func() {
-		defer func() { recovered = recover() }()
-		runSleep(storedHooks)
-	}()
-	if recovered != nil {
+	if recovered := runHook(storedHooks.Sleep); recovered != nil {
+		// Nobody is waiting on a return value here, so createErr stays nil: a later Open creates a
+		// fresh incarnation instead of inheriting one whose Sleep never finished.
+		logger.Error(MsgHookPanic, "key", key, "hook", "sleep", "panic", recovered)
 		t.endBusySlot(key, incarnation, nil)
 		dispose(key, storedHooks, logger)
 		return
@@ -436,16 +415,9 @@ func (t *Table) Reset() {
 
 		switch state {
 		case slotAwake:
-			slept := true
-			func() {
-				defer func() {
-					if recover() != nil {
-						slept = false
-					}
-				}()
-				runSleep(storedHooks)
-			}()
-			if slept {
+			if recovered := runHook(storedHooks.Sleep); recovered != nil {
+				logger.Error(MsgHookPanic, "key", key, "hook", "sleep", "panic", recovered)
+			} else {
 				logger.Debug(MsgOrphan, "key", key)
 			}
 			dispose(key, storedHooks, logger)

@@ -35,7 +35,7 @@ Optional `Hooks.Wake`, called when an `Open` finds a stored, sleeping value. `Op
 _Avoid_: an error return or a create-fallback on a Wake that returns; work in `Wake` slow enough to stall a Traefik reload
 
 **Close**:
-Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table emits `reclaim_dispose` after Close returns, or after a recovered Close panic.
+Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table emits `reclaim_dispose` after Close returns, or after a recovered Close panic (which also logs `reclaim_hook_panic` at error).
 _Avoid_: cleanup in Close that Sleep already did; a Close hook that blocks; Traefik plugin `Close`
 
 **Grace**:
@@ -52,6 +52,7 @@ Because grace costs a sleeping value rather than a live one, a long grace is che
 
 - Production: `reclaim.Open(ctx, key, logger, create, hooks)` (process table). Tests: `NewTable` with a short grace, or `Reset`. `logger` is required. Nil hook funcs skip that event.
 - Watch stable `msg` + `key`. All five (`reclaim_put`, `reclaim_bind`, `reclaim_orphan`, `reclaim_reclaim`, `reclaim_dispose`) are debug. Put/bind/reclaim use that `Open`'s logger; orphan/dispose use the last `Open` on the key.
+- `reclaim_hook_panic` is the one error-level line: a hook panicked and was recovered. Alert on it — the table kept running, but that hook is broken.
 - `ctx` is the host teardown context (Traefik `New` ctx), not `req.Context()`, not `context.Background()`.
 - Pass `Hooks` that close over a pointer assigned inside `create`. Do not type-switch the stored `any` for Sleep, Wake, or Close.
 - Write the Close hook assuming Sleep already ran. Do not block in Close.
