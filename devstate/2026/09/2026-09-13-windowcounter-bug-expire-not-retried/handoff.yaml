@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-windowcounter-bug-expire-not-retried
+jobName: 2026-09-13-windowcounter-bug-expire-not-retried
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: c6ad6e1a03efc6363ac02f0b4e0ddc4e82a08bc662bfc5abd8d62124bb138932
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: windowcounter-exact-expire-if-no-ttl
+pr:
+  id: 60
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/60

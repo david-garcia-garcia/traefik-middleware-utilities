@@ -5,7 +5,7 @@ Exact versus buffered Redis sync for the sliding-window limiter: every Take hits
 ## Requirements
 
 ### Requirement: Exact mode increments Redis on every Take
-When `sync_rate` is zero, each Take SHALL send Redis `INCR` on the current-window key and SHALL set a TTL of two window lengths when that increment returns 1. Previous-window reads SHALL use `GET` (`redis:miss` counts as zero). Counter updates MUST NOT be a GET-then-SET of the integer.
+When `sync_rate` is zero, each Take SHALL increment the current-window key and SHALL set a TTL of two window lengths when that key has no TTL (`PTTL < 0`), including when the increment is not 1. Exact Take SHALL perform that increment and expire in one EVAL with the current-window key declared in `KEYS`. Exact Take MUST NOT refresh TTL when the key already has a TTL. Exact Take MUST NOT delete the key when expire would fail. Previous-window reads SHALL use `GET` (`redis:miss` counts as zero). Counter updates MUST NOT be a GET-then-SET of the integer.
 
 #### Scenario: Exact mode expires the new window key
 - **WHEN** `sync_rate` is 0
@@ -13,6 +13,13 @@ When `sync_rate` is zero, each Take SHALL send Redis `INCR` on the current-windo
 - **THEN** Redis TTL on that key is two window lengths
 - **WHEN** that TTL elapses
 - **THEN** a later Take in a new window admits again
+
+#### Scenario: Exact mode expires a leftover no-TTL key
+- **WHEN** `sync_rate` is 0
+- **AND** the current-window key already exists with count at least 1 and no TTL
+- **AND** Take is called for that key
+- **THEN** Redis TTL on that key is two window lengths
+- **AND** the increment is not discarded
 
 ### Requirement: Buffered mode shares one limit without last-write-wins
 When `sync_rate` is greater than zero, Take SHALL admit from `redis_known + local_delta` (plus the sliding previous-window term) and SHALL NOT `INCR` on every Take. A timer SHALL flush pending deltas with one EVAL of INCRBY plus EXPIREAT when the key did not exist, with the touched key declared in `KEYS`. After a successful flush, `redis_known` SHALL become the EVAL return and `local_delta` SHALL clear. `sync_rate` less than zero SHALL fail construction. `sync_rate` greater than zero and less than 20 ms SHALL floor to 20 ms. Construction and the README SHALL state that exact mode returns Redis errors on every Take, and that buffered mode returns a retained flush error (or a probe after one missed `sync_rate`) instead of a silent nil.

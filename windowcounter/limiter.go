@@ -23,8 +23,18 @@ if exists == 0 then
 end
 return value`
 
+// takeExactScript INCR then EXPIRE if the key has no TTL. KEYS must list the key (Dragonfly).
+const takeExactScript = `local n = redis.call("INCR", KEYS[1])
+if redis.call("PTTL", KEYS[1]) < 0 then
+  redis.call("EXPIRE", KEYS[1], ARGV[1])
+end
+return n`
+
 // flushScriptDigest is Redis sha1hex of flushScript, computed once at package init.
 var flushScriptDigest = simpleredis.ScriptSHA1Hex(flushScript)
+
+// takeExactScriptDigest is Redis sha1hex of takeExactScript, computed once at package init.
+var takeExactScriptDigest = simpleredis.ScriptSHA1Hex(takeExactScript)
 
 // Limiter admits hits on opaque keys against a sliding Redis window. Local memory is only the sync_rate buffer.
 type Limiter struct {
@@ -52,7 +62,7 @@ type windowState struct {
 	expireAt   int64
 }
 
-// New builds a limiter on a SimpleRedis from simpleredis.New. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (INCR every Take, Redis errors on that call). Positive syncRate buffers locally and returns a retained flush error (or a probe after one missed sync_rate) instead of a silent nil.
+// New builds a limiter on a SimpleRedis from simpleredis.New. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (EVAL INCR plus EXPIRE-if-no-TTL every Take, Redis errors on that call). Positive syncRate buffers locally and returns a retained flush error (or a probe after one missed sync_rate) instead of a silent nil.
 func New(redis *simpleredis.SimpleRedis, syncRate time.Duration) (*Limiter, error) {
 	if redis == nil {
 		return nil, errors.New("windowcounter: redis is required")
@@ -157,16 +167,17 @@ func (l *Limiter) Allow(ctx context.Context, key string, limit int64, window tim
 	return l.Take(ctx, key, limit, window)
 }
 
-// takeExact INCR the current window, EXPIRE on first hit, GET previous, then compare the estimate.
+// takeExact EVAL INCR plus EXPIRE-if-no-TTL on the current window, GET previous, then compare the estimate.
 func (l *Limiter) takeExact(ctx context.Context, currentKey, previousKey string, ttlSec int64, weight float64, limit int64) (bool, float64, error) {
-	current, err := l.redis.Incr(ctx, currentKey)
+	values, err := l.redis.Eval(ctx, takeExactScript, takeExactScriptDigest, []string{currentKey}, []string{
+		strconv.FormatInt(ttlSec, 10),
+	})
 	if err != nil {
 		return false, 0, err
 	}
-	if current == 1 {
-		if expireErr := l.redis.Expire(ctx, currentKey, ttlSec); expireErr != nil {
-			return false, 0, expireErr
-		}
+	current, convErr := parseEvalInt(values)
+	if convErr != nil {
+		return false, 0, convErr
 	}
 	previous, err := l.getCount(ctx, previousKey)
 	if err != nil {
