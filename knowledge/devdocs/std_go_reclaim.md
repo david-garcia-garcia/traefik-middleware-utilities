@@ -35,7 +35,7 @@ Optional `Hooks.Wake`, called when an `Open` finds a stored, sleeping value. `Op
 _Avoid_: an error return or a create-fallback on a Wake that returns; work in `Wake` slow enough to stall a Traefik reload
 
 **Close**:
-Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table waits until it has returned before `reclaim_dispose`.
+Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table emits `reclaim_dispose` after Close returns, or after a recovered Close panic.
 _Avoid_: cleanup in Close that Sleep already did; a Close hook that blocks; Traefik plugin `Close`
 
 **Grace**:

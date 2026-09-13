@@ -1771,6 +1771,36 @@ func TestTable_SleepPanicAfterFuncDoesNotCrash(t *testing.T) {
 	}
 }
 
+func TestTable_ClosePanicAfterFuncDoesNotCrash(t *testing.T) {
+	if os.Getenv("RECLAIM_CLOSE_PANIC_CHILD") == "1" {
+		h := &recHandler{}
+		tab := NewTable(0)
+		ctx, cancel := context.WithCancel(context.Background())
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
+			return "v", nil
+		}, Hooks{Close: func() { panic("close boom") }}); err != nil {
+			os.Exit(2)
+		}
+		cancel()
+		deadline := time.Now().Add(waitBudget)
+		for time.Now().Before(deadline) && mappedKeys(tab) != 0 {
+			time.Sleep(time.Millisecond)
+		}
+		if _, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			return "next", nil
+		}, Hooks{}); err != nil {
+			os.Exit(4)
+		}
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_ClosePanicAfterFuncDoesNotCrash$")
+	cmd.Env = append(os.Environ(), "RECLAIM_CLOSE_PANIC_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("AfterFunc Close panic crashed the process: %v\n%s", err, out)
+	}
+}
+
 func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 	h := &recHandler{}
 	tab := NewTable(graceNoRace)

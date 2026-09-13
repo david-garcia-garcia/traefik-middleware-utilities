@@ -51,8 +51,8 @@ type Hooks struct {
 //
 // The goroutine that sees the last holder go Done owns the rest of that incarnation: it sleeps
 // the value, writes reclaim_orphan, waits out grace, closes the value, and writes
-// reclaim_dispose. Those lines cannot be reordered, because one goroutine writes them in that
-// order.
+// reclaim_dispose. A Sleep panic aborts instead: Close and unmap, no orphan. Those lines cannot
+// be reordered, because one goroutine writes them in that order.
 type Table struct {
 	mu    sync.Mutex
 	grace time.Duration
@@ -143,8 +143,8 @@ func runClose(hooks Hooks) {
 	}
 }
 
-// dispose runs the Close hook and then reports the end, so reclaim_dispose means Close has returned.
-// Recover a Close panic so AfterFunc cannot kill the process. ready is already closed.
+// dispose runs the Close hook and then reports the end. reclaim_dispose means Close has returned
+// or a Close panic was recovered (AfterFunc must not kill the process). ready is already closed.
 func dispose(key string, hooks Hooks, logger *slog.Logger) {
 	defer func() {
 		if recover() != nil {
@@ -155,10 +155,10 @@ func dispose(key string, hooks Hooks, logger *slog.Logger) {
 	logger.Debug(MsgDispose, "key", key)
 }
 
-// failBusySlot records hookErr on a busy slot (nil means waiters create), unmaps it, and closes ready.
-func (t *Table) failBusySlot(key string, incarnation *slot, hookErr error) {
+// endBusySlot records createErr on a busy slot (nil means waiters create), unmaps it, and closes ready.
+func (t *Table) endBusySlot(key string, incarnation *slot, createErr error) {
 	t.mu.Lock()
-	incarnation.createErr = hookErr
+	incarnation.createErr = createErr
 	incarnation.state = slotGone
 	if t.items[key] == incarnation {
 		delete(t.items, key)
@@ -245,7 +245,7 @@ func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *
 		err = fmt.Errorf("reclaim: create %q: panic: %v", key, recovered)
 	}
 	if err != nil {
-		t.failBusySlot(key, incarnation, err)
+		t.endBusySlot(key, incarnation, err)
 		return nil, err
 	}
 
@@ -289,7 +289,7 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 	}()
 	if recovered != nil {
 		err := fmt.Errorf("reclaim: wake %q: panic: %v", key, recovered)
-		t.failBusySlot(key, incarnation, err)
+		t.endBusySlot(key, incarnation, err)
 		dispose(key, storedHooks, logger)
 		return nil, err
 	}
@@ -322,8 +322,9 @@ func (t *Table) watch(key string, incarnation *slot, ctx context.Context) {
 }
 
 // drop removes one holder. When it was the last one, this goroutine ends the incarnation: sleep,
-// orphan, grace, close, dispose — in that order, so those lines cannot be reordered. A watcher
-// whose incarnation is already gone finds slotGone and returns.
+// orphan, grace, close, dispose — in that order, so those lines cannot be reordered. A Sleep
+// panic aborts: Close, unmap, no orphan. A watcher whose incarnation is already gone finds
+// slotGone and returns.
 func (t *Table) drop(key string, incarnation *slot) {
 	t.mu.Lock()
 	incarnation.holders--
@@ -354,7 +355,7 @@ func (t *Table) drop(key string, incarnation *slot) {
 		runSleep(storedHooks)
 	}()
 	if recovered != nil {
-		t.failBusySlot(key, incarnation, nil)
+		t.endBusySlot(key, incarnation, nil)
 		dispose(key, storedHooks, logger)
 		return
 	}
@@ -407,8 +408,9 @@ func (t *Table) expire(key string, incarnation *slot) {
 }
 
 // Reset ends every incarnation on this table. An awake value is slept first, so Close never sees
-// a live value and orphan still precedes dispose. Tests only: it must not race an Open on the
-// same key. A slot that is mid-transition is ended by the goroutine that owns that transition.
+// a live value and orphan still precedes dispose when Sleep returns. A Sleep panic skips orphan
+// and still disposes. Tests only: it must not race an Open on the same key. A slot that is
+// mid-transition is ended by the goroutine that owns that transition.
 func (t *Table) Reset() {
 	if t == nil {
 		return
