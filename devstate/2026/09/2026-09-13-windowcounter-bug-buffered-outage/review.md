@@ -23,3 +23,9 @@ phase: implement
 findings: localTests passed; CI run 34746003664 all 8 success
 fixed: limiter buffered outage nil-error per-node cap; lock tests; usage/README
 skipped: bugs 2–7; phase close was conductor
+
+## codereview (2026-09-13)
+phase: codereview
+findings: Standards 1 done, Nitpicks 2 done, Spec none, Security 1 skipped (ticket), Performance 1 skipped (debt), Dead 1 done, Coverage 1 done 1 skipped
+fixed: lastOutageErr rename, lastRedisOK deleted, skip-GET lock test
+skipped: fail-closed; windows cap (debt)
