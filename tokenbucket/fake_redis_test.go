@@ -81,8 +81,9 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				_, _ = io.WriteString(conn, "-ERR bad argv\r\n")
 				break
 			}
-			tokens := 0.0
-			last := int64(0)
+			// Missing hash is a full bucket like Lua empty HGETALL, then consumeOne.
+			tokens := burst
+			last := nowMicro
 			if hash := f.hashes[key]; hash != nil {
 				parsedLast, lastErr := strconv.ParseInt(hash.last, 10, 64)
 				parsedTokens, tokErr := strconv.ParseFloat(hash.tokens, 64)

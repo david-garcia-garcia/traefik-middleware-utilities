@@ -7,7 +7,7 @@ repoSlug: traefik-middleware-utilities
 destBranch: master
 qualify: qualified-with-gaps
 src: 1827eb4f5d6001785aaddd5c7a95d39ed840f2a61c77c9769392e25b83ed0840
-localTests: none
+localTests: passed
 requirement: requirement.md
 comments: none
 explore: explore.md

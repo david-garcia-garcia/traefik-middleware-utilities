@@ -47,5 +47,6 @@ _ = wait
 
 - `rate <= 0`, `burst < 1`, `maxDelay < 0`, or `ttl < 1s` fails New. Passthrough is skipping construction.
 - Lua always returns `"true"`; Go maps allowed from wait vs maxDelay and from refund.
+- A new or TTL-expired key starts at `burst`, then consume 1. Missing Redis hash does the same; do not assume `last=0` refill from Unix epoch.
 - EVAL scripts must list keys in `KEYS` (Dragonfly). Do not use `table.maxn`.
 - Two limiter instances on one Redis key share burst. Do not expect a second full burst.

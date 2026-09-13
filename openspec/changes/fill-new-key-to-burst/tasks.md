@@ -6,12 +6,12 @@
 
 ## 2. Fill missing state
 
-- [ ] 2.1 Lua: empty `HGETALL` (`#rl_source ~= 4`) sets `tokens = burst` and `last = t`; keep MIT notice
-- [ ] 2.2 Memory: new `memEntry` (miss and TTL delete) starts `tokens = burst`, `last = nowMicro`; do not change `consumeOne` for `last=0`
-- [ ] 2.3 Fake Redis missing hash seeds `tokens=burst`, `last=now` like Lua, then `consumeOne`
+- [x] 2.1 Lua: empty `HGETALL` (`#rl_source ~= 4`) sets `tokens = burst` and `last = t`; keep MIT notice
+- [x] 2.2 Memory: new `memEntry` (miss and TTL delete) starts `tokens = burst`, `last = nowMicro`; do not change `consumeOne` for `last=0`
+- [x] 2.3 Fake Redis missing hash seeds `tokens=burst`, `last=now` like Lua, then `consumeOne`
 
 ## 3. Pass and agree
 
-- [ ] 3.1 Re-run `go test -short -count=1 -timeout 60s -run TestRepro_NewKeyFillsToBurstAtEpoch ./tokenbucket` and confirm PASS
-- [ ] 3.2 Run `go test -short -count=1 -timeout 60s ./tokenbucket` and confirm `TestMemoryAndRedis_Agree` and existing burst/TTL tests pass
-- [ ] 3.3 Run `openspec validate --change fill-new-key-to-burst --strict`
+- [x] 3.1 Re-run `go test -short -count=1 -timeout 60s -run TestRepro_NewKeyFillsToBurstAtEpoch ./tokenbucket` and confirm PASS
+- [x] 3.2 Run `go test -short -count=1 -timeout 60s ./tokenbucket` and confirm `TestMemoryAndRedis_Agree` and existing burst/TTL tests pass
+- [x] 3.3 Run `openspec validate --change fill-new-key-to-burst --strict`
