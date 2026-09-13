@@ -29,3 +29,9 @@ phase: codereview
 findings: P3 2 hard Standards Leave-a-trail; 1 hard Nitpicks chaosHonest; Lint G404/goconst; Unit race
 fixed: job comments; named chaosHonest; chaosIntn gosec; skip Yaegi error paths and concurrent MSetEX under race
 skipped: none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: 3 stale-usage
+fixed: std_go_simpleredis, std_go_simpleredis_resp-decode, std_go_test-suites
+skipped: none
