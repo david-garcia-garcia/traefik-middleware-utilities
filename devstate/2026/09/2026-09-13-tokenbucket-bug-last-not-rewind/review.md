@@ -24,3 +24,21 @@ findings: persist-max consumeOne + Lua HSET; Memory now after lock; FAIL then PA
 fixed: clock.go, lua.go, memory.go, repro test, usage gotcha
 skipped: builtin max (Yaegi undefined)
 
+## codereview (2026-09-13)
+phase: codereview
+findings: Standards 1 hard (stale dest comment); Coverage 1 hard (lock-order unproven); others none
+fixed: test comment; goroutine handshake with timeout
+skipped: none of the hard items
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage Token bucket gotcha (persist-max + lock-order)
+fixed: already produced on std_go_tokenbucket.md
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: fold allow + lua-eval synced; archived 2026-09-13-tokenbucket-last-not-rewind
+fixed: live specs + archive move
+skipped: none
+
