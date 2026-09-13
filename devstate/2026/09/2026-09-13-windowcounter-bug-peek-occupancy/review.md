@@ -17,3 +17,9 @@ phase: propose
 findings: fold std_go_windowcounter_sliding-take occupancy; tests first then docs
 fixed: change windowcounter-peek-occupancy (proposal, spec delta, design, tasks)
 skipped: product apply
+
+## implement (2026-09-13)
+phase: implement
+findings: occupancy lock passes; Peek godoc and usage occupancy; compare unchanged
+fixed: repro_peek_take_boundary_test.go; limiter.go godoc; std_go_windowcounter.md
+skipped: Peek compare change
