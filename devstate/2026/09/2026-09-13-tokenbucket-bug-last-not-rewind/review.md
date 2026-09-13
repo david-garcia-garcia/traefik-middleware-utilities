@@ -42,3 +42,15 @@ findings: fold allow + lua-eval synced; archived 2026-09-13-tokenbucket-last-not
 fixed: live specs + archive move
 skipped: none
 
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: CI 34743674876 all success; no comments
+fixed: ready title; PR summary
+skipped: none
+
+## sync (2026-09-13)
+phase: pullrequest
+findings: origin/master 4 commits; conflict std_go_tokenbucket_allow (ttl New scenarios vs persist-last); CI 34744464465 Integration Tests Dragonfly failed in 2s (sibling Redis 21s, prior green 22s)
+fixed: merge 2b35c26; both ttl scenarios and persist-last kept
+skipped: none
+
