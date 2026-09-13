@@ -11,4 +11,4 @@ JobName: 2026-09-13-simpleredis-eval-fallback-comments
 | codereview | [x] | [x] | 2026-09-13T06:03:01Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T06:05:43Z |
 | archive | [x] | [x] | 2026-09-13T06:05:43Z |
-| pullrequest | [x] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-13T06:11:11Z |
