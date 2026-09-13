@@ -27,6 +27,9 @@ func TestYaegi_CreateAnyTypeSwitchDoesNotMatch(t *testing.T) {
 
 // TestYaegi_OpenHooksRunSleepWakeClose proves Open Hooks funcs run under the interpreter.
 func TestYaegi_OpenHooksRunSleepWakeClose(t *testing.T) {
+	if raceDetectorOn {
+		t.Skip("Yaegi v0.16.1 select races inside the interp on context cancel; Unit without -race still runs this")
+	}
 	goPath := t.TempDir()
 	writeGopathReclaim(t, goPath)
 	writeGopathFile(t, goPath, "hookprobe", "run.go", hookprobeRunSrc)

@@ -20,6 +20,11 @@ priority: normal
 local: ext_traefik_ratelimiter_token-bucket/
 description: Traefik RateLimit token-bucket math, in-memory vs Redis Lua, and GCRA-not-in-tree vs PR 10211.
 
+## CircuitBreaker middleware
+priority: normal
+local: ext_traefik_circuitbreaker/
+description: Traefik CircuitBreaker expression examples, duration defaults, and Closed/Open/Recovering — not a library this product imports.
+
 ## Plugin useUnsafe load gate
 priority: normal
 local: ext_traefik_plugins_useunsafe/
