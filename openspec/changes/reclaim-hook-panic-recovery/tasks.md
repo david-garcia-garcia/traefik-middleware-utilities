@@ -1,10 +1,10 @@
 ## 1. Failing tests
 
-- [ ] 1.1 Add `TestTable_CreatePanicUnsticksKey` (2a): first Open create panics (recover); after the recover the second Open with a valid create must return (on master it hangs). Assert wrapped panic error after the fix.
-- [ ] 1.2 Add `TestTable_NilCreateUnsticksKey` (2b): Open with nil create; after recover, Open with a valid create must return (on master it hangs). Assert `reclaim: create %q: nil create`.
-- [ ] 1.3 Add `TestTable_SleepPanicAfterFuncDoesNotCrash` (2c): subprocess AfterFunc Sleep panic; parent asserts child exit (non-zero on master, zero after fix). Later Open in the child must not hang; Close of the broken incarnation must run.
-- [ ] 1.4 Add `TestTable_WakePanicReturnsErrorAndUnsticks` (2d): after Sleep, Open Wake panics; recover; third Open must return (on master it hangs). After the fix: wrapped wake panic error, later Open creates, Close ran.
-- [ ] 1.5 Run `go test -count=1 -timeout 60s ./reclaim/` and confirm 1.1–1.4 fail on current table.go; existing reclaim tests still pass. Commit the tests.
+- [x] 1.1 Add `TestTable_CreatePanicUnsticksKey` (2a): first Open create panics (recover); after the recover the second Open with a valid create must return (on master it hangs). Assert wrapped panic error after the fix.
+- [x] 1.2 Add `TestTable_NilCreateUnsticksKey` (2b): Open with nil create; after recover, Open with a valid create must return (on master it hangs). Assert `reclaim: create %q: nil create`.
+- [x] 1.3 Add `TestTable_SleepPanicAfterFuncDoesNotCrash` (2c): subprocess AfterFunc Sleep panic; parent asserts child exit (non-zero on master, zero after fix). Later Open in the child must not hang; Close of the broken incarnation must run.
+- [x] 1.4 Add `TestTable_WakePanicReturnsErrorAndUnsticks` (2d): after Sleep, Open Wake panics; recover; third Open must return (on master it hangs). After the fix: wrapped wake panic error, later Open creates, Close ran.
+- [x] 1.5 Run `go test -count=1 -timeout 60s ./reclaim/` and confirm 1.1–1.4 fail on current table.go; existing reclaim tests still pass. Commit the tests.
 
 ## 2. Recover
 

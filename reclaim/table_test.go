@@ -3,9 +3,12 @@ package reclaim
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go/parser"
 	"go/token"
 	"log/slog"
+	"os"
+	"os/exec"
 	"reflect"
 	"runtime"
 	"strconv"
@@ -244,6 +247,27 @@ func waitUntil(t *testing.T, cond func() bool) {
 		time.Sleep(time.Millisecond)
 	}
 	t.Fatal("timeout waiting for condition")
+}
+
+// openReturned is Open that must come back. A leftover busy slot hangs until waitBudget, then the test fails.
+func openReturned(t *testing.T, tab *Table, ctx context.Context, key string, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
+	t.Helper()
+	type finished struct {
+		value any
+		err   error
+	}
+	done := make(chan finished, 1)
+	go func() {
+		value, err := tab.Open(ctx, key, logger, create, hooks)
+		done <- finished{value, err}
+	}()
+	select {
+	case got := <-done:
+		return got.value, got.err
+	case <-time.After(waitBudget):
+		t.Fatal("Open did not return; key left busy")
+		return nil, nil
+	}
 }
 
 // waitKeyMsg waits until msg is logged for key.
@@ -1659,5 +1683,127 @@ func TestTable_OpenLoggerLevelGatesPutDispose(t *testing.T) {
 	waitKeyMsg(t, &loud.recHandler, MsgDispose, "loud")
 	if got := countKeyMsg(loud.events(), MsgPut, "loud"); got != 1 {
 		t.Fatalf("%d put lines through a debug logger, want 1", got)
+	}
+}
+
+func TestTable_CreatePanicUnsticksKey(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	func() {
+		defer func() { recover() }()
+		_, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			panic("create boom")
+		}, Hooks{})
+		want := fmt.Sprintf("reclaim: create %q: panic: %v", "a", "create boom")
+		if err == nil || err.Error() != want {
+			t.Fatalf("create panic: err %v, want %s", err, want)
+		}
+	}()
+	created := 0
+	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+		created++
+		return "next", nil
+	}, Hooks{})
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	if value != "next" || created != 1 {
+		t.Fatalf("second open value %v created %d, want next created once", value, created)
+	}
+}
+
+func TestTable_NilCreateUnsticksKey(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	func() {
+		defer func() { recover() }()
+		_, err := tab.Open(context.Background(), "a", recLogger(h), nil, Hooks{})
+		want := fmt.Sprintf("reclaim: create %q: nil create", "a")
+		if err == nil || err.Error() != want {
+			t.Fatalf("nil create: err %v, want %s", err, want)
+		}
+	}()
+	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+		return "next", nil
+	}, Hooks{})
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	if value != "next" {
+		t.Fatalf("second open value %v, want next", value)
+	}
+}
+
+func TestTable_SleepPanicAfterFuncDoesNotCrash(t *testing.T) {
+	if os.Getenv("RECLAIM_SLEEP_PANIC_CHILD") == "1" {
+		var closed atomic.Int32
+		h := &recHandler{}
+		tab := NewTable(graceNoRace)
+		ctx, cancel := context.WithCancel(context.Background())
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
+			return "v", nil
+		}, Hooks{
+			Sleep: func() { panic("sleep boom") },
+			Close: func() { closed.Add(1) },
+		}); err != nil {
+			os.Exit(2)
+		}
+		cancel()
+		deadline := time.Now().Add(waitBudget)
+		for time.Now().Before(deadline) && closed.Load() == 0 {
+			time.Sleep(time.Millisecond)
+		}
+		if closed.Load() != 1 {
+			os.Exit(3)
+		}
+		if _, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			return "next", nil
+		}, Hooks{}); err != nil {
+			os.Exit(4)
+		}
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_SleepPanicAfterFuncDoesNotCrash$")
+	cmd.Env = append(os.Environ(), "RECLAIM_SLEEP_PANIC_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("AfterFunc Sleep panic crashed the process: %v\n%s", err, out)
+	}
+}
+
+func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
+	h := &recHandler{}
+	tab := NewTable(graceNoRace)
+	var closed atomic.Int32
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
+		return "v", nil
+	}, Hooks{
+		Wake:  func() { panic("wake boom") },
+		Close: func() { closed.Add(1) },
+	}); err != nil {
+		t.Fatalf("first open: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgOrphan, "a")
+	func() {
+		defer func() { recover() }()
+		_, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			return "ignored", nil
+		}, Hooks{})
+		want := fmt.Sprintf("reclaim: wake %q: panic: %v", "a", "wake boom")
+		if err == nil || err.Error() != want {
+			t.Fatalf("wake panic: err %v, want %s", err, want)
+		}
+	}()
+	waitUntil(t, func() bool { return closed.Load() == 1 })
+	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+		return "next", nil
+	}, Hooks{})
+	if err != nil {
+		t.Fatalf("third open: %v", err)
+	}
+	if value != "next" {
+		t.Fatalf("third open value %v, want next", value)
 	}
 }
