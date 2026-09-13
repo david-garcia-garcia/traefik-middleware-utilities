@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T14:49:05Z
+Developer review: in progress — 2026-09-13T14:54:39Z
 
 ## What this changes
 **Operators.** None.
@@ -29,29 +29,29 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Prepare grounded the ticket. Product fix is not on this branch yet. 4 items remain.
+Explore reproduced the dest brick and kept the prototype design. Product fix is not on this branch yet. 4 items remain.
 
 Priority: P1 — dest is permanently unreachable after PoolSize recovered panics
-Reviewed head: 5794f04
+Reviewed head: 16b0c56
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Stub PR open, CI in progress |
-| CI proof | 3/6 | in progress, [build 34763734136](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34763734136) |
+| Overall readiness | 6/6 | Stub CI succeeded; product still to land |
+| CI proof | 6/6 | succeeded, [build 34763834285](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34763834285) |
 | Local tests proof | N/A | localTests none, before implement |
 | Review resolution | 6/6 | OPEN PR, no comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-simpleredis-panic-safe-release pushed | `git` origin |
+| Branch | 2026-09-13-simpleredis-panic-safe-release pushed | `git` HEAD 16b0c56 |
 | OpenSpec | none | `openspec/` |
-| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/71 | pr-host Create |
-| CI | build 34763734136 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34763734136 | pr-host CI |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/71 | GitHub |
+| CI | build 34763834285 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34763834285 | Unit, Unit race, Lint, Go E2E Redis, Go E2E Dragonfly, Integration Tests, Integration Tests Redis, Integration Tests Dragonfly |
 | Local tests | none | handoff.yaml localTests |
-| PR comments | no comments | no comments.md |
+| PR comments | no comments | comments: none |
 
 ## Specs
 None.
@@ -63,7 +63,7 @@ None.
 None.
 
 ## How this fits together
-Local spec is the dump. Branch `2026-09-13-simpleredis-panic-safe-release` from `origin/master` opened PR 71. CI is in progress on the prepare commits.
+Local spec → branch `2026-09-13-simpleredis-panic-safe-release` → PR 71 → CI 34763834285 green on prepare commits. Explore reproduced dest; apply not started.
 
 ## Explore Decisions
 None.
@@ -87,26 +87,27 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 5794f04318d32e030e2f6089993a0c4c9726b4d5 | Card must match the branch you measured |
+| Reviewed head | 16b0c568d4de219ce7798fe9452591bf2e99181c | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: dest still loses the turn and fd on a recovered panic. The prototype deferred `release` plus `handedOff` is the smallest durable delta versus dest.
+Best possible solution: dest still loses the turn and fd on a recovered panic. Copy `runOnConn` plus `borrow` `handedOff` from `origin/proto-defer-net` onto current dest; do not merge that branch (it predates #68 and would delete `BUGS.md`).
 
-Do we have a high-confidence way to reproduce? Yes — dest `exec` has no deferred `release` (`simpleredis/commands_exec.go`), dest hunt file records PoolSize 2 then `redis:unreachable` (`simpleredis/BUGS.md` section 2), and `origin/proto-defer-net` already has a passing panic test.
+Do we have a high-confidence way to reproduce? Yes. Throwaway dest test (deleted after): PoolSize 2, two recovered panics inside `do` via panicking `bufio.Writer` → `turns=0/2 idle=0 OverFrees=0 accepts=2`, next Get `redis:unreachable`.
 
-Is this the best way to solve the issue? Yes — keep the prototype. Closed PRs #66 and #70 refilled turns without closing the panicked fd; this ticket forbids that machinery.
+Is this the best way to solve the issue? Yes versus dest: prevent the leak with deferred release. Closed #66 / #70 refilled turns without closing the panicked fd; this ticket forbids that machinery.
 
 ### Evidence
 What I checked:
-- dest `exec` comments PR #29 and calls `release` only after `do` (`simpleredis/commands_exec.go`, `origin/master` `c960bfe`)
+- dest leak reproduced: `turns=0/2 idle=0 OverFrees=0 accepts=2`, Get `redis:unreachable` (`go test -v -count=1 -run TestExploreDestPanicInDoLosesTurn ./simpleredis/`)
+- dest `exec` comments PR #29 and calls `release` only after `do` (`simpleredis/commands_exec.go`)
 - dest `borrow` explicit `freeInUseTurn` on closed-idle and dial-error only (`simpleredis/pool.go`)
 - dest `do` comment still says a panic loses the turn (`simpleredis/resp.go`)
-- dest pins `github.com/traefik/yaegi v0.16.1` (`go.mod`, `go.sum`); compose image `traefik:v3.7.11`
-- prototype `runOnConn` / `handedOff` on `origin/proto-defer-net`
-- PR 71 open, comments empty (GitHub MCP)
+- dest pins `github.com/traefik/yaegi v0.16.1` (`go.mod`); compose `traefik:v3.7.11`; Traefik v3.7.11 `go.mod` requires the same (`knowledge/research/ext_traefik_plugins_yaegi-generics/.sources/traefik-v3.7.11-go.mod.md`)
+- prototype `runOnConn` / `handedOff` on `origin/proto-defer-net`; do not merge that branch onto dest
+- Yaegi pin resolved, not assumed. Explore Decisions empty.
 
 ### Rank-up moves
 None.
