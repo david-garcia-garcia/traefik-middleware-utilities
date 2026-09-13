@@ -59,3 +59,12 @@ fixed: folded decode and commands deltas into live specs; archived change
 skipped: none
 verdict: in progress
 pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/46
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: none
+skipped: none
+verdict: ready for review
+pr: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/46
+ci: https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742123448
