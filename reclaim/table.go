@@ -11,11 +11,12 @@ import (
 const (
 	DefaultGrace = 10 * time.Second
 
-	MsgPut     = "reclaim_put"
-	MsgBind    = "reclaim_bind"
-	MsgOrphan  = "reclaim_orphan"
-	MsgReclaim = "reclaim_reclaim"
-	MsgDispose = "reclaim_dispose"
+	MsgPut       = "reclaim_put"
+	MsgBind      = "reclaim_bind"
+	MsgOrphan    = "reclaim_orphan"
+	MsgReclaim   = "reclaim_reclaim"
+	MsgDispose   = "reclaim_dispose"
+	MsgHookPanic = "reclaim_hook_panic"
 )
 
 // Hooks are the optional sleep, wake, and close funcs for one incarnation. A nil field skips
@@ -51,8 +52,8 @@ type Hooks struct {
 //
 // The goroutine that sees the last holder go Done owns the rest of that incarnation: it sleeps
 // the value, writes reclaim_orphan, waits out grace, closes the value, and writes
-// reclaim_dispose. Those lines cannot be reordered, because one goroutine writes them in that
-// order.
+// reclaim_dispose. A Sleep panic aborts instead: Close and unmap, no orphan. Those lines cannot
+// be reordered, because one goroutine writes them in that order.
 type Table struct {
 	mu    sync.Mutex
 	grace time.Duration
@@ -122,31 +123,38 @@ func waitCtx(ctx context.Context) {
 	}
 }
 
-// runSleep runs the stored Sleep hook when it is set. Runs outside t.mu.
-func runSleep(hooks Hooks) {
-	if hooks.Sleep != nil {
-		hooks.Sleep()
+// runHook calls one hook and returns what it panicked with, or nil when it is unset or returned.
+// The table finishes the slotBusy protocol either way: a hook runs on an AfterFunc goroutine, so
+// letting the panic out would kill the process. Returning it keeps the caller in charge of the
+// failure — no caller may treat nil-or-not as success. Runs outside t.mu.
+func runHook(hook func()) (recovered any) {
+	if hook == nil {
+		return nil
 	}
+	defer func() { recovered = recover() }()
+	hook()
+	return nil
 }
 
-// runWake runs the stored Wake hook when it is set. Runs outside t.mu, before Open returns.
-func runWake(hooks Hooks) {
-	if hooks.Wake != nil {
-		hooks.Wake()
-	}
-}
-
-// runClose runs the stored Close hook when it is set. Runs outside t.mu, always after runSleep.
-func runClose(hooks Hooks) {
-	if hooks.Close != nil {
-		hooks.Close()
-	}
-}
-
-// dispose runs the Close hook and then reports the end, so reclaim_dispose means Close has returned.
+// dispose runs the Close hook and then reports the end. reclaim_dispose means Close has returned;
+// a Close panic is reported on its own line, because ready is already closed and nothing can retry.
 func dispose(key string, hooks Hooks, logger *slog.Logger) {
-	runClose(hooks)
+	if recovered := runHook(hooks.Close); recovered != nil {
+		logger.Error(MsgHookPanic, "key", key, "hook", "close", "panic", recovered)
+	}
 	logger.Debug(MsgDispose, "key", key)
+}
+
+// endBusySlot records createErr on a busy slot (nil means waiters create), unmaps it, and closes ready.
+func (t *Table) endBusySlot(key string, incarnation *slot, createErr error) {
+	t.mu.Lock()
+	incarnation.createErr = createErr
+	incarnation.state = slotGone
+	if t.items[key] == incarnation {
+		delete(t.items, key)
+	}
+	close(incarnation.ready)
+	t.mu.Unlock()
 }
 
 // Open returns the stored value for key, creating it once, and tracks ctx until it is done.
@@ -161,6 +169,9 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 	}
 	if logger == nil {
 		return nil, fmt.Errorf("reclaim: open %q: nil logger", key)
+	}
+	if create == nil {
+		return nil, fmt.Errorf("reclaim: create %q: nil create", key)
 	}
 	requireContext(ctx)
 
@@ -187,7 +198,7 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 			t.dropWhenDone(key, incarnation, ctx)
 			return value, nil
 		case slotAsleep:
-			return t.reclaimLocked(ctx, key, incarnation, logger), nil
+			return t.reclaimLocked(ctx, key, incarnation, logger)
 		case slotBusy:
 			// A create, wake, or sleep owns the slot. Wait for it, then look again.
 			ready := incarnation.ready
@@ -212,19 +223,17 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 // put runs create for a slot this Open registered, then publishes the value or the failure to
 // every caller waiting on that slot.
 func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
-	value, err := create()
-
-	t.mu.Lock()
+	var value any
+	var err error
+	if recovered := runHook(func() { value, err = create() }); recovered != nil {
+		err = fmt.Errorf("reclaim: create %q: panic: %v", key, recovered)
+	}
 	if err != nil {
-		incarnation.createErr = err
-		incarnation.state = slotGone
-		if t.items[key] == incarnation {
-			delete(t.items, key)
-		}
-		close(incarnation.ready)
-		t.mu.Unlock()
+		t.endBusySlot(key, incarnation, err)
 		return nil, err
 	}
+
+	t.mu.Lock()
 	incarnation.value = value
 	incarnation.hooks = hooks
 	incarnation.state = slotAwake
@@ -243,7 +252,7 @@ func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *
 
 // reclaimLocked wakes a sleeping slot for this Open and binds ctx. The caller holds t.mu and has
 // seen slotAsleep; this releases it, because Wake must not run under the table mutex.
-func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot, logger *slog.Logger) any {
+func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot, logger *slog.Logger) (any, error) {
 	incarnation.logger = logger
 	incarnation.state = slotBusy
 	incarnation.ready = make(chan struct{})
@@ -257,7 +266,14 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 	storedHooks := incarnation.hooks
 	t.mu.Unlock()
 
-	runWake(storedHooks)
+	if recovered := runHook(storedHooks.Wake); recovered != nil {
+		// This Open has a caller to answer, so it reports the panic as its error. A waiter parked
+		// on ready replays it from createErr rather than resuming a value Wake left half-done.
+		err := fmt.Errorf("reclaim: wake %q: panic: %v", key, recovered)
+		t.endBusySlot(key, incarnation, err)
+		dispose(key, storedHooks, logger)
+		return nil, err
+	}
 
 	t.mu.Lock()
 	incarnation.state = slotAwake
@@ -267,7 +283,7 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 	logger.Debug(MsgReclaim, "key", key)
 	logger.Debug(MsgBind, "key", key)
 	t.dropWhenDone(key, incarnation, ctx)
-	return value
+	return value, nil
 }
 
 // dropWhenDone runs drop when ctx is done. A holder with a Done channel uses AfterFunc so the
@@ -287,8 +303,9 @@ func (t *Table) watch(key string, incarnation *slot, ctx context.Context) {
 }
 
 // drop removes one holder. When it was the last one, this goroutine ends the incarnation: sleep,
-// orphan, grace, close, dispose — in that order, so those lines cannot be reordered. A watcher
-// whose incarnation is already gone finds slotGone and returns.
+// orphan, grace, close, dispose — in that order, so those lines cannot be reordered. A Sleep
+// panic aborts: Close, unmap, no orphan. A watcher whose incarnation is already gone finds
+// slotGone and returns.
 func (t *Table) drop(key string, incarnation *slot) {
 	t.mu.Lock()
 	incarnation.holders--
@@ -313,7 +330,14 @@ func (t *Table) drop(key string, incarnation *slot) {
 	grace := t.grace
 	t.mu.Unlock()
 
-	runSleep(storedHooks)
+	if recovered := runHook(storedHooks.Sleep); recovered != nil {
+		// Nobody is waiting on a return value here, so createErr stays nil: a later Open creates a
+		// fresh incarnation instead of inheriting one whose Sleep never finished.
+		logger.Error(MsgHookPanic, "key", key, "hook", "sleep", "panic", recovered)
+		t.endBusySlot(key, incarnation, nil)
+		dispose(key, storedHooks, logger)
+		return
+	}
 	// Orphan is written while the slot is still busy. Reset leaves a busy slot to the goroutine
 	// that owns the transition, so nothing else can write this incarnation's dispose line first.
 	logger.Debug(MsgOrphan, "key", key)
@@ -363,8 +387,9 @@ func (t *Table) expire(key string, incarnation *slot) {
 }
 
 // Reset ends every incarnation on this table. An awake value is slept first, so Close never sees
-// a live value and orphan still precedes dispose. Tests only: it must not race an Open on the
-// same key. A slot that is mid-transition is ended by the goroutine that owns that transition.
+// a live value and orphan still precedes dispose when Sleep returns. A Sleep panic skips orphan
+// and still disposes. Tests only: it must not race an Open on the same key. A slot that is
+// mid-transition is ended by the goroutine that owns that transition.
 func (t *Table) Reset() {
 	if t == nil {
 		return
@@ -390,8 +415,11 @@ func (t *Table) Reset() {
 
 		switch state {
 		case slotAwake:
-			runSleep(storedHooks)
-			logger.Debug(MsgOrphan, "key", key)
+			if recovered := runHook(storedHooks.Sleep); recovered != nil {
+				logger.Error(MsgHookPanic, "key", key, "hook", "sleep", "panic", recovered)
+			} else {
+				logger.Debug(MsgOrphan, "key", key)
+			}
 			dispose(key, storedHooks, logger)
 		case slotAsleep:
 			dispose(key, storedHooks, logger)

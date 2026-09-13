@@ -50,3 +50,4 @@ _ = wait
 - A 3-field Eval wait that is not a finite number (`nan`, `+Inf`, `-Inf`, `inf`) is `errEvalWait` (`tokenbucket: eval wait is not a number`), same as a garbage string. Do not treat it as admit or deny.
 - EVAL scripts must list keys in `KEYS` (Dragonfly). Do not use `table.maxn`.
 - Two limiter instances on one Redis key share burst. Do not expect a second full burst.
+- Persisted `last` is never earlier than the previous `last`. Elapsed still clamps when now is behind `last` (no negative refill). Memory reads now after the mutex so lock order is clock order.

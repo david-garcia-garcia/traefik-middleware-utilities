@@ -60,8 +60,8 @@ _, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 
 ## Gotchas
 
-- Window length is whole seconds (Redis TTL is integer seconds).
+- Window length is whole seconds (Redis TTL is integer seconds). Take and Peek reject a window that is shorter than one second or not an integer number of seconds (for example 1500ms); they do not truncate into second buckets.
 - Denied Takes still increment. Peek does not.
-- `Sleep` flushes pending deltas then stops the ticker. After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's.
+- `Sleep` flushes pending deltas then stops the ticker. Concurrent `Wake` during Sleep does not start a ticker and Sleep still returns. After Sleep returns, `Wake` starts the ticker again when `sync_rate` is greater than zero. After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's.
 - EVAL scripts must list keys in `KEYS` (Dragonfly).
 - Buffered Take/Peek during a Redis outage return a nil error and admit until this instance's `limit`. Exact mode still returns Redis errors. Do not check `err` to fail closed on the buffered path.
