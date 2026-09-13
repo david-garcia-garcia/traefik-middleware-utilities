@@ -124,7 +124,7 @@ func (l *Limiter) slidingAt(key string, window time.Duration) (slidingWindow, er
 }
 
 // Take counts one hit on key against limit and window, then returns whether it is allowed and the sliding estimate.
-func (l *Limiter) Take(ctx context.Context, key string, limit int64, window time.Duration) (bool, float64, error) {
+func (l *Limiter) Take(ctx context.Context, key string, limit int64, window time.Duration) (allowed bool, estimated float64, err error) {
 	if err := ctx.Err(); err != nil {
 		return false, 0, err
 	}
@@ -140,7 +140,7 @@ func (l *Limiter) Take(ctx context.Context, key string, limit int64, window time
 
 // Peek reports whether already-used occupancy is at or under limit, and the sliding estimate, without recording a hit.
 // allowed is occupancy, not whether the next Take would admit.
-func (l *Limiter) Peek(ctx context.Context, key string, limit int64, window time.Duration) (bool, float64, error) {
+func (l *Limiter) Peek(ctx context.Context, key string, limit int64, window time.Duration) (allowed bool, estimated float64, err error) {
 	if err := ctx.Err(); err != nil {
 		return false, 0, err
 	}
@@ -155,12 +155,12 @@ func (l *Limiter) Peek(ctx context.Context, key string, limit int64, window time
 }
 
 // Allow is an alias for Take for callers who prefer Allow.
-func (l *Limiter) Allow(ctx context.Context, key string, limit int64, window time.Duration) (bool, float64, error) {
+func (l *Limiter) Allow(ctx context.Context, key string, limit int64, window time.Duration) (allowed bool, estimated float64, err error) {
 	return l.Take(ctx, key, limit, window)
 }
 
 // takeExact INCR the current window, EXPIRE on first hit, GET previous, then compare the estimate.
-func (l *Limiter) takeExact(ctx context.Context, currentKey, previousKey string, ttlSec int64, weight float64, limit int64) (bool, float64, error) {
+func (l *Limiter) takeExact(ctx context.Context, currentKey, previousKey string, ttlSec int64, weight float64, limit int64) (allowed bool, estimated float64, err error) {
 	current, err := l.redis.Incr(ctx, currentKey)
 	if err != nil {
 		return false, 0, err
@@ -174,12 +174,12 @@ func (l *Limiter) takeExact(ctx context.Context, currentKey, previousKey string,
 	if err != nil {
 		return false, 0, err
 	}
-	estimated := float64(current) + float64(previous)*weight
+	estimated = float64(current) + float64(previous)*weight
 	return estimated <= float64(limit), estimated, nil
 }
 
 // takeBuffered admits from redis_known + local_delta and leaves Redis to the flush ticker.
-func (l *Limiter) takeBuffered(ctx context.Context, currentKey, previousKey string, expireAt int64, weight float64, limit int64) (bool, float64, error) {
+func (l *Limiter) takeBuffered(ctx context.Context, currentKey, previousKey string, expireAt int64, weight float64, limit int64) (allowed bool, estimated float64, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -193,13 +193,13 @@ func (l *Limiter) takeBuffered(ctx context.Context, currentKey, previousKey stri
 	}
 	currentState.localDelta++
 	current := currentState.redisKnown + currentState.localDelta
-	estimated := float64(current) + float64(previous)*weight
+	estimated = float64(current) + float64(previous)*weight
 	// Local admit stays on the return even when a flush/probe error is set.
 	return estimated <= float64(limit), estimated, l.bufferedOutageErrorLocked(ctx)
 }
 
 // peekExact GETs current and previous without INCR or EXPIRE, then compares the estimate.
-func (l *Limiter) peekExact(ctx context.Context, currentKey, previousKey string, weight float64, limit int64) (bool, float64, error) {
+func (l *Limiter) peekExact(ctx context.Context, currentKey, previousKey string, weight float64, limit int64) (allowed bool, estimated float64, err error) {
 	current, err := l.getCount(ctx, currentKey)
 	if err != nil {
 		return false, 0, err
@@ -208,12 +208,12 @@ func (l *Limiter) peekExact(ctx context.Context, currentKey, previousKey string,
 	if err != nil {
 		return false, 0, err
 	}
-	estimated := float64(current) + float64(previous)*weight
+	estimated = float64(current) + float64(previous)*weight
 	return estimated <= float64(limit), estimated, nil
 }
 
 // peekBuffered reads redis_known + local_delta under the Take lock without incrementing.
-func (l *Limiter) peekBuffered(ctx context.Context, currentKey, previousKey string, expireAt int64, weight float64, limit int64) (bool, float64, error) {
+func (l *Limiter) peekBuffered(ctx context.Context, currentKey, previousKey string, expireAt int64, weight float64, limit int64) (allowed bool, estimated float64, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -225,7 +225,7 @@ func (l *Limiter) peekBuffered(ctx context.Context, currentKey, previousKey stri
 	if err != nil {
 		return false, 0, err
 	}
-	estimated := float64(current) + float64(previous)*weight
+	estimated = float64(current) + float64(previous)*weight
 	return estimated <= float64(limit), estimated, l.bufferedOutageErrorLocked(ctx)
 }
 

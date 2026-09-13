@@ -16,6 +16,19 @@ import (
 	"github.com/traefik/yaegi/stdlib"
 )
 
+// TestYaegi_StrayExtraReplyOwnKey proves interpreted Get against a compiled stray-extra fake. Traefik is not started.
+func TestYaegi_StrayExtraReplyOwnKey(t *testing.T) {
+	_, addr := startStrayExtraReplyFake(t, 5)
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.GetOwnKeys(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi stray extra: %q, want ok", got)
+	}
+}
+
 // TestYaegi_NewGetSetDel proves interpreted code can New, Set, Get, and Del
 // against a compiled fake TCP Redis. Traefik is not started.
 func TestYaegi_NewGetSetDel(t *testing.T) {
@@ -176,20 +189,20 @@ func evalClientprobe(t *testing.T, goPath, expr string) string {
 }
 
 // writeGopathSimpleredis copies non-test simpleredis sources into a GOPATH module tree.
-func writeGopathSimpleredis(t testing.TB, goPath string) {
-	t.Helper()
+func writeGopathSimpleredis(tb testing.TB, goPath string) {
+	tb.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatal("no caller path")
+		tb.Fatal("no caller path")
 	}
 	srcDir := filepath.Dir(thisFile)
 	destDir := filepath.Join(goPath, "src", "github.com", "david-garcia-garcia", "traefik-middleware-utilities", "simpleredis")
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	copied := 0
 	for _, entry := range entries {
@@ -199,34 +212,34 @@ func writeGopathSimpleredis(t testing.TB, goPath string) {
 		}
 		body, err := os.ReadFile(filepath.Join(srcDir, name))
 		if err != nil {
-			t.Fatal(err)
+			tb.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(destDir, name), body, 0o600); err != nil {
-			t.Fatal(err)
+			tb.Fatal(err)
 		}
 		copied++
 	}
 	if copied == 0 {
-		t.Fatal("no simpleredis sources copied into GOPATH")
+		tb.Fatal("no simpleredis sources copied into GOPATH")
 	}
 }
 
 // writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
-func writeGopathFile(t testing.TB, goPath, pkg, name, src string) {
-	t.Helper()
+func writeGopathFile(tb testing.TB, goPath, pkg, name, src string) {
+	tb.Helper()
 	dir := filepath.Join(goPath, "src", pkg)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 }
 
 // writeGopathClientprobe writes the interpreted probe package under GOPATH/src/clientprobe.
-func writeGopathClientprobe(t testing.TB, goPath string) {
-	t.Helper()
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+func writeGopathClientprobe(tb testing.TB, goPath string) {
+	tb.Helper()
+	writeGopathFile(tb, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
 }
 
 const clientprobeSrc = `package clientprobe
@@ -255,6 +268,23 @@ func RoundTrip(host string) string {
 		return "del:" + err.Error()
 	}
 	return string(got)
+}
+
+// GetOwnKeys Gets k0..k11. A stray extra bulk must not surface as another key's value.
+func GetOwnKeys(host string) string {
+	client := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, MaxRetries: -1})
+	for i := 0; i < 12; i++ {
+		key := "k" + strconv.Itoa(i)
+		want := "v" + strconv.Itoa(i)
+		got, err := client.Get(context.Background(), key)
+		if err != nil {
+			continue
+		}
+		if string(got) != want {
+			return "Get(" + key + ")=" + string(got)
+		}
+	}
+	return "ok"
 }
 
 const kongIncrbyExpireatScript = ` + "`" + `local exists = redis.call("exists", KEYS[1])

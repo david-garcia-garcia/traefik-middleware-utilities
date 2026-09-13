@@ -66,8 +66,10 @@ func (sr *SimpleRedis) freeInUseTurn() {
 }
 
 // borrow waits for an in-use turn, then takes an unused socket younger than idleTimeout, or dials.
-// The bool is handshakeFailed: true only when a new dial's AUTH or SELECT failed after TCP succeeded.
-func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error, bool) {
+// handshakeFailed is true only when a new dial's AUTH or SELECT failed after TCP succeeded.
+//
+//nolint:revive // error stays before handshakeFailed; reordering would collide with in-flight SimpleRedis PRs.
+func (sr *SimpleRedis) borrow(ctx context.Context) (conn *pooledConn, err error, handshakeFailed bool) {
 	// closed is atomic; inUseTurns is written once in New before concurrent use.
 	if sr.closed.Load() {
 		return nil, errUnreachable, false
@@ -125,7 +127,7 @@ func (sr *SimpleRedis) borrow(ctx context.Context) (*pooledConn, error, bool) {
 		return reused, nil, false
 	}
 	// Idle miss: dial while still holding the turn.
-	conn, err, handshakeFailed := sr.dial(ctx)
+	conn, err, handshakeFailed = sr.dial(ctx)
 	if err != nil {
 		return nil, err, handshakeFailed
 	}
@@ -191,7 +193,9 @@ func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
 // dial opens TCP to host, then AUTH and SELECT when those New fields are set.
 // Dialer.Timeout is the per-attempt cap; DialContext also honors ctx (overall budget or caller).
 // handshakeFailed is true when TCP succeeded and AUTH or SELECT then failed; exec must not retry that error.
-func (sr *SimpleRedis) dial(ctx context.Context) (*pooledConn, error, bool) {
+//
+//nolint:revive // error stays before handshakeFailed; reordering would collide with in-flight SimpleRedis PRs.
+func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, handshakeFailed bool) {
 	if err := contextStop(ctx); err != nil {
 		return nil, err, false
 	}
@@ -203,7 +207,7 @@ func (sr *SimpleRedis) dial(ctx context.Context) (*pooledConn, error, bool) {
 		}
 		return nil, errUnreachable, false
 	}
-	conn := &pooledConn{
+	conn = &pooledConn{
 		netConn: netConn,
 		reader:  bufio.NewReader(netConn),
 		writer:  bufio.NewWriter(netConn),

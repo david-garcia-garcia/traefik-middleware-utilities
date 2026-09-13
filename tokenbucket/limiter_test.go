@@ -13,8 +13,8 @@ const testTTL = 2 * time.Second
 const agreeMaxDelay = time.Millisecond
 
 // newSimpleRedisForTest returns a New client for tests.
-func newSimpleRedisForTest(t testing.TB, host string) *simpleredis.SimpleRedis {
-	t.Helper()
+func newSimpleRedisForTest(tb testing.TB, host string) *simpleredis.SimpleRedis {
+	tb.Helper()
 	return simpleredis.New(simpleredis.Config{Host: host})
 }
 

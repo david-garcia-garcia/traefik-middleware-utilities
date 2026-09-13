@@ -41,7 +41,7 @@ type chaosFake struct {
 }
 
 // startChaosFake serves k0..k63 as v0..v63 and tracks still-open accepted sockets.
-func startChaosFake(t *testing.T) (*chaosFake, string) {
+func startChaosFake(t *testing.T) (server *chaosFake, listenAddr string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
