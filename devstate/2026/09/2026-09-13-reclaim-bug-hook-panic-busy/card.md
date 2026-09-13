@@ -1,11 +1,11 @@
-Developer review: in progress — 2026-09-13T06:16:06Z
+Developer review: in progress — 2026-09-13T06:25:51Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** `reclaim.Table` recovers a nil `create` and panics in create, Sleep, Wake, and Close so a key is not left `slotBusy` and AfterFunc cannot crash the process. `Open` can return a wrapped Wake panic error. Tests 2a–2d.
+**Developers.** `reclaim.Table` recovers a nil `create` and panics in create, Sleep, Wake, and Close so a key is not left `slotBusy` and AfterFunc cannot crash the process. `Open` can return a wrapped Wake panic error. Specs `std_go_reclaim_context-lease` and `std_go_reclaim_value-lifecycle` and usage packet `std_go_reclaim.md` match. Tests 2a–2d plus AfterFunc Close panic.
 
 **End users.** None.
 
@@ -30,17 +30,17 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Recover is on the branch. Local unit tests passed. CI on this head is still queued.
+Recover, tests, spec archive, and usage packet are on the branch. Waiting on CI for this head.
 
 Priority: P1 — Production is unsafe, or serving a wrong public contract today
-Reviewed head: 2df37dc
+Reviewed head: pending-after-archive-commit
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI in progress on the recover head |
-| CI proof | 3/6 | queued — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742235082 |
+| Overall readiness | 3/6 | CI in progress after archive |
+| CI proof | 3/6 | in progress — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742665563 |
 | Local tests proof | N/A | prHost github; CI covers it |
 | Review resolution | 6/6 | OPEN PR; no reviewer comments |
 
@@ -48,15 +48,15 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-13-reclaim-bug-hook-panic-busy pushed | `git` / GitHub |
-| OpenSpec | reclaim-hook-panic-recovery | `openspec/changes/reclaim-hook-panic-recovery/` |
+| OpenSpec | reclaim-hook-panic-recovery (archived) | `openspec/changes/archive/2026-09-13-reclaim-hook-panic-recovery/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/49 | GitHub MCP |
-| CI | build 34742235082 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742235082 | GitHub MCP check runs queued |
+| CI | in progress | GitHub MCP |
 | Local tests | passed | `go test -short -timeout 2m -count=1 ./...` |
 | PR comments | no comments | comments none |
 
 ## Specs
-- [std_go_reclaim_context-lease](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/openspec/changes/reclaim-hook-panic-recovery/proposal.md) — modified
-- [std_go_reclaim_value-lifecycle](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/openspec/changes/reclaim-hook-panic-recovery/proposal.md) — modified
+- [std_go_reclaim_context-lease](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/openspec/changes/archive/2026-09-13-reclaim-hook-panic-recovery/proposal.md) — modified
+- [std_go_reclaim_value-lifecycle](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/openspec/changes/archive/2026-09-13-reclaim-hook-panic-recovery/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -78,16 +78,21 @@ Local ticket `devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/` on branc
 ## Before merge
 - [x] [P1] Recover nil `create` and panics in create/Sleep/Wake/Close so a key is not left `slotBusy` and AfterFunc cannot crash the process
 - [x] Land product tests that fail on current master, then implement, then they pass
-- [ ] CI green on 2df37dc
-- [x] Stub review PR open
-- [x] Explore: 2a–2d reproduced on master
-- [x] Propose `reclaim-hook-panic-recovery`
+- [ ] CI green on this head
+- [x] Archive `reclaim-hook-panic-recovery`
+- [x] Seven-axis review; hard findings applied
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/codereview_standards.md) — 4 total, 0 pending, 4 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/codereview_nitpicks.md) — 1 total, 0 pending, 1 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-reclaim-bug-hook-panic-busy/devstate/2026/09/2026-09-13-reclaim-bug-hook-panic-busy/codereview_coverage.md) — 3 total, 0 pending, 1 completed, 2 skipped
 
 ## Agent review details
 
@@ -96,23 +101,23 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs; do not paste diff --stat |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 2df37dc32b11cdaa347bb6ae1a097a947ffcb817 | Card must match the branch you measured |
+| Reviewed head | pending-after-archive-commit | Card must match the branch you measured |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: Recover at `put` / `drop` / `reclaimLocked` / `dispose` / `Reset`, sharing `failBusySlot` with the existing create-error path. `runSleep` / `runWake` / `runClose` stay thin.
+Best possible solution: Recover at `put` / `drop` / `reclaimLocked` / `dispose` / `Reset` via `endBusySlot`. `runSleep` / `runWake` / `runClose` stay thin.
 
-Do we have a high-confidence way to reproduce? Yes. Fail-then-pass: 2a/2b hung 10s (`Open did not return; key left busy`); 2c child `exit status 2` from AfterFunc; 2d Close never ran. After `2e24a03` those four tests pass in 0.19s; `go test -short ./...` passed.
+Do we have a high-confidence way to reproduce? Yes. Fail-then-pass on 2a–2d (hang / leftover busy / AfterFunc child `exit status 2`); Close AfterFunc panic covered after review.
 
-Is this the best way to solve the issue? Yes versus `origin/master`. The table owns `slotBusy`/`ready`; a silent swallow in the runners would look like success.
+Is this the best way to solve the issue? Yes versus `origin/master`. The table owns `slotBusy`/`ready`.
 
 ### Evidence
 What I checked:
-- Fail: `go test -run TestTable_CreatePanicUnsticksKey|...` on `1baff53` (tests only) — 4 FAIL
-- Pass: same four tests after `2e24a03`; `go test -short -timeout 2m -count=1 ./...` passed
-- CI run 34742235082 queued (GitHub MCP)
+- Fail on `1baff53` (tests only): 4 FAIL. Pass after `2e24a03`. Close AfterFunc test added in `c4146ad`.
+- `go test -short -timeout 2m -count=1 ./...` passed
+- Archive: `openspec archive` → `2026-09-13-reclaim-hook-panic-recovery`
 
 ### Rank-up moves
 None.
