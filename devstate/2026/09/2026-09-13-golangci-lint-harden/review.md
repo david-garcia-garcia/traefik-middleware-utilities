@@ -42,4 +42,11 @@ findings: folded three ADDED requirements into openspec/specs/std_go_ci_test-sui
 fixed: none
 skipped: dest catalog still lacks ## Requirements (pre-existing; live-e2e same)
 
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: title dropped WIP; CI 34767018262 all success
+fixed: none
+skipped: none
+
+
 

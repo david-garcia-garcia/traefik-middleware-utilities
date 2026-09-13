@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T15:48:49Z
+Developer review: ready for review — 2026-09-13T15:56:41Z
 
 ## What this changes
 **Operators.** None.
@@ -23,32 +23,32 @@ flowchart LR
 ```
 
 ## Merge readiness
-Apply landed. CI run 34766624338 succeeded. Remaining phases: code review, usage-doc impact, archive, pullrequest title. 2 items remain.
+Ready for review. 1 item remains (merge order vs in-flight SimpleRedis PRs).
 
 Priority: P3 — spec, docs, tests, or internal clarity, no current user or operator harm
-Reviewed head: 8c2ec1d
+Reviewed head: 5d28117
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 4/6 | Apply and CI are green; remaining workflow phases and a WIP title |
-| CI proof | 6/6 | build 34766624338 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34766624338 |
+| Overall readiness | 6/6 | OPEN PR, CI succeeded, no open review comments |
+| CI proof | 6/6 | build 34767018262 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34767018262 |
 | Local tests proof | N/A | remote PR; CI is the proof axis |
 | Review resolution | 6/6 | OPEN PR, no review comments |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-13-golangci-lint-harden pushed | git / origin 8c2ec1d |
-| OpenSpec | harden-golangci-lint | `openspec/changes/harden-golangci-lint/` |
+| Branch | 2026-09-13-golangci-lint-harden pushed | git / origin 5d28117 |
+| OpenSpec | harden-golangci-lint archived | `openspec/changes/archive/2026-09-13-harden-golangci-lint/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/72 | pr-host |
-| CI | build 34766624338 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34766624338 | pr-host CI |
+| CI | build 34767018262 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34767018262 | pr-host CI |
 | Local tests | passed | handoff.yaml localTests; `go test -short ./...` plus Yaegi |
 | PR comments | no comments | no comments.md |
 
 ## Specs
-- [std_go_ci_test-suites](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-golangci-lint-harden/openspec/changes/harden-golangci-lint/proposal.md) — modified
+- [std_go_ci_test-suites](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-golangci-lint-harden/openspec/changes/archive/2026-09-13-harden-golangci-lint/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -57,22 +57,28 @@ None.
 None.
 
 ## How this fits together
-Ticket is local spec → branch `2026-09-13-golangci-lint-harden` → PR 72 → change `harden-golangci-lint`. Merge after remaining in-flight SimpleRedis branches: `2026-09-13-simpleredis-lost-turn-recovery`, `2026-09-13-simpleredis-desync-boundary-check`, `2026-09-13-simpleredis-close-abandoned-socket`, `2026-09-13-simpleredis-resilience-test-coverage`. `2026-09-13-simpleredis-panic-safe-release` is already on master. Deferred: reorder `borrow`/`dial` so `error` is last (naming is call-site compatible; reordering would collide with those PRs).
+Ticket is local spec → branch `2026-09-13-golangci-lint-harden` → PR 72 → archived change `harden-golangci-lint`. Merge after remaining in-flight SimpleRedis branches: `2026-09-13-simpleredis-lost-turn-recovery`, `2026-09-13-simpleredis-desync-boundary-check`, `2026-09-13-simpleredis-close-abandoned-socket`, `2026-09-13-simpleredis-resilience-test-coverage`. `2026-09-13-simpleredis-panic-safe-release` is already on master. Deferred: reorder `borrow`/`dial` so `error` is last (naming is call-site compatible; reordering would collide with those PRs).
 
 ## Explore Decisions
 None.
 
 ## Before merge
 - [ ] Merge after remaining in-flight SimpleRedis PRs that rewrite `simpleredis/commands_exec.go`, `pool.go`, and `resp.go`
-- [ ] Drop WIP title in pullrequest
+- [x] Drop WIP title
 - [x] Land Tasks 1–6 with no runtime behavior change
-- [x] CI green on 8c2ec1d (lint included)
+- [x] CI green on 5d28117 (lint included)
 
 ## Findings
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-golangci-lint-harden/devstate/2026/09/2026-09-13-golangci-lint-harden/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-golangci-lint-harden/devstate/2026/09/2026-09-13-golangci-lint-harden/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-golangci-lint-harden/devstate/2026/09/2026-09-13-golangci-lint-harden/codereview_spec.md) — 2 total, 0 pending, 0 completed, 2 skipped
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-golangci-lint-harden/devstate/2026/09/2026-09-13-golangci-lint-harden/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-golangci-lint-harden/devstate/2026/09/2026-09-13-golangci-lint-harden/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-golangci-lint-harden/devstate/2026/09/2026-09-13-golangci-lint-harden/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-golangci-lint-harden/devstate/2026/09/2026-09-13-golangci-lint-harden/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 ## Agent review details
 
@@ -81,7 +87,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 8c2ec1d66e4fcf457adc8f9d3e5f29f9e1fbf6f5 | Card must match the branch you measured |
+| Reviewed head | 5d28117f1c5336cb72e83c3f085d38cd83336922 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -97,7 +103,7 @@ Is this the best way to solve the issue? Yes vs dest: config plus mechanical fix
 What I checked:
 - `golangci-lint run` v1.63.4: non-gofmt 0 on this Windows host; Ubuntu CI Lint succeeded
 - `go test -short ./...` passed (backendbackoff, reclaim, simpleredis, tokenbucket, windowcounter)
-- CI run 34766624338: Lint, Unit, Unit race, Go E2E Redis/Dragonfly, Integration Tests Redis/Dragonfly all success
+- CI run 34767018262: Lint, Unit, Unit race, Go E2E Redis/Dragonfly, Integration Tests Redis/Dragonfly all success
 - Converted zero errorlint sites to `errors.Is`
 
 ### Rank-up moves

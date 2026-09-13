@@ -11,4 +11,4 @@ JobName: 2026-09-13-golangci-lint-harden
 | codereview | [x] | [x] | 2026-09-13T15:53:24Z |
 | devdocsimpact | [x] | [x] | 2026-09-13T15:53:24Z |
 | archive | [x] | [x] | 2026-09-13T15:53:24Z |
-| pullrequest | [ ] | [ ] | |
+| pullrequest | [x] | [x] | 2026-09-13T15:56:41Z |
