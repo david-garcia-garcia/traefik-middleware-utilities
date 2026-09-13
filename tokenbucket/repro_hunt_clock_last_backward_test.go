@@ -19,13 +19,13 @@ func TestRepro_StaleNowRewindsLastDoubleRefill(t *testing.T) {
 	t.Run("sequential", func(t *testing.T) {
 		limiter := newBurst1Delay0(t)
 		limiter.SetNowForTest(func() time.Time { return t0 })
-		mustAllow(t, limiter, "k", true, "init at t0")
+		mustAllow(t, limiter, true, "init at t0")
 
 		limiter.SetNowForTest(func() time.Time { return t2 })
-		mustAllow(t, limiter, "k", true, "refill at t2")
+		mustAllow(t, limiter, true, "refill at t2")
 
 		limiter.SetNowForTest(func() time.Time { return t1 })
-		mustAllow(t, limiter, "k", false, "stale t1 must deny")
+		mustAllow(t, limiter, false, "stale t1 must deny")
 
 		limiter.SetNowForTest(func() time.Time { return t2 })
 		allowed, _, err := limiter.Allow(context.Background(), "k")
@@ -41,7 +41,7 @@ func TestRepro_StaleNowRewindsLastDoubleRefill(t *testing.T) {
 	t.Run("goroutines_stale_samples_before_fresh_lock", func(t *testing.T) {
 		limiter := newBurst1Delay0(t)
 		limiter.SetNowForTest(func() time.Time { return t0 })
-		mustAllow(t, limiter, "k", true, "init at t0")
+		mustAllow(t, limiter, true, "init at t0")
 
 		firstInNow := make(chan struct{})
 		proceed := make(chan struct{})
@@ -107,9 +107,9 @@ func newBurst1Delay0(t *testing.T) *Memory {
 	return limiter
 }
 
-func mustAllow(t *testing.T, limiter *Memory, key string, want bool, step string) {
+func mustAllow(t *testing.T, limiter *Memory, want bool, step string) {
 	t.Helper()
-	got, _, err := limiter.Allow(context.Background(), key)
+	got, _, err := limiter.Allow(context.Background(), "k")
 	if err != nil {
 		t.Fatalf("%s: %v", step, err)
 	}
