@@ -7,7 +7,7 @@ JobName: 2026-09-13-reclaim-bug-hook-panic-busy
 | prepare | [x] | [x] | 2026-09-13T05:59:42Z |
 | explore | [x] | [x] | 2026-09-13T06:05:53Z |
 | propose | [x] | [x] | 2026-09-13T06:08:53Z |
-| implement | [ ] | [ ] | |
+| implement | [x] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
 | archive | [ ] | [ ] | |
