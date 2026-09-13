@@ -69,6 +69,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 func (sr *SimpleRedis) runOnConn(ctx context.Context, conn *pooledConn, args [][]byte) (values [][]byte, err error) {
 	reusable := false
 	defer func() { sr.release(conn, reusable) }()
+	// Recover logs MsgPanic then re-raises so the release defer still runs with reusable false.
 	defer func() {
 		recovered := recover()
 		if recovered == nil {

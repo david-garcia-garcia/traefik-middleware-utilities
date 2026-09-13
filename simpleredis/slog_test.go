@@ -16,6 +16,7 @@ type recHandler struct {
 	recs []slog.Record
 }
 
+// Enabled always captures.
 func (h *recHandler) Enabled(context.Context, slog.Level) bool { return true }
 
 // Handle stores a clone of the record.
@@ -26,10 +27,13 @@ func (h *recHandler) Handle(_ context.Context, r slog.Record) error {
 	return nil
 }
 
+// WithAttrs returns the same handler; tests do not attach handler attrs.
 func (h *recHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 
+// WithGroup returns the same handler; tests do not use slog groups.
 func (h *recHandler) WithGroup(string) slog.Handler { return h }
 
+// records is a snapshot of captured lines.
 func (h *recHandler) records() []slog.Record {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -38,6 +42,7 @@ func (h *recHandler) records() []slog.Record {
 	return out
 }
 
+// dump is message plus attrs for failure text.
 func (h *recHandler) dump() string {
 	var b strings.Builder
 	for _, r := range h.records() {
@@ -54,8 +59,10 @@ func (h *recHandler) dump() string {
 	return b.String()
 }
 
+// recLogger wraps h as slog.Logger.
 func recLogger(h slog.Handler) *slog.Logger { return slog.New(h) }
 
+// requireMsg fails unless msg was logged at level.
 func requireMsg(t *testing.T, h *recHandler, msg string, level slog.Level) slog.Record {
 	t.Helper()
 	for _, r := range h.records() {
@@ -70,6 +77,7 @@ func requireMsg(t *testing.T, h *recHandler, msg string, level slog.Level) slog.
 	return slog.Record{}
 }
 
+// attrString is the first attr value for key.
 func attrString(r slog.Record, key string) string {
 	var got string
 	r.Attrs(func(a slog.Attr) bool {
@@ -237,6 +245,46 @@ func TestLogCanceled(t *testing.T) {
 	requireMsg(t, h, MsgCanceled, slog.LevelDebug)
 }
 
+func TestLogCanceledWaitForTurn(t *testing.T) {
+	h := &recHandler{}
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	hold := make(chan struct{})
+	fake.mu.Lock()
+	fake.holdCh = hold
+	fake.mu.Unlock()
+	t.Cleanup(func() { close(hold) })
+	sr := New(Config{Host: addr, PoolSize: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1, Logger: recLogger(h)})
+	go func() {
+		_, _ = sr.Get(context.Background(), "hit")
+	}()
+	deadline := time.Now().Add(time.Second)
+	for {
+		fake.mu.Lock()
+		held := fake.heldGets
+		fake.mu.Unlock()
+		if held > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("holder never held")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	waitErr := make(chan error, 1)
+	go func() {
+		_, err := sr.Get(ctx, "hit")
+		waitErr <- err
+	}()
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+	err := <-waitErr
+	if !errorsIsCanceled(err) {
+		t.Fatalf("waiter Get = %v, want canceled", err)
+	}
+	requireMsg(t, h, MsgCanceled, slog.LevelDebug)
+}
+
 func TestLogTimeout(t *testing.T) {
 	h := &recHandler{}
 	addr := startStallRedis(t)
@@ -358,6 +406,7 @@ func TestLogSocketClosedCancel(t *testing.T) {
 	if attrString(rec, "reason") != closedReasonCancel {
 		t.Fatalf("reason = %q, want %s", attrString(rec, "reason"), closedReasonCancel)
 	}
+	requireMsg(t, h, MsgCanceled, slog.LevelDebug)
 }
 
 func TestNilLoggerDoesNotPanic(t *testing.T) {
@@ -434,6 +483,7 @@ func TestSecretsNeverAppearInLogs(t *testing.T) {
 	}
 }
 
+// levelGate drops lines below min, so alloc tests prove Debug is gated.
 type levelGate struct {
 	min slog.Level
 }

@@ -41,6 +41,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	if conn.reader.Buffered() != 0 {
 		buffered := conn.reader.Buffered()
 		if handshakeCommand(args) {
+			// AUTH/SELECT leftover: unread bytes before the handshake write.
 			sr.logWarn(MsgAuthLeftover, "buffered", buffered, "host", sr.host)
 		}
 		return nil, false, errUnreachable
