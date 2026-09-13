@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-reclaim-bug-unmap-before-close
+jobName: 2026-09-13-reclaim-bug-unmap-before-close
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: f6202d86f9d34685184af0abf9d75aeb121f5e3e5e014789fe57a8190460192a
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr:
+  id: 50
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/50
