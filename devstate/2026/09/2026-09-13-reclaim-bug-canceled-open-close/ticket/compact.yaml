@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: Zero-grace Table.Open can return a pointer whose Close already ran
+url: none
+number: none
