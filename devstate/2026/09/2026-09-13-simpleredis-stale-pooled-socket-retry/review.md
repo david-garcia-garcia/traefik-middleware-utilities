@@ -9,3 +9,9 @@ phase: explore
 findings: reproduced 4 sequential redis:unreachable at PoolSize 8 / MaxRetries 1
 fixed: none
 skipped: epoch / idle-list wipe. Cheap skipIdle plus one unused-socket force-dial proceeds.
+
+## propose (2026-09-13)
+phase: propose
+findings: fold std_go_simpleredis_tcp-session; change simpleredis-stale-pooled-socket-retry
+fixed: none
+skipped: epoch. Apply not started.
