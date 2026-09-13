@@ -24,7 +24,7 @@ func ScriptSHA1Hex(script string) string {
 // Eval runs a Lua script with KEYS then ARGV. Sends EVALSHA of the caller digest; on NOSCRIPT falls back once to EVAL of the body.
 // Each hop is its own exec and binds its own overall deadline on purpose.
 // The EVAL fallback must still have a full command budget after EVALSHA; do not share remaining time across hops (that can starve EVAL).
-// The reply is a flat array of bulk strings or integers; Lua authors wrap each slot with tostring. Nested tables and {err=...} inside an array are redis:unsupported-reply.
+// The reply is a flat array of bulk strings or integers; Lua authors wrap each slot with tostring. Nested tables and {err=...} inside an array are redis:unsupported-reply. Top-level Lua false/nil is a nil slot, not redis:miss.
 func (sr *SimpleRedis) Eval(ctx context.Context, script string, digest string, keys []string, args []string) ([][]byte, error) {
 	values, err := sr.exec(ctx, evalArgv(evalShaVerb, digest, keys, args)...)
 	// Miss: engine has no matching digest (FLUSH, restart); EVAL is the only send of the body so the engine stores it.

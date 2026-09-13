@@ -48,7 +48,11 @@ if tokens < 0 then
 	end
 end
 
-redis.call('hset', key, 'last', t, 'tokens', tokens)
+local persistLast = bucket.last
+if t > persistLast then
+	persistLast = t
+end
+redis.call('hset', key, 'last', persistLast, 'tokens', tokens)
 redis.call('expire', key, ttl)
 
 return {tostring(true), tostring(wait_duration), tostring(tokens)}
