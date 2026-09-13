@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-13T06:26:11Z
+Developer review: in progress — 2026-09-13T06:28:40Z
 
 ## What this changes
 **Operators.** None.
@@ -51,14 +51,14 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-09-13-tokenbucket-bug-eval-finite-wait pushed | `git` / pr-host |
-| OpenSpec | tokenbucket-eval-finite-wait | `openspec/changes/tokenbucket-eval-finite-wait/` |
+| OpenSpec | tokenbucket-eval-finite-wait (archived) | `openspec/changes/archive/2026-09-13-tokenbucket-eval-finite-wait/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/53 | pr-host List |
 | CI | build 34742576798 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34742576798 | pr-host check_runs |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | pr-host get_comments empty |
 
 ## Specs
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-eval-finite-wait/openspec/changes/tokenbucket-eval-finite-wait/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-tokenbucket-bug-eval-finite-wait/openspec/changes/archive/2026-09-13-tokenbucket-eval-finite-wait/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -67,7 +67,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait`, stub PR #53. Code review of the apply diff is clean. Next is usage-doc impact.
+Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait`, stub PR #53. Usage impact: none (Gotcha already in `std_go_tokenbucket.md`). Finite-wait rule is in live `std_go_tokenbucket_allow`. Next is pullrequest (drop WIP, wait for CI).
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -76,8 +76,7 @@ Local ticket, branch `2026-09-13-tokenbucket-bug-eval-finite-wait`, stub PR #53.
 | Can live Lua `tostring(wait_duration)` emit `nan` / `inf`, or only a fake 3-field override? | additive asked | assumed — still require finite after ParseFloat. Proof is the fake override. Do not wait for a live Lua nan path. Do not change Lua in this ticket. | explore |
 
 ## Before merge
-- [x] Land tokenbucket tests that fail on dest for Eval wait `nan` / `+Inf` / `-Inf` / `inf`, then require finite `ParseFloat` or `errEvalWait`
-- [ ] Fold the finite-wait contract into the live allow spec (archive)
+None.
 
 ## Findings
 None.

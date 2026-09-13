@@ -27,3 +27,15 @@ phase: codereview
 findings: 0
 fixed: none
 skipped: none
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: none (Gotcha already produced in implement)
+fixed: none
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: fold std_go_tokenbucket_allow
+fixed: live spec + archive move
+skipped: none
