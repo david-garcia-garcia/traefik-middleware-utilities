@@ -20,7 +20,7 @@ _Avoid_: a sliding window of failures; an absolute failures-per-second bucket
 
 ## Overview
 
-Import `github.com/david-garcia-garcia/traefik-middleware-utilities/backendbackoff`. Prefix keys in the caller. Store the Gate in `reclaim.Open` so a Traefik reload keeps the map. Pass `Close` as `reclaim.Hooks.Close`. No Sleep/Wake: there is no ticker. Do not import `tokenbucket`.
+Import `github.com/david-garcia-garcia/traefik-middleware-utilities/backendbackoff`. Prefix keys in the caller. Store the Gate in a reclaim table the caller owns so a Traefik reload keeps the map. Pass `Close` as `reclaim.Hooks.Close`. No Sleep/Wake: there is no ticker. Do not import `tokenbucket`.
 
 ## How to use
 

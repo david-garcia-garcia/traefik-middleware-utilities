@@ -1,0 +1,1 @@
+Remove the process-wide default reclaim table in reclaim/default.go (Default, package Open, Reset, ResetWith). Callers who need a table manage its instance and lifetime. Tables are created through New() that feeds any config parameters; those parameters are immutable once the table has been created. Especially now that tables can have config.
