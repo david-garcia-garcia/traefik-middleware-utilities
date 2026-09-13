@@ -15,7 +15,7 @@ IssueKey: 2026-09-13-simpleredis-structured-logging
             └─ retry, library timeout, caller cancel
 ```
 
-`reclaim` already owns the house shape: exported `Msg*` constants (`reclaim_dispose`), `*slog.Logger`, `logger.Error(MsgHookPanic, "key", key, ...)`. `Open` there **rejects** nil. This package copies the shape with a `simpleredis_` prefix and a different nil policy: `Config.Logger` frozen at `New`, nil means silent, no discard handler.
+`reclaim` already owns exported `Msg*` constants and rejects a nil logger. This package does **not** copy that catalog. `Config.Logger` is frozen at `New`; nil is replaced with a discard logger (`slog.NewTextHandler` on `io.Discard`) so call sites never nil-check. Emits are inline `simpleredis_*` strings at the decision site. No `log.go`, no message constants, no extra types to capture log attributes.
 
 Happy-path `Get` on a reused socket must not build `...any` attrs. Dest `interpretedcost_test.go` and `TestAlloc*` are the regression gates. Debug events sit on miss / retry / timeout / capability paths, not on every Get.
 
@@ -25,42 +25,13 @@ PR #69 landed on dest during implement Sync. `do` now has pre-write and post-rep
 
 ## Decisions
 
-- Mirror reclaim constants and slog key/value attrs. Put `Msg*` and the nil-safe helpers in `simpleredis/log.go`. Freeze `logger *slog.Logger` on the client in `New` from `Config.Logger`. `New` still returns only `*SimpleRedis`. Zero Config stays silent.
-- Do not install `slog.DiscardHandler`. Every emit is `if sr.logger != nil`. Debug emits add `logger.Enabled(ctx, slog.LevelDebug)` **at the call site** before any attr construction (variadic `...any` or `LogAttrs`). A helper that takes `...any` still allocates at the caller; do not hide the guard in one.
-- Error/Warn may allocate; they are rare. Still nil-check. No Info tier.
-- Panic: keep the existing release defer first; add a second defer that recovers, logs `MsgPanic` (`panic`, `stack`, `host`), then re-panics. LIFO: recover runs first, re-panic, release still runs with `reusable==false`. Do not swallow. Extend `panic_safety_test.go` so the caller still sees the panic **and** turns/idle/`OverFrees()==0` stay as today.
-- Emit at the decision site:
-
-  | Const | Site |
-  |---|---|
-  | `MsgPanic` | new recover defer in `runOnConn` |
-  | `MsgNoAuth` | `dial` after AUTH `do` when `errors.Is(err, errNoAuth)`; also `do` after `readReply` when the mapped error is `errNoAuth` (later NOAUTH on a live socket) |
-  | `MsgNotFromNew` | `borrow` when `inUseTurns == nil` |
-  | `MsgOverFree` | `freeInUseTurn` default branch after `overFrees.Add(1)` |
-  | `MsgPoolExhausted` | `borrow` timer path returning `errPoolWait` |
-  | `MsgShortBulk` | `readBulk` when `io.ReadFull` returns short of the announced buffer (capture `n`) |
-  | `MsgBadReply` | `do` when `isDirtyProtocolError(err)` (`errIssue` / `errUnsupportedReply`) |
-  | `MsgHandshakeFailed` | `dial` after AUTH or SELECT `do` when `err != nil` and not `errNoAuth` |
-  | `MsgDial` | `borrow` after a successful `dial`, `reason` from that borrow (`idle_miss` vs `stale`) |
-  | `MsgIdleSwept` | `borrow` when `len(stale) > 0` |
-  | `MsgRetry` | `exec` when `attempt > 0` before `waitUntil` |
-  | `MsgTimeout` | `ioError` OS deadline; `libraryTimeout` when it maps to `errTimeout`; `do` when `ioBound<=0` yields `errTimeout` |
-  | `MsgCanceled` | `runOnConn` / `do` / `borrow` when the stop is `context.Canceled` and a socket is in play |
-  | `MsgSocketClosed` | `runOnConn` when cancel forces `reusable=false`; idle-cap branch in `release` (that branch **is** the detection site — see open question) |
-  | `MsgCapability` | `storeGroupWrite` when the cache becomes native or lua |
-  | `MsgNoScript` | `Eval` when NOSCRIPT prefix triggers the EVAL fallback |
-  | `MsgOpen` | `New` after freeze |
-  | `MsgClose` | `Close` after draining idle (`idle_closed` = count closed) |
-
-- Do not log from the generic `if !reusable { conn.close() }` arm. That arm is the sink, not the decision. Poisoned / bad-reply / panic already have their own events.
-- Security: never `Pass`, never Redis key names, never values. `error` attrs are sentinel text or Redis error payloads (`WRONGPASS…`, `LOADING…`) — those are not keys. Secrets test uses a distinctive password and key and asserts the capturing handler never saw either string.
-- Tests: capturing `slog.Handler` (reclaim `recHandler` shape, local to simpleredis tests). Nil-logger on every public verb. Cost: `testing.AllocsPerRun` around a Debug call site with nil logger and with a handler whose `Enabled` is false for Debug; report the numbers. Yaegi: follow `yaegi_test.go` GOPATH probe; slog is already interpreted in `reclaim/yaegi_test.go`. Do not regress `interpretedcost_test.go`.
-- Spec: delta on `std_go_simpleredis_tcp-session` (Logger freeze, nil policy). Event list may fold into that family or a new leaf — propose runs FindSpecHost. Usage: update `knowledge/devdocs/std_go_simpleredis.md`.
-- Implement all 20 events. `MsgSocketPoisoned` and `MsgAuthLeftover` fire at dest leftover checks in `do` (PR #69 merged during implement Sync).
-- Merge last vs OPEN #69 / #72 / #73. Do not take their hunks.
-- No new research folder: slog is stdlib; reclaim Yaegi already uses it; AUTH/NOSCRIPT notes already exist.
-
-Owner levels are implemented as specified. No disagreement on Error vs Warn vs Debug. Timeout stays Debug (volume). Pool exhausted stays Warn. Over-free stays Error.
+- Human reshape: no `log.go`, no `Msg*` constants, no nil-safe helpers. Freeze `logger *slog.Logger` on the client in `New`. Nil `Config.Logger` becomes a discard logger. Call sites use `sr.logger.Error/Warn/Debug("simpleredis_…")` with values already in scope. `New` still returns only `*SimpleRedis`.
+- Do not wrap control flow to capture extra log attributes (dial reason, short-bulk announced/read, idle-cap vs cancel close reason, Open knobs, Close idle count). Happy-path Get still does not log.
+- No Info tier. Never log `Pass`, Redis keys, or values.
+- Panic: keep the existing release defer first; add a second defer that recovers, logs `simpleredis_panic`, then re-panics. Do not swallow. Turns/idle/`OverFrees()==0` stay as today.
+- Emit inline at the decision site: panic, noauth, over-free, pool exhausted, short bulk, bad reply, handshake failed, leftover (poisoned / auth leftover), dial, idle swept, retry, timeout, canceled, capability, noscript, open. Do not emit not-from-new, socket-closed, or close.
+- Tests: capturing `slog.Handler` local to simpleredis tests. Nil-logger (discard) on every public verb. Yaegi GOPATH probe observes `simpleredis_open`. Do not regress `interpretedcost_test.go`.
+- Spec: `std_go_simpleredis_tcp-session` (Logger freeze, discard-at-New). Event list: `std_go_simpleredis_slog-events`. Usage: `knowledge/devdocs/std_go_simpleredis.md`.
 
 ## Open questions
 
@@ -71,45 +42,45 @@ Owner levels are implemented as specified. No disagreement on Error vs Warn vs D
 
 - Q: Exact `MsgOpen` attribute set (frozen knobs besides never `Pass`)?
   Rank: additive asked — requirement Unknowns; New copies those knobs today
-  Decision: assumed — log frozen values: `host`, `database`, `pool_size`, `max_idle_conns`, `pool_timeout`, `idle_timeout`, `dial_timeout`, `io_timeout`, `max_retries`, `min_retry_backoff`, `max_retry_backoff`. Never `Pass`. `database` is the SELECT index from Config, not a Redis key name.
-  By: explore
+  Decision: resolved — `simpleredis_open` logs `host` only. Do not dump frozen knobs. Never `Pass`.
+  By: implement
 
 - Q: Exact `reason` strings for `MsgDial` (idle miss / stale) and `MsgSocketClosed` (cancel / idle cap)?
   Rank: additive asked — requirement Unknowns; borrow already distinguishes empty-idle vs stale-sweep
-  Decision: assumed — `MsgDial` `reason` is `idle_miss` when `takeIdleConn` returns no reused and no stale, `stale` when it returns no reused after a non-empty stale list. `MsgSocketClosed` `reason` is `cancel` or `idle_cap`. Snake_case to match event strings.
-  By: explore
+  Decision: resolved — no reason attrs. Dial is `simpleredis_dial` after a successful dial. Do not emit `simpleredis_socket_closed`.
+  By: implement
 
 - Q: Whether `MsgNoAuth` `error` is the Redis payload or `redis:noauth`?
   Rank: additive asked — requirement Unknowns; `replyError` currently maps AUTH-class text to `errNoAuth`
-  Decision: assumed — log `error` as `err.Error()` after mapping (`redis:noauth`). Do not change the caller-visible sentinel to preserve the payload. Operators already match `ErrNoAuth`; the event name is the AUTH class.
-  By: explore
+  Decision: resolved — inline `simpleredis_noauth` with no required `error` attr. Caller-visible sentinel stays `redis:noauth`.
+  By: implement
 
 - Q: Whether short-bulk `read` is bytes received before the short `ReadFull`?
   Rank: additive asked — requirement Unknowns; dest `readBulk` discards `ReadFull`'s `n`
-  Decision: assumed — capture `n, err := io.ReadFull(...)`; `announced` is the RESP `$` length; `read` is `n` (bytes filled into the length+2 buffer). Do not log payload bytes.
-  By: explore
+  Decision: resolved — do not capture `n`. Dest `readBulk` still returns the I/O error. Warn is `simpleredis_short_bulk` when that error is EOF / unexpected EOF.
+  By: implement
 
 - Q: Whether `MsgHandshakeFailed` covers SELECT as well as AUTH when the mapped error is not `errNoAuth`?
   Rank: additive asked — requirement Desired inventory "AUTH/SELECT failed for a NON-auth reason"
-  Decision: resolved — yes. `dial` after AUTH `do` and after SELECT `do`, when `err != nil && !errors.Is(err, errNoAuth)`. AUTH-class stays `MsgNoAuth` only.
+  Decision: resolved — yes. `dial` after AUTH `do` and after SELECT `do`, when `err != errNoAuth`. AUTH-class stays `simpleredis_noauth` only.
   By: explore
 
 - Q: Whether `MsgCapability` `path` is `native`/`lua` or the `groupWritePath` names?
   Rank: additive asked — requirement Unknowns; `storeGroupWrite` already records `groupWriteNative` / `groupWriteLua`
-  Decision: assumed — `path` is `native` or `lua`. Log once when `storeGroupWrite` records the cache, not on every later MSetEX that reads the cache.
-  By: explore
+  Decision: resolved — no `path` attr. Log `simpleredis_capability` when `storeGroupWrite` records the cache.
+  By: implement
 
 - Q: Whether non-per-command Debug (`MsgOpen` / `MsgClose`) still needs the `Enabled` guard?
   Rank: additive asked — requirement Unknowns; those paths run once per client
-  Decision: assumed — nil-check only is enough for alloc; still wrap with `Enabled` so a logger at Warn+ does not build Open/Close attrs. Same shape as other Debug events. Cost test targets the per-command Debug sites (timeout/retry/dial), not New/Close.
-  By: explore
+  Decision: resolved — no Enabled guard and no Close event. Open is one Debug line at New. Discard logger at New when Logger is nil.
+  By: implement
 
 - Q: `MsgSocketClosed` idle-cap is decided inside `release`; the ticket forbids logging inside `release` and forbids changing its signature. Where does that event go?
   Rank: additive asked — inventory names idle cap; dest close lives in `release` (`pool.go`); signature change is Out of scope
-  Decision: assumed — dest #27 parks only when unused sockets are under maxIdleConns (no live-cap conjunct). Emit `MsgSocketClosed` reason `idle_cap` when `parkIdleConn` refuses because idle is already at the cap. `release` signature stays `(conn, reusable bool)`.
+  Decision: resolved — do not emit `simpleredis_socket_closed`. Leave `parkIdleConn` as dest.
   By: implement
 
 - Q: Caller `DeadlineExceeded` (not library budget, not `Canceled`) — `MsgTimeout` or silence?
   Rank: additive asked — requirement inventory splits I/O-or-budget timeout vs cancel; `libraryTimeout` already keeps caller deadline as `ctx.Err()`
-  Decision: assumed — `MsgTimeout` only when the mapped error is `errTimeout` (OS I/O deadline or library overall budget). `MsgCanceled` only for `context.Canceled`. Caller deadline stays the caller's timer; do not emit a library timeout line for it.
-  By: explore
+  Decision: resolved — `simpleredis_timeout` only when the mapped error is `errTimeout` at the I/O site. `simpleredis_canceled` only for `context.Canceled`. Caller deadline stays silent. Do not wrap `libraryTimeout` just to log.
+  By: implement
