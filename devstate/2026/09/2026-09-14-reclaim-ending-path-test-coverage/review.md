@@ -15,3 +15,9 @@ phase: propose
 findings: folded Reset Sleep-panic and Reset-unmap into std_go_reclaim_value-lifecycle and std_go_reclaim_context-lease
 fixed: n/a
 skipped: no new spec folder
+
+## implement (2026-09-14)
+phase: implement
+findings: landed table_gaps_test.go; cover 100.0% / 0 uncovered; table.go unchanged; Docker race green
+fixed: n/a
+skipped: did not edit table.go
