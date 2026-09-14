@@ -69,11 +69,14 @@ func bug3ServeChunkedBulk(conn net.Conn, payloadLen, chunk int, fill byte, perCh
 	}
 }
 
-func TestBug3StreamingBulkBeyondIOTimeoutReturnsIntact(t *testing.T) {
-	const payloadLen = 1 << 20 // 1 MiB; chunk pauses make transfer > IOTimeout
+// TestBug3StreamingBulkReturnsIntactWithinCommandTimeout pins that a reply is not cut off for its size.
+// The chunk pauses make the transfer take far longer than any single chunk's arrival window, so this only
+// passes while the socket deadline is one stamp of the remaining command budget.
+func TestBug3StreamingBulkReturnsIntactWithinCommandTimeout(t *testing.T) {
+	const payloadLen = 1 << 20 // 1 MiB in 32 KiB chunks 4ms apart: ~128ms of transfer
 	const fill byte = 0x5A
 	addr := startBug3ChunkedBulkRedis(t, payloadLen, 32<<10, fill, 4*time.Millisecond, -1)
-	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 40 * time.Millisecond,
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, CommandTimeout: 600 * time.Millisecond,
 		MaxRetries: -1, MinRetryBackoff: -1, MaxRetryBackoff: -1})
 	t.Cleanup(client.Close)
 
@@ -89,18 +92,17 @@ func TestBug3StreamingBulkBeyondIOTimeoutReturnsIntact(t *testing.T) {
 }
 
 // TestBug3SilentMidReplyTimesOutAtCommandBudget pins the price of stamping the socket deadline from
-// the command budget: a peer that goes quiet mid-reply is no longer cut off after IOTimeout, it ends
-// the command when the budget runs out. That is the deliberate trade for not killing a large reply
-// that is still arriving, so the lower bound is asserted too — losing it would mean the socket
-// deadline drifted back to a per-operation cap.
+// the command budget: a peer that goes quiet mid-reply ends the command when CommandTimeout runs out,
+// not sooner. That is the deliberate trade for not killing a large reply that is still arriving, so a
+// lower bound is asserted too — losing it would mean the socket deadline drifted back to a
+// per-operation cap smaller than the budget.
 func TestBug3SilentMidReplyTimesOutAtCommandBudget(t *testing.T) {
 	addr := startBug3ChunkedBulkRedis(t, 4096, 16, 0x11, 0, 16)
-	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 40 * time.Millisecond,
-		MaxRetries: -1, MinRetryBackoff: -1, MaxRetryBackoff: -1, DialTimeout: 200 * time.Millisecond})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, CommandTimeout: 200 * time.Millisecond,
+		MaxRetries: -1, MinRetryBackoff: -1, MaxRetryBackoff: -1, DialTimeout: 100 * time.Millisecond})
 	t.Cleanup(client.Close)
 
-	retries, _, _ := retryLimits(client.MaxRetries(), client.minRetryBackoff, client.maxRetryBackoff)
-	budget := time.Duration(retries+1) * (client.DialTimeout() + client.IOTimeout())
+	budget := client.CommandTimeout()
 	start := time.Now()
 	_, err := client.Get(context.Background(), "partial")
 	elapsed := time.Since(start)
@@ -110,8 +112,8 @@ func TestBug3SilentMidReplyTimesOutAtCommandBudget(t *testing.T) {
 	if elapsed > budget+100*time.Millisecond {
 		t.Fatalf("Get silent mid-reply elapsed %v, want <= budget %v plus slack", elapsed, budget)
 	}
-	if elapsed < client.IOTimeout() {
-		t.Fatalf("Get silent mid-reply elapsed %v, want at least IOTimeout %v", elapsed, client.IOTimeout())
+	if elapsed < budget/2 {
+		t.Fatalf("Get silent mid-reply elapsed %v, want at least half the budget %v", elapsed, budget)
 	}
 	assertTurnsFullAndNoOverFrees(t, client)
 }
@@ -119,12 +121,11 @@ func TestBug3SilentMidReplyTimesOutAtCommandBudget(t *testing.T) {
 func TestBug3DripPeerCannotPinTurnPastOverallBudget(t *testing.T) {
 	// 1-byte chunks every 20ms keep arriving forever, so only the command budget can end this.
 	addr := startBug3ChunkedBulkRedis(t, 1<<20, 1, 0x22, 20*time.Millisecond, -1)
-	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 50 * time.Millisecond, DialTimeout: 50 * time.Millisecond,
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, CommandTimeout: 100 * time.Millisecond, DialTimeout: 50 * time.Millisecond,
 		MaxRetries: -1, MinRetryBackoff: -1, MaxRetryBackoff: -1, PoolTimeout: 80 * time.Millisecond})
 	t.Cleanup(client.Close)
 
-	retries, _, _ := retryLimits(client.MaxRetries(), client.minRetryBackoff, client.maxRetryBackoff)
-	budget := time.Duration(retries+1) * (client.DialTimeout() + client.IOTimeout())
+	budget := client.CommandTimeout()
 	start := time.Now()
 	_, err := client.Get(context.Background(), "drip")
 	elapsed := time.Since(start)

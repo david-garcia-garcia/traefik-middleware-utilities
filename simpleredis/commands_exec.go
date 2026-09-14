@@ -17,7 +17,8 @@ var nopCancel context.CancelFunc = func() {}
 // skipIdle is per-command on purpose: leftover corpses stay parked, so each later command spends one and then dials.
 // A socket taken from idle that fails after its write is indistinguishable from a lost reply, so that attempt still
 // consumes MaxRetries and MaxRetries -1 still fails the command; no free extra send is added.
-// The library overall deadline is bound onto ctx (stdlib Dialer/Client shape). Caller cancel stays ctx.Err(); library expiry is redis:timeout. INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
+// CommandTimeout is bound onto ctx (stdlib Dialer/Client shape), so retries stop at whichever comes first: the attempt
+// count or that budget. Caller cancel stays ctx.Err(); library expiry is redis:timeout. INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
 func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -26,7 +27,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		return nil, err
 	}
 	maxRetries, minBackoff, maxBackoff := retryLimits(sr.maxRetries, sr.minRetryBackoff, sr.maxRetryBackoff)
-	ctx, cancel, libraryOwnsDeadline := sr.bindCommandDeadline(ctx, maxRetries)
+	ctx, cancel, libraryOwnsDeadline := sr.bindCommandDeadline(ctx)
 	defer cancel()
 
 	var last error
@@ -80,11 +81,12 @@ func (sr *SimpleRedis) runOnConn(ctx context.Context, conn *pooledConn, args [][
 	return values, err
 }
 
-// bindCommandDeadline wraps ctx with (maxRetries+1)*(DialTimeout+IOTimeout) when that instant is sooner than the parent.
+// bindCommandDeadline wraps ctx with CommandTimeout when that instant is sooner than the parent.
 // Same shape as net.Dialer / http.Client: one child context, not a parallel time.Time next to ctx.
+// MaxRetries is not a multiplicand here: attempts share this one budget, so raising it cannot raise the ceiling.
 // libraryOwnsDeadline is true when DeadlineExceeded on the returned ctx is the library budget (maps to redis:timeout).
-func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context, maxRetries int) (context.Context, context.CancelFunc, bool) {
-	libraryDeadline := time.Now().Add(time.Duration(maxRetries+1) * (sr.DialTimeout() + sr.IOTimeout()))
+func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context) (context.Context, context.CancelFunc, bool) {
+	libraryDeadline := time.Now().Add(sr.CommandTimeout())
 	if parent, ok := ctx.Deadline(); ok && !parent.After(libraryDeadline) {
 		return ctx, nopCancel, false
 	}

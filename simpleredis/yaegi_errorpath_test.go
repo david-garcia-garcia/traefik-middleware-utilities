@@ -38,7 +38,7 @@ func DialRetry(host string) string {
 
 // StallTimeout Gets a peer that never replies.
 func StallTimeout(host string) string {
-	client, err := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1, IOTimeout: 40 * time.Millisecond, DialTimeout: 40 * time.Millisecond})
+	client, err := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1, CommandTimeout: 80 * time.Millisecond, DialTimeout: 40 * time.Millisecond})
 	if err != nil {
 		return "new:" + err.Error()
 	}
@@ -55,7 +55,7 @@ func StallTimeout(host string) string {
 
 // CancelMidCommand Gets with a short caller deadline.
 func CancelMidCommand(host string) string {
-	client, err := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client, err := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, MaxIdleConns: 1, CommandTimeout: 5 * time.Second, MaxRetries: -1})
 	if err != nil {
 		return "new:" + err.Error()
 	}
@@ -74,7 +74,7 @@ func CancelMidCommand(host string) string {
 
 // PoolWait Gets when this client's live cap is already held by another Get.
 func PoolWait(host string) string {
-	client, err := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: 40 * time.Millisecond, IOTimeout: time.Second, MaxRetries: -1})
+	client, err := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: 40 * time.Millisecond, CommandTimeout: time.Second, MaxRetries: -1})
 	if err != nil {
 		return "new:" + err.Error()
 	}

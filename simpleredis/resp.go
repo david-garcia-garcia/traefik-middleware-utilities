@@ -19,12 +19,11 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	if err := contextStop(ctx); err != nil {
 		return nil, false, err
 	}
-	// The socket deadline is what is left of the command budget, not IOTimeout. A reply that keeps
-	// arriving must not be killed for its size, and exec already bounds the whole command at
-	// (MaxRetries+1)*(DialTimeout+IOTimeout) via bindCommandDeadline. IOTimeout is an input to that
-	// budget, not a second per-operation cap: two bounds on the same socket could only disagree, and
-	// the shorter one made a large reply unreadable while the peer was healthy and still sending.
-	ioBound := commandBudgetLeft(ctx, sr.IOTimeout())
+	// The socket deadline is what is left of the command budget exec bound with CommandTimeout. A reply
+	// that keeps arriving must not be killed for its size, so there is no second per-operation cap:
+	// two bounds on the same socket could only disagree, and the shorter one made a large reply
+	// unreadable while the peer was healthy and still sending.
+	ioBound := sr.commandBudgetLeft(ctx)
 	if ioBound <= 0 {
 		if err := contextStop(ctx); err != nil {
 			return nil, false, err
@@ -94,8 +93,8 @@ func watchConnClose(ctx context.Context, conn net.Conn) func() {
 // the library budget. Go E2E Redis failed TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout
 // that way. Report the deadline and let exec's libraryOwnsDeadline decide library vs caller.
 //
-// A ctx with no deadline is the direct-do path, where the socket deadline came from IOTimeout
-// instead; that one is the library's own bound and stays redis:timeout.
+// A ctx with no deadline is the direct-do path, where the socket deadline came straight from
+// CommandTimeout; that one is the library's own bound and stays redis:timeout.
 func ioOrContext(ctx context.Context, err error) error {
 	if stop := contextStop(ctx); stop != nil {
 		return stop
@@ -106,12 +105,12 @@ func ioOrContext(ctx context.Context, err error) error {
 	return ioError(err)
 }
 
-// commandBudgetLeft is the time left on ctx, or fallback when ctx carries no deadline.
-// exec binds the command budget onto ctx, so this is that budget's remainder.
-func commandBudgetLeft(ctx context.Context, fallback time.Duration) time.Duration {
+// commandBudgetLeft is the time left on ctx. exec binds CommandTimeout onto ctx, so this is that budget's remainder.
+// A ctx with no deadline never comes from exec; it is a direct do call, where the whole budget is still ahead.
+func (sr *SimpleRedis) commandBudgetLeft(ctx context.Context) time.Duration {
 	deadline, ok := ctx.Deadline()
 	if !ok {
-		return fallback
+		return sr.CommandTimeout()
 	}
 	return time.Until(deadline)
 }
