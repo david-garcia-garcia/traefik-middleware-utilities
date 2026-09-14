@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"net"
 	"os"
 	"strconv"
@@ -32,7 +31,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		return nil, false, errTimeout
 	}
 	if err := conn.netConn.SetDeadline(time.Now().Add(budgetLeft)); err != nil {
-		sr.logSite(slog.LevelDebug, siteDo, errUnreachable, attrReason, reasonSetDeadline, attrVerb, commandVerb(args))
+		sr.logger.Debug("do: "+RedisUnreachable, "reason", "set_deadline", "verb", commandVerb(args))
 		return nil, false, errUnreachable
 	}
 	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before the deadline.
@@ -46,11 +45,16 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	if conn.reader.Buffered() != 0 {
 		// verb is what makes this handshake leftover when it is AUTH or SELECT: the socket was dialed for
 		// this command, so nothing should have been on it before the first write.
-		sr.logSite(slog.LevelWarn, siteDo, errUnreachable, attrReason, reasonUnreadBeforeWrite, attrVerb, commandVerb(args))
+		sr.logger.Warn("do: "+RedisUnreachable, "reason", "unread_before_write", "verb", commandVerb(args))
 		return nil, false, errUnreachable
 	}
 	if err := writeCommand(conn, args); err != nil {
-		return nil, false, sr.logIOFailure(ctx, slog.LevelDebug, err, args, reasonWrite)
+		mapped := ioOrContext(ctx, err)
+		if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
+			return nil, false, mapped
+		}
+		sr.logger.Debug("do: "+RedisUnreachable, "reason", "write", "verb", commandVerb(args))
+		return nil, false, mapped
 	}
 	values, clean, err := readReply(conn.reader)
 	if stop := contextStop(ctx); stop != nil {
@@ -58,24 +62,29 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	}
 	if err != nil && !clean {
 		if isDirtyProtocolError(err) {
-			sr.logSite(slog.LevelWarn, siteDo, err, attrVerb, commandVerb(args))
+			sr.logger.Warn("do: redis error", "verb", commandVerb(args))
 			return nil, false, err
 		}
 		// Timeout is not classified here: ioOrContext hands the deadline up and exec's libraryTimeout owns that call.
 		// A short bulk read is Warn (the peer lied about a length); every other I/O failure is a peer that went away.
-		level := slog.LevelDebug
-		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
-			level = slog.LevelWarn
+		mapped := ioOrContext(ctx, err)
+		if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
+			return nil, false, mapped
 		}
-		return nil, false, sr.logIOFailure(ctx, level, err, args, reasonRead)
+		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+			sr.logger.Warn("do: "+RedisUnreachable, "reason", "read", "verb", commandVerb(args))
+		} else {
+			sr.logger.Debug("do: "+RedisUnreachable, "reason", "read", "verb", commandVerb(args))
+		}
+		return nil, false, mapped
 	}
 	// A clean reply that is an error is the peer's own answer. AUTH-class is already the mapped sentinel here.
 	if err != nil {
-		level := slog.LevelDebug
 		if errors.Is(err, ErrNoAuth) {
-			level = slog.LevelError
+			sr.logger.Error("do: "+RedisNoAuth, "verb", commandVerb(args))
+		} else {
+			sr.logger.Debug("do: redis error", "verb", commandVerb(args))
 		}
-		sr.logSite(level, siteDo, err, attrVerb, commandVerb(args))
 	}
 	// Extra well-formed RESP after this reply means the peer is ahead; return the value and destroy the socket.
 	// Same limit as the pre-write check: leftover already in the reader, not a stray still only in the kernel buffer.
@@ -85,19 +94,6 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		return values, false, err
 	}
 	return values, true, err
-}
-
-// logIOFailure maps a socket I/O failure with ioOrContext, logs it at do, and returns that mapped error.
-// It adds nothing to the error: the mapping is ioOrContext's and the site lives only on the log line.
-// A fired context is not logged here — exec's libraryTimeout owns library budget versus caller deadline, and
-// that one decision emits one line.
-func (sr *SimpleRedis) logIOFailure(ctx context.Context, level slog.Level, err error, args [][]byte, reason string) error {
-	mapped := ioOrContext(ctx, err)
-	if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
-		return mapped
-	}
-	sr.logSite(level, siteDo, mapped, attrReason, reason, attrVerb, commandVerb(args))
-	return mapped
 }
 
 // commandVerb is the Redis verb do is running (args[0]). Never a key name or a value: argv[0] is the command.

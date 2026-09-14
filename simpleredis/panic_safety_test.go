@@ -3,7 +3,6 @@ package simpleredis
 import (
 	"bufio"
 	"context"
-	"log/slog"
 	"testing"
 	"time"
 )
@@ -18,10 +17,9 @@ func (panicOnWrite) Write(_ []byte) (int, error) { panic("simulated panic inside
 // in-use turn AND destroys the socket when do panics, so neither the turn nor the fd leaks.
 // On DestBranch the same panic lost the turn permanently (PR #29 left release non-deferred).
 func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
-	h := &recHandler{}
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	const poolSize = 2
-	sr := newTestRedis(t, Config{Host: addr, PoolSize: poolSize, MaxIdleConns: poolSize, PoolTimeout: 50 * time.Millisecond, MaxRetries: -1, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: poolSize, MaxIdleConns: poolSize, PoolTimeout: 50 * time.Millisecond, MaxRetries: -1})
 	t.Cleanup(sr.Close)
 
 	if _, err := sr.Get(context.Background(), "hit"); err != nil {
@@ -58,7 +56,6 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 	if of := sr.OverFrees(); of != 0 {
 		t.Fatalf("OverFrees = %d, want 0", of)
 	}
-	requireMsg(t, h, "simpleredis_panic", slog.LevelError)
 
 	value, err := sr.Get(context.Background(), "hit")
 	if err != nil {

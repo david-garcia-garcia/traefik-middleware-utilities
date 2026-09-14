@@ -3,7 +3,6 @@ package simpleredis
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"math/rand"
 	"strings"
 	"time"
@@ -25,7 +24,11 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
-		sr.logSite(slog.LevelDebug, siteExec, err)
+		if errors.Is(err, context.Canceled) {
+			sr.logger.Debug("exec: canceled")
+		} else {
+			sr.logger.Debug("exec: deadline exceeded")
+		}
 		return nil, err
 	}
 	maxRetries, minBackoff, maxBackoff := retryLimits(sr.maxRetries, sr.minRetryBackoff, sr.maxRetryBackoff)
@@ -78,16 +81,6 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 func (sr *SimpleRedis) runOnConn(ctx context.Context, conn *pooledConn, args [][]byte) (values [][]byte, err error) {
 	reusable := false
 	defer func() { sr.release(conn, reusable) }()
-	// Recover logs then re-raises so the release defer still runs with reusable false.
-	defer func() {
-		recovered := recover()
-		if recovered == nil {
-			return
-		}
-		// A recovered panic value is not an error, so it stays a named event.
-		sr.logger.Error("simpleredis_panic", "panic", recovered, "host", sr.host)
-		panic(recovered)
-	}()
 	values, reusable, err = sr.do(ctx, conn, args)
 	if stop := contextStop(ctx); stop != nil {
 		reusable = false
@@ -116,12 +109,13 @@ func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context) (context.Context
 // Errors that arrived from borrowSocket or do were already logged where they were seen and are not logged again.
 func (sr *SimpleRedis) libraryTimeout(err error, libraryOwnsDeadline bool) error {
 	if libraryOwnsDeadline && errors.Is(err, context.DeadlineExceeded) {
-		sr.logSite(slog.LevelDebug, siteExec, errTimeout)
+		sr.logger.Debug("exec: " + RedisTimeout)
 		return errTimeout
 	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		// The caller's own cancel or a caller deadline sooner than the budget: exec is what decided it was theirs.
-		sr.logSite(slog.LevelDebug, siteExec, err)
+	if errors.Is(err, context.Canceled) {
+		sr.logger.Debug("exec: canceled")
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		sr.logger.Debug("exec: deadline exceeded")
 	}
 	return err
 }

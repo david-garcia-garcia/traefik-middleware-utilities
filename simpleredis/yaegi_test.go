@@ -172,9 +172,8 @@ func TestYaegi_MSetEXLua(t *testing.T) {
 }
 
 // TestYaegi_StructuredLogging proves interpreted New with a slog logger emits simpleredis_open and that a
-// site line reaches the same logger. The site line matters on its own: logSite calls Logger.Log with a level
-// argument, which is a different slog surface than the Debug and Warn calls the named events use, and Yaegi
-// resolves stdlib symbols one method at a time.
+// composed site line (dial: redis:unreachable) reaches the same logger through Debug, the same slog surface
+// the named events use. Yaegi resolves stdlib symbols one method at a time.
 func TestYaegi_StructuredLogging(t *testing.T) {
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
@@ -210,7 +209,7 @@ import (
 )
 
 // OpenEvent constructs a client with a capturing text logger, checks simpleredis_open, then fails one command
-// against a closed port so the interpreter also runs the site logger (Logger.Log with a level).
+// against a closed port so the interpreter also runs a composed site line (Logger.Debug).
 func OpenEvent() string {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))

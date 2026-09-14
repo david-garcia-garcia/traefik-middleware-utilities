@@ -2,12 +2,10 @@
 package simpleredis
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -120,96 +118,6 @@ func New(cfg Config) (*SimpleRedis, error) {
 	sr.logger.Debug("simpleredis_open", "host", sr.host)
 	return sr, nil
 }
-
-// Log sites: the function that saw a failure. Named once so the same literal is not repeated at every emit.
-const (
-	siteBorrow = "borrowSocket"
-	siteDial   = "dial"
-	siteDo     = "do"
-	siteExec   = "exec"
-)
-
-// slog attribute keys, and the reason values that separate two paths that share one site and one sentinel.
-const (
-	attrReason = "reason"
-	attrVerb   = "verb"
-
-	reasonClosed            = "closed"
-	reasonNotFromNew        = "not_from_new"
-	reasonPoolWait          = "pool_wait"
-	reasonIdleMiss          = "idle_miss"
-	reasonSkipIdle          = "skip_idle"
-	reasonSetDeadline       = "set_deadline"
-	reasonUnreadBeforeWrite = "unread_before_write"
-	reasonWrite             = "write"
-	reasonRead              = "read"
-)
-
-// logSite records a failure at the function that saw it, as the slog message "<site>: <cause>".
-//
-// It logs and returns nothing. It MUST NOT wrap the error it is given. RedisUnreachable, RedisTimeout,
-// RedisNoAuth, RedisIssue, RedisMiss and RedisUnsupportedReply are exported text that windowcounter,
-// tokenbucket, leakybucket and e2e/simpleredisprobe compare against, and std_go_simpleredis_tcp-session pins
-// those exact strings in its requirements; a "<site>: <cause>" wrap would change every one of them and force
-// each surviving err.Error() prefix check through an unwrap helper. The site is for the operator, not the caller.
-//
-// Why a site at all: six paths return the one redis:unreachable text (a TCP dial that failed, the pre-write
-// and the SetDeadline refusals in do, a short read in do, a closed client, and a client that never came from
-// New). The sentinel alone cannot tell an operator which of them happened.
-func (sr *SimpleRedis) logSite(level slog.Level, site string, err error, attrs ...any) {
-	if err == nil {
-		return
-	}
-	// A client that did not come from New has no logger; its first command still reports errNotFromNew here.
-	if sr.logger == nil {
-		return
-	}
-	sr.logger.Log(context.Background(), level, site+": "+loggableCause(err), attrs...)
-}
-
-// loggableCause is the text logSite may publish for err.
-//
-// An error this package owns prints itself. Anything else came from the peer and prints its leading error
-// code only, because a Redis error reply carries text this client must never republish:
-//
-//   - Redis 7.4 answers AUTH against a nopass default user with "ERR AUTH <password> called without any
-//     password configured for the default user". That is not an AUTH-class prefix, so replyError does not map
-//     it to redis:noauth and nothing else keeps Config.Pass off the line.
-//   - An unknown verb is refused with the command's own arguments quoted back ("ERR unknown command 'MSETEX',
-//     with args beginning with: '2', '<key>', '<value>'"), which is Redis key names and values.
-//
-// Trimming at this one sink is why no call site has to decide: the rule holds for every site, level and verb.
-// The caller still receives the peer's full text; only the log line is trimmed.
-func loggableCause(err error) string {
-	switch {
-	case errors.Is(err, ErrUnreachable), errors.Is(err, ErrTimeout), errors.Is(err, ErrNoAuth),
-		errors.Is(err, ErrMiss), errors.Is(err, ErrIssue), errors.Is(err, ErrUnsupportedReply),
-		errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-		return err.Error()
-	}
-	return peerErrorCode(err.Error())
-}
-
-// peerErrorCode is the leading error code of a Redis error reply (ERR, LOADING, MISCONF, NOSCRIPT, WRONGTYPE)
-// and no byte after it. A first token that is not all A-Z is not an error code and is not published at all.
-func peerErrorCode(text string) string {
-	code := text
-	if space := strings.IndexByte(text, ' '); space >= 0 {
-		code = text[:space]
-	}
-	if code == "" {
-		return unnamedPeerReply
-	}
-	for i := 0; i < len(code); i++ {
-		if code[i] < 'A' || code[i] > 'Z' {
-			return unnamedPeerReply
-		}
-	}
-	return code
-}
-
-// unnamedPeerReply stands in for a peer error whose leading token is not a Redis error code.
-const unnamedPeerReply = "redis error reply"
 
 // Close drains unused pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval/MSetEX/MSetEXAt return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
 func (sr *SimpleRedis) Close() {
