@@ -520,9 +520,18 @@ func (t *Table) releaseHolder(incarnation *slot) {
 	incarnation.holders--
 }
 
+// dropAction is what drop does after claimDrop releases t.mu.
+type dropAction int
+
+const (
+	dropPark dropAction = iota
+	dropStop
+	dropClaim
+)
+
 // dropStep is what claimDrop returns after releasing t.mu.
 type dropStep struct {
-	stop   bool
+	action dropAction
 	ready  <-chan struct{}
 	logger *slog.Logger
 	hooks  Hooks
@@ -536,18 +545,19 @@ func (t *Table) claimDrop(incarnation *slot) dropStep {
 	defer t.mu.Unlock()
 	if incarnation.state == slotBusy {
 		// A create, wake, sleep, or (when EnforceCloseBeforeOpen) close owns the slot.
-		return dropStep{ready: incarnation.ready}
+		return dropStep{action: dropPark, ready: incarnation.ready}
 	}
-	if incarnation.holders > 0 || incarnation.state != slotAwake {
-		return dropStep{stop: true}
+	if incarnation.holders == 0 && incarnation.state == slotAwake {
+		incarnation.state = slotBusy
+		incarnation.ready = make(chan struct{})
+		return dropStep{
+			action: dropClaim,
+			logger: incarnation.logger,
+			hooks:  incarnation.hooks,
+			grace:  t.grace,
+		}
 	}
-	incarnation.state = slotBusy
-	incarnation.ready = make(chan struct{})
-	return dropStep{
-		logger: incarnation.logger,
-		hooks:  incarnation.hooks,
-		grace:  t.grace,
-	}
+	return dropStep{action: dropStop}
 }
 
 // parkAsleep marks the incarnation asleep after Sleep returned, closes ready, and arms grace
@@ -589,16 +599,17 @@ func (t *Table) drop(key string, incarnation *slot) {
 	var grace time.Duration
 	for {
 		step := t.claimDrop(incarnation)
-		if step.ready != nil {
+		switch step.action {
+		case dropPark:
 			<-step.ready
 			continue
-		}
-		if step.stop {
+		case dropStop:
 			return
+		case dropClaim:
+			logger = step.logger
+			storedHooks = step.hooks
+			grace = step.grace
 		}
-		logger = step.logger
-		storedHooks = step.hooks
-		grace = step.grace
 		break
 	}
 
@@ -629,34 +640,43 @@ func (t *Table) drop(key string, incarnation *slot) {
 	}
 }
 
+// expireAction is what expire does after claimExpire releases t.mu.
+type expireAction int
+
+const (
+	expireSkip expireAction = iota
+	expireEnforce
+	expireDispose
+)
+
 // expireStep is what claimExpire returns after releasing t.mu.
 type expireStep struct {
-	skip    bool
-	enforce bool
-	hooks   Hooks
-	logger  *slog.Logger
+	action expireAction
+	hooks  Hooks
+	logger *slog.Logger
 }
 
 // claimExpire takes a sleeping incarnation for close, or returns skip when an Open woke it.
 func (t *Table) claimExpire(key string, incarnation *slot) expireStep {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if incarnation.state != slotAsleep || incarnation.holders > 0 {
-		return expireStep{skip: true}
-	}
-	step := expireStep{hooks: incarnation.hooks, logger: incarnation.logger}
-	if incarnation.hooks.EnforceCloseBeforeOpen {
-		incarnation.state = slotBusy
-		incarnation.ready = make(chan struct{})
-		step.enforce = true
+	if incarnation.state == slotAsleep && incarnation.holders == 0 {
+		step := expireStep{hooks: incarnation.hooks, logger: incarnation.logger}
+		if incarnation.hooks.EnforceCloseBeforeOpen {
+			incarnation.state = slotBusy
+			incarnation.ready = make(chan struct{})
+			step.action = expireEnforce
+			return step
+		}
+		incarnation.state = slotGone
+		closeFinished(incarnation)
+		if t.items[key] == incarnation {
+			delete(t.items, key)
+		}
+		step.action = expireDispose
 		return step
 	}
-	incarnation.state = slotGone
-	closeFinished(incarnation)
-	if t.items[key] == incarnation {
-		delete(t.items, key)
-	}
-	return step
+	return expireStep{action: expireSkip}
 }
 
 // expire ends a sleeping incarnation, unless an Open woke it or something else already claimed
@@ -664,14 +684,14 @@ func (t *Table) claimExpire(key string, incarnation *slot) expireStep {
 // waits; otherwise the key is unmapped first (dest) so a concurrent Open may create during Close.
 func (t *Table) expire(key string, incarnation *slot) {
 	step := t.claimExpire(key, incarnation)
-	if step.skip {
+	switch step.action {
+	case expireSkip:
 		return
-	}
-	if step.enforce {
+	case expireEnforce:
 		t.endMappedClose(key, incarnation, step.hooks, step.logger)
-		return
+	case expireDispose:
+		dispose(key, step.hooks, step.logger)
 	}
-	dispose(key, step.hooks, step.logger)
 }
 
 // takeAll swaps out every mapped incarnation and stops their grace timers. Tests-only Reset.
