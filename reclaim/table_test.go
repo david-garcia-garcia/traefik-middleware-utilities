@@ -32,6 +32,11 @@ const nextIncarnation = "second"
 // graceNoRace is long enough that a test asserting the reclaim branch cannot lose the grace race.
 const graceNoRace = 5 * time.Second
 
+// NewTable builds a table for tests. Production callers use New(Config).
+func NewTable(grace time.Duration) *Table {
+	return New(Config{Grace: grace})
+}
+
 // box is a disposable stand-in stored on the table in tests.
 type box struct {
 	n     int
@@ -1573,6 +1578,15 @@ func TestTable_NilTableOpenErrors(t *testing.T) {
 		return ending(1, nil), nil
 	}, Hooks{}); err == nil {
 		t.Fatal("no error from a nil table")
+	}
+}
+
+func TestTable_ZeroValueOpenErrors(t *testing.T) {
+	tab := &Table{}
+	if _, err := tab.Open(context.Background(), "a", recLogger(&recHandler{}), func() (any, error) {
+		return ending(1, nil), nil
+	}, Hooks{}); err == nil {
+		t.Fatal("no error from a zero-value table")
 	}
 }
 

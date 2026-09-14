@@ -1,0 +1,17 @@
+issueKey: 2026-09-14-reclaim-ending-path-test-coverage
+jobName: 2026-09-14-reclaim-ending-path-test-coverage
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 9a41c638811ef6685b44749fe71c19965948aaa8a8ce62e36aa94ccc018035a9
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: reclaim-ending-path-test-coverage
+pr:
+  id: 92
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/92

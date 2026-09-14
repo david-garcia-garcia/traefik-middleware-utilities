@@ -49,7 +49,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		sr.logSite(slog.LevelWarn, siteDo, errUnreachable, attrReason, reasonUnreadBeforeWrite, attrVerb, commandVerb(args))
 		return nil, false, errUnreachable
 	}
-	if err := writeCommand(conn.writer, args); err != nil {
+	if err := writeCommand(conn, args); err != nil {
 		return nil, false, sr.logIOFailure(ctx, slog.LevelDebug, err, args, reasonWrite)
 	}
 	values, clean, err := readReply(conn.reader)
@@ -159,12 +159,36 @@ func (sr *SimpleRedis) commandBudgetLeft(ctx context.Context) time.Duration {
 }
 
 // writeCommand writes one RESP array of bulk strings and flushes.
-func writeCommand(writer *bufio.Writer, args [][]byte) error {
-	if _, err := writer.WriteString("*" + strconv.Itoa(len(args)) + "\r\n"); err != nil {
+//
+// Every length header is strconv.AppendInt into conn.lenBuf, never "$" + strconv.Itoa(n) + CRLF.
+// That concatenation is the whole allocation cost of framing — one string per header, so three on
+// a GET — and removing it is where the allocation win comes from. It is not the number of writes:
+// see pooledConn for why bufio stays.
+//
+// The digit scratch lives on the connection rather than as a local array because a local escapes.
+// It is handed to bufio.Writer.Write, whose argument can reach the underlying io.Writer interface,
+// so the compiler heap-allocates it once per command (measured: 1 alloc, 24 B, versus 0 here).
+func writeCommand(conn *pooledConn, args [][]byte) error {
+	writer := conn.writer
+	// Array header: *<count>\r\n
+	if err := writer.WriteByte('*'); err != nil {
 		return err
 	}
+	if _, err := writer.Write(strconv.AppendInt(conn.lenBuf[:0], int64(len(args)), 10)); err != nil {
+		return err
+	}
+	if _, err := writer.WriteString("\r\n"); err != nil {
+		return err
+	}
+	// Each arg is a bulk string: $<len>\r\n<payload>\r\n
 	for _, arg := range args {
-		if _, err := writer.WriteString("$" + strconv.Itoa(len(arg)) + "\r\n"); err != nil {
+		if err := writer.WriteByte('$'); err != nil {
+			return err
+		}
+		if _, err := writer.Write(strconv.AppendInt(conn.lenBuf[:0], int64(len(arg)), 10)); err != nil {
+			return err
+		}
+		if _, err := writer.WriteString("\r\n"); err != nil {
 			return err
 		}
 		if _, err := writer.Write(arg); err != nil {

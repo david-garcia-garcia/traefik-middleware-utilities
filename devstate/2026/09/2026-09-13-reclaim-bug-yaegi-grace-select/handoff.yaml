@@ -1,0 +1,15 @@
+issueKey: 2026-09-13-reclaim-bug-yaegi-grace-select
+jobName: 2026-09-13-reclaim-bug-yaegi-grace-select
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 6a3cd5b2a27485d3ea5bde500f01aedf2da74b0d0fb5d1a228d920152f57d615
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: reclaim-afterfunc-grace
+pr: { id: 80, url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/80 }

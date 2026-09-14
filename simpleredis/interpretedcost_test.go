@@ -1,9 +1,7 @@
 package simpleredis
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"strconv"
 	"testing"
 	"unsafe"
@@ -158,11 +156,11 @@ func bytesToStringUnsafe(b []byte) string {
 
 // BenchmarkCompiledEncodeEvalCopy is today's Eval encode: the script is copied.
 func BenchmarkCompiledEncodeEvalCopy(b *testing.B) {
-	writer := bufio.NewWriter(io.Discard)
+	conn := discardConn()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := writeCommand(writer, [][]byte{
+		if err := writeCommand(conn, [][]byte{
 			[]byte("EVAL"), []byte(tokenBucketScript), []byte("1"), []byte("bucket:1.2.3.4"),
 		}); err != nil {
 			b.Fatal(err)
@@ -172,11 +170,11 @@ func BenchmarkCompiledEncodeEvalCopy(b *testing.B) {
 
 // BenchmarkCompiledEncodeEvalUnsafe is the same encode with zero-copy args.
 func BenchmarkCompiledEncodeEvalUnsafe(b *testing.B) {
-	writer := bufio.NewWriter(io.Discard)
+	conn := discardConn()
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := writeCommand(writer, [][]byte{
+		if err := writeCommand(conn, [][]byte{
 			stringToBytesUnsafe("EVAL"), stringToBytesUnsafe(tokenBucketScript),
 			stringToBytesUnsafe("1"), stringToBytesUnsafe("bucket:1.2.3.4"),
 		}); err != nil {
@@ -321,10 +319,30 @@ func benchmarkYaegiEncode(b *testing.B, loopName string) {
 	}
 }
 
-// BenchmarkYaegiEncodeBufio is today's writeCommand shape, interpreted.
+// These two record a cost we knowingly accept, and they are kept so nobody has to rediscover it.
+//
+// BenchmarkYaegiEncodeBufio is the shape production ships (bufio.Writer plus AppendInt length
+// headers). BenchmarkYaegiEncodeSingleWrite is the shape we rejected (one growable scratch, one
+// Write). Interpreted, the rejected shape is the cheaper one, and by a wide margin: measured on
+// windows/amd64, GET encode is 6330 ns / 166 allocs through bufio against 2599 ns / 69 allocs
+// through the scratch. Every call that crosses the Yaegi boundary is expensive, and the shipped
+// shape makes five of them per argument where the scratch makes none.
+//
+// We ship the expensive one anyway. Production is compiled into Traefik, where the same comparison
+// inverts (100 KiB SET encode: 65 ns with bufio against 1590 ns with the scratch), and the encoder
+// is chosen on the compiled numbers. Yaegi matters for two other reasons — the package must stay
+// loadable as a plugin for operators who install it that way, and the e2e suite uses Yaegi plugins
+// because rebuilding Traefik costs minutes — but interpreted speed is not the optimisation target,
+// so an interpreted win MUST NOT justify an encoder shape on its own.
+//
+// The bufio probe used to build headers by concatenation, like the pre-AppendInt encoder, and
+// measured 4039 ns / 108 allocs. It now mirrors what production runs, which is why the interpreted
+// gap here is wider than that older pair.
+
+// BenchmarkYaegiEncodeBufio is the production encoder shape, interpreted.
 func BenchmarkYaegiEncodeBufio(b *testing.B) { benchmarkYaegiEncode(b, "BufioLoop") }
 
-// BenchmarkYaegiEncodeSingleWrite builds the frame in one scratch buffer, interpreted.
+// BenchmarkYaegiEncodeSingleWrite is the rejected single-Write shape, interpreted.
 func BenchmarkYaegiEncodeSingleWrite(b *testing.B) { benchmarkYaegiEncode(b, "SingleWriteLoop") }
 
 const encodeprobeSrc = `package encodeprobe
@@ -335,13 +353,26 @@ import (
 	"strconv"
 )
 
-// writeBufio is the current per-argument bufio.Writer encoding.
-func writeBufio(writer *bufio.Writer, args [][]byte) error {
-	if _, err := writer.WriteString("*" + strconv.Itoa(len(args)) + "\r\n"); err != nil {
+// writeBufio mirrors the production encoder: bufio.Writer, length digits appended into a scratch
+// the caller owns, no string concatenation.
+func writeBufio(writer *bufio.Writer, lenBuf []byte, args [][]byte) error {
+	if err := writer.WriteByte('*'); err != nil {
+		return err
+	}
+	if _, err := writer.Write(strconv.AppendInt(lenBuf[:0], int64(len(args)), 10)); err != nil {
+		return err
+	}
+	if _, err := writer.WriteString("\r\n"); err != nil {
 		return err
 	}
 	for _, arg := range args {
-		if _, err := writer.WriteString("$" + strconv.Itoa(len(arg)) + "\r\n"); err != nil {
+		if err := writer.WriteByte('$'); err != nil {
+			return err
+		}
+		if _, err := writer.Write(strconv.AppendInt(lenBuf[:0], int64(len(arg)), 10)); err != nil {
+			return err
+		}
+		if _, err := writer.WriteString("\r\n"); err != nil {
 			return err
 		}
 		if _, err := writer.Write(arg); err != nil {
@@ -371,12 +402,13 @@ func writeSingle(writer io.Writer, buf []byte, args [][]byte) ([]byte, error) {
 	return buf, err
 }
 
-// BufioLoop encodes a GET count times through the current path.
+// BufioLoop encodes a GET count times through the production path.
 func BufioLoop(count int) string {
 	writer := bufio.NewWriter(io.Discard)
+	lenBuf := make([]byte, 24)
 	args := [][]byte{[]byte("GET"), []byte("session:9f2c1ab4-user-token")}
 	for i := 0; i < count; i++ {
-		if err := writeBufio(writer, args); err != nil {
+		if err := writeBufio(writer, lenBuf, args); err != nil {
 			return "bufio:" + err.Error()
 		}
 	}

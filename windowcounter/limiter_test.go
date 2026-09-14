@@ -248,7 +248,7 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 	}
 	limiter.Wake()
 	limiter.mu.Lock()
-	running := limiter.stop != nil
+	running := limiter.flushTimer != nil
 	limiter.mu.Unlock()
 	if running {
 		t.Fatal("Wake after Close started a ticker")
@@ -267,14 +267,14 @@ func TestWake_StartsTickerAfterSleep(t *testing.T) {
 	limiter.Sleep()
 	limiter.Sleep()
 	limiter.mu.Lock()
-	stopped := limiter.stop == nil
+	stopped := limiter.flushTimer == nil
 	limiter.mu.Unlock()
 	if !stopped {
 		t.Fatal("Sleep left a ticker running")
 	}
 	limiter.Wake()
 	limiter.mu.Lock()
-	running := limiter.stop != nil
+	running := limiter.flushTimer != nil
 	limiter.mu.Unlock()
 	if !running {
 		t.Fatal("Wake after Sleep did not start a ticker")

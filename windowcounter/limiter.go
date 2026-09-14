@@ -32,13 +32,12 @@ type Limiter struct {
 	syncRate time.Duration
 	now      func() time.Time
 
-	mu       sync.Mutex
-	windows  map[string]*windowState
-	closed   bool
-	stopping bool // true while stopFlushAndWait has cleared stop and is waiting for flushLoop
-	ticker   *time.Ticker
-	stop     chan struct{}
-	wg       sync.WaitGroup
+	mu         sync.Mutex
+	windows    map[string]*windowState
+	closed     bool
+	stopping   bool // true while stopFlushAndWait has detached the timer and is waiting for an in-flight tick
+	flushTimer *time.Timer
+	flushBusy  sync.WaitGroup // 1 while a timer is armed or flushAfterTick is running
 
 	lastFlushErr  error     // last failed flush, returned by buffered Take/Peek
 	flushFailedAt time.Time // when lastFlushErr was stored
@@ -333,11 +332,11 @@ func (l *Limiter) Sleep() {
 	l.stopFlushAndWait()
 }
 
-// Wake starts the flush ticker when sync_rate is positive, the limiter is not closed, and Sleep or Close is not waiting for flushLoop.
+// Wake starts the flush timer when sync_rate is positive, the limiter is not closed, and Sleep or Close is not waiting for an in-flight tick.
 func (l *Limiter) Wake() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.closed || l.syncRate == 0 || l.stop != nil || l.stopping {
+	if l.closed || l.syncRate == 0 || l.flushTimer != nil || l.stopping {
 		return
 	}
 	l.startFlushLocked()
@@ -356,55 +355,55 @@ func (l *Limiter) Close() {
 	l.stopFlushAndWait()
 }
 
-// startFlushLocked starts the ticker goroutine. Caller holds l.mu. NewTicker is not time.Tick.
+// startFlushLocked arms a stdlib AfterFunc timer. Caller holds l.mu except during New.
+//
+// Why AfterFunc, not go + select on ticker.C and stop: this package is interpreted under Yaegi
+// (Traefik plugins and TestYaegi_*). Yaegi v0.16.1's interp._select can miss close(stop) when
+// interpreted code selects on a channel from a goroutine started as go method(...). CI Go E2E
+// Dragonfly hung 300s on TestYaegiLive_RedisAndDragonfly/dragonfly/bufferedTwoClients that way
+// (Eval parked in WaitGroup.Wait; flushLoop parked in interp._select). time.AfterFunc is the
+// real stdlib timer (Yaegi maps the symbol to time.AfterFunc), so the waiter is not interpreted
+// select. Do not use time.Tick.
 func (l *Limiter) startFlushLocked() {
-	l.stop = make(chan struct{})
-	l.ticker = time.NewTicker(l.syncRate)
-	l.wg.Add(1)
-	go l.flushLoop(l.ticker, l.stop)
-}
-
-// takeFlushTickerLocked closes the stop channel and detaches the ticker. Caller holds l.mu. Does not wait.
-func (l *Limiter) takeFlushTickerLocked() *time.Ticker {
-	if l.stop == nil {
-		return nil
+	if l.flushTimer != nil {
+		return
 	}
-	close(l.stop)
-	l.stop = nil
-	ticker := l.ticker
-	l.ticker = nil
-	return ticker
+	l.flushBusy.Add(1)
+	l.flushTimer = time.AfterFunc(l.syncRate, l.flushAfterTick)
 }
 
-// stopFlushAndWait stops the ticker then waits for flushLoop. Caller must not hold l.mu.
+// flushAfterTick EVAL-flushes then re-arms, unless Sleep or Close has stopped the timer.
+func (l *Limiter) flushAfterTick() {
+	_ = l.flushPending(context.Background())
+	l.mu.Lock()
+	if l.closed || l.stopping || l.flushTimer == nil {
+		l.mu.Unlock()
+		l.flushBusy.Done()
+		return
+	}
+	l.flushTimer = time.AfterFunc(l.syncRate, l.flushAfterTick)
+	l.mu.Unlock()
+}
+
+// stopFlushAndWait stops the flush timer then waits for an in-flight tick. Caller must not hold l.mu.
 func (l *Limiter) stopFlushAndWait() {
 	l.mu.Lock()
 	l.stopping = true
-	ticker := l.takeFlushTickerLocked()
-	if ticker == nil {
+	timer := l.flushTimer
+	l.flushTimer = nil
+	if timer == nil {
 		l.stopping = false
 		l.mu.Unlock()
 		return
 	}
 	l.mu.Unlock()
-	l.wg.Wait()
-	ticker.Stop()
+	if timer.Stop() {
+		l.flushBusy.Done()
+	}
+	l.flushBusy.Wait()
 	l.mu.Lock()
 	l.stopping = false
 	l.mu.Unlock()
-}
-
-// flushLoop EVAL-flushes on each tick until stop.
-func (l *Limiter) flushLoop(ticker *time.Ticker, stop <-chan struct{}) {
-	defer l.wg.Done()
-	for {
-		select {
-		case <-ticker.C:
-			_ = l.flushPending(context.Background())
-		case <-stop:
-			return
-		}
-	}
 }
 
 // flushPending EVAL INCRBY + EXPIREAT-if-new for every window with a local delta.
