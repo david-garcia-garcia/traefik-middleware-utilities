@@ -50,6 +50,11 @@ PR #69 landed on dest during implement Sync. `do` now has pre-write and post-rep
   Decision: resolved — no reason attrs. Dial is `simpleredis_dial` after a successful dial. Do not emit `simpleredis_socket_closed`.
   By: implement
 
+- Q: `origin/master` PR #87 added a second reason to dial (`skipIdle`: this command already failed I/O on a socket it took from the unused list). Does `simpleredis_dial` still carry no reason?
+  Rank: additive asked — dest sync reopened the resolved "no reason attrs" row; the new path is the one this feature exists to make visible
+  Decision: assumed — `simpleredis_dial` carries `reason` `idle_miss` or `skip_idle`. Without it a peer restart that poisons every parked socket and ordinary pool pressure produce the same line, and separating them is the diagnosis PR #87 exists to enable. `simpleredis_socket_closed` stays unemitted.
+  By: mergeconflictresolve
+
 - Q: Whether `MsgNoAuth` `error` is the Redis payload or `redis:noauth`?
   Rank: additive asked — requirement Unknowns; `replyError` currently maps AUTH-class text to `errNoAuth`
   Decision: resolved — inline `simpleredis_noauth` with no required `error` attr. Caller-visible sentinel stays `redis:noauth`.
@@ -84,3 +89,8 @@ PR #69 landed on dest during implement Sync. `do` now has pre-write and post-rep
   Rank: additive asked — requirement inventory splits I/O-or-budget timeout vs cancel; `libraryTimeout` already keeps caller deadline as `ctx.Err()`
   Decision: resolved — `simpleredis_timeout` only when the mapped error is `errTimeout` at the I/O site. `simpleredis_canceled` only for `context.Canceled`. Caller deadline stays silent. Do not wrap `libraryTimeout` just to log.
   By: implement
+
+- Q: `origin/master` PR #84 moved the `redis:timeout` decision out of `do` (`ioOrContext` now reports the socket deadline as a context deadline and `libraryTimeout` classifies it). Where does `simpleredis_timeout` emit?
+  Rank: additive asked — dest sync made the resolved "at the I/O site" answer unreachable on the exec path
+  Decision: assumed — emit in `libraryTimeout`, which became a method on `*SimpleRedis`; `do` no longer emits. Measured: with the `exec` emit disabled, `TestLogTimeout` fails and the captured dump holds only `simpleredis_open` and `simpleredis_dial`. Caller deadline still stays silent.
+  By: mergeconflictresolve
