@@ -156,9 +156,9 @@ func clientKillFromSidecarForTest(t *testing.T, host, filter, value string) int 
 	if err := netConn.SetDeadline(time.Now().Add(defaultCommandTimeout)); err != nil {
 		t.Fatal(err)
 	}
-	writer := bufio.NewWriter(netConn)
+	killConn := &pooledConn{netConn: netConn, writer: bufio.NewWriter(netConn)}
 	reader := bufio.NewReader(netConn)
-	if err := writeCommand(writer, [][]byte{[]byte("CLIENT"), []byte("KILL"), []byte(filter), []byte(value)}); err != nil {
+	if err := writeCommand(killConn, [][]byte{[]byte("CLIENT"), []byte("KILL"), []byte(filter), []byte(value)}); err != nil {
 		t.Fatalf("CLIENT KILL %s %s: %v", filter, value, err)
 	}
 	values, _, err := readReply(reader)

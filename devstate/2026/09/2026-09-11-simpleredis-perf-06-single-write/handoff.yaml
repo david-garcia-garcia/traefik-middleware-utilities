@@ -1,0 +1,17 @@
+issueKey: 2026-09-11-simpleredis-perf-06-single-write
+jobName: 2026-09-11-simpleredis-perf-06-single-write
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: c413cbbb4c7c56efaf9f5b33b0a7aff1de6320ca808de7503200d17c2d926195
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-allocation-free-encode
+pr:
+  id: 10
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/10
