@@ -1,5 +1,5 @@
 {
-  "commentId": "pending",
+  "commentId": "pr-body",
   "issueKey": "2026-09-14-reclaim-bug-finished-race-lock-defer",
   "markerValue": "2026-09-14-reclaim-bug-finished-race-lock-defer",
   "issueHost": "local"
