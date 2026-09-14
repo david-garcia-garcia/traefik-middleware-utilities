@@ -62,7 +62,7 @@ func TestCloseDuringHeldGetsReturnsTurns(t *testing.T) {
 	}
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.holdGetsForTest(t)
-	client := newTestRedis(t, Config{Host: addr, PoolSize: held, MaxIdleConns: held, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: held, MaxIdleConns: held, CommandTimeout: 5 * time.Second, MaxRetries: -1})
 
 	errCh := make(chan error, held)
 	for i := 0; i < held; i++ {

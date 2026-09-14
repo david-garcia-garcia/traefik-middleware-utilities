@@ -19,17 +19,21 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	if err := contextStop(ctx); err != nil {
 		return nil, false, err
 	}
-	ioBound := clampTimeout(ctx, sr.IOTimeout())
-	if ioBound <= 0 {
+	// The socket deadline is what is left of the command budget exec bound with CommandTimeout. A reply
+	// that keeps arriving must not be killed for its size, so there is no second per-operation cap:
+	// two bounds on the same socket could only disagree, and the shorter one made a large reply
+	// unreadable while the peer was healthy and still sending.
+	budgetLeft := sr.commandBudgetLeft(ctx)
+	if budgetLeft <= 0 {
 		if err := contextStop(ctx); err != nil {
 			return nil, false, err
 		}
 		return nil, false, errTimeout
 	}
-	if err := conn.netConn.SetDeadline(time.Now().Add(ioBound)); err != nil {
+	if err := conn.netConn.SetDeadline(time.Now().Add(budgetLeft)); err != nil {
 		return nil, false, errUnreachable
 	}
-	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before SetDeadline.
+	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before the deadline.
 	stopWatch := watchConnClose(ctx, conn.netConn)
 	defer stopWatch()
 	// Unread leftover from a prior command on this socket must not be parsed as this command's reply.
@@ -41,7 +45,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		return nil, false, errUnreachable
 	}
 	if err := writeCommand(conn.writer, args); err != nil {
-		return nil, false, ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
+		return nil, false, ioOrContext(ctx, err)
 	}
 	values, clean, err := readReply(conn.reader)
 	if stop := contextStop(ctx); stop != nil {
@@ -51,7 +55,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		if isDirtyProtocolError(err) {
 			return nil, false, err
 		}
-		return nil, false, ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
+		return nil, false, ioOrContext(ctx, err)
 	}
 	// Extra well-formed RESP after this reply means the peer is ahead; return the value and destroy the socket.
 	// Same limit as the pre-write check: leftover already in the reader, not a stray still only in the kernel buffer.
@@ -83,19 +87,32 @@ func watchConnClose(ctx context.Context, conn net.Conn) func() {
 
 // ioOrContext prefers a fired context over a socket I/O error.
 //
-// Why not ioError alone: SetDeadline is a wall clock. When ioBound was clamped to ctx's remaining
-// time, the OS can return os.ErrDeadlineExceeded a few ms before ctx.Done closes. ioError maps
-// that to redis:timeout, so a caller deadline looked like the library budget. Go E2E Redis failed
-// TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout that way. If the socket timeout is the
-// clamped ctx instant, return DeadlineExceeded and let exec map library vs caller.
-func ioOrContext(ctx context.Context, ioBound, ioTimeout time.Duration, err error) error {
+// Why not ioError alone: SetDeadline is a wall clock. The socket deadline is the command
+// deadline's remainder, so when it fires the OS can return os.ErrDeadlineExceeded a few ms
+// before ctx.Done closes. ioError maps that to redis:timeout, so a caller deadline looked like
+// the library budget. Go E2E Redis failed TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout
+// that way. Report the deadline and let exec's libraryOwnsDeadline decide library vs caller.
+//
+// A ctx with no deadline is the direct-do path, where the socket deadline came straight from
+// CommandTimeout; that one is the library's own bound and stays redis:timeout.
+func ioOrContext(ctx context.Context, err error) error {
 	if stop := contextStop(ctx); stop != nil {
 		return stop
 	}
-	if ioBound < ioTimeout && errors.Is(err, os.ErrDeadlineExceeded) {
+	if _, ok := ctx.Deadline(); ok && errors.Is(err, os.ErrDeadlineExceeded) {
 		return context.DeadlineExceeded
 	}
 	return ioError(err)
+}
+
+// commandBudgetLeft is the time left on ctx. exec binds CommandTimeout onto ctx, so this is that budget's remainder.
+// A ctx with no deadline never comes from exec; it is a direct do call, where the whole budget is still ahead.
+func (sr *SimpleRedis) commandBudgetLeft(ctx context.Context) time.Duration {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return sr.CommandTimeout()
+	}
+	return time.Until(deadline)
 }
 
 // writeCommand writes one RESP array of bulk strings and flushes.
