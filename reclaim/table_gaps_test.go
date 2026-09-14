@@ -8,33 +8,21 @@ import (
 	"time"
 )
 
-// TestWaitCtx_DoneChannelBranch pins what waitCtx does for a holder that has a Done channel.
-// The table never reaches this branch: dropWhenDone starts watch only when ctx.Done() is nil,
-// and watch is the only caller. It is covered here so the branch is not merely unexercised.
-func TestWaitCtx_DoneChannelBranch(t *testing.T) {
-	canceled, cancel := context.WithCancel(context.Background())
-	cancel()
-	if waitCtx(canceled, make(chan struct{})) {
-		t.Fatal("a canceled holder was reported as an ended incarnation; the caller would skip its drop")
-	}
-
-	live, cancelLive := context.WithCancel(context.Background())
-	defer cancelLive()
-	ended := make(chan struct{})
-	close(ended)
-	if !waitCtx(live, ended) {
-		t.Fatal("an ended incarnation was not reported; the caller would drop a holder from a gone slot")
-	}
-}
-
 // TestWaitCtx_PollingSeesAnEndedIncarnationFirst covers the non-blocking check at the top of the
 // polling loop. It is the only branch that answers a holder whose incarnation had already ended
-// before the watcher looked, without waiting out a 20ms tick first.
+// before the watcher looked, without waiting out a 20ms tick first. An ended incarnation must win
+// even when the holder is done, or watch would drop a slot nobody owns.
 func TestWaitCtx_PollingSeesAnEndedIncarnationFirst(t *testing.T) {
 	ended := make(chan struct{})
 	close(ended)
 	if !waitCtx(&nilDoneCtx{}, ended) {
 		t.Fatal("a polling watcher did not report an already-ended incarnation")
+	}
+
+	done := &nilDoneCtx{}
+	done.cancel()
+	if !waitCtx(done, ended) {
+		t.Fatal("an ended incarnation lost to a done holder; watch would drop a gone slot")
 	}
 }
 

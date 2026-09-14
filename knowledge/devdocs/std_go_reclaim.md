@@ -84,7 +84,7 @@ w := stored.(*BIN)
 ## Gotchas
 
 - Hosts that cancel before they call the constructor again need a positive grace (Traefik: ~1 ms, then `New`). `New(Config{Grace: 0})` ends the incarnation as soon as the last holder is gone.
-- Yaegi: do not write `Table[*T]` on a type from another package, and do not give `create` an argument. Do not park grace expire in an interpreted `go` + `select` on a timer and a wake channel — Yaegi v0.16.1 `_select` can miss the timer (use `time.AfterFunc`). Do not park grace expire in an interpreted `go` + `select` on a timer and a wake channel — Yaegi v0.16.1 `_select` can miss the timer (use `time.AfterFunc`).
+- Yaegi: do not write `Table[*T]` on a type from another package, and do not give `create` an argument. Do not park grace expire in an interpreted `go` + `select` on a timer and a wake channel — Yaegi v0.16.1 `_select` can miss the timer (use `time.AfterFunc`).
 - A later `Open` uses the hooks stored at put; its own `Hooks` argument is ignored.
 - A second `Open` while the incarnation is live or in grace returns the same value when that `Open`'s context is still live at bind. If `ctx.Err()` is already set, `Open` returns that error and not the pointer; Close may already have run when that call was the last holder.
 - Tests assert the `msg` constants. A test that cancels a holder and immediately calls `Open` is usually not testing the wake branch — wait for `reclaim_orphan` first.
@@ -95,3 +95,27 @@ w := stored.(*BIN)
 - `Table.Reset` is tests only. It must not race an `Open` on the same key. Reset unmaps first regardless of `EnforceCloseBeforeOpen`. A Sleep panic during Reset skips `reclaim_orphan` and still disposes.
 - A holder whose `Done` is nil (`context.Background()`, Yaegi) is still accepted. The table polls `Err` until it is set, or until that incarnation has ended (`Reset`, grace, last-holder close, Sleep-panic, or Wake-panic). The bind-path snapshot of `finished` is taken under the table mutex: if that snapshot is already nil, no watcher is started. When the incarnation has ended the watcher exits without dropping that holder, so a later incarnation of the same key is unchanged. A Sleep-panic or Wake-panic ending that stored `EnforceCloseBeforeOpen` still ends the real incarnation before the closer occupies the key; no holder binds to that closer. Do not pass Background in production — Traefik `New` ctx is `WithCancel`.
 - Every lock-held region releases the table mutex with `defer`. A panic recovered at the Yaegi plugin boundary cannot leave the mutex held; a later `Open` on that table still runs. `Open` on a zero-value `Table{}` returns an error (same class as a nil table or nil logger). Construct with `New(Config)`.
+
+## Audited invariants
+
+Ruled out by a race, leak, and coverage audit of `reclaim/table.go`, so the next reader does not
+re-derive them:
+
+- Holder accounting is balanced: exactly one `drop` per bind, and `finishBind` either drops or registers a watcher, never both.
+- `expire` against a reclaim, `Reset` against `drop`, and `Reset` against `expire` all serialize under `t.mu` and produce no double `Close`. Grace timers are stopped on reclaim and on `Reset`, and every `context.AfterFunc` registration pairs with a live holder.
+- `slot.finished` was the only field ever read outside `t.mu`. The bind path snapshots it under the lock and starts no watcher when the snapshot is nil.
+- `close(slot.ready)` is balanced on every ending path, so no double-close panic is reachable. Hooks and every `slog` call run outside the mutex, so no caller-supplied hook can wedge the table.
+
+Two internal shapes are unreachable from the table and are pinned by tests rather than deleted:
+`claimDrop`'s `slotBusy` park (a busy slot only ever has holders that have not bound yet) and
+`expire`'s early return for an incarnation another path already claimed. Both are guards whose
+alternative is acting on a slot the goroutine does not own. `waitCtx`'s Done-channel branch was
+deleted instead, because `dropWhenDone` hands every holder that has a Done channel to
+`context.AfterFunc`, so no caller could reach it.
+
+`reclaim/table_gaps_test.go` reaches those shapes by taking `tab.mu` and writing `slot` state
+directly, as `mustSlot` and `readState` do. A locking rewrite that renames `Table.mu`, `slot.state`,
+`slot.holders`, `slot.ready`, or the `slotState` constants must update that file in the same change.
+
+Reproduce the audit with `go test -count=1 ./reclaim/` plus, for the race detector,
+`docker run --rm -v "<repo>:/src" -w /src golang:1.25 go test -race -count=1 ./reclaim/`.
