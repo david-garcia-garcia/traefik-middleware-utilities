@@ -21,3 +21,21 @@ phase: implement
 findings: landed table_gaps_test.go; cover 100.0% / 0 uncovered; table.go unchanged; Docker race green
 fixed: n/a
 skipped: did not edit table.go
+
+## codereview (2026-09-14)
+phase: codereview
+findings: seven axes none
+fixed: n/a
+skipped: n/a
+
+## devdocsimpact (2026-09-14)
+phase: devdocsimpact
+findings: stale-usage Reset Sleep-panic skip-orphan on std_go_reclaim Gotcha
+fixed: extended knowledge/devdocs/std_go_reclaim.md Gotcha
+skipped: n/a
+
+## archive (2026-09-14)
+phase: archive
+findings: folded two Reset contracts into live leaves; moved change to archive/2026-09-14-reclaim-ending-path-test-coverage
+fixed: n/a
+skipped: n/a

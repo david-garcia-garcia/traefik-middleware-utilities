@@ -8,7 +8,7 @@ JobName: 2026-09-14-reclaim-ending-path-test-coverage
 | explore | [x] | [x] | 2026-09-14T15:11:24Z |
 | propose | [x] | [x] | 2026-09-14T15:38:31Z |
 | implement | [x] | [x] | 2026-09-14T15:42:09Z |
-| codereview | [ ] | [ ] | |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-14T15:47:24Z |
+| devdocsimpact | [x] | [x] | 2026-09-14T15:47:24Z |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
