@@ -21,3 +21,9 @@ phase: implement
 findings: CI lint exhaustive switch (openRetry) then fixed
 fixed: table.go finishedAtBind + defer-unlock helpers; Open error on Table{}; wedge injection; exhaustive case
 skipped: n/a
+
+## codereview (2026-09-14)
+phase: codereview
+findings: 3 hard nitpicks (drop/expire action enums, positive claimDrop/claimExpire guards)
+fixed: table.go dropAction/expireAction switches; claimDrop/claimExpire positive guards; SHA 71de2bc
+skipped: n/a
