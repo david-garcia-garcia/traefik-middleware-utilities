@@ -33,6 +33,7 @@ What the table settles:
 2. **`bufio` already coalesced a small command into exactly one write.** Dropping it bought zero syscalls on the workload this repo has (counters, TTLs, short Lua). It bought two syscalls only for a large payload, and paid a full memcpy of that payload for them.
 3. **D dominates B.** Allocation-free like B, no growable buffer and therefore no 64 KiB clamp to specify and test, and 24x faster than B on a 100 KiB payload (65 ns against 1590 ns) because `bufio` hands a large slice straight to the socket instead of copying it.
 4. **C is why the scratch must live on the connection.** A local array escapes to the heap when it is handed to `bufio.Writer.Write`, because that argument can flow to the underlying `io.Writer` interface. That escape is C's 1 alloc / 24 B.
+5. **The same escape costs D two allocations per command that B did not pay, outside framing.** Framing is 0 allocs in both. End to end against the in-process fake server, `BenchmarkGet` measures 29 allocs/op on dest, 26 on D, 24 on B. The gap is the argv, not the encoder: `Get` builds `[]byte("GET")` and `[]byte(name)`, D hands those slices to `bufio.Writer.Write`, and the same interface flow that sinks C sinks them (`go build -gcflags=-m` reports `([]byte)("GET") escapes to heap` on D and `does not escape` on B, which copied every argument into its scratch). Accepted: two allocations and 16 B/op per command, against B's 24x penalty on a large payload and the retention machinery in Decision 3.
 
 ## Decisions
 
