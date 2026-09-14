@@ -63,18 +63,17 @@ func (h *recHandler) dump() string {
 func recLogger(h slog.Handler) *slog.Logger { return slog.New(h) }
 
 // requireMsg fails unless msg was logged at level.
-func requireMsg(t *testing.T, h *recHandler, msg string, level slog.Level) slog.Record {
+func requireMsg(t *testing.T, h *recHandler, msg string, level slog.Level) {
 	t.Helper()
 	for _, r := range h.records() {
 		if r.Message == msg {
 			if r.Level != level {
 				t.Fatalf("%s level = %s, want %s", msg, r.Level, level)
 			}
-			return r
+			return
 		}
 	}
 	t.Fatalf("missing event %s\n%s", msg, h.dump())
-	return slog.Record{}
 }
 
 // requireMsgAttr fails unless some record for msg carries key=want.

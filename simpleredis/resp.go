@@ -45,7 +45,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		// Handshake leftover: unread bytes before AUTH or SELECT.
 		if len(args) > 0 {
 			verb := string(args[0])
-			if verb == "AUTH" || verb == "SELECT" {
+			if verb == verbAuth || verb == verbSelect {
 				sr.logger.Warn("simpleredis_auth_leftover")
 			}
 		}

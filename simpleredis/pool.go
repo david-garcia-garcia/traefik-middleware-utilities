@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+// Handshake verbs dial sends on a new socket before the caller's command.
+// do also names them: unread bytes before one of these is handshake leftover, not a stray reply.
+const (
+	verbAuth   = "AUTH"
+	verbSelect = "SELECT"
+)
+
 // pooledConn is one TCP socket plus RESP reader/writer kept in idleConns.
 type pooledConn struct {
 	netConn  net.Conn
@@ -251,22 +258,22 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 
 	// AUTH before SELECT so a passworded server accepts the session.
 	if sr.pass != "" {
-		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(verbAuth), []byte(sr.pass)}); err != nil {
 			conn.close()
 			if err != errNoAuth { //nolint:errorlint // AUTH-class already logged in do
 				// verb, not the error text: Redis 7.4 echoes the password back in
 				// "ERR AUTH <password> called without any password configured", which is not AUTH-class
 				// and would put Pass on the log line. The error still reaches the caller.
-				sr.logger.Warn("simpleredis_handshake_failed", "verb", "AUTH")
+				sr.logger.Warn("simpleredis_handshake_failed", "verb", verbAuth)
 			}
 			return nil, err, true
 		}
 	}
 	if sr.database != "" {
-		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(verbSelect), []byte(sr.database)}); err != nil {
 			conn.close()
 			if err != errNoAuth { //nolint:errorlint // AUTH-class already logged in do
-				sr.logger.Warn("simpleredis_handshake_failed", "verb", "SELECT")
+				sr.logger.Warn("simpleredis_handshake_failed", "verb", verbSelect)
 			}
 			return nil, err, true
 		}
