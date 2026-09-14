@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"bufio"
 	"context"
+	"log/slog"
 	"net"
 	"time"
 )
@@ -68,6 +69,7 @@ func (sr *SimpleRedis) freeInUseTurn() {
 	case sr.inUseTurns <- struct{}{}:
 	default:
 		// Over-free: some path returned a turn it did not take. Drop so the request does not hang.
+		// No error exists on this path and none is invented for the log, so this stays a named event.
 		sr.overFrees.Add(1)
 		sr.logger.Error("simpleredis_over_free")
 	}
@@ -99,9 +101,11 @@ func (sr *SimpleRedis) freeInUseTurn() {
 func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *pooledConn, err error, handshakeFailed bool, fromIdle bool) {
 	// closed is atomic; inUseTurns is written once in New before concurrent use.
 	if sr.closed.Load() {
+		sr.logSite(slog.LevelDebug, siteBorrow, errUnreachable, attrReason, reasonClosed)
 		return nil, errUnreachable, false, false
 	}
 	if sr.inUseTurns == nil {
+		sr.logSite(slog.LevelDebug, siteBorrow, errNotFromNew, attrReason, reasonNotFromNew)
 		return nil, errNotFromNew, false, false
 	}
 	if err := contextStop(ctx); err != nil {
@@ -123,18 +127,13 @@ func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *p
 			if !timer.Stop() {
 				<-timer.C
 			}
-			if errorsIsCanceled(ctx.Err()) {
-				sr.logger.Debug("simpleredis_canceled")
-			}
+			// A fired context is not logged here: exec is the single owner of caller-cancel versus library-budget.
 			return nil, ctx.Err(), false, false
 		case <-timer.C:
 			if err := contextStop(ctx); err != nil {
-				if errorsIsCanceled(err) {
-					sr.logger.Debug("simpleredis_canceled")
-				}
 				return nil, err, false, false
 			}
-			sr.logger.Warn("simpleredis_pool_exhausted")
+			sr.logSite(slog.LevelWarn, siteBorrow, errPoolWait, attrReason, reasonPoolWait)
 			return nil, errPoolWait, false, false
 		}
 	}
@@ -152,11 +151,13 @@ func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *p
 		// Prefer a young unused socket over a new dial.
 		reused, stale, closed := sr.takeIdleConn()
 		if closed {
+			sr.logSite(slog.LevelDebug, siteBorrow, errUnreachable, attrReason, reasonClosed)
 			return nil, errUnreachable, false, false
 		}
 		for _, idle := range stale {
 			idle.close()
 		}
+		// Sweeping expired sockets is pool hygiene, not a failure, so it stays a named event.
 		if len(stale) > 0 {
 			sr.logger.Debug("simpleredis_idle_swept")
 		}
@@ -166,6 +167,7 @@ func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *p
 		}
 	} else if sr.closed.Load() {
 		// Close raced after the turn was taken; do not dial a client that is shutting down.
+		sr.logSite(slog.LevelDebug, siteBorrow, errUnreachable, attrReason, reasonClosed)
 		return nil, errUnreachable, false, false
 	}
 	// Idle miss, or skipIdle: dial while still holding the turn.
@@ -173,12 +175,14 @@ func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *p
 	if err != nil {
 		return nil, err, handshakeFailed, false
 	}
-	// reason separates a dial because the unused list was empty from one that bypassed a list this command already found dead.
-	dialReason := "idle_miss"
+	// A dial that worked is not a failure, so it stays a named event: reason separates a dial because the unused
+	// list was empty from one that bypassed a list this command already found dead, and nothing else records
+	// that the automatic recovery ran at all.
+	dialReason := reasonIdleMiss
 	if skipIdle {
-		dialReason = "skip_idle"
+		dialReason = reasonSkipIdle
 	}
-	sr.logger.Debug("simpleredis_dial", "reason", dialReason)
+	sr.logger.Debug("simpleredis_dial", attrReason, dialReason)
 	handedOff = true
 	return conn, nil, false, false
 }
@@ -248,6 +252,8 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 		if stop := contextStop(ctx); stop != nil {
 			return nil, stop, false
 		}
+		// The dialer's own text is not published: loggableCause keeps peer and OS text off the line, and host is on simpleredis_open.
+		sr.logSite(slog.LevelDebug, siteDial, errUnreachable)
 		return nil, errUnreachable, false
 	}
 	conn = &pooledConn{
@@ -257,24 +263,20 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 	}
 
 	// AUTH before SELECT so a passworded server accepts the session.
+	// A handshake failure is Warn here and the verb says which step failed; do already logged what it saw on the
+	// socket, at its own level. The peer's text is not on either line (loggableCause), so the AUTH reply that
+	// quotes Config.Pass back cannot reach a log through this site either. The caller still gets the full error.
 	if sr.pass != "" {
 		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(verbAuth), []byte(sr.pass)}); err != nil {
 			conn.close()
-			if err != errNoAuth { //nolint:errorlint // AUTH-class already logged in do
-				// verb, not the error text: Redis 7.4 echoes the password back in
-				// "ERR AUTH <password> called without any password configured", which is not AUTH-class
-				// and would put Pass on the log line. The error still reaches the caller.
-				sr.logger.Warn("simpleredis_handshake_failed", "verb", verbAuth)
-			}
+			sr.logSite(slog.LevelWarn, siteDial, err, attrVerb, verbAuth)
 			return nil, err, true
 		}
 	}
 	if sr.database != "" {
 		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(verbSelect), []byte(sr.database)}); err != nil {
 			conn.close()
-			if err != errNoAuth { //nolint:errorlint // AUTH-class already logged in do
-				sr.logger.Warn("simpleredis_handshake_failed", "verb", verbSelect)
-			}
+			sr.logSite(slog.LevelWarn, siteDial, err, attrVerb, verbSelect)
 			return nil, err, true
 		}
 	}

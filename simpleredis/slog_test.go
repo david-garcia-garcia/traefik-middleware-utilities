@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -62,6 +63,18 @@ func (h *recHandler) dump() string {
 // recLogger wraps h as slog.Logger.
 func recLogger(h slog.Handler) *slog.Logger { return slog.New(h) }
 
+// requireSite fails unless the failure at site was logged at level with cause as its text.
+func requireSite(t *testing.T, h *recHandler, site, cause string, level slog.Level) {
+	t.Helper()
+	requireMsg(t, h, site+": "+cause, level)
+}
+
+// requireSiteAttr fails unless the failure at site with cause carries key=want.
+func requireSiteAttr(t *testing.T, h *recHandler, site, cause, key, want string) {
+	t.Helper()
+	requireMsgAttr(t, h, site+": "+cause, key, want)
+}
+
 // requireMsg fails unless msg was logged at level.
 func requireMsg(t *testing.T, h *recHandler, msg string, level slog.Level) {
 	t.Helper()
@@ -116,7 +129,8 @@ func TestLogNoAuth(t *testing.T) {
 	if err == nil || err.Error() != RedisNoAuth {
 		t.Fatalf("Get = %v, want %s", err, RedisNoAuth)
 	}
-	requireMsg(t, h, "simpleredis_noauth", slog.LevelError)
+	requireSite(t, h, siteDo, RedisNoAuth, slog.LevelError)
+	requireSiteAttr(t, h, siteDo, RedisNoAuth, attrVerb, "GET")
 }
 
 func TestLogOverFree(t *testing.T) {
@@ -139,7 +153,27 @@ func TestLogPoolExhausted(t *testing.T) {
 	if !IsPoolWait(waitErr) {
 		t.Fatalf("Get = %v, want pool wait", waitErr)
 	}
-	requireMsg(t, h, "simpleredis_pool_exhausted", slog.LevelWarn)
+	requireSite(t, h, siteBorrow, RedisUnreachable, slog.LevelWarn)
+	requireSiteAttr(t, h, siteBorrow, RedisUnreachable, attrReason, reasonPoolWait)
+}
+
+// TestLogUnreachableNamesItsSite is the point of site logging: one redis:unreachable text, told apart by where it
+// was seen. A closed port is dial; a client that never came from New is borrowSocket.
+func TestLogUnreachableNamesItsSite(t *testing.T) {
+	h := &recHandler{}
+	sr := newTestRedis(t, Config{Host: "127.0.0.1:1", Logger: recLogger(h), MaxRetries: -1,
+		DialTimeout: 50 * time.Millisecond})
+	_, err := sr.Get(context.Background(), "k")
+	if err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
+	}
+	requireSite(t, h, siteDial, RedisUnreachable, slog.LevelDebug)
+
+	sr.Close()
+	if _, err := sr.Get(context.Background(), "k"); err == nil || err.Error() != RedisUnreachable {
+		t.Fatalf("Get after Close = %v, want %s", err, RedisUnreachable)
+	}
+	requireSiteAttr(t, h, siteBorrow, RedisUnreachable, attrReason, reasonClosed)
 }
 
 func TestLogShortBulk(t *testing.T) {
@@ -151,7 +185,8 @@ func TestLogShortBulk(t *testing.T) {
 	if err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
 	}
-	requireMsg(t, h, "simpleredis_short_bulk", slog.LevelWarn)
+	requireSite(t, h, siteDo, RedisUnreachable, slog.LevelWarn)
+	requireSiteAttr(t, h, siteDo, RedisUnreachable, attrReason, reasonRead)
 }
 
 func TestLogBadReply(t *testing.T) {
@@ -162,7 +197,7 @@ func TestLogBadReply(t *testing.T) {
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("Get = %v, want %s", err, RedisIssue)
 	}
-	requireMsg(t, h, "simpleredis_bad_reply", slog.LevelWarn)
+	requireSite(t, h, siteDo, RedisIssue, slog.LevelWarn)
 }
 
 func TestLogHandshakeFailed(t *testing.T) {
@@ -174,8 +209,31 @@ func TestLogHandshakeFailed(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), "LOADING ") {
 		t.Fatalf("Get = %v, want LOADING", err)
 	}
-	requireMsg(t, h, "simpleredis_handshake_failed", slog.LevelWarn)
-	requireMsgAttr(t, h, "simpleredis_handshake_failed", "verb", "AUTH")
+	// The code, and nothing after it: the tail of a Redis error reply is peer text.
+	if strings.Contains(h.dump(), "loading the dataset") {
+		t.Fatalf("peer reply text published beyond its error code:\n%s", h.dump())
+	}
+	// dial says which handshake step failed; do says it read the reply. Both name the peer's error code.
+	requireSiteAttr(t, h, siteDial, "LOADING", attrVerb, verbAuth)
+	requireSite(t, h, siteDial, "LOADING", slog.LevelWarn)
+	requireSite(t, h, siteDo, "LOADING", slog.LevelDebug)
+}
+
+// TestLogPeerReplyIsCodeOnlyNotItsArguments pins the trim that keeps Redis key names and values off log lines:
+// Redis refuses an unknown verb by quoting the command's own arguments back.
+func TestLogPeerReplyIsCodeOnlyNotItsArguments(t *testing.T) {
+	const key = "tenant-user-KEY-7c2e"
+	h := &recHandler{}
+	addr := startStaticRedis(t, "-ERR unknown command 'GET', with args beginning with: '"+key+"'\r\n")
+	sr := newTestRedis(t, Config{Host: addr, MaxRetries: -1, Logger: recLogger(h)})
+	_, err := sr.Get(context.Background(), key)
+	if err == nil || !strings.Contains(err.Error(), key) {
+		t.Fatalf("Get = %v, want the peer text (the caller still gets the full error)", err)
+	}
+	if strings.Contains(h.dump(), key) {
+		t.Fatalf("key name leaked in logs:\n%s", h.dump())
+	}
+	requireSite(t, h, siteDo, "ERR", slog.LevelDebug)
 }
 
 // TestLogHandshakeFailedNeverEchoesPass pins the one handshake reply that carries the password:
@@ -192,10 +250,14 @@ func TestLogHandshakeFailedNeverEchoesPass(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), pass) {
 		t.Fatalf("Get = %v, want the peer text (the caller still gets the full error)", err)
 	}
-	requireMsg(t, h, "simpleredis_handshake_failed", slog.LevelWarn)
+	// The leak check comes first on purpose: it must fail on its own when the trim goes, not be shadowed by a
+	// message-shape assertion that happens to fail for the same reason.
 	if strings.Contains(h.dump(), pass) {
 		t.Fatalf("password leaked in logs:\n%s", h.dump())
 	}
+	// The reply is published as its error code only, so the AUTH step is still visible without the credential.
+	requireSiteAttr(t, h, siteDial, "ERR", attrVerb, verbAuth)
+	requireSite(t, h, siteDial, "ERR", slog.LevelWarn)
 }
 
 func TestLogSocketPoisonedAndAuthLeftover(t *testing.T) {
@@ -215,7 +277,10 @@ func TestLogSocketPoisonedAndAuthLeftover(t *testing.T) {
 	if err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("auth leftover Get = %v, want %s", err, RedisUnreachable)
 	}
-	requireMsg(t, h2, "simpleredis_auth_leftover", slog.LevelWarn)
+	requireSite(t, h2, siteDo, RedisUnreachable, slog.LevelWarn)
+	requireSiteAttr(t, h2, siteDo, RedisUnreachable, attrReason, reasonUnreadBeforeWrite)
+	// The stray arrived on the AUTH reply, so the verb refused before its write is SELECT.
+	requireSiteAttr(t, h2, siteDo, RedisUnreachable, attrVerb, verbSelect)
 }
 
 func TestLogDialRetryCapabilityNoScript(t *testing.T) {
@@ -230,7 +295,8 @@ func TestLogDialRetryCapabilityNoScript(t *testing.T) {
 	if _, err := sr.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), nil, nil); err != nil {
 		t.Fatalf("Eval: %v", err)
 	}
-	requireMsg(t, h, "simpleredis_noscript", slog.LevelDebug)
+	requireSite(t, h, siteDo, noScriptPrefix, slog.LevelDebug)
+	requireSiteAttr(t, h, siteDo, noScriptPrefix, attrVerb, evalShaVerb)
 
 	fake.setRejectMSetEX()
 	if err := sr.MSetEX(context.Background(), []string{"a"}, [][]byte{[]byte("1")}, 60); err != nil {
@@ -246,10 +312,10 @@ func TestLogCanceled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := sr.Get(ctx, "hit")
-	if !errorsIsCanceled(err) {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("Get = %v, want canceled", err)
 	}
-	requireMsg(t, h, "simpleredis_canceled", slog.LevelDebug)
+	requireSite(t, h, siteExec, context.Canceled.Error(), slog.LevelDebug)
 }
 
 func TestLogCanceledWaitForTurn(t *testing.T) {
@@ -286,10 +352,10 @@ func TestLogCanceledWaitForTurn(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	cancel()
 	err := <-waitErr
-	if !errorsIsCanceled(err) {
+	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("waiter Get = %v, want canceled", err)
 	}
-	requireMsg(t, h, "simpleredis_canceled", slog.LevelDebug)
+	requireSite(t, h, siteExec, context.Canceled.Error(), slog.LevelDebug)
 }
 
 func TestLogTimeout(t *testing.T) {
@@ -300,7 +366,13 @@ func TestLogTimeout(t *testing.T) {
 	if err == nil || err.Error() != RedisTimeout {
 		t.Fatalf("Get = %v, want %s", err, RedisTimeout)
 	}
-	requireMsg(t, h, "simpleredis_timeout", slog.LevelDebug)
+	// One owner: libraryTimeout in exec decides the command budget expired, so exec is the only site that says so.
+	requireSite(t, h, siteExec, RedisTimeout, slog.LevelDebug)
+	for _, r := range h.records() {
+		if r.Message == siteDo+": "+RedisTimeout {
+			t.Fatalf("do also classified the timeout:\n%s", h.dump())
+		}
+	}
 }
 
 func TestLogRetry(t *testing.T) {

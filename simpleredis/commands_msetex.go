@@ -86,6 +86,7 @@ func (sr *SimpleRedis) storeGroupWrite(path groupWritePath) {
 	sr.groupWriteMu.Lock()
 	sr.groupWrite = path
 	sr.groupWriteMu.Unlock()
+	// Resolving native MSETEX versus the Lua fallback is a state transition, not a failure, so it stays a named event.
 	sr.logger.Debug("simpleredis_capability")
 }
 

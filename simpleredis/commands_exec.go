@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"math/rand"
 	"strings"
 	"time"
@@ -24,9 +25,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
-		if errorsIsCanceled(err) {
-			sr.logger.Debug("simpleredis_canceled")
-		}
+		sr.logSite(slog.LevelDebug, siteExec, err)
 		return nil, err
 	}
 	maxRetries, minBackoff, maxBackoff := retryLimits(sr.maxRetries, sr.minRetryBackoff, sr.maxRetryBackoff)
@@ -40,6 +39,8 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 			return nil, sr.libraryTimeout(err, libraryOwnsDeadline)
 		}
 		if attempt > 0 {
+			// Retrying is a decision, not a failure: the failure that caused it already logged at its own site,
+			// and this is the only line that says four failures were one command and not four.
 			sr.logger.Debug("simpleredis_retry")
 			if err := waitUntil(ctx, retryBackoff(attempt, minBackoff, maxBackoff)); err != nil {
 				return nil, sr.libraryTimeout(err, libraryOwnsDeadline)
@@ -83,15 +84,14 @@ func (sr *SimpleRedis) runOnConn(ctx context.Context, conn *pooledConn, args [][
 		if recovered == nil {
 			return
 		}
+		// A recovered panic value is not an error, so it stays a named event.
 		sr.logger.Error("simpleredis_panic", "panic", recovered, "host", sr.host)
 		panic(recovered)
 	}()
 	values, reusable, err = sr.do(ctx, conn, args)
 	if stop := contextStop(ctx); stop != nil {
 		reusable = false
-		if errorsIsCanceled(stop) {
-			sr.logger.Debug("simpleredis_canceled")
-		}
+		// exec logs the fired context; this only marks the socket unusable.
 		return nil, stop
 	}
 	return values, err
@@ -111,12 +111,17 @@ func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context) (context.Context
 }
 
 // libraryTimeout maps a library-owned context deadline to redis:timeout. Caller cancel and a sooner caller deadline stay ctx.Err().
-// This is where the command budget becomes redis:timeout, so it is where simpleredis_timeout is emitted; do only sees
+// This is the single owner of that classification, so it is the single site that logs it; do only sees
 // os.ErrDeadlineExceeded on the socket and ioOrContext hands that up as DeadlineExceeded for this decision.
+// Errors that arrived from borrowSocket or do were already logged where they were seen and are not logged again.
 func (sr *SimpleRedis) libraryTimeout(err error, libraryOwnsDeadline bool) error {
 	if libraryOwnsDeadline && errors.Is(err, context.DeadlineExceeded) {
-		sr.logger.Debug("simpleredis_timeout")
+		sr.logSite(slog.LevelDebug, siteExec, errTimeout)
 		return errTimeout
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		// The caller's own cancel or a caller deadline sooner than the budget: exec is what decided it was theirs.
+		sr.logSite(slog.LevelDebug, siteExec, err)
 	}
 	return err
 }
@@ -235,9 +240,4 @@ func isRetryableRedisReply(err error) bool {
 		}
 	}
 	return false
-}
-
-// errorsIsCanceled is context.Canceled, including wrapping.
-func errorsIsCanceled(err error) bool {
-	return errors.Is(err, context.Canceled)
 }

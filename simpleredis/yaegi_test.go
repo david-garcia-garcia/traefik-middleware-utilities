@@ -171,7 +171,10 @@ func TestYaegi_MSetEXLua(t *testing.T) {
 	}
 }
 
-// TestYaegi_StructuredLogging proves interpreted New with a slog logger emits simpleredis_open.
+// TestYaegi_StructuredLogging proves interpreted New with a slog logger emits simpleredis_open and that a
+// site line reaches the same logger. The site line matters on its own: logSite calls Logger.Log with a level
+// argument, which is a different slog surface than the Debug and Warn calls the named events use, and Yaegi
+// resolves stdlib symbols one method at a time.
 func TestYaegi_StructuredLogging(t *testing.T) {
 	goPath := t.TempDir()
 	writeGopathSimpleredis(t, goPath)
@@ -198,24 +201,34 @@ const logprobeSrc = `package logprobe
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
-// OpenEvent constructs a client with a capturing text logger and checks simpleredis_open.
+// OpenEvent constructs a client with a capturing text logger, checks simpleredis_open, then fails one command
+// against a closed port so the interpreter also runs the site logger (Logger.Log with a level).
 func OpenEvent() string {
 	var buf bytes.Buffer
 	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	client, err := simpleredis.New(simpleredis.Config{Host: "127.0.0.1:1", Logger: logger})
+	client, err := simpleredis.New(simpleredis.Config{Host: "127.0.0.1:1", Logger: logger,
+		MaxRetries: -1, DialTimeout: 50 * time.Millisecond, Pass: "PassW0rd-UNIQUE-9f3a"})
 	if err != nil {
 		return "new: " + err.Error()
 	}
-	_ = client
 	if !strings.Contains(buf.String(), "simpleredis_open") {
 		return "missing open: " + buf.String()
 	}
+	if _, err := client.Get(context.Background(), "k"); err == nil {
+		return "get-unexpected-ok"
+	}
+	if !strings.Contains(buf.String(), "dial: "+simpleredis.RedisUnreachable) {
+		return "missing dial site: " + buf.String()
+	}
+	// The configured password starts with "Pass", so this one check covers both the credential and an attr key named Pass.
 	if strings.Contains(buf.String(), "Pass") {
 		return "pass leaked: " + buf.String()
 	}
