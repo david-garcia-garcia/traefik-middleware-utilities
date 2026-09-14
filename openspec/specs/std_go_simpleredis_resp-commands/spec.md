@@ -331,7 +331,7 @@ The package SHALL export `ScriptSHA1Hex(script string) string`. It SHALL return 
 - **AND** the error is not `redis:miss`
 
 ### Requirement: Eval and MSetEX fallback hops each have a full command budget
-`Eval` SHALL send EVALSHA then, on a `NOSCRIPT` prefix, EVAL as two separate command executions. Each hop SHALL compute its own overall deadline at that hop’s entry equal to `(maxRetries+1)*(DialTimeout+IOTimeout)` unless the caller’s context deadline is sooner. The EVAL hop MUST NOT inherit remaining time from the EVALSHA hop. Sharing remaining time across those hops can starve EVAL after a slow EVALSHA.
+`Eval` SHALL send EVALSHA then, on a `NOSCRIPT` prefix, EVAL as two separate command executions. Each hop SHALL compute its own overall deadline at that hop’s entry equal to `now + CommandTimeout` unless the caller’s context deadline is sooner. The EVAL hop MUST NOT inherit remaining time from the EVALSHA hop. Sharing remaining time across those hops can starve EVAL after a slow EVALSHA.
 
 `MSetEX` and `MSetEXAt` SHALL send native MSETEX as its own command execution. On `ERR unknown command`, the Lua fallback via `Eval` SHALL start with a full command budget (one or two further hops). Comments on `Eval`, `MSetEX`, `MSetEXAt`, and `msetex` SHALL record that each hop binds its own overall deadline on purpose.
 

@@ -34,7 +34,7 @@ func startStallRedis(t *testing.T) string {
 
 func TestBlackHoleGetReturnsWithinOverallDeadline(t *testing.T) {
 	client := newTestRedis(t, Config{Host: "203.0.113.1:6379"})
-	budget := time.Duration(client.MaxRetries()+1) * (client.DialTimeout() + client.IOTimeout())
+	budget := client.CommandTimeout()
 	start := time.Now()
 	_, err := client.Get(context.Background(), "k")
 	elapsed := time.Since(start)
@@ -52,9 +52,10 @@ func TestBlackHoleGetReturnsWithinOverallDeadline(t *testing.T) {
 
 func TestHandshakeStallIsBoundedByOverallDeadline(t *testing.T) {
 	addr := startStallRedis(t)
+	// Dial, AUTH, SELECT and two attempts all stall here: the one budget must still bound the command,
+	// so elapsed must not grow with the number of steps or attempts.
 	client := newTestRedis(t, Config{Host: addr, Pass: "p", Database: "1"})
-	budget := time.Duration(client.MaxRetries()+1) * (client.DialTimeout() + client.IOTimeout())
-	freshSteps := time.Duration(client.MaxRetries()+1) * (client.DialTimeout() + 2*client.IOTimeout())
+	budget := client.CommandTimeout()
 	start := time.Now()
 	_, err := client.Get(context.Background(), "k")
 	elapsed := time.Since(start)
@@ -62,10 +63,27 @@ func TestHandshakeStallIsBoundedByOverallDeadline(t *testing.T) {
 		t.Fatal("Get against stall succeeded")
 	}
 	if elapsed > budget+50*time.Millisecond {
-		t.Fatalf("Get elapsed %v, want <= overall %v", elapsed, budget+50*time.Millisecond)
+		t.Fatalf("Get elapsed %v, want <= CommandTimeout %v", elapsed, budget+50*time.Millisecond)
 	}
-	if elapsed >= freshSteps {
-		t.Fatalf("Get elapsed %v, want < DialTimeout+2×IOTimeout per attempt %v", elapsed, freshSteps)
+}
+
+// TestHighMaxRetriesIsStillBoundedByCommandTimeout pins that MaxRetries left the deadline formula.
+// Dest bound (MaxRetries+1)*(DialTimeout+IOTimeout), so this stall would have run 11 attempts worth of
+// budget; CommandTimeout alone must end it, which is what makes the attempt count safe to raise.
+func TestHighMaxRetriesIsStillBoundedByCommandTimeout(t *testing.T) {
+	addr := startStallRedis(t)
+	client := newTestRedis(t, Config{Host: addr, Pass: "p", Database: "1", MaxRetries: 10,
+		MinRetryBackoff: -1, MaxRetryBackoff: -1, DialTimeout: 100 * time.Millisecond,
+		CommandTimeout: 300 * time.Millisecond})
+	budget := client.CommandTimeout()
+	start := time.Now()
+	_, err := client.Get(context.Background(), "k")
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("Get against stall succeeded")
+	}
+	if elapsed > budget+50*time.Millisecond {
+		t.Fatalf("Get with MaxRetries 10 elapsed %v, want <= CommandTimeout %v plus slack", elapsed, budget)
 	}
 }
 
@@ -77,7 +95,7 @@ func TestGetCancelFreesTurnAndDoesNotPool(t *testing.T) {
 	fake.mu.Unlock()
 	t.Cleanup(func() { close(hold) })
 
-	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, CommandTimeout: 5 * time.Second, MaxRetries: -1})
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
@@ -125,7 +143,7 @@ func TestGetCancelWhileWaitingForTurn(t *testing.T) {
 	fake.mu.Unlock()
 	t.Cleanup(func() { close(hold) })
 
-	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: time.Second, CommandTimeout: 5 * time.Second, MaxRetries: -1})
 	go func() {
 		_, _ = client.Get(context.Background(), "hit")
 	}()
@@ -185,14 +203,14 @@ func TestZeroConfigMaxRetriesIsOneExtra(t *testing.T) {
 	if client.DialTimeout() != 200*time.Millisecond {
 		t.Fatalf("DialTimeout() = %v, want 200ms", client.DialTimeout())
 	}
-	if client.IOTimeout() != 100*time.Millisecond {
-		t.Fatalf("IOTimeout() = %v, want 100ms", client.IOTimeout())
+	if client.CommandTimeout() != 900*time.Millisecond {
+		t.Fatalf("CommandTimeout() = %v, want 900ms", client.CommandTimeout())
 	}
 }
 
 func TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout(t *testing.T) {
 	addr := startStallRedis(t)
-	client := newTestRedis(t, Config{Host: addr, MaxRetries: -1, DialTimeout: time.Second, IOTimeout: time.Second})
+	client := newTestRedis(t, Config{Host: addr, MaxRetries: -1, DialTimeout: time.Second, CommandTimeout: 2 * time.Second})
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
 	defer cancel()
 	_, err := client.Get(ctx, "k")
@@ -209,7 +227,7 @@ func TestGetCallerDeadlineWhileWaitingForTurn(t *testing.T) {
 	fake.mu.Unlock()
 	t.Cleanup(func() { close(hold) })
 
-	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: time.Second, CommandTimeout: 5 * time.Second, MaxRetries: -1})
 	go func() {
 		_, _ = client.Get(context.Background(), "hit")
 	}()

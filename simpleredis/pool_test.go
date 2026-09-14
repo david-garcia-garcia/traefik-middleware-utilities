@@ -449,7 +449,7 @@ func TestPoolWaitTimesOutWithoutExtraDial(t *testing.T) {
 	fake.mu.Lock()
 	fake.getDelay = 300 * time.Millisecond
 	fake.mu.Unlock()
-	redis := newTestRedis(t, Config{Host: addr, PoolSize: 2, MaxIdleConns: 2, PoolTimeout: 50 * time.Millisecond, IOTimeout: time.Second})
+	redis := newTestRedis(t, Config{Host: addr, PoolSize: 2, MaxIdleConns: 2, PoolTimeout: 50 * time.Millisecond, CommandTimeout: time.Second})
 
 	started := make(chan struct{}, 2)
 	var wg sync.WaitGroup

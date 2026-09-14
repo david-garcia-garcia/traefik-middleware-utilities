@@ -153,7 +153,7 @@ func clientKillFromSidecarForTest(t *testing.T, host, filter, value string) int 
 		t.Fatalf("sidecar dial %s: %v", host, err)
 	}
 	defer netConn.Close()
-	if err := netConn.SetDeadline(time.Now().Add(defaultIOTimeout)); err != nil {
+	if err := netConn.SetDeadline(time.Now().Add(defaultCommandTimeout)); err != nil {
 		t.Fatal(err)
 	}
 	killConn := &pooledConn{netConn: netConn}

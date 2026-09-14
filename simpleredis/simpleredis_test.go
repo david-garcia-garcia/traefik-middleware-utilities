@@ -52,7 +52,7 @@ func TestCloseDrainsIdleAndDoesNotRedial(t *testing.T) {
 func TestCloseDuringInFlightCommandClosesSocketOnRelease(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.holdGetsForTest(t)
-	redis := newTestRedis(t, Config{Host: addr, IOTimeout: 5 * time.Second})
+	redis := newTestRedis(t, Config{Host: addr, CommandTimeout: 5 * time.Second})
 
 	errCh := make(chan error, 1)
 	go func() {
