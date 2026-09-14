@@ -139,6 +139,12 @@ Sleep-panic or Wake-panic ending. When that field is false (the zero value), the
 unmap the key before Close, so a concurrent `Open` MAY create while Close is in flight.
 Tests-only `Reset` MAY unmap first regardless of the field.
 
+The positive-grace wait MUST be a compiled stdlib waiter (`time.AfterFunc` or equivalent). It
+MUST NOT be an interpreted goroutine that `select`s on a timer channel and a wake channel. The
+wait MUST NOT run on the last-holder drop caller. An `Open` that reclaims a sleeping value
+SHALL cancel that waiter so expire does not dispose it. `expire` SHALL still refuse a slot that
+is not asleep or that still has holders.
+
 #### Scenario: Grace expiry does not sleep a sleeping value twice
 - **WHEN** the last holder for a key is Done and grace elapses without a new `Open`
 - **THEN** the value received exactly one `sleep`
@@ -162,6 +168,13 @@ Tests-only `Reset` MAY unmap first regardless of the field.
 - **WHEN** Sleep panics
 - **AND** that incarnation stored `Hooks.EnforceCloseBeforeOpen`
 - **THEN** the key stayed stored until `close` returned
+
+#### Scenario: Interpreted grace expire still closes
+- **WHEN** a table with positive grace runs interpreted under Yaegi v0.16.1
+- **AND** the last holder for several keys is Done
+- **AND** no `Open` arrives during grace
+- **THEN** each incarnation is disposed
+- **AND** Close of each incarnation runs
 
 ### Requirement: Lifecycle events are optional Hooks passed to Open
 `sleep`, `wake`, and `close` SHALL be carried by optional `func()` fields on a `Hooks` value

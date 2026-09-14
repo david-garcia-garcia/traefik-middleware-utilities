@@ -84,7 +84,7 @@ w := stored.(*BIN)
 ## Gotchas
 
 - Hosts that cancel before they call the constructor again need a positive grace (Traefik: ~1 ms, then `New`). `New(Config{Grace: 0})` ends the incarnation as soon as the last holder is gone.
-- Yaegi: do not write `Table[*T]` on a type from another package, and do not give `create` an argument.
+- Yaegi: do not write `Table[*T]` on a type from another package, and do not give `create` an argument. Do not park grace expire in an interpreted `go` + `select` on a timer and a wake channel — Yaegi v0.16.1 `_select` can miss the timer (use `time.AfterFunc`). Do not park grace expire in an interpreted `go` + `select` on a timer and a wake channel — Yaegi v0.16.1 `_select` can miss the timer (use `time.AfterFunc`).
 - A later `Open` uses the hooks stored at put; its own `Hooks` argument is ignored.
 - A second `Open` while the incarnation is live or in grace returns the same value when that `Open`'s context is still live at bind. If `ctx.Err()` is already set, `Open` returns that error and not the pointer; Close may already have run when that call was the last holder.
 - Tests assert the `msg` constants. A test that cancels a holder and immediately calls `Open` is usually not testing the wake branch — wait for `reclaim_orphan` first.
