@@ -104,7 +104,7 @@ type slot struct {
 	// when EnforceCloseBeforeOpen is unset), unmapAfterClose on the real incarnation
 	// (enforce Close: zero-grace drop, expire), expire when EnforceCloseBeforeOpen is
 	// unset, Reset for awake/asleep, and endBusyAfterPanic when EnforceCloseBeforeOpen
-	// is set (Sleep-panic drop and Wake-panic reclaimLocked). A closer placeholder
+	// is set (Sleep-panic drop and Wake-panic wakeAndBind). A closer placeholder
 	// never has a finished channel: no holder binds to it.
 	finished chan struct{}
 	logger   *slog.Logger
@@ -205,6 +205,7 @@ func dispose(key string, hooks Hooks, logger *slog.Logger) {
 // endBusySlot records createErr on a busy slot (nil means waiters create), unmaps it, and closes ready.
 func (t *Table) endBusySlot(key string, incarnation *slot, createErr error) {
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	incarnation.createErr = createErr
 	incarnation.state = slotGone
 	closeFinished(incarnation)
@@ -212,21 +213,26 @@ func (t *Table) endBusySlot(key string, incarnation *slot, createErr error) {
 		delete(t.items, key)
 	}
 	close(incarnation.ready)
-	t.mu.Unlock()
 }
 
 // unmapAfterClose unmaps a still-mapped busy incarnation after Close has returned (or its panic
 // was recovered) and closes ready so waiters create. The caller already ran dispose outside t.mu.
 func (t *Table) unmapAfterClose(key string, incarnation *slot) {
+	ready := t.unmapLocked(key, incarnation)
+	close(ready)
+}
+
+// unmapLocked unmaps a still-mapped busy incarnation and returns ready so the caller can close
+// it outside t.mu.
+func (t *Table) unmapLocked(key string, incarnation *slot) chan struct{} {
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	if t.items[key] == incarnation {
 		delete(t.items, key)
 	}
 	incarnation.state = slotGone
 	closeFinished(incarnation)
-	ready := incarnation.ready
-	t.mu.Unlock()
-	close(ready)
+	return incarnation.ready
 }
 
 // endMappedClose runs dispose while the slot is still mapped slotBusy, then unmaps. Used when
@@ -234,6 +240,30 @@ func (t *Table) unmapAfterClose(key string, incarnation *slot) {
 func (t *Table) endMappedClose(key string, incarnation *slot, storedHooks Hooks, logger *slog.Logger) {
 	dispose(key, storedHooks, logger)
 	t.unmapAfterClose(key, incarnation)
+}
+
+// closerSwap is the closer slot and the old ready channel installCloser returns.
+type closerSwap struct {
+	closer   *slot
+	oldReady chan struct{}
+}
+
+// installCloser records createErr, ends the real incarnation, and occupies the key with a closer
+// for the Close window. finished stays nil on the closer: a holder never binds to it.
+func (t *Table) installCloser(key string, incarnation *slot, logger *slog.Logger, createErr error) closerSwap {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	incarnation.createErr = createErr
+	incarnation.state = slotGone
+	closeFinished(incarnation)
+	oldReady := incarnation.ready
+	// Occupy the key for the Close window. Waiters already parked on oldReady replay
+	// createErr from this incarnation; a later Open finds closer and creates after Close.
+	// finished stays nil: a holder never binds to this closer, so no watcher can
+	// reference it. Do not add a channel here.
+	closer := &slot{state: slotBusy, ready: make(chan struct{}), logger: logger}
+	t.items[key] = closer
+	return closerSwap{closer: closer, oldReady: oldReady}
 }
 
 // endBusyAfterPanic ends a busy slot after a recovered Sleep or Wake panic. createErr is what
@@ -244,25 +274,92 @@ func (t *Table) endMappedClose(key string, incarnation *slot, storedHooks Hooks,
 // unmap first, then Close. Close never runs under t.mu.
 func (t *Table) endBusyAfterPanic(key string, incarnation *slot, storedHooks Hooks, logger *slog.Logger, createErr error) {
 	if storedHooks.EnforceCloseBeforeOpen {
-		t.mu.Lock()
-		incarnation.createErr = createErr
-		incarnation.state = slotGone
-		closeFinished(incarnation)
-		oldReady := incarnation.ready
-		// Occupy the key for the Close window. Waiters already parked on oldReady replay
-		// createErr from this incarnation; a later Open finds closer and creates after Close.
-		// finished stays nil: a holder never binds to this closer, so no watcher can
-		// reference it. Do not add a channel here.
-		closer := &slot{state: slotBusy, ready: make(chan struct{}), logger: logger}
-		t.items[key] = closer
-		t.mu.Unlock()
-		close(oldReady)
+		swap := t.installCloser(key, incarnation, logger, createErr)
+		close(swap.oldReady)
 		dispose(key, storedHooks, logger)
-		t.unmapAfterClose(key, closer)
+		t.unmapAfterClose(key, swap.closer)
 		return
 	}
 	t.endBusySlot(key, incarnation, createErr)
 	dispose(key, storedHooks, logger)
+}
+
+// openAction is what Open does after lookupOpen releases t.mu.
+type openAction int
+
+const (
+	openCreate openAction = iota
+	openBind
+	openWake
+	openPark
+	openRetry
+)
+
+// openStep is the snapshot lookupOpen returns after releasing t.mu.
+type openStep struct {
+	action      openAction
+	incarnation *slot
+	value       any
+	ready       <-chan struct{}
+	storedHooks Hooks
+}
+
+// lookupOpen inspects key under t.mu and returns the next Open step. Register, bind, and wake
+// mutations happen here so the caller can run create, logs, and Wake outside the lock.
+func (t *Table) lookupOpen(key string, logger *slog.Logger) (openStep, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.items == nil {
+		return openStep{}, fmt.Errorf("reclaim: open %q: uninitialized table", key)
+	}
+	incarnation, mapped := t.items[key]
+	if !mapped {
+		// Register the key before create runs, so a second first Open waits for this result
+		// instead of creating a value that would be thrown away.
+		incarnation = &slot{state: slotBusy, ready: make(chan struct{}), finished: make(chan struct{}), logger: logger}
+		t.items[key] = incarnation
+		return openStep{action: openCreate, incarnation: incarnation}, nil
+	}
+	switch incarnation.state {
+	case slotAwake:
+		// Only an Open that binds takes the slot's logger: orphan and dispose belong to the
+		// last Open that actually held this incarnation, not to one that merely looked.
+		incarnation.logger = logger
+		incarnation.holders++
+		return openStep{action: openBind, incarnation: incarnation, value: incarnation.value}, nil
+	case slotAsleep:
+		incarnation.logger = logger
+		incarnation.state = slotBusy
+		incarnation.ready = make(chan struct{})
+		if incarnation.graceTimer != nil {
+			// Cancel expiry: this incarnation is not being disposed after all.
+			incarnation.graceTimer.Stop()
+			incarnation.graceTimer = nil
+		}
+		incarnation.holders++
+		return openStep{
+			action:      openWake,
+			incarnation: incarnation,
+			value:       incarnation.value,
+			storedHooks: incarnation.hooks,
+		}, nil
+	case slotBusy:
+		// A create, wake, sleep, or (when EnforceCloseBeforeOpen) close owns the slot.
+		return openStep{action: openPark, incarnation: incarnation, ready: incarnation.ready}, nil
+	case slotGone:
+		// This incarnation has ended. Take the key back and create a fresh one.
+		if t.items[key] == incarnation {
+			delete(t.items, key)
+		}
+	}
+	return openStep{action: openRetry}, nil
+}
+
+// createErrOf returns the stored create failure for a slot that just left slotBusy.
+func (t *Table) createErrOf(incarnation *slot) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return incarnation.createErr
 }
 
 // Open returns the stored value for key, creating it once, and tracks ctx until it is done.
@@ -286,45 +383,25 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 	requireContext(ctx)
 
 	for {
-		t.mu.Lock()
-		incarnation, mapped := t.items[key]
-		if !mapped {
-			// Register the key before create runs, so a second first Open waits for this result
-			// instead of creating a value that would be thrown away.
-			incarnation = &slot{state: slotBusy, ready: make(chan struct{}), finished: make(chan struct{}), logger: logger}
-			t.items[key] = incarnation
-			t.mu.Unlock()
-			return t.put(ctx, key, incarnation, logger, create, hooks)
+		step, err := t.lookupOpen(key, logger)
+		if err != nil {
+			return nil, err
 		}
-		switch incarnation.state {
-		case slotAwake:
-			// Only an Open that binds takes the slot's logger: orphan and dispose belong to the
-			// last Open that actually held this incarnation, not to one that merely looked.
-			incarnation.logger = logger
-			incarnation.holders++
-			value := incarnation.value
-			t.mu.Unlock()
+		switch step.action {
+		case openCreate:
+			return t.put(ctx, key, step.incarnation, logger, create, hooks)
+		case openBind:
 			logger.Debug(MsgBind, "key", key)
-			return t.finishBind(ctx, key, incarnation, value)
-		case slotAsleep:
-			return t.reclaimLocked(ctx, key, incarnation, logger)
-		case slotBusy:
-			// A create, wake, sleep, or (when EnforceCloseBeforeOpen) close owns the slot.
-			ready := incarnation.ready
-			t.mu.Unlock()
-			<-ready
-			t.mu.Lock()
-			createErr := incarnation.createErr
-			t.mu.Unlock()
-			if createErr != nil {
-				return nil, createErr
+			return t.finishBind(ctx, key, step.incarnation, step.value)
+		case openWake:
+			return t.wakeAndBind(ctx, key, step.incarnation, logger, step.value, step.storedHooks)
+		case openPark:
+			<-step.ready
+			if err := t.createErrOf(step.incarnation); err != nil {
+				return nil, err
 			}
-		case slotGone:
-			// This incarnation has ended. Take the key back and create a fresh one.
-			if t.items[key] == incarnation {
-				delete(t.items, key)
-			}
-			t.mu.Unlock()
+		case openRetry:
+			// Gone incarnation was unmapped; look up again and create.
 		}
 	}
 }
@@ -342,7 +419,17 @@ func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *
 		return nil, err
 	}
 
+	t.publishPut(key, incarnation, value, hooks)
+
+	logger.Debug(MsgPut, "key", key)
+	logger.Debug(MsgBind, "key", key)
+	return t.finishBind(ctx, key, incarnation, value)
+}
+
+// publishPut stores a successful create and closes ready so waiters bind.
+func (t *Table) publishPut(key string, incarnation *slot, value any, hooks Hooks) {
 	t.mu.Lock()
+	defer t.mu.Unlock()
 	incarnation.value = value
 	incarnation.hooks = hooks
 	incarnation.state = slotAwake
@@ -351,30 +438,12 @@ func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *
 	// while create ran. Take the key back rather than strand a value nobody can close.
 	t.items[key] = incarnation
 	close(incarnation.ready)
-	t.mu.Unlock()
-
-	logger.Debug(MsgPut, "key", key)
-	logger.Debug(MsgBind, "key", key)
-	return t.finishBind(ctx, key, incarnation, value)
 }
 
-// reclaimLocked wakes a sleeping slot for this Open and binds ctx. The caller holds t.mu and has
-// seen slotAsleep; this releases it, because Wake must not run under the table mutex. If ctx is
-// already done after wake, it drops this holder and returns that error without the pointer.
-func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot, logger *slog.Logger) (any, error) {
-	incarnation.logger = logger
-	incarnation.state = slotBusy
-	incarnation.ready = make(chan struct{})
-	if incarnation.graceTimer != nil {
-		// Cancel expiry: this incarnation is not being disposed after all.
-		incarnation.graceTimer.Stop()
-		incarnation.graceTimer = nil
-	}
-	incarnation.holders++
-	value := incarnation.value
-	storedHooks := incarnation.hooks
-	t.mu.Unlock()
-
+// wakeAndBind wakes a sleeping slot for this Open and binds ctx. Wake must not run under the
+// table mutex. If ctx is already done after wake, it drops this holder and returns that error
+// without the pointer.
+func (t *Table) wakeAndBind(ctx context.Context, key string, incarnation *slot, logger *slog.Logger, value any, storedHooks Hooks) (any, error) {
 	if recovered := runHook(storedHooks.Wake); recovered != nil {
 		// This Open has a caller to answer, so it reports the panic as its error. A waiter parked
 		// on ready replays it from createErr rather than resuming a value Wake left half-done.
@@ -383,14 +452,19 @@ func (t *Table) reclaimLocked(ctx context.Context, key string, incarnation *slot
 		return nil, err
 	}
 
-	t.mu.Lock()
-	incarnation.state = slotAwake
-	close(incarnation.ready)
-	t.mu.Unlock()
+	t.publishWake(incarnation)
 
 	logger.Debug(MsgReclaim, "key", key)
 	logger.Debug(MsgBind, "key", key)
 	return t.finishBind(ctx, key, incarnation, value)
+}
+
+// publishWake marks a woken slot awake and closes ready so waiters bind.
+func (t *Table) publishWake(incarnation *slot) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	incarnation.state = slotAwake
+	close(incarnation.ready)
 }
 
 // finishBind returns the bound value if ctx is still live, and watches it until Done. If ctx is
@@ -404,6 +478,14 @@ func (t *Table) finishBind(ctx context.Context, key string, incarnation *slot, v
 	return value, nil
 }
 
+// finishedAtBind copies incarnation.finished under t.mu so dropWhenDone can start watch without
+// racing closeFinished. Nil means the incarnation already ended between bind and here.
+func (t *Table) finishedAtBind(incarnation *slot) <-chan struct{} {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return incarnation.finished
+}
+
 // dropWhenDone runs drop when ctx is done. A holder with a Done channel uses AfterFunc so the
 // hold does not park a waiter. A holder whose Done is nil still needs watch to poll Err.
 func (t *Table) dropWhenDone(ctx context.Context, key string, incarnation *slot) {
@@ -411,7 +493,12 @@ func (t *Table) dropWhenDone(ctx context.Context, key string, incarnation *slot)
 		context.AfterFunc(ctx, func() { t.drop(key, incarnation) })
 		return
 	}
-	finished := incarnation.finished
+	finished := t.finishedAtBind(incarnation)
+	if finished == nil {
+		// This incarnation ended between the bind and here, so there is no holder left to drop
+		// and no channel left to wake a watcher. Starting one would poll ctx.Err forever.
+		return
+	}
 	go t.watch(ctx, key, incarnation, finished)
 }
 
@@ -425,6 +512,79 @@ func (t *Table) watch(ctx context.Context, key string, incarnation *slot, finish
 	t.drop(key, incarnation)
 }
 
+// releaseHolder decrements the incarnation's holder count.
+func (t *Table) releaseHolder(incarnation *slot) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	incarnation.holders--
+}
+
+// dropAction is what drop does after claimDrop releases t.mu.
+type dropAction int
+
+const (
+	dropPark dropAction = iota
+	dropStop
+	dropClaim
+)
+
+// dropStep is what claimDrop returns after releasing t.mu.
+type dropStep struct {
+	action dropAction
+	ready  <-chan struct{}
+	logger *slog.Logger
+	hooks  Hooks
+	grace  time.Duration
+}
+
+// claimDrop either parks the caller on a busy ready channel, stops because this is not the last
+// awake holder, or claims the last-holder Sleep transition.
+func (t *Table) claimDrop(incarnation *slot) dropStep {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if incarnation.state == slotBusy {
+		// A create, wake, sleep, or (when EnforceCloseBeforeOpen) close owns the slot.
+		return dropStep{action: dropPark, ready: incarnation.ready}
+	}
+	if incarnation.holders == 0 && incarnation.state == slotAwake {
+		incarnation.state = slotBusy
+		incarnation.ready = make(chan struct{})
+		return dropStep{
+			action: dropClaim,
+			logger: incarnation.logger,
+			hooks:  incarnation.hooks,
+			grace:  t.grace,
+		}
+	}
+	return dropStep{action: dropStop}
+}
+
+// parkAsleep marks the incarnation asleep after Sleep returned, closes ready, and arms grace
+// when the key is still mapped with a positive grace. mapped is false when this goroutine must
+// expire now (zero grace, or Reset already dropped the slot).
+func (t *Table) parkAsleep(key string, incarnation *slot, grace time.Duration) (mapped bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	incarnation.state = slotAsleep
+	close(incarnation.ready)
+	mapped = t.items[key] == incarnation
+	if mapped && grace <= 0 {
+		// Zero grace keeps nothing: unmap now, so no Open can ever see this value asleep.
+		delete(t.items, key)
+		mapped = false
+	}
+	if mapped {
+		// Why AfterFunc, not go + select on timer.C and woken: this package is interpreted under
+		// Yaegi (Traefik plugins and TestYaegi_*). Yaegi v0.16.1's interp._select can miss a timer
+		// wake when interpreted code selects on a channel from a goroutine started as go method(...).
+		// Concurrent expire on Go 1.21.13 left expire uncalled and a goroutine in interp._select.func4
+		// (run.go:3815) created by go callf(in) (run.go:1322). time.AfterFunc is the real stdlib
+		// timer. The wait is not on the drop caller: a canceled bind must not stall Open for grace.
+		incarnation.graceTimer = time.AfterFunc(grace, func() { t.expire(key, incarnation) })
+	}
+	return mapped
+}
+
 // drop removes one holder. When it was the last one, this goroutine sleeps the value and writes
 // reclaim_orphan. Zero grace expires on this stack. Positive grace arms a grace AfterFunc.
 // Orphan still precedes dispose. A Sleep panic aborts: Close, unmap (order follows stored
@@ -432,26 +592,25 @@ func (t *Table) watch(ctx context.Context, key string, incarnation *slot, finish
 // EnforceCloseBeforeOpen is set, Close runs while the key is still mapped slotBusy. A watcher
 // whose incarnation is already gone finds slotGone and returns.
 func (t *Table) drop(key string, incarnation *slot) {
-	t.mu.Lock()
-	incarnation.holders--
-	for incarnation.state == slotBusy {
-		// A create, wake, sleep, or (when EnforceCloseBeforeOpen) close owns the slot.
-		ready := incarnation.ready
-		t.mu.Unlock()
-		<-ready
-		t.mu.Lock()
+	t.releaseHolder(incarnation)
+	var logger *slog.Logger
+	var storedHooks Hooks
+	var grace time.Duration
+	for {
+		step := t.claimDrop(incarnation)
+		switch step.action {
+		case dropPark:
+			<-step.ready
+			continue
+		case dropStop:
+			return
+		case dropClaim:
+			logger = step.logger
+			storedHooks = step.hooks
+			grace = step.grace
+		}
+		break
 	}
-	if incarnation.holders > 0 || incarnation.state != slotAwake {
-		t.mu.Unlock()
-		return
-	}
-
-	incarnation.state = slotBusy
-	incarnation.ready = make(chan struct{})
-	logger := incarnation.logger
-	storedHooks := incarnation.hooks
-	grace := t.grace
-	t.mu.Unlock()
 
 	if recovered := runHook(storedHooks.Sleep); recovered != nil {
 		// Nobody is waiting on a return value here, so createErr stays nil: a later Open creates a
@@ -472,25 +631,7 @@ func (t *Table) drop(key string, incarnation *slot) {
 		return
 	}
 
-	t.mu.Lock()
-	incarnation.state = slotAsleep
-	close(incarnation.ready)
-	mapped := t.items[key] == incarnation
-	if mapped && grace <= 0 {
-		// Zero grace keeps nothing: unmap now, so no Open can ever see this value asleep.
-		delete(t.items, key)
-		mapped = false
-	}
-	if mapped {
-		// Why AfterFunc, not go + select on timer.C and woken: this package is interpreted under
-		// Yaegi (Traefik plugins and TestYaegi_*). Yaegi v0.16.1's interp._select can miss a timer
-		// wake when interpreted code selects on a channel from a goroutine started as go method(...).
-		// Concurrent expire on Go 1.21.13 left expire uncalled and a goroutine in interp._select.func4
-		// (run.go:3815) created by go callf(in) (run.go:1322). time.AfterFunc is the real stdlib
-		// timer. The wait is not on the drop caller: a canceled bind must not stall Open for grace.
-		incarnation.graceTimer = time.AfterFunc(grace, func() { t.expire(key, incarnation) })
-	}
-	t.mu.Unlock()
+	mapped := t.parkAsleep(key, incarnation, grace)
 
 	// Not mapped means zero grace, or Reset dropped this slot: either way it is ours to close.
 	if !mapped {
@@ -498,31 +639,85 @@ func (t *Table) drop(key string, incarnation *slot) {
 	}
 }
 
+// expireAction is what expire does after claimExpire releases t.mu.
+type expireAction int
+
+const (
+	expireSkip expireAction = iota
+	expireEnforce
+	expireDispose
+)
+
+// expireStep is what claimExpire returns after releasing t.mu.
+type expireStep struct {
+	action expireAction
+	hooks  Hooks
+	logger *slog.Logger
+}
+
+// claimExpire takes a sleeping incarnation for close, or returns skip when an Open woke it.
+func (t *Table) claimExpire(key string, incarnation *slot) expireStep {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if incarnation.state == slotAsleep && incarnation.holders == 0 {
+		step := expireStep{hooks: incarnation.hooks, logger: incarnation.logger}
+		if incarnation.hooks.EnforceCloseBeforeOpen {
+			incarnation.state = slotBusy
+			incarnation.ready = make(chan struct{})
+			step.action = expireEnforce
+			return step
+		}
+		incarnation.state = slotGone
+		closeFinished(incarnation)
+		if t.items[key] == incarnation {
+			delete(t.items, key)
+		}
+		step.action = expireDispose
+		return step
+	}
+	return expireStep{action: expireSkip}
+}
+
 // expire ends a sleeping incarnation, unless an Open woke it or something else already claimed
 // it. When the stored EnforceCloseBeforeOpen is set, Close runs as slotBusy so a racing Open
 // waits; otherwise the key is unmapped first (dest) so a concurrent Open may create during Close.
 func (t *Table) expire(key string, incarnation *slot) {
+	step := t.claimExpire(key, incarnation)
+	switch step.action {
+	case expireSkip:
+		return
+	case expireEnforce:
+		t.endMappedClose(key, incarnation, step.hooks, step.logger)
+	case expireDispose:
+		dispose(key, step.hooks, step.logger)
+	}
+}
+
+// takeAll swaps out every mapped incarnation and stops their grace timers. Tests-only Reset.
+func (t *Table) takeAll() map[string]*slot {
 	t.mu.Lock()
-	if incarnation.state != slotAsleep || incarnation.holders > 0 {
-		t.mu.Unlock()
-		return
+	defer t.mu.Unlock()
+	items := t.items
+	t.items = map[string]*slot{}
+	for _, incarnation := range items {
+		if incarnation.graceTimer != nil {
+			incarnation.graceTimer.Stop()
+			incarnation.graceTimer = nil
+		}
 	}
-	storedHooks := incarnation.hooks
-	logger := incarnation.logger
-	if storedHooks.EnforceCloseBeforeOpen {
-		incarnation.state = slotBusy
-		incarnation.ready = make(chan struct{})
-		t.mu.Unlock()
-		t.endMappedClose(key, incarnation, storedHooks, logger)
-		return
+	return items
+}
+
+// endResetSlot snapshots an incarnation for Reset and closeFinished when it was awake or asleep.
+func (t *Table) endResetSlot(incarnation *slot) (state slotState, storedHooks Hooks, logger *slog.Logger) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	state, storedHooks, logger = incarnation.state, incarnation.hooks, incarnation.logger
+	if state == slotAwake || state == slotAsleep {
+		incarnation.state = slotGone
+		closeFinished(incarnation)
 	}
-	incarnation.state = slotGone
-	closeFinished(incarnation)
-	if t.items[key] == incarnation {
-		delete(t.items, key)
-	}
-	t.mu.Unlock()
-	dispose(key, storedHooks, logger)
+	return
 }
 
 // Reset ends every incarnation on this table. An awake value is slept first, so Close never sees
@@ -534,25 +729,13 @@ func (t *Table) Reset() {
 	if t == nil {
 		return
 	}
-	t.mu.Lock()
-	items := t.items
-	t.items = map[string]*slot{}
-	for _, incarnation := range items {
-		if incarnation.graceTimer != nil {
-			incarnation.graceTimer.Stop()
-			incarnation.graceTimer = nil
-		}
+	items := t.takeAll()
+	if items == nil {
+		return
 	}
-	t.mu.Unlock()
 
 	for key, incarnation := range items {
-		t.mu.Lock()
-		state, storedHooks, logger := incarnation.state, incarnation.hooks, incarnation.logger
-		if state == slotAwake || state == slotAsleep {
-			incarnation.state = slotGone
-			closeFinished(incarnation)
-		}
-		t.mu.Unlock()
+		state, storedHooks, logger := t.endResetSlot(incarnation)
 
 		switch state {
 		case slotAwake:
