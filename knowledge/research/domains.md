@@ -9,3 +9,4 @@
 - valkey
 - kong
 - go-redis
+- go
