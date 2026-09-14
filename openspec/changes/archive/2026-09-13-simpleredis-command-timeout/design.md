@@ -12,6 +12,7 @@ Two earlier revisions of this change were rejected on human review. They are rec
 - A steadily streaming multi-megabyte bulk returns intact at zero Config.
 - A drip peer cannot hold an in-use turn past the budget.
 - `MaxRetries` cannot inflate the latency ceiling.
+- A sane default I/O share: 250 ms rather than 100 ms, before that share is folded away.
 - Existing caller-deadline vs `redis:timeout` tests stay green.
 
 **Non-Goals:**
@@ -31,7 +32,9 @@ Two earlier revisions of this change were rejected on human review. They are rec
 
 4. **`DialTimeout` stays, unchanged and un-folded.** It has real individual meaning: `net.Dialer{Timeout: sr.DialTimeout()}` caps one dial attempt, and `DialContext` clamps it against the command budget too, so a dial attempt is bounded by the smaller of the two. Collapsing it into `CommandTimeout` would remove the only way to fail fast on an unresponsive host while still allowing a long read, which is exactly the WAN case.
 
-5. **`defaultCommandTimeout` is 900 ms, not 1 s.** 900 ms is dest's worst case `(1+1)*(200ms+250ms)` to the millisecond, so no operator's latency ceiling moves on upgrade and no existing budget test changes meaning. 1 s reads rounder and was considered, but it would widen the default ceiling by 11% as a side effect of an API-coherence change, which is a behavior change smuggled into a refactor. An operator who wants 1 s writes 1 s.
+5. **`defaultCommandTimeout` is 900 ms, not 1 s.** This change also raises the default I/O share 100 ms → 250 ms, which takes the derived budget from dest's 600 ms to 900 ms. 900 ms is then `(1+1)*(200ms+250ms)` to the millisecond, so the collapse itself moves no instant: it renames the ceiling the branch already had, and no existing budget test changes meaning. 1 s reads rounder and was considered, but it would widen the ceiling a second time as a side effect of an API-coherence change, which is a behavior change smuggled into a refactor. An operator who wants 1 s writes 1 s.
+
+   Be precise about which step owns the widening. Against `origin/master` the zero-Config ceiling goes 600 ms → 900 ms, and that is entirely the default raise; the knob collapse contributes 0 ms. Do not read "900 ms preserves the worst case" as a claim about dest.
 
 6. **`commandBudgetLeft` becomes a method and loses `fallback`.** A single knob means the only sensible bound for a deadline-free ctx is `CommandTimeout` itself, so the caller cannot pass anything else and the parameter is noise. It is not dead: `simpleredis_e2e_test.go` calls `do` directly with `context.Background()`, and that path must still stamp a deadline.
 

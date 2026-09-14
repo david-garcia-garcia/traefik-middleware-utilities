@@ -67,6 +67,26 @@ func TestHandshakeStallIsBoundedByOverallDeadline(t *testing.T) {
 	}
 }
 
+// TestHighMaxRetriesIsStillBoundedByCommandTimeout pins that MaxRetries left the deadline formula.
+// Dest bound (MaxRetries+1)*(DialTimeout+IOTimeout), so this stall would have run 11 attempts worth of
+// budget; CommandTimeout alone must end it, which is what makes the attempt count safe to raise.
+func TestHighMaxRetriesIsStillBoundedByCommandTimeout(t *testing.T) {
+	addr := startStallRedis(t)
+	client := newTestRedis(t, Config{Host: addr, Pass: "p", Database: "1", MaxRetries: 10,
+		MinRetryBackoff: -1, MaxRetryBackoff: -1, DialTimeout: 100 * time.Millisecond,
+		CommandTimeout: 300 * time.Millisecond})
+	budget := client.CommandTimeout()
+	start := time.Now()
+	_, err := client.Get(context.Background(), "k")
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("Get against stall succeeded")
+	}
+	if elapsed > budget+50*time.Millisecond {
+		t.Fatalf("Get with MaxRetries 10 elapsed %v, want <= CommandTimeout %v plus slack", elapsed, budget)
+	}
+}
+
 func TestGetCancelFreesTurnAndDoesNotPool(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	hold := make(chan struct{})

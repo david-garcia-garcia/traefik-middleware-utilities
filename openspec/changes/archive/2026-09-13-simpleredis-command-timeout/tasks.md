@@ -8,7 +8,8 @@
 ## 2. Collapse the knobs
 
 - [x] 2.1 Replace `Config.IOTimeout` with `Config.CommandTimeout`; `applyDefaults` fills it when `<= 0`
-- [x] 2.2 `defaultIOTimeout` → `defaultCommandTimeout = 900 * time.Millisecond` (dest worst case `(1+1)*(200+250)`)
+- [x] 2.1a Raise `defaultIOTimeout` 100 ms → 250 ms first, so the derived budget is 900 ms before the knob is folded away
+- [x] 2.2 `defaultIOTimeout` → `defaultCommandTimeout = 900 * time.Millisecond`, the same instant as `(1+1)*(200+250)` after 2.1a. Against dest the zero-Config ceiling moves 600 ms → 900 ms and that is 2.1a, not the collapse
 - [x] 2.3 Rename the client field to `commandTimeout` and the accessor `IOTimeout()` → `CommandTimeout()`; remove `IOTimeout` with no alias
 - [x] 2.4 `bindCommandDeadline` binds `now + CommandTimeout` and drops its `maxRetries` parameter; `MaxRetries` bounds attempts only
 - [x] 2.5 Leave `Config.DialTimeout` and `dial`'s `net.Dialer{Timeout: ...}` exactly as they are
@@ -26,6 +27,7 @@
 - [x] 4.2 `TestZeroConfigMaxRetriesIsOneExtra` asserts `CommandTimeout() == 900ms` next to `DialTimeout() == 200ms`
 - [x] 4.3 `TestBlackHoleGetReturnsWithinOverallDeadline` and `TestHandshakeStallIsBoundedByOverallDeadline` bound on `CommandTimeout`; the stall test drops the `DialTimeout + 2×IOTimeout` fresh-step bound, which the single knob makes vacuous
 - [x] 4.4 `TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout` stays green (sooner caller deadline is `context.DeadlineExceeded`, library budget is `redis:timeout`)
+- [x] 4.4a Add `TestHighMaxRetriesIsStillBoundedByCommandTimeout`: `MaxRetries: 10` against a stalling peer must still end at `CommandTimeout` + slack, which is what pins `MaxRetries` out of the deadline formula
 - [x] 4.5 `go build ./...`, `go vet ./...`, `go test ./simpleredis/ -count=1`, `go test ./... -count=1 -short`
 - [x] 4.6 Measure at zero Config: 8 MiB streamed in 128 KiB chunks returns intact in ~535 ms (3/3); a peer that goes quiet mid-reply returns `redis:timeout` at 900.2-900.5 ms (3/3)
 

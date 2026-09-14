@@ -44,6 +44,12 @@ Each command SHALL compute one overall deadline at entry equal to `now + Command
 - **THEN** the command returns within `CommandTimeout` plus 50 milliseconds of scheduling slack
 - **AND** that elapsed time does not grow with the number of stalled handshake steps or attempts
 
+#### Scenario: A high MaxRetries does not raise the ceiling
+- **WHEN** `MaxRetries` is 10 and retry backoff is off
+- **AND** the peer completes the TCP handshake and never replies
+- **AND** a command is issued
+- **THEN** the command returns within `CommandTimeout` plus 50 milliseconds of scheduling slack
+
 ### Requirement: New records settings and does not dial
 `New(Config)` SHALL copy `Config` onto a new client (host, password, database, pool knobs, timeout knobs, retry sentinels) and SHALL create the in-use-turn channel sized to `PoolSize` (const default 8 when `PoolSize` is 0). `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, or retry fields.
 

@@ -517,6 +517,12 @@ Each command SHALL compute one overall deadline at entry equal to `now + Command
 - **THEN** the command returns within `CommandTimeout` plus 50 milliseconds of scheduling slack
 - **AND** that elapsed time does not grow with the number of stalled handshake steps or attempts
 
+#### Scenario: A high MaxRetries does not raise the ceiling
+- **WHEN** `MaxRetries` is 10 and retry backoff is off
+- **AND** the peer completes the TCP handshake and never replies
+- **AND** a command is issued
+- **THEN** the command returns within `CommandTimeout` plus 50 milliseconds of scheduling slack
+
 ### Requirement: The socket deadline is the remaining command budget
 A command socket's `SetDeadline` SHALL be the time remaining on the command context, which `bindCommandDeadline` has already set to `now + CommandTimeout` or the caller's sooner deadline. There MUST NOT be a second, separate bound on the same socket: no per-operation cap and no per-kernel-`Read` deadline refresh. Mapping MUST keep `errors.Is` against `os.ErrDeadlineExceeded` and MUST NOT type-assert `net.Error`; because that deadline is the command deadline, a fired socket deadline SHALL report the context deadline and let the retry layer decide library (`redis:timeout`) versus caller (`Err()`). A compliant peer that keeps sending a bulk whose transfer needs more wall time than any single arrival window SHALL still return that value when the transfer finishes inside the budget. A peer that keeps sending slowly SHALL NOT hold an in-use turn past the budget; extra turn returns SHALL stay 0. The decoder's `maxBulkLength` cap SHALL stay a parse cap, not a time-derived size.
 

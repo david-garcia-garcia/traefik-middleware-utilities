@@ -10,7 +10,8 @@ Second, once `do` stamps the socket deadline from the remaining command budget, 
 - `Config.CommandTimeout` replaces `Config.IOTimeout`. It bounds the whole command: all attempts, plus the dial, AUTH, SELECT and command I/O inside them. `bindCommandDeadline` binds `now + CommandTimeout`, still deferring to a sooner caller deadline and still reporting `libraryOwnsDeadline` the same way.
 - `MaxRetries` leaves the deadline formula. It bounds the attempt count only; retries stop when either the count is exhausted or `CommandTimeout` expires.
 - `DialTimeout` is unchanged. It keeps real individual meaning as the per-dial-attempt cap (`net.Dialer.Timeout`) and is not folded into `CommandTimeout`.
-- Default `CommandTimeout` is 900 ms, which is exactly dest's worst case `(1+1)*(200ms+250ms)`.
+- Raise the default I/O share from 100 ms to 250 ms before collapsing. 100 ms is too tight for a default once it is the only bound on the socket, and it is the number that made large values unreadable.
+- Default `CommandTimeout` is 900 ms, which is `(1+1)*(200ms+250ms)`: the worst case the budget already had once that raise landed. Relative to dest the zero-Config ceiling moves 600 ms → 900 ms, and that move is the default raise, not the collapse.
 - Accessor `IOTimeout()` becomes `CommandTimeout()`. `IOTimeout` is removed with no deprecated alias; the package is internal to this module.
 - `ioOrContext` drops its `ioBound` / `ioTimeout` arguments; `commandBudgetLeft` drops its `fallback` argument and becomes a method that reads `CommandTimeout` for the deadline-free direct-`do` path.
 - Keep `watchConnClose`. A drip peer MUST NOT pin an in-use turn past the budget.
@@ -44,4 +45,4 @@ Second, once `do` stamps the socket deadline from the remaining command budget, 
 
 A peer that goes quiet mid-reply ends the command at the budget (900 ms at zero Config) rather than after a shorter per-operation window. That is accepted: the failure it replaces was silent, permanent data loss on healthy peers, and operators who need a tighter ceiling now lower one number, `CommandTimeout`, which *is* the ceiling.
 
-The worst case does not move: 900 ms before, 900 ms after. What moves is that raising `MaxRetries` no longer raises it.
+The zero-Config ceiling widens once, 600 ms → 900 ms, and that is the 100 ms → 250 ms default raise. The collapse itself moves no ceiling: `(1+1)*(200ms+250ms)` and `CommandTimeout` 900 ms are the same instant. What the collapse changes is that raising `MaxRetries` no longer raises the ceiling at all, where dest's `MaxRetries: 3` quietly took it to 1.8 s.

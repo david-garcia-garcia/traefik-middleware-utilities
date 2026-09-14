@@ -23,14 +23,14 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	// that keeps arriving must not be killed for its size, so there is no second per-operation cap:
 	// two bounds on the same socket could only disagree, and the shorter one made a large reply
 	// unreadable while the peer was healthy and still sending.
-	ioBound := sr.commandBudgetLeft(ctx)
-	if ioBound <= 0 {
+	budgetLeft := sr.commandBudgetLeft(ctx)
+	if budgetLeft <= 0 {
 		if err := contextStop(ctx); err != nil {
 			return nil, false, err
 		}
 		return nil, false, errTimeout
 	}
-	if err := conn.netConn.SetDeadline(time.Now().Add(ioBound)); err != nil {
+	if err := conn.netConn.SetDeadline(time.Now().Add(budgetLeft)); err != nil {
 		return nil, false, errUnreachable
 	}
 	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before the deadline.
