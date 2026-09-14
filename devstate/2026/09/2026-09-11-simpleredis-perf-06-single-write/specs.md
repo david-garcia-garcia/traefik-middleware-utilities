@@ -1,7 +1,6 @@
 # Specs
-change: simpleredis-single-write-encode
+change: simpleredis-allocation-free-encode
 - modified std_go_simpleredis_resp-commands
-- modified std_go_simpleredis_tcp-session
 
 ## FindSpecHost (archive)
 
@@ -22,4 +21,6 @@ verdicts:
 
 ## archive (2026-09-11)
 
-FindSpecHost Search + Verdict. Same fold/high owners as propose. Live catalog folded ADDED encode framing, dual-engine proof, and encode benches into `std_go_simpleredis_resp-commands`; idle encode-scratch trim into `std_go_simpleredis_tcp-session`.
+FindSpecHost Search + Verdict. Same fold/high owners as propose. Live catalog folded ADDED encode framing, dual-engine proof, and the allocation-free framing requirement into `std_go_simpleredis_resp-commands`.
+
+The `std_go_simpleredis_tcp-session` delta was dropped after the encoder was reduced to variant D: the idle encode-scratch trim it described belonged to the rejected single-write shape, so that leaf is unchanged from `master` and still holds 27 requirements.

@@ -7,11 +7,22 @@ import (
 	"time"
 )
 
-// pooledConn is one TCP socket plus RESP reader and encode scratch kept in idleConns.
+// pooledConn is one TCP socket plus RESP reader/writer kept in idleConns.
+//
+// The writer stays a bufio.Writer. Encoding the whole command into a growable per-conn scratch
+// and issuing one net.Conn.Write was implemented and measured, and rejected: bufio already
+// coalesces a small command (the workload here is counters, TTLs and short Lua) into exactly one
+// write, so the scratch bought no syscall, while it copied every payload an extra time and needed
+// a 64 KiB idle-retention cap that had to be specified and tested. Compiled 100 KiB SET encode:
+// 1590 ns with the scratch, 65 ns with bufio, because bufio hands a large slice straight to the
+// socket instead of copying it. See writeCommand in resp.go for where the allocation win is.
 type pooledConn struct {
-	netConn  net.Conn
-	reader   *bufio.Reader
-	buf      []byte
+	netConn net.Conn
+	reader  *bufio.Reader
+	writer  *bufio.Writer
+	// lenBuf holds the decimal digits of one RESP length header; 24 bytes takes any int64.
+	// It is owned by the connection on purpose; writeCommand says why a local array is not.
+	lenBuf   [24]byte
 	lastUsed time.Time
 }
 
@@ -205,10 +216,6 @@ func (sr *SimpleRedis) parkIdleConn(conn *pooledConn) bool {
 	if sr.closed.Load() || len(sr.idleConns) >= sr.maxIdleConns {
 		return false
 	}
-	// Drop a huge encode scratch so one large SET cannot pin that idle conn.
-	if cap(conn.buf) > maxIdleEncodeBuf {
-		conn.buf = nil
-	}
 	sr.idleConns = append(sr.idleConns, conn)
 	return true
 }
@@ -233,6 +240,7 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 	conn = &pooledConn{
 		netConn: netConn,
 		reader:  bufio.NewReader(netConn),
+		writer:  bufio.NewWriter(netConn),
 	}
 
 	// AUTH before SELECT so a passworded server accepts the session.

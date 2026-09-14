@@ -1,19 +1,17 @@
 package simpleredis
 
 import (
+	"bufio"
 	"context"
-	"net"
 	"testing"
 	"time"
 )
 
-// panicOnWriteConn panics from inside writeCommand's Write, so the panic happens inside do while
+// panicOnWrite panics from inside writeCommand's Flush, so the panic happens inside do while
 // conn.netConn is still a healthy socket that release can close.
-type panicOnWriteConn struct {
-	net.Conn
-}
+type panicOnWrite struct{}
 
-func (panicOnWriteConn) Write(_ []byte) (int, error) { panic("simulated panic inside do") }
+func (panicOnWrite) Write(_ []byte) (int, error) { panic("simulated panic inside do") }
 
 // TestPanicInDoReturnsTurnAndClosesSocket proves the deferred release in runOnConn returns the
 // in-use turn AND destroys the socket when do panics, so neither the turn nor the fd leaks.
@@ -37,7 +35,7 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 		// Traefik shape: the middleware panics and Traefik recovers the request.
 		func() {
 			defer func() { _ = recover() }()
-			conn.netConn = panicOnWriteConn{conn.netConn}
+			conn.writer = bufio.NewWriterSize(panicOnWrite{}, 16)
 			_, _ = sr.runOnConn(context.Background(), conn, [][]byte{[]byte("GET"), []byte("hit")})
 		}()
 

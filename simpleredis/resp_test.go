@@ -387,19 +387,31 @@ func TestIncrGarbageIntegerPayload(t *testing.T) {
 	}
 }
 
-func TestAppendRESPGetMatchesDestFraming(t *testing.T) {
-	got := appendRESP(nil, [][]byte{[]byte("GET"), []byte("session:9f2c1ab4-user-token")})
+// encodeGolden frames args with the production encoder over an in-memory buffer, so the golden
+// asserts the bytes that reach the socket rather than a test-only reimplementation of framing.
+func encodeGolden(t *testing.T, args [][]byte) string {
+	t.Helper()
+	var wire bytes.Buffer
+	conn := &pooledConn{writer: bufio.NewWriter(&wire)}
+	if err := writeCommand(conn, args); err != nil {
+		t.Fatalf("writeCommand: %v", err)
+	}
+	return wire.String()
+}
+
+func TestWriteCommandGetMatchesDestFraming(t *testing.T) {
+	got := encodeGolden(t, [][]byte{[]byte("GET"), []byte("session:9f2c1ab4-user-token")})
 	want := "*2\r\n$3\r\nGET\r\n$27\r\nsession:9f2c1ab4-user-token\r\n"
-	if string(got) != want {
-		t.Fatalf("appendRESP GET = %q, want %q", got, want)
+	if got != want {
+		t.Fatalf("encoded GET = %q, want %q", got, want)
 	}
 }
 
-func TestAppendRESPMSetEXMatchesDestFraming(t *testing.T) {
-	got := appendRESP(nil, msetexArgs([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, "EX", 60))
+func TestWriteCommandMSetEXMatchesDestFraming(t *testing.T) {
+	got := encodeGolden(t, msetexArgs([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, "EX", 60))
 	want := "*8\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\n1\r\n$1\r\nb\r\n$1\r\n2\r\n$2\r\nEX\r\n$2\r\n60\r\n"
-	if string(got) != want {
-		t.Fatalf("appendRESP MSETEX = %q, want %q", got, want)
+	if got != want {
+		t.Fatalf("encoded MSETEX = %q, want %q", got, want)
 	}
 }
 
@@ -603,6 +615,9 @@ func TestGarbageBulkLengthIsIssue(t *testing.T) {
 	_, err := redis.Get(context.Background(), "k")
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("garbage bulk = %v, want %s", err, RedisIssue)
+	}
+	if got := pooledIdle(redis); got != 0 {
+		t.Fatalf("idle after garbage bulk = %d, want 0", got)
 	}
 }
 

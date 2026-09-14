@@ -523,54 +523,6 @@ func TestConcurrentGetsQuiesceAtMaxIdleConns(t *testing.T) {
 	}
 }
 
-func TestIdleEncodeScratchTrimmedPast64KiB(t *testing.T) {
-	fake, addr := startFakeRedis(t, map[string]string{})
-	redis := newTestRedis(t, Config{Host: addr})
-
-	if err := redis.Set(context.Background(), "small", []byte("v"), 60); err != nil {
-		t.Fatalf("Set small: %v", err)
-	}
-	redis.idleConnsMu.Lock()
-	if len(redis.idleConns) != 1 {
-		redis.idleConnsMu.Unlock()
-		t.Fatalf("idle after small SET %d, want 1", len(redis.idleConns))
-	}
-	smallCap := cap(redis.idleConns[0].buf)
-	redis.idleConnsMu.Unlock()
-	if smallCap == 0 {
-		t.Fatal("small SET dropped encode scratch, want retained")
-	}
-	if smallCap > maxIdleEncodeBuf {
-		t.Fatalf("small SET scratch cap %d, want <= %d", smallCap, maxIdleEncodeBuf)
-	}
-
-	large := make([]byte, maxIdleEncodeBuf+1)
-	if err := redis.Set(context.Background(), "large", large, 60); err != nil {
-		t.Fatalf("Set large: %v", err)
-	}
-	redis.idleConnsMu.Lock()
-	if len(redis.idleConns) != 1 {
-		redis.idleConnsMu.Unlock()
-		t.Fatalf("idle after large SET %d, want 1", len(redis.idleConns))
-	}
-	largeCap := cap(redis.idleConns[0].buf)
-	redis.idleConnsMu.Unlock()
-	if largeCap > maxIdleEncodeBuf {
-		t.Fatalf("idle encode scratch cap %d, want <= %d", largeCap, maxIdleEncodeBuf)
-	}
-
-	got, err := redis.Get(context.Background(), "large")
-	if err != nil {
-		t.Fatalf("Get after trim: %v", err)
-	}
-	if len(got) != len(large) {
-		t.Fatalf("Get after trim len %d, want %d", len(got), len(large))
-	}
-	if fake.connections() != 1 {
-		t.Fatalf("dials %d, want 1 (reused after trim)", fake.connections())
-	}
-}
-
 // TestIdleCapAfterSequentialRelease proves borrow/release trims unused sockets to
 // min(MaxIdleConns, PoolSize) and the fake's still-open count matches that idle list.
 func TestIdleCapAfterSequentialRelease(t *testing.T) {

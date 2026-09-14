@@ -98,35 +98,40 @@ func BenchmarkEval(b *testing.B) {
 	}
 }
 
-// encodeToDiscard encodes args with the production encoder and one Write to Discard.
-func encodeToDiscard(b *testing.B, buf []byte, args [][]byte) []byte {
-	b.Helper()
-	buf = appendRESP(buf[:0], args)
-	if _, err := io.Discard.Write(buf); err != nil {
-		b.Fatal(err)
-	}
-	return buf
+// discardConn is a pooledConn with no socket whose writer drains to io.Discard, so an encode
+// bench runs the production path (bufio.Writer plus the conn-owned length scratch) without a peer.
+func discardConn() *pooledConn {
+	return &pooledConn{writer: bufio.NewWriter(io.Discard)}
 }
 
+// The encode loops below call writeCommand inline rather than through a shared helper. A helper
+// would have to call b.Helper(), which costs roughly 83 ns per call — more than the encode being
+// measured — so per iteration it made these benches report mostly harness.
+
 // encodeGet encodes a GET argv to Discard so CI can gate encode allocs/op and B/op.
+// The argv is built once: this bench gates framing, which must not allocate at all.
 func encodeGet(b *testing.B) {
 	b.Helper()
 	const name = "session:9f2c1ab4-user-token"
-	buf := make([]byte, 0, 64)
+	conn := discardConn()
+	args := [][]byte{[]byte("GET"), []byte(name)}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		buf = encodeToDiscard(b, buf, [][]byte{[]byte("GET"), []byte(name)})
+		if err := writeCommand(conn, args); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
-// encodeEval rebuilds and encodes an EVAL argv each op (KEYS declared, script copied).
+// encodeEval rebuilds and encodes an EVAL argv each op (KEYS declared, script copied), so what it
+// reports is the cost of building that argv; framing contributes none of it.
 func encodeEval(b *testing.B) {
 	b.Helper()
 	keys := []string{"bucket:1.2.3.4"}
 	args := []string{"10", "10", "1", "1700000000"}
-	buf := make([]byte, 0, 512)
+	conn := discardConn()
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -139,7 +144,9 @@ func encodeEval(b *testing.B) {
 		for _, arg := range args {
 			wire = append(wire, []byte(arg))
 		}
-		buf = encodeToDiscard(b, buf, wire)
+		if err := writeCommand(conn, wire); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -183,16 +190,20 @@ func benchDecode(b *testing.B, resp []byte) {
 	}
 }
 
-// encodeSet100KB encodes a 100 KiB SET argv to Discard so buffer growth is gated.
+// encodeSet100KB encodes a 100 KiB SET argv to Discard. It documents what a payload larger than
+// the bufio buffer costs: bufio hands that slice straight to the socket instead of copying it.
 func encodeSet100KB(b *testing.B) {
 	b.Helper()
 	value := make([]byte, largeBulkBytes)
-	buf := make([]byte, 0, largeBulkBytes+32)
+	conn := discardConn()
+	args := [][]byte{[]byte("SET"), []byte("k"), value}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		buf = encodeToDiscard(b, buf, [][]byte{[]byte("SET"), []byte("k"), value})
+		if err := writeCommand(conn, args); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -200,12 +211,14 @@ func encodeSet100KB(b *testing.B) {
 func encodeMSetEX(b *testing.B) {
 	b.Helper()
 	args := msetexArgs([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, "EX", 60)
-	buf := make([]byte, 0, 128)
+	conn := discardConn()
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		buf = encodeToDiscard(b, buf, args)
+		if err := writeCommand(conn, args); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -356,11 +369,18 @@ func TestConnectionChurnAcrossBursts(t *testing.T) {
 
 // Go 1.21 linux/amd64 measured allocs/op and B/op (CI toolchain) on the ReadSlice
 // decode path. Slack: +1 allocs/op; B/op = measured + 64, or +20% when that is larger.
+//
+// The framing ceilings carry no slack on purpose. Framing a command allocates nothing at all, so
+// zero is the invariant, not a measurement to pad: one alloc back means a length header went
+// through a string again, which is exactly the regression these guards exist to catch. Only
+// encode EVAL has a budget, and every alloc in it comes from building the argv, not from framing.
 const (
-	encodeGetAllocs      int64 = 6      // measured 5
-	encodeGetBytes       int64 = 112    // measured 48 + 64
-	encodeEvalAllocs     int64 = 20     // measured 19
-	encodeEvalBytes      int64 = 864    // measured 800 + 64
+	encodeGetAllocs      int64 = 0      // framing allocates nothing
+	encodeGetBytes       int64 = 0      // framing allocates nothing
+	encodeMSetEXAllocs   int64 = 0      // framing allocates nothing
+	encodeMSetEXBytes    int64 = 0      // framing allocates nothing
+	encodeEvalAllocs     int64 = 10     // measured 9, all of them the argv build
+	encodeEvalBytes      int64 = 808    // measured 744 + 64
 	decodeBulkAllocs     int64 = 3      // measured 2
 	decodeBulkBytes      int64 = 112    // measured 48 + 64
 	decodeArrayAllocs    int64 = 12     // measured 11
@@ -369,8 +389,8 @@ const (
 	decodeIntegerBytes   int64 = 112    // measured 48 + 64
 	decode100KBAllocs    int64 = 3      // measured 2
 	decode100KBBytes     int64 = 127843 // measured 106536 + 20%
-	encodeSet100KBAllocs int64 = 8      // measured 7
-	encodeSet100KBBytes  int64 = 96     // measured 32 + 64
+	encodeSet100KBAllocs int64 = 0      // framing allocates nothing, whatever the payload size
+	encodeSet100KBBytes  int64 = 0      // framing allocates nothing, whatever the payload size
 )
 
 // allocExceedsCeiling reports whether allocs/op or B/op exceeded the recorded ceilings.
@@ -418,6 +438,11 @@ func skipAllocCeilingIfRace(t *testing.T) {
 func TestAllocEncodeGet(t *testing.T) {
 	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "encode GET", testing.Benchmark(encodeGet), encodeGetAllocs, encodeGetBytes)
+}
+
+func TestAllocEncodeMSetEX(t *testing.T) {
+	skipAllocCeilingIfRace(t)
+	assertAllocCeiling(t, "encode MSETEX", testing.Benchmark(encodeMSetEX), encodeMSetEXAllocs, encodeMSetEXBytes)
 }
 
 func TestAllocEncodeEval(t *testing.T) {

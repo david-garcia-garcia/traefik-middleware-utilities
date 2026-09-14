@@ -11,7 +11,7 @@ localTests: passed
 requirement: requirement.md
 comments: none
 explore: explore.md
-change: simpleredis-single-write-encode
+change: simpleredis-allocation-free-encode
 pr:
   id: 10
   url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/10

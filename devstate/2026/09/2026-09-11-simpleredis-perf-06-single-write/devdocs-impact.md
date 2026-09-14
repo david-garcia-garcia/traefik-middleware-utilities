@@ -1,8 +1,8 @@
 # Devdocs impact
-change: simpleredis-single-write-encode
+change: simpleredis-allocation-free-encode
 
 ## Units
-- SimpleRedis — subsystem — `simpleredis/simpleredis.go` (`writeCommand` / `appendRESP`, `pooledConn.buf`, idle scratch trim); spec `std_go_simpleredis_resp-commands`, `std_go_simpleredis_tcp-session`
+- SimpleRedis — subsystem — `simpleredis/resp.go` (`writeCommand`), `simpleredis/pool.go` (`pooledConn.writer`, `pooledConn.lenBuf`); spec `std_go_simpleredis_resp-commands`
 
 ## Findings
 none.

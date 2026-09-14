@@ -14,8 +14,6 @@ const (
 	defaultCommandTimeout = 900 * time.Millisecond
 	defaultPoolTimeout    = 200 * time.Millisecond
 	defaultMaxRetries     = 1
-	// maxIdleEncodeBuf is the largest encode scratch an idle conn may keep.
-	maxIdleEncodeBuf = 64 * 1024
 )
 
 // ErrMaxIdleConnsAbovePoolSize is New when an explicit MaxIdleConns is above PoolSize.
