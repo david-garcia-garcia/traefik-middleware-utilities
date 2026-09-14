@@ -33,3 +33,15 @@ phase: devdocsimpact
 findings: none
 fixed: n/a
 skipped: n/a
+
+## archive (2026-09-14)
+phase: archive
+findings: none
+fixed: folded three ADDED requirements into std_go_reclaim_context-lease; moved change to archive/2026-09-14-reclaim-finished-race-lock-defer
+skipped: nested FindSpecHost Task (this agent is already a subagent; Search reconfirmed fold)
+
+## pullrequest (2026-09-14)
+phase: pullrequest
+findings: none
+fixed: title drop WIP; CI 34864724861 succeeded
+skipped: n/a

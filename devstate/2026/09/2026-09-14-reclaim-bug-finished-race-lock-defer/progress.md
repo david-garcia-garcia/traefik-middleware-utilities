@@ -10,5 +10,5 @@ JobName: 2026-09-14-reclaim-bug-finished-race-lock-defer
 | implement | [x] | [x] | 2026-09-14T15:35:55Z |
 | codereview | [x] | [x] | 2026-09-14T15:45:20Z |
 | devdocsimpact | [x] | [x] | 2026-09-14T15:48:27Z |
-| archive | [ ] | [ ] | |
-| pullrequest | [ ] | [ ] | |
+| archive | [x] | [x] | 2026-09-14T15:49:30Z |
+| pullrequest | [x] | [x] | 2026-09-14T15:52:39Z |

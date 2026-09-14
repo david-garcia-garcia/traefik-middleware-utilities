@@ -1,4 +1,4 @@
-Developer review: in progress — 2026-09-14T15:47:00Z
+Developer review: ready for review — 2026-09-14T15:52:39Z
 
 ## What this changes
 **Operators.** None.
@@ -31,32 +31,32 @@ sequenceDiagram
 ```
 
 ## Merge readiness
-Code review and usage-doc impact are done; archive and pullrequest remain. CI on the latest SHA is still running.
+Ready for review. 0 items remain.
 
 Priority: P2 — real process leak and mutex wedge under Yaegi with limited blast radius per table instance.
-Reviewed head: f1eff90
+Reviewed head: 048004c
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | CI in progress on f1eff90 |
-| CI proof | 3/6 | workflow run 34864404408 in progress — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34864404408 |
+| Overall readiness | 6/6 | CI succeeded; checklist closed |
+| CI proof | 6/6 | workflow run 34864724861 succeeded — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34864724861 |
 | Local tests proof | N/A | Remote PR; local `./reclaim/` passed, Docker `-race` passed, coverage 95.1% |
 | Review resolution | 6/6 | No open PR review comments inventoried |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-14-reclaim-bug-finished-race-lock-defer pushed | git HEAD f1eff90 |
-| OpenSpec | reclaim-finished-race-lock-defer | openspec/changes/reclaim-finished-race-lock-defer/ |
+| Branch | 2026-09-14-reclaim-bug-finished-race-lock-defer pushed | git HEAD 048004c4df8da834c5c981d388575afc7b14498b |
+| OpenSpec | reclaim-finished-race-lock-defer archived | openspec/changes/archive/2026-09-14-reclaim-finished-race-lock-defer/ |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/91 | handoff.yaml |
-| CI | build 34864404408 in progress https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34864404408 | GitHub check runs on PR 91 |
+| CI | build 34864724861 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34864724861 | GitHub check runs on PR 91 (Lint, Unit, Unit race, e2e, integration) |
 | Local tests | passed | handoff.yaml; `go test ./reclaim/` 7.15s; Docker `-race` 10.98s; cover 95.1% |
 | PR comments | no comments | comments.md absent |
 
 ## Specs
-- [std_go_reclaim_context-lease](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-14-reclaim-bug-finished-race-lock-defer/openspec/changes/reclaim-finished-race-lock-defer/proposal.md) — modified
+- [std_go_reclaim_context-lease](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-14-reclaim-bug-finished-race-lock-defer/openspec/changes/archive/2026-09-14-reclaim-finished-race-lock-defer/proposal.md) — modified
 
 ## Deviations from the ask
 None.
@@ -65,7 +65,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket spec → branch `2026-09-14-reclaim-bug-finished-race-lock-defer` → PR #91 → apply at 71de2bc plus review/docs bus at f1eff90 → CI 34864404408 in progress.
+Local ticket spec → branch `2026-09-14-reclaim-bug-finished-race-lock-defer` → PR #91 → apply at 71de2bc, live spec folded at 048004c → CI 34864724861 green.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -76,14 +76,7 @@ Local ticket spec → branch `2026-09-14-reclaim-bug-finished-race-lock-defer` �
 | Does this change need a Yaegi interp probe that recovers a panic under t.mu, or is compiled recover() enough? | additive incidental | assumed — compiled recover plus the put ready double-close injection is the proof; do not add a Traefik/Yaegi panic probe in this change | explore |
 
 ## Before merge
-- [x] [P2] Implement synchronized `finished` read plus defer-unlock refactor in `reclaim/table.go`
-- [x] [P2] Land repro tests and meet acceptance (`-race`, coverage floor)
-- [x] Prepare, explore, propose
-- [x] Code review seven axes (3 hard nitpicks applied)
-- [x] Usage packet `std_go_reclaim` already covers bind-path skip and defer unlock
-- [ ] Archive the OpenSpec change
-- [ ] Drop WIP from the PR title
-- [ ] CI succeeded on HEAD
+None.
 
 ## Findings
 None.
@@ -104,7 +97,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | No PR thread inventory |
-| Reviewed head | 71de2bcd00941299a94c0696413650098492af46 | Product SHA for the table.go fix; bus HEAD f1eff9063583e3cdae699cd5f27585e11951ac57 |
+| Reviewed head | 048004c4df8da834c5c981d388575afc7b14498b | Archived change plus live spec fold |
 
 ### Stored data model
 None.
@@ -112,7 +105,7 @@ None.
 ### Technical review
 Best possible solution: yes versus DestBranch — locked `finished` snapshot plus nil skip closes the bind-path leak; 14 lock-held helpers all `defer Unlock`; `Open` on `Table{}` errors instead of panicking under the lock.
 
-Do we have a high-confidence way to reproduce? Yes. The three repros now pass; Docker `-race` is green.
+Do we have a high-confidence way to reproduce? Yes. The three repros now pass; Docker `-race` is green; CI Unit race succeeded.
 
 Is this the best way to solve the issue? Yes versus DestBranch. A nil-map guard alone would have skipped the wedge repro.
 
@@ -121,10 +114,9 @@ What I checked:
 - `go test -count=1 -timeout 10m ./reclaim/` passed (7.15s)
 - Docker `golang:1.25 go test -race -count=1 -timeout 10m ./reclaim/` passed (10.98s)
 - Coverage 95.1% of statements (DestBranch floor 94.4%)
-- CI run 34864404408 in progress on f1eff90
-- Devdocs impact: none. Packet `std_go_reclaim` already documents the bind-path `finished` snapshot and `defer` unlock.
+- CI run 34864724861: Lint, Unit, Unit race, Go E2E Redis/Dragonfly, Integration Tests (Redis/Dragonfly) all success
 - 14 `t.mu.Lock()` sites, each followed by `defer t.mu.Unlock()`
-- Three hard nitpicks: `dropAction`/`expireAction` switches and positive guards in `claimDrop`/`claimExpire`
+- PR title is `🐛 fix(reclaim): stop bind-path watcher leak and mutex wedge`
 
 ### Rank-up moves
 None.
