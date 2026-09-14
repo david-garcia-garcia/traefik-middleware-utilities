@@ -171,6 +171,70 @@ func TestYaegi_MSetEXLua(t *testing.T) {
 	}
 }
 
+// TestYaegi_StructuredLogging proves interpreted New with a slog logger emits simpleredis_open and that a
+// composed site line (dial: redis:unreachable) reaches the same logger through Debug, the same slog surface
+// the named events use. Yaegi resolves stdlib symbols one method at a time.
+func TestYaegi_StructuredLogging(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathFile(t, goPath, "logprobe", "probe.go", logprobeSrc)
+
+	interpreter := interp.New(interp.Options{GoPath: goPath})
+	if err := interpreter.Use(stdlib.Symbols); err != nil {
+		t.Fatalf("use stdlib: %v", err)
+	}
+	if _, err := interpreter.Eval(`import "logprobe"`); err != nil {
+		t.Fatalf("import logprobe: %v", err)
+	}
+	evaluated, err := interpreter.Eval(`logprobe.OpenEvent()`)
+	if err != nil {
+		t.Fatalf("eval OpenEvent: %v", err)
+	}
+	got := evaluated.Interface().(string)
+	if got != "ok" {
+		t.Fatalf("yaegi structured logging: %q, want ok", got)
+	}
+}
+
+const logprobeSrc = `package logprobe
+
+import (
+	"bytes"
+	"context"
+	"log/slog"
+	"strings"
+	"time"
+
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
+)
+
+// OpenEvent constructs a client with a capturing text logger, checks simpleredis_open, then fails one command
+// against a closed port so the interpreter also runs a composed site line (Logger.Debug).
+func OpenEvent() string {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	client, err := simpleredis.New(simpleredis.Config{Host: "127.0.0.1:1", Logger: logger,
+		MaxRetries: -1, DialTimeout: 50 * time.Millisecond, Pass: "PassW0rd-UNIQUE-9f3a"})
+	if err != nil {
+		return "new: " + err.Error()
+	}
+	if !strings.Contains(buf.String(), "simpleredis_open") {
+		return "missing open: " + buf.String()
+	}
+	if _, err := client.Get(context.Background(), "k"); err == nil {
+		return "get-unexpected-ok"
+	}
+	if !strings.Contains(buf.String(), "dial: "+simpleredis.RedisUnreachable) {
+		return "missing dial site: " + buf.String()
+	}
+	// The configured password starts with "Pass", so this one check covers both the credential and an attr key named Pass.
+	if strings.Contains(buf.String(), "Pass") {
+		return "pass leaked: " + buf.String()
+	}
+	return "ok"
+}
+`
+
 // evalClientprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalClientprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()

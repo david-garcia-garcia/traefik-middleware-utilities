@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -57,6 +58,8 @@ type Config struct {
 	MinRetryBackoff time.Duration
 	// MaxRetryBackoff caps backoff. 0 means 512ms; -1 means 0.
 	MaxRetryBackoff time.Duration
+	// Logger is slog for this client. Nil at New becomes a discard logger so call sites never see nil. Never log Pass.
+	Logger *slog.Logger
 }
 
 // applyDefaults fills zero pool, timeout, and MaxRetries knobs, clamps a defaulted MaxIdleConns to PoolSize, and rejects an explicit MaxIdleConns above PoolSize. Min/max backoff sentinels stay 0/-1 for retryLimits.

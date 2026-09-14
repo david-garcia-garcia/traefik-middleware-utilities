@@ -19,13 +19,15 @@ The session SHALL live in package `simpleredis` under folder `simpleredis/`. The
 - **THEN** the import path ends in `/simpleredis`
 
 ### Requirement: New records settings and does not dial
-`New(Config)` SHALL copy `Config` onto a new client (host, password, database, pool knobs, timeout knobs, retry sentinels) and SHALL create the in-use-turn channel sized to `PoolSize` (const default 8 when `PoolSize` is 0). `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, or retry fields.
+`New(Config)` SHALL copy `Config` onto a new client (host, password, database, pool knobs, timeout knobs, retry sentinels, and `Logger`) and SHALL create the in-use-turn channel sized to `PoolSize` (const default 8 when `PoolSize` is 0). `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, retry, or logger fields.
 
 Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` 200 milliseconds, `CommandTimeout` 900 milliseconds. Retry fields on `Config`: `0` at `New` means 1 extra retry; `-1` means off (one send). An explicit `MaxRetries` of 3 means 3 extra retries. `MinRetryBackoff` / `MaxRetryBackoff` keep go-redis sentinels: `0` means 8ms / 512ms; `-1` means off.
 
 The session SHALL expose exactly two timeout knobs that bound a command, and each SHALL bound something individually. `DialTimeout` SHALL cap one TCP dial attempt (`net.Dialer.Timeout`); `CommandTimeout` SHALL cap the whole command. `CommandTimeout` MUST NOT be derived from `MaxRetries` or `DialTimeout`, and a knob that bounds no operation MUST NOT be exported.
 
 `New` SHALL return `ErrMaxIdleConnsAbovePoolSize` and a nil client when an **explicit** `MaxIdleConns` is above `PoolSize`, and MUST NOT rewrite either knob in that case. A zero `MaxIdleConns` is not a request for 8: it SHALL take `min(8, PoolSize)`, so a `Config` that sets only a `PoolSize` below 8 SHALL still create a client whose `MaxIdleConns()` equals that `PoolSize`. `New` MUST NOT rewrite `PoolSize`. A trim below `PoolSize` SHALL still create a client.
+
+A nil `Config.Logger` SHALL be replaced at `New` with a discard logger (`slog.NewTextHandler` writing to `io.Discard`) so later call sites never nil-check the logger. A nil `Logger` MUST NOT be a reason for `New` to return an error. `log/slog` is a Go standard-library package and SHALL be an allowed import of the session source.
 
 #### Scenario: Zero Config timeout knobs
 - **WHEN** a client is created with `New` from a `Config` whose only field is `Host`
@@ -61,6 +63,11 @@ The session SHALL expose exactly two timeout knobs that bound a command, and eac
 - **AND** another command waits past `PoolTimeout`
 - **THEN** that waiter returns `redis:unreachable`
 - **AND** the fake observes at most one TCP connection
+
+#### Scenario: Nil logger is silent and New still succeeds
+- **WHEN** `New` is called with a zero `Config` except `Host`
+- **THEN** `New` returns a client without error
+- **AND** later commands on that client MUST NOT panic for want of a logger
 
 ### Requirement: First command dials TCP
 The first `Get`, `MGet` (with at least one name), `Set`, or `Del` after `New` SHALL dial `tcp` to the host stored by `New`. The session MUST NOT dial a Unix socket and MUST NOT use TLS. Zero-Config dial timeout SHALL be 200 milliseconds.

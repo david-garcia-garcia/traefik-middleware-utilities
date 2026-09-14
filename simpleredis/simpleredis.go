@@ -4,6 +4,8 @@ package simpleredis
 import (
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -70,6 +72,7 @@ type SimpleRedis struct {
 	idleTimeout    time.Duration
 	dialTimeout    time.Duration
 	commandTimeout time.Duration
+	logger         *slog.Logger
 
 	// idleConnsMu guards idleConns (the unused sockets waiting for reuse).
 	idleConnsMu sync.Mutex
@@ -105,8 +108,14 @@ func New(cfg Config) (*SimpleRedis, error) {
 		idleTimeout:     cfg.IdleTimeout,
 		dialTimeout:     cfg.DialTimeout,
 		commandTimeout:  cfg.CommandTimeout,
+		logger:          cfg.Logger,
+	}
+	// Nil Config.Logger is a discard handler so later call sites never nil-check.
+	if sr.logger == nil {
+		sr.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	sr.ensureInUseTurns()
+	sr.logger.Debug("simpleredis_open", "host", sr.host)
 	return sr, nil
 }
 

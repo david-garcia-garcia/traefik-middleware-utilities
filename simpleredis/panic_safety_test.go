@@ -22,7 +22,6 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 	sr := newTestRedis(t, Config{Host: addr, PoolSize: poolSize, MaxIdleConns: poolSize, PoolTimeout: 50 * time.Millisecond, MaxRetries: -1})
 	t.Cleanup(sr.Close)
 
-	// Warm one socket so the panic hits a pooled connection, not a fresh dial.
 	if _, err := sr.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("warm Get: %v", err)
 	}
@@ -32,12 +31,15 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 		if err != nil {
 			t.Fatalf("borrow %d: %v", i, err)
 		}
-		// Traefik shape: the middleware panics and Traefik recovers the request.
+		var recovered any
 		func() {
-			defer func() { _ = recover() }()
+			defer func() { recovered = recover() }()
 			conn.writer = bufio.NewWriterSize(panicOnWrite{}, 16)
 			_, _ = sr.runOnConn(context.Background(), conn, [][]byte{[]byte("GET"), []byte("hit")})
 		}()
+		if recovered == nil {
+			t.Fatalf("after panic %d: panic did not reach the caller", i)
+		}
 
 		if got := len(sr.inUseTurns); got != cap(sr.inUseTurns) {
 			t.Fatalf("after panic %d: in-use turns = %d/%d, want full (the deferred release must return the turn)",
@@ -55,7 +57,6 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 		t.Fatalf("OverFrees = %d, want 0", of)
 	}
 
-	// The client must still work: this is what a bricked pool could not do.
 	value, err := sr.Get(context.Background(), "hit")
 	if err != nil {
 		t.Fatalf("Get after %d recovered panics = %v, want success", poolSize, err)

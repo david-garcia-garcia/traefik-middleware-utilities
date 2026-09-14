@@ -28,6 +28,7 @@ func ScriptSHA1Hex(script string) string {
 func (sr *SimpleRedis) Eval(ctx context.Context, script string, digest string, keys []string, args []string) ([][]byte, error) {
 	values, err := sr.exec(ctx, evalArgv(evalShaVerb, digest, keys, args)...)
 	// Miss: engine has no matching digest (FLUSH, restart); EVAL is the only send of the body so the engine stores it.
+	// No event here: do already logged NOSCRIPT at the site that read it off the socket.
 	if err != nil && strings.HasPrefix(err.Error(), noScriptPrefix) {
 		return sr.exec(ctx, evalArgv(evalVerb, script, keys, args)...)
 	}

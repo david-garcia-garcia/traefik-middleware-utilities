@@ -3,8 +3,16 @@ package simpleredis
 import (
 	"bufio"
 	"context"
+	"errors"
 	"net"
 	"time"
+)
+
+// Handshake verbs dial sends on a new socket before the caller's command.
+// do also names them: unread bytes before one of these is handshake leftover, not a stray reply.
+const (
+	verbAuth   = "AUTH"
+	verbSelect = "SELECT"
 )
 
 // pooledConn is one TCP socket plus RESP reader/writer kept in idleConns.
@@ -72,7 +80,9 @@ func (sr *SimpleRedis) freeInUseTurn() {
 	case sr.inUseTurns <- struct{}{}:
 	default:
 		// Over-free: some path returned a turn it did not take. Drop so the request does not hang.
+		// No error exists on this path and none is invented for the log, so this stays a named event.
 		sr.overFrees.Add(1)
+		sr.logger.Error("simpleredis_over_free")
 	}
 }
 
@@ -102,6 +112,7 @@ func (sr *SimpleRedis) freeInUseTurn() {
 func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *pooledConn, err error, handshakeFailed bool, fromIdle bool) {
 	// closed is atomic; inUseTurns is written once in New before concurrent use.
 	if sr.closed.Load() {
+		sr.logger.Debug("borrowSocket: "+RedisUnreachable, "reason", "closed")
 		return nil, errUnreachable, false, false
 	}
 	if sr.inUseTurns == nil {
@@ -126,11 +137,13 @@ func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *p
 			if !timer.Stop() {
 				<-timer.C
 			}
+			// A fired context is not logged here: exec is the single owner of caller-cancel versus library-budget.
 			return nil, ctx.Err(), false, false
 		case <-timer.C:
 			if err := contextStop(ctx); err != nil {
 				return nil, err, false, false
 			}
+			sr.logger.Warn("borrowSocket: "+RedisUnreachable, "reason", "pool_wait")
 			return nil, errPoolWait, false, false
 		}
 	}
@@ -148,10 +161,15 @@ func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *p
 		// Prefer a young unused socket over a new dial.
 		reused, stale, closed := sr.takeIdleConn()
 		if closed {
+			sr.logger.Debug("borrowSocket: "+RedisUnreachable, "reason", "closed")
 			return nil, errUnreachable, false, false
 		}
 		for _, idle := range stale {
 			idle.close()
+		}
+		// Sweeping expired sockets is pool hygiene, not a failure, so it stays a named event.
+		if len(stale) > 0 {
+			sr.logger.Debug("simpleredis_idle_swept")
 		}
 		if reused != nil {
 			handedOff = true
@@ -159,12 +177,21 @@ func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *p
 		}
 	} else if sr.closed.Load() {
 		// Close raced after the turn was taken; do not dial a client that is shutting down.
+		sr.logger.Debug("borrowSocket: "+RedisUnreachable, "reason", "closed")
 		return nil, errUnreachable, false, false
 	}
 	// Idle miss, or skipIdle: dial while still holding the turn.
 	conn, err, handshakeFailed = sr.dial(ctx)
 	if err != nil {
 		return nil, err, handshakeFailed, false
+	}
+	// A dial that worked is not a failure, so it stays a named event: reason separates a dial because the unused
+	// list was empty from one that bypassed a list this command already found dead, and nothing else records
+	// that the automatic recovery ran at all.
+	if skipIdle {
+		sr.logger.Debug("simpleredis_dial", "reason", "skip_idle")
+	} else {
+		sr.logger.Debug("simpleredis_dial", "reason", "idle_miss")
 	}
 	handedOff = true
 	return conn, nil, false, false
@@ -235,6 +262,8 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 		if stop := contextStop(ctx); stop != nil {
 			return nil, stop, false
 		}
+		// The dialer's own text is not published: the line is the unreachable sentinel, and host is on simpleredis_open.
+		sr.logger.Debug("dial: " + RedisUnreachable)
 		return nil, errUnreachable, false
 	}
 	conn = &pooledConn{
@@ -244,15 +273,27 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 	}
 
 	// AUTH before SELECT so a passworded server accepts the session.
+	// A handshake failure is Warn here and the verb says which step failed; do already logged what it saw.
+	// Never log the peer's text: Redis 7.4 AUTH replies can quote Config.Pass.
 	if sr.pass != "" {
-		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(verbAuth), []byte(sr.pass)}); err != nil {
 			conn.close()
+			if errors.Is(err, ErrNoAuth) {
+				sr.logger.Warn("dial: "+RedisNoAuth, "verb", verbAuth)
+			} else {
+				sr.logger.Warn("dial: redis error", "verb", verbAuth)
+			}
 			return nil, err, true
 		}
 	}
 	if sr.database != "" {
-		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(verbSelect), []byte(sr.database)}); err != nil {
 			conn.close()
+			if errors.Is(err, ErrNoAuth) {
+				sr.logger.Warn("dial: "+RedisNoAuth, "verb", verbSelect)
+			} else {
+				sr.logger.Warn("dial: redis error", "verb", verbSelect)
+			}
 			return nil, err, true
 		}
 	}

@@ -31,6 +31,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		return nil, false, errTimeout
 	}
 	if err := conn.netConn.SetDeadline(time.Now().Add(budgetLeft)); err != nil {
+		sr.logger.Debug("do: "+RedisUnreachable, "reason", "set_deadline", "verb", commandVerb(args))
 		return nil, false, errUnreachable
 	}
 	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before the deadline.
@@ -42,10 +43,18 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	// makes for a short bulk read, which MUST NOT surface as redis:issue?.
 	// Buffered() covers leftover already in the reader, not a stray that arrives while the socket is idle: it does not see the kernel receive buffer.
 	if conn.reader.Buffered() != 0 {
+		// verb is what makes this handshake leftover when it is AUTH or SELECT: the socket was dialed for
+		// this command, so nothing should have been on it before the first write.
+		sr.logger.Warn("do: "+RedisUnreachable, "reason", "unread_before_write", "verb", commandVerb(args))
 		return nil, false, errUnreachable
 	}
 	if err := writeCommand(conn, args); err != nil {
-		return nil, false, ioOrContext(ctx, err)
+		mapped := ioOrContext(ctx, err)
+		if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
+			return nil, false, mapped
+		}
+		sr.logger.Debug("do: "+RedisUnreachable, "reason", "write", "verb", commandVerb(args))
+		return nil, false, mapped
 	}
 	values, clean, err := readReply(conn.reader)
 	if stop := contextStop(ctx); stop != nil {
@@ -53,16 +62,46 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	}
 	if err != nil && !clean {
 		if isDirtyProtocolError(err) {
+			sr.logger.Warn("do: redis error", "verb", commandVerb(args))
 			return nil, false, err
 		}
-		return nil, false, ioOrContext(ctx, err)
+		// Timeout is not classified here: ioOrContext hands the deadline up and exec's libraryTimeout owns that call.
+		// A short bulk read is Warn (the peer lied about a length); every other I/O failure is a peer that went away.
+		mapped := ioOrContext(ctx, err)
+		if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
+			return nil, false, mapped
+		}
+		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+			sr.logger.Warn("do: "+RedisUnreachable, "reason", "read", "verb", commandVerb(args))
+		} else {
+			sr.logger.Debug("do: "+RedisUnreachable, "reason", "read", "verb", commandVerb(args))
+		}
+		return nil, false, mapped
+	}
+	// A clean reply that is an error is the peer's own answer. AUTH-class is already the mapped sentinel here.
+	if err != nil {
+		if errors.Is(err, ErrNoAuth) {
+			sr.logger.Error("do: "+RedisNoAuth, "verb", commandVerb(args))
+		} else {
+			sr.logger.Debug("do: redis error", "verb", commandVerb(args))
+		}
 	}
 	// Extra well-formed RESP after this reply means the peer is ahead; return the value and destroy the socket.
 	// Same limit as the pre-write check: leftover already in the reader, not a stray still only in the kernel buffer.
+	// The command succeeded, so there is no error to site-tag; this stays a named event.
 	if conn.reader.Buffered() != 0 {
+		sr.logger.Warn("simpleredis_socket_poisoned")
 		return values, false, err
 	}
 	return values, true, err
+}
+
+// commandVerb is the Redis verb do is running (args[0]). Never a key name or a value: argv[0] is the command.
+func commandVerb(args [][]byte) string {
+	if len(args) == 0 {
+		return ""
+	}
+	return string(args[0])
 }
 
 // watchConnClose closes conn when ctx is done so a blocked read returns. Stop the returned func when I/O finishes.

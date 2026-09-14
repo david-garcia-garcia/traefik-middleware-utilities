@@ -24,6 +24,11 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		ctx = context.Background()
 	}
 	if err := ctx.Err(); err != nil {
+		if errors.Is(err, context.Canceled) {
+			sr.logger.Debug("exec: canceled")
+		} else {
+			sr.logger.Debug("exec: deadline exceeded")
+		}
 		return nil, err
 	}
 	maxRetries, minBackoff, maxBackoff := retryLimits(sr.maxRetries, sr.minRetryBackoff, sr.maxRetryBackoff)
@@ -34,17 +39,20 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 	skipIdle := false
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if err := contextStop(ctx); err != nil {
-			return nil, libraryTimeout(err, libraryOwnsDeadline)
+			return nil, sr.libraryTimeout(err, libraryOwnsDeadline)
 		}
 		if attempt > 0 {
+			// Retrying is a decision, not a failure: the failure that caused it already logged at its own site,
+			// and this is the only line that says four failures were one command and not four.
+			sr.logger.Debug("simpleredis_retry")
 			if err := waitUntil(ctx, retryBackoff(attempt, minBackoff, maxBackoff)); err != nil {
-				return nil, libraryTimeout(err, libraryOwnsDeadline)
+				return nil, sr.libraryTimeout(err, libraryOwnsDeadline)
 			}
 		}
 		conn, err, handshakeFailed, fromIdle := sr.borrowSocket(ctx, skipIdle)
 		if err != nil {
 			if sr.isClosed() || !shouldRetry(err, handshakeFailed) {
-				return nil, libraryTimeout(err, libraryOwnsDeadline)
+				return nil, sr.libraryTimeout(err, libraryOwnsDeadline)
 			}
 			last = err
 			continue
@@ -57,12 +65,12 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 			skipIdle = true
 		}
 		if !shouldRetry(err, false) {
-			return values, libraryTimeout(err, libraryOwnsDeadline)
+			return values, sr.libraryTimeout(err, libraryOwnsDeadline)
 		}
 		last = err
 	}
 	if last != nil {
-		return nil, libraryTimeout(last, libraryOwnsDeadline)
+		return nil, sr.libraryTimeout(last, libraryOwnsDeadline)
 	}
 	return nil, errTimeout
 }
@@ -76,6 +84,7 @@ func (sr *SimpleRedis) runOnConn(ctx context.Context, conn *pooledConn, args [][
 	values, reusable, err = sr.do(ctx, conn, args)
 	if stop := contextStop(ctx); stop != nil {
 		reusable = false
+		// exec logs the fired context; this only marks the socket unusable.
 		return nil, stop
 	}
 	return values, err
@@ -95,9 +104,18 @@ func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context) (context.Context
 }
 
 // libraryTimeout maps a library-owned context deadline to redis:timeout. Caller cancel and a sooner caller deadline stay ctx.Err().
-func libraryTimeout(err error, libraryOwnsDeadline bool) error {
+// This is the single owner of that classification, so it is the single site that logs it; do only sees
+// os.ErrDeadlineExceeded on the socket and ioOrContext hands that up as DeadlineExceeded for this decision.
+// Errors that arrived from borrowSocket or do were already logged where they were seen and are not logged again.
+func (sr *SimpleRedis) libraryTimeout(err error, libraryOwnsDeadline bool) error {
 	if libraryOwnsDeadline && errors.Is(err, context.DeadlineExceeded) {
+		sr.logger.Debug("exec: " + RedisTimeout)
 		return errTimeout
+	}
+	if errors.Is(err, context.Canceled) {
+		sr.logger.Debug("exec: canceled")
+	} else if errors.Is(err, context.DeadlineExceeded) {
+		sr.logger.Debug("exec: deadline exceeded")
 	}
 	return err
 }
