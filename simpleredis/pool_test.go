@@ -16,7 +16,7 @@ import (
 
 func TestConnectionIsReused(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 	if fake.connections() != 0 {
 		t.Fatalf("New opened %d connections, want 0", fake.connections())
 	}
@@ -33,7 +33,7 @@ func TestConnectionIsReused(t *testing.T) {
 
 func TestConcurrentCommandsStayWithinPool(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
@@ -64,7 +64,7 @@ func TestRejectedAuthIsReturned(t *testing.T) {
 	}
 	for _, reply := range replies {
 		addr := startStaticRedis(t, reply)
-		redis := New(Config{Host: addr})
+		redis := newTestRedis(t, Config{Host: addr})
 		if _, err := redis.Get(context.Background(), "a"); err == nil || err.Error() != RedisNoAuth {
 			t.Fatalf("Get against %q = %v, want %s", reply, err, RedisNoAuth)
 		}
@@ -74,7 +74,7 @@ func TestRejectedAuthIsReturned(t *testing.T) {
 // TestStaleConnectionIsRetried proves client-fd close retries on SetDeadline/os.ErrClosed, not peer EOF.
 func TestStaleConnectionIsRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("first Get: %v", err)
@@ -102,7 +102,7 @@ func TestStaleConnectionIsRetried(t *testing.T) {
 // TestPeerClosedIdleConnEOFIsRetried proves a server-closed idle socket is retried on a new dial.
 func TestPeerClosedIdleConnEOFIsRetried(t *testing.T) {
 	fake, addr := startPeerCloseFake(t, map[string]string{"hit": "t"}, true)
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	got, err := redis.Get(context.Background(), "hit")
 	if err != nil {
@@ -144,7 +144,7 @@ func TestPeerClosedIdleConnEOFIsRetried(t *testing.T) {
 // TestPeerClosedIdleRetryBorrowFailsUnreachable proves retry borrow after peer close returns redis:unreachable when the listener is gone.
 func TestPeerClosedIdleRetryBorrowFailsUnreachable(t *testing.T) {
 	fake, addr := startPeerCloseFake(t, map[string]string{"hit": "t"}, false)
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("first Get: %v", err)
@@ -158,7 +158,7 @@ func TestPeerClosedIdleRetryBorrowFailsUnreachable(t *testing.T) {
 
 func TestAuthAndSelectOncePerDial(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr, Pass: "secret", Database: "2"})
+	redis := newTestRedis(t, Config{Host: addr, Pass: "secret", Database: "2"})
 
 	for i := 0; i < 3; i++ {
 		if _, err := redis.Get(context.Background(), "hit"); err != nil {
@@ -186,7 +186,7 @@ func TestHandshakeAuthRejectedMapsToNoAuthAndIsNotPooled(t *testing.T) {
 		t.Run(reply, func(t *testing.T) {
 			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 			fake.setHandshakeReplies(reply, statusOKReply)
-			redis := New(Config{Host: addr, Pass: "wrong-password"})
+			redis := newTestRedis(t, Config{Host: addr, Pass: "wrong-password"})
 			if _, err := redis.Get(context.Background(), "hit"); err == nil || err.Error() != RedisNoAuth {
 				t.Fatalf("Get = %v, want %s", err, RedisNoAuth)
 			}
@@ -208,7 +208,7 @@ func TestHandshakeAuthRejectedMapsToNoAuthAndIsNotPooled(t *testing.T) {
 func TestHandshakeSelectRejectedAfterAuthIsNotPooled(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.setHandshakeReplies(statusOKReply, "-ERR DB index is out of range\r\n")
-	redis := New(Config{Host: addr, Pass: "secret", Database: "99"})
+	redis := newTestRedis(t, Config{Host: addr, Pass: "secret", Database: "99"})
 	if _, err := redis.Get(context.Background(), "hit"); err == nil || err.Error() != "ERR DB index is out of range" {
 		t.Fatalf("Get = %v, want ERR DB index is out of range", err)
 	}
@@ -235,7 +235,7 @@ func TestHandshakeAuthEOFMustNotOpenSecondConnection(t *testing.T) {
 		}
 		// close with no AUTH reply
 	})
-	redis := New(Config{Host: addr, Pass: "secret", MaxRetries: 1, MinRetryBackoff: -1})
+	redis := newTestRedis(t, Config{Host: addr, Pass: "secret", MaxRetries: 1, MinRetryBackoff: -1})
 	_, err := redis.Get(context.Background(), "k")
 	if err == nil {
 		t.Fatal("want error after AUTH EOF")
@@ -258,7 +258,7 @@ func TestHandshakeSelectEOFMustNotOpenSecondConnection(t *testing.T) {
 		}
 		// close with no SELECT reply
 	})
-	redis := New(Config{Host: addr, Pass: "secret", Database: "2", MaxRetries: 1, MinRetryBackoff: -1})
+	redis := newTestRedis(t, Config{Host: addr, Pass: "secret", Database: "2", MaxRetries: 1, MinRetryBackoff: -1})
 	_, err := redis.Get(context.Background(), "k")
 	if err == nil {
 		t.Fatal("want error after SELECT EOF")
@@ -271,7 +271,7 @@ func TestHandshakeSelectEOFMustNotOpenSecondConnection(t *testing.T) {
 func TestHandshakeAuthLoadingMustNotOpenSecondConnection(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"k": "t"})
 	fake.setHandshakeReplies("-LOADING Redis is loading the dataset in memory\r\n", statusOKReply)
-	redis := New(Config{Host: addr, Pass: "secret", MaxRetries: 1, MinRetryBackoff: -1})
+	redis := newTestRedis(t, Config{Host: addr, Pass: "secret", MaxRetries: 1, MinRetryBackoff: -1})
 	_, err := redis.Get(context.Background(), "k")
 	if err == nil || err.Error() != "LOADING Redis is loading the dataset in memory" {
 		t.Fatalf("Get = %v, want LOADING Redis is loading the dataset in memory", err)
@@ -284,7 +284,7 @@ func TestHandshakeAuthLoadingMustNotOpenSecondConnection(t *testing.T) {
 func TestHandshakeAuthMaxClientsMustNotOpenSecondConnection(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"k": "t"})
 	fake.setHandshakeReplies("-ERR max number of clients reached\r\n", statusOKReply)
-	redis := New(Config{Host: addr, Pass: "secret", MaxRetries: 1, MinRetryBackoff: -1})
+	redis := newTestRedis(t, Config{Host: addr, Pass: "secret", MaxRetries: 1, MinRetryBackoff: -1})
 	_, err := redis.Get(context.Background(), "k")
 	if err == nil || err.Error() != "ERR max number of clients reached" {
 		t.Fatalf("Get = %v, want ERR max number of clients reached", err)
@@ -321,7 +321,7 @@ func startAcceptFake(t *testing.T, handle func(conn net.Conn, reader *bufio.Read
 
 func TestIdleTimeoutOpensANewConnection(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("first Get: %v", err)
@@ -347,7 +347,7 @@ func TestStaleIdleHeadIsClosedWhileTailStaysHot(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.holdGetsForTest(t)
 	beforeNew := runtime.NumGoroutine()
-	redis := New(Config{Host: addr, PoolSize: 2, MaxIdleConns: 2})
+	redis := newTestRedis(t, Config{Host: addr, PoolSize: 2, MaxIdleConns: 2})
 	if got := runtime.NumGoroutine(); got != beforeNew {
 		t.Fatalf("New started goroutines: before %d after %d", beforeNew, got)
 	}
@@ -399,7 +399,7 @@ func TestBurstGetsStayWithinLiveCap(t *testing.T) {
 	fake.mu.Lock()
 	fake.getDelay = 500 * time.Microsecond
 	fake.mu.Unlock()
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	const bursts = 5
 	const perBurst = 64
@@ -426,7 +426,7 @@ func TestOverlappingCallersDoNotDialPastLiveCap(t *testing.T) {
 	fake.mu.Lock()
 	fake.getDelay = 20 * time.Millisecond
 	fake.mu.Unlock()
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 32; i++ {
@@ -449,7 +449,7 @@ func TestPoolWaitTimesOutWithoutExtraDial(t *testing.T) {
 	fake.mu.Lock()
 	fake.getDelay = 300 * time.Millisecond
 	fake.mu.Unlock()
-	redis := New(Config{Host: addr, PoolSize: 2, PoolTimeout: 50 * time.Millisecond, IOTimeout: time.Second})
+	redis := newTestRedis(t, Config{Host: addr, PoolSize: 2, MaxIdleConns: 2, PoolTimeout: 50 * time.Millisecond, CommandTimeout: time.Second})
 
 	started := make(chan struct{}, 2)
 	var wg sync.WaitGroup
@@ -494,7 +494,7 @@ func TestConcurrentGetsQuiesceAtMaxIdleConns(t *testing.T) {
 	fake.mu.Lock()
 	fake.getDelay = 20 * time.Millisecond
 	fake.mu.Unlock()
-	redis := New(Config{Host: addr, PoolSize: 16})
+	redis := newTestRedis(t, Config{Host: addr, PoolSize: 16})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 12; i++ {
@@ -532,7 +532,6 @@ func TestIdleCapAfterSequentialRelease(t *testing.T) {
 	}{
 		{8, 2},
 		{16, 1},
-		{2, 8},
 		{8, 8},
 	}
 	for _, row := range rows {
@@ -543,14 +542,14 @@ func TestIdleCapAfterSequentialRelease(t *testing.T) {
 		}
 		t.Run(fmt.Sprintf("poolSize=%d maxIdleConns=%d", row.poolSize, row.maxIdle), func(t *testing.T) {
 			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-			redis := New(Config{Host: addr, PoolSize: row.poolSize, MaxIdleConns: row.maxIdle})
+			redis := newTestRedis(t, Config{Host: addr, PoolSize: row.poolSize, MaxIdleConns: row.maxIdle})
 			assertIdleCapAfterSequentialRelease(t, fake, redis, row.poolSize, wantIdle)
 		})
 	}
 
 	t.Run("default Config PoolSize and MaxIdleConns", func(t *testing.T) {
 		fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-		redis := New(Config{Host: addr})
+		redis := newTestRedis(t, Config{Host: addr})
 		if redis.PoolSize() != 8 || redis.MaxIdleConns() != 8 {
 			t.Fatalf("defaults PoolSize=%d MaxIdleConns=%d, want 8 and 8", redis.PoolSize(), redis.MaxIdleConns())
 		}
@@ -563,7 +562,7 @@ func assertIdleCapAfterSequentialRelease(t *testing.T, fake *fakeRedis, redis *S
 	t.Helper()
 	conns := make([]*pooledConn, liveCap)
 	for i := 0; i < liveCap; i++ {
-		conn, err, _ := redis.borrow(context.Background())
+		conn, err, _, _ := redis.borrowSocket(context.Background(), false)
 		if err != nil {
 			t.Fatalf("borrow %d: %v", i, err)
 		}
@@ -587,7 +586,7 @@ func TestReleaseClosesWhenIdleFull(t *testing.T) {
 	fake.mu.Lock()
 	fake.getDelay = 20 * time.Millisecond
 	fake.mu.Unlock()
-	redis := New(Config{Host: addr, PoolSize: 2, MaxIdleConns: 1})
+	redis := newTestRedis(t, Config{Host: addr, PoolSize: 2, MaxIdleConns: 1})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
@@ -618,7 +617,7 @@ func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
 		{payload: ownValue, closeAfter: true},
 	})
 	// MaxRetries off: default retry would redial and hide the truncated classification.
-	redis := New(Config{Host: addr, MaxRetries: -1})
+	redis := newTestRedis(t, Config{Host: addr, MaxRetries: -1})
 
 	_, err := redis.Get(context.Background(), "k")
 	if err == nil {
@@ -645,7 +644,7 @@ func TestTruncatedBulkIsUnreachableAndNotPooled(t *testing.T) {
 
 // TestOverFreeOnFullSemaphoreReturns proves an extra turn return does not hang and OverFrees counts it.
 func TestOverFreeOnFullSemaphoreReturns(t *testing.T) {
-	sr := New(Config{Host: "127.0.0.1:1", PoolSize: 2})
+	sr := newTestRedis(t, Config{Host: "127.0.0.1:1", PoolSize: 2, MaxIdleConns: 2})
 	done := make(chan struct{})
 	go func() {
 		sr.freeInUseTurn()
@@ -665,19 +664,19 @@ func TestOverFreeOnFullSemaphoreReturns(t *testing.T) {
 func TestOverFreeAccountingStaysBalanced(t *testing.T) {
 	// Healthy fake: successful Get/release cycles.
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	healthy := New(Config{Host: addr, MaxRetries: -1})
+	healthy := newTestRedis(t, Config{Host: addr, MaxRetries: -1})
 	hammerGets(t, healthy)
 	assertTurnsFullAndNoOverFrees(t, healthy)
 
 	// Dead address: dial failure frees the turn before returning.
-	dead := New(Config{Host: "127.0.0.1:1", DialTimeout: 20 * time.Millisecond, MaxRetries: -1})
+	dead := newTestRedis(t, Config{Host: "127.0.0.1:1", DialTimeout: 20 * time.Millisecond, MaxRetries: -1})
 	hammerGets(t, dead)
 	assertTurnsFullAndNoOverFrees(t, dead)
 
 	// AUTH reject: handshake failure closes the socket and frees the turn.
 	authFake, authAddr := startFakeRedis(t, map[string]string{"hit": "t"})
 	authFake.setHandshakeReplies("-WRONGPASS invalid password\r\n", statusOKReply)
-	authReject := New(Config{Host: authAddr, Pass: "wrong-password", MaxRetries: -1})
+	authReject := newTestRedis(t, Config{Host: authAddr, Pass: "wrong-password", MaxRetries: -1})
 	hammerGets(t, authReject)
 	assertTurnsFullAndNoOverFrees(t, authReject)
 
@@ -686,7 +685,7 @@ func TestOverFreeAccountingStaysBalanced(t *testing.T) {
 	starvedFake.mu.Lock()
 	starvedFake.getDelay = 80 * time.Millisecond
 	starvedFake.mu.Unlock()
-	starved := New(Config{Host: starvedAddr, PoolSize: 1, PoolTimeout: 15 * time.Millisecond, MaxRetries: -1})
+	starved := newTestRedis(t, Config{Host: starvedAddr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: 15 * time.Millisecond, MaxRetries: -1})
 	hammerGets(t, starved)
 	assertTurnsFullAndNoOverFrees(t, starved)
 }

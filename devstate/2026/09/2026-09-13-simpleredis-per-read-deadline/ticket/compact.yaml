@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: "IOTimeout is a total-transfer deadline so values larger than the wire window are permanently unreadable (BUG-3)"
+url: none
+number: none

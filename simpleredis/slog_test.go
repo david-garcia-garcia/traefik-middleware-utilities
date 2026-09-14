@@ -77,9 +77,31 @@ func requireMsg(t *testing.T, h *recHandler, msg string, level slog.Level) slog.
 	return slog.Record{}
 }
 
+// requireMsgAttr fails unless some record for msg carries key=want.
+func requireMsgAttr(t *testing.T, h *recHandler, msg, key, want string) {
+	t.Helper()
+	for _, r := range h.records() {
+		if r.Message != msg {
+			continue
+		}
+		matched := false
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == key && a.Value.String() == want {
+				matched = true
+				return false
+			}
+			return true
+		})
+		if matched {
+			return
+		}
+	}
+	t.Fatalf("missing event %s with %s=%s\n%s", msg, key, want, h.dump())
+}
+
 func TestLogOpen(t *testing.T) {
 	h := &recHandler{}
-	sr := New(Config{Host: "127.0.0.1:1", Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: "127.0.0.1:1", Logger: recLogger(h)})
 	requireMsg(t, h, "simpleredis_open", slog.LevelDebug)
 	if strings.Contains(h.dump(), "Pass") || strings.Contains(strings.ToLower(h.dump()), " pass=") {
 		t.Fatalf("open leaked a pass attr:\n%s", h.dump())
@@ -90,7 +112,7 @@ func TestLogOpen(t *testing.T) {
 func TestLogNoAuth(t *testing.T) {
 	h := &recHandler{}
 	addr := startStaticRedis(t, "-WRONGPASS invalid password\r\n")
-	sr := New(Config{Host: addr, Logger: recLogger(h), MaxRetries: -1})
+	sr := newTestRedis(t, Config{Host: addr, Logger: recLogger(h), MaxRetries: -1})
 	_, err := sr.Get(context.Background(), "a")
 	if err == nil || err.Error() != RedisNoAuth {
 		t.Fatalf("Get = %v, want %s", err, RedisNoAuth)
@@ -100,7 +122,7 @@ func TestLogNoAuth(t *testing.T) {
 
 func TestLogOverFree(t *testing.T) {
 	h := &recHandler{}
-	sr := New(Config{Host: "127.0.0.1:1", PoolSize: 2, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: "127.0.0.1:1", PoolSize: 2, Logger: recLogger(h)})
 	sr.freeInUseTurn()
 	requireMsg(t, h, "simpleredis_over_free", slog.LevelError)
 }
@@ -108,8 +130,8 @@ func TestLogOverFree(t *testing.T) {
 func TestLogPoolExhausted(t *testing.T) {
 	h := &recHandler{}
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	sr := New(Config{Host: addr, PoolSize: 1, PoolTimeout: 20 * time.Millisecond, MaxRetries: -1, Logger: recLogger(h)})
-	conn, err, _ := sr.borrow(context.Background())
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: 1, PoolTimeout: 20 * time.Millisecond, MaxRetries: -1, Logger: recLogger(h)})
+	conn, err, _, _ := sr.borrowSocket(context.Background(), false)
 	if err != nil {
 		t.Fatalf("borrow: %v", err)
 	}
@@ -125,7 +147,7 @@ func TestLogShortBulk(t *testing.T) {
 	h := &recHandler{}
 	truncated := append([]byte("$100\r\n"), bytes.Repeat([]byte("x"), 40)...)
 	addr := startRawReplyRedis(t, []rawReply{{payload: truncated, closeAfter: true}})
-	sr := New(Config{Host: addr, MaxRetries: -1, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: addr, MaxRetries: -1, Logger: recLogger(h)})
 	_, err := sr.Get(context.Background(), "k")
 	if err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
@@ -136,7 +158,7 @@ func TestLogShortBulk(t *testing.T) {
 func TestLogBadReply(t *testing.T) {
 	h := &recHandler{}
 	addr := startStaticRedis(t, "$abc\r\n")
-	sr := New(Config{Host: addr, MaxRetries: -1, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: addr, MaxRetries: -1, Logger: recLogger(h)})
 	_, err := sr.Get(context.Background(), "k")
 	if err == nil || err.Error() != RedisIssue {
 		t.Fatalf("Get = %v, want %s", err, RedisIssue)
@@ -148,18 +170,39 @@ func TestLogHandshakeFailed(t *testing.T) {
 	h := &recHandler{}
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.setHandshakeReplies("-LOADING Redis is loading the dataset in memory\r\n", statusOKReply)
-	sr := New(Config{Host: addr, Pass: "p", MaxRetries: -1, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: addr, Pass: "p", MaxRetries: -1, Logger: recLogger(h)})
 	_, err := sr.Get(context.Background(), "hit")
 	if err == nil || !strings.HasPrefix(err.Error(), "LOADING ") {
 		t.Fatalf("Get = %v, want LOADING", err)
 	}
 	requireMsg(t, h, "simpleredis_handshake_failed", slog.LevelWarn)
+	requireMsgAttr(t, h, "simpleredis_handshake_failed", "verb", "AUTH")
+}
+
+// TestLogHandshakeFailedNeverEchoesPass pins the one handshake reply that carries the password:
+// Redis 7.4 answers AUTH against a nopass default user with "ERR AUTH <password> called without…",
+// which is not AUTH-class, so a handshake event that logged the error text would publish Pass.
+func TestLogHandshakeFailedNeverEchoesPass(t *testing.T) {
+	const pass = "PassW0rd-UNIQUE-9f3a"
+	h := &recHandler{}
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.setHandshakeReplies("-ERR AUTH "+pass+" called without any password configured for the default user\r\n", statusOKReply)
+	sr := newTestRedis(t, Config{Host: addr, Pass: pass, MaxRetries: -1, Logger: recLogger(h)})
+
+	_, err := sr.Get(context.Background(), "hit")
+	if err == nil || !strings.Contains(err.Error(), pass) {
+		t.Fatalf("Get = %v, want the peer text (the caller still gets the full error)", err)
+	}
+	requireMsg(t, h, "simpleredis_handshake_failed", slog.LevelWarn)
+	if strings.Contains(h.dump(), pass) {
+		t.Fatalf("password leaked in logs:\n%s", h.dump())
+	}
 }
 
 func TestLogSocketPoisonedAndAuthLeftover(t *testing.T) {
 	h := &recHandler{}
 	_, addr := startStrayExtraReplyFake(t, 1)
-	sr := New(Config{Host: addr, PoolSize: 1, MaxRetries: -1, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxRetries: -1, Logger: recLogger(h)})
 	if _, err := sr.Get(context.Background(), "k0"); err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -168,7 +211,7 @@ func TestLogSocketPoisonedAndAuthLeftover(t *testing.T) {
 	h2 := &recHandler{}
 	authFake, authAddr := startFakeRedis(t, map[string]string{"hit": "t"})
 	authFake.setHandshakeReplies("+OK\r\n$5\r\nSTRAY\r\n", statusOKReply)
-	auth := New(Config{Host: authAddr, Pass: "secret", Database: "2", MaxRetries: -1, Logger: recLogger(h2)})
+	auth := newTestRedis(t, Config{Host: authAddr, Pass: "secret", Database: "2", MaxRetries: -1, Logger: recLogger(h2)})
 	_, err := auth.Get(context.Background(), "hit")
 	if err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("auth leftover Get = %v, want %s", err, RedisUnreachable)
@@ -179,7 +222,7 @@ func TestLogSocketPoisonedAndAuthLeftover(t *testing.T) {
 func TestLogDialRetryCapabilityNoScript(t *testing.T) {
 	h := &recHandler{}
 	fake, addr := startFakeRedis(t, map[string]string{})
-	sr := New(Config{Host: addr, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: addr, Logger: recLogger(h)})
 	if err := sr.Set(context.Background(), "k", []byte("v"), 60); err != nil {
 		t.Fatalf("Set: %v", err)
 	}
@@ -200,7 +243,7 @@ func TestLogDialRetryCapabilityNoScript(t *testing.T) {
 func TestLogCanceled(t *testing.T) {
 	h := &recHandler{}
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	sr := New(Config{Host: addr, Logger: recLogger(h), MaxRetries: -1, IOTimeout: time.Second})
+	sr := newTestRedis(t, Config{Host: addr, Logger: recLogger(h), MaxRetries: -1, CommandTimeout: time.Second})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := sr.Get(ctx, "hit")
@@ -218,7 +261,7 @@ func TestLogCanceledWaitForTurn(t *testing.T) {
 	fake.holdCh = hold
 	fake.mu.Unlock()
 	t.Cleanup(func() { close(hold) })
-	sr := New(Config{Host: addr, PoolSize: 1, PoolTimeout: time.Second, IOTimeout: 5 * time.Second, MaxRetries: -1, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: 1, PoolTimeout: time.Second, CommandTimeout: 5 * time.Second, MaxRetries: -1, Logger: recLogger(h)})
 	go func() {
 		_, _ = sr.Get(context.Background(), "hit")
 	}()
@@ -253,7 +296,7 @@ func TestLogCanceledWaitForTurn(t *testing.T) {
 func TestLogTimeout(t *testing.T) {
 	h := &recHandler{}
 	addr := startStallRedis(t)
-	sr := New(Config{Host: addr, Logger: recLogger(h), MaxRetries: -1, IOTimeout: 30 * time.Millisecond})
+	sr := newTestRedis(t, Config{Host: addr, Logger: recLogger(h), MaxRetries: -1, CommandTimeout: 30 * time.Millisecond})
 	_, err := sr.Get(context.Background(), "k")
 	if err == nil || err.Error() != RedisTimeout {
 		t.Fatalf("Get = %v, want %s", err, RedisTimeout)
@@ -264,7 +307,7 @@ func TestLogTimeout(t *testing.T) {
 func TestLogRetry(t *testing.T) {
 	h := &recHandler{}
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	sr := New(Config{Host: addr, Logger: recLogger(h), MinRetryBackoff: -1})
+	sr := newTestRedis(t, Config{Host: addr, Logger: recLogger(h), MinRetryBackoff: -1})
 	fake.armErrorReplyOnceForTest("-LOADING Redis is loading the dataset in memory\r\n")
 	got, err := sr.Get(context.Background(), "hit")
 	if err != nil {
@@ -279,7 +322,7 @@ func TestLogRetry(t *testing.T) {
 func TestLogIdleSwept(t *testing.T) {
 	h := &recHandler{}
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	sr := New(Config{Host: addr, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: addr, Logger: recLogger(h)})
 	if _, err := sr.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("first Get: %v", err)
 	}
@@ -292,9 +335,30 @@ func TestLogIdleSwept(t *testing.T) {
 	requireMsg(t, h, "simpleredis_idle_swept", slog.LevelDebug)
 }
 
+// TestLogDialReasonSkipIdleAfterPeerDrop proves simpleredis_dial says why it dialled: idle_miss while the
+// unused list has nothing to reuse, skip_idle once a command found a dropped socket in that list and bypassed it.
+func TestLogDialReasonSkipIdleAfterPeerDrop(t *testing.T) {
+	const poolSize = 2
+	h := &recHandler{}
+	fake, addr := startPeerDropAllFake(t, map[string]string{"hit": "t"})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: poolSize, MaxIdleConns: poolSize,
+		MinRetryBackoff: -1, MaxRetryBackoff: -1, Logger: recLogger(h)})
+	t.Cleanup(sr.Close)
+
+	warmPeerDropAllIdle(t, fake, sr, poolSize)
+	requireMsgAttr(t, h, "simpleredis_dial", "reason", "idle_miss")
+
+	fake.dropEveryAcceptedSocket()
+	time.Sleep(50 * time.Millisecond)
+	if _, err := sr.Get(context.Background(), "hit"); err != nil {
+		t.Fatalf("Get after peer drop: %v", err)
+	}
+	requireMsgAttr(t, h, "simpleredis_dial", "reason", "skip_idle")
+}
+
 func TestNilLoggerDoesNotPanic(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	sr := New(Config{Host: addr})
+	sr := newTestRedis(t, Config{Host: addr})
 	ctx := context.Background()
 	if err := sr.Set(ctx, "k", []byte("v"), 60); err != nil {
 		t.Fatalf("Set: %v", err)
@@ -342,12 +406,12 @@ func TestSecretsNeverAppearInLogs(t *testing.T) {
 	h := &recHandler{}
 	fake, addr := startFakeRedis(t, map[string]string{})
 	fake.setHandshakeReplies("-WRONGPASS invalid password\r\n", statusOKReply)
-	sr := New(Config{Host: addr, Pass: pass, Logger: recLogger(h), MaxRetries: -1})
+	sr := newTestRedis(t, Config{Host: addr, Pass: pass, Logger: recLogger(h), MaxRetries: -1})
 	_, _ = sr.Get(context.Background(), key)
 
 	okFake, okAddr := startFakeRedis(t, map[string]string{})
 	_ = okFake
-	ok := New(Config{Host: okAddr, Pass: pass, Logger: recLogger(h)})
+	ok := newTestRedis(t, Config{Host: okAddr, Pass: pass, Logger: recLogger(h)})
 	_ = ok.Set(context.Background(), key, []byte("secret-value-should-not-log"), 60)
 	_, _ = ok.Get(context.Background(), key)
 	_, _ = ok.Eval(context.Background(), "return 1", ScriptSHA1Hex("return 1"), []string{key}, []string{"x"})

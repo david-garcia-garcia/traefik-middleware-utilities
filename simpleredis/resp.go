@@ -19,18 +19,21 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	if err := contextStop(ctx); err != nil {
 		return nil, false, err
 	}
-	ioBound := clampTimeout(ctx, sr.IOTimeout())
-	if ioBound <= 0 {
+	// The socket deadline is what is left of the command budget exec bound with CommandTimeout. A reply
+	// that keeps arriving must not be killed for its size, so there is no second per-operation cap:
+	// two bounds on the same socket could only disagree, and the shorter one made a large reply
+	// unreadable while the peer was healthy and still sending.
+	budgetLeft := sr.commandBudgetLeft(ctx)
+	if budgetLeft <= 0 {
 		if err := contextStop(ctx); err != nil {
 			return nil, false, err
 		}
-		sr.logger.Debug("simpleredis_timeout")
 		return nil, false, errTimeout
 	}
-	if err := conn.netConn.SetDeadline(time.Now().Add(ioBound)); err != nil {
+	if err := conn.netConn.SetDeadline(time.Now().Add(budgetLeft)); err != nil {
 		return nil, false, errUnreachable
 	}
-	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before SetDeadline.
+	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before the deadline.
 	stopWatch := watchConnClose(ctx, conn.netConn)
 	defer stopWatch()
 	// Unread leftover from a prior command on this socket must not be parsed as this command's reply.
@@ -49,11 +52,7 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		return nil, false, errUnreachable
 	}
 	if err := writeCommand(conn.writer, args); err != nil {
-		mapped := ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
-		if mapped == errTimeout { //nolint:errorlint // exact I/O timeout sentinel
-			sr.logger.Debug("simpleredis_timeout")
-		}
-		return nil, false, mapped
+		return nil, false, ioOrContext(ctx, err)
 	}
 	values, clean, err := readReply(conn.reader)
 	if stop := contextStop(ctx); stop != nil {
@@ -64,13 +63,11 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 			sr.logger.Warn("simpleredis_bad_reply", "error", err)
 			return nil, false, err
 		}
-		mapped := ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
-		if mapped == errTimeout { //nolint:errorlint // exact I/O timeout sentinel
-			sr.logger.Debug("simpleredis_timeout")
-		} else if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		// Timeout is not classified here: ioOrContext hands the deadline up and exec's libraryTimeout owns that call.
+		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
 			sr.logger.Warn("simpleredis_short_bulk")
 		}
-		return nil, false, mapped
+		return nil, false, ioOrContext(ctx, err)
 	}
 	if err == errNoAuth { //nolint:errorlint // AUTH-class is the exact mapped sentinel
 		sr.logger.Error("simpleredis_noauth")
@@ -106,19 +103,32 @@ func watchConnClose(ctx context.Context, conn net.Conn) func() {
 
 // ioOrContext prefers a fired context over a socket I/O error.
 //
-// Why not ioError alone: SetDeadline is a wall clock. When ioBound was clamped to ctx's remaining
-// time, the OS can return os.ErrDeadlineExceeded a few ms before ctx.Done closes. ioError maps
-// that to redis:timeout, so a caller deadline looked like the library budget. Go E2E Redis failed
-// TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout that way. If the socket timeout is the
-// clamped ctx instant, return DeadlineExceeded and let exec map library vs caller.
-func ioOrContext(ctx context.Context, ioBound, ioTimeout time.Duration, err error) error {
+// Why not ioError alone: SetDeadline is a wall clock. The socket deadline is the command
+// deadline's remainder, so when it fires the OS can return os.ErrDeadlineExceeded a few ms
+// before ctx.Done closes. ioError maps that to redis:timeout, so a caller deadline looked like
+// the library budget. Go E2E Redis failed TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout
+// that way. Report the deadline and let exec's libraryOwnsDeadline decide library vs caller.
+//
+// A ctx with no deadline is the direct-do path, where the socket deadline came straight from
+// CommandTimeout; that one is the library's own bound and stays redis:timeout.
+func ioOrContext(ctx context.Context, err error) error {
 	if stop := contextStop(ctx); stop != nil {
 		return stop
 	}
-	if ioBound < ioTimeout && errors.Is(err, os.ErrDeadlineExceeded) {
+	if _, ok := ctx.Deadline(); ok && errors.Is(err, os.ErrDeadlineExceeded) {
 		return context.DeadlineExceeded
 	}
 	return ioError(err)
+}
+
+// commandBudgetLeft is the time left on ctx. exec binds CommandTimeout onto ctx, so this is that budget's remainder.
+// A ctx with no deadline never comes from exec; it is a direct do call, where the whole budget is still ahead.
+func (sr *SimpleRedis) commandBudgetLeft(ctx context.Context) time.Duration {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return sr.CommandTimeout()
+	}
+	return time.Until(deadline)
 }
 
 // writeCommand writes one RESP array of bulk strings and flushes.
@@ -175,6 +185,7 @@ func readReply(reader *bufio.Reader) (values [][]byte, clean bool, err error) {
 		if count > maxArrayCount {
 			return nil, false, errIssue
 		}
+		// In-cap count is allocated up front, not appended element by element; see the cap const block.
 		values := make([][]byte, count)
 		for i := 0; i < count; i++ {
 			head, headErr := readLine(reader)
@@ -229,6 +240,7 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if length > maxBulkLength {
 		return nil, errIssue
 	}
+	// In-cap length is allocated up front, not grown from arrived bytes; see the cap const block.
 	data := make([]byte, length+2)
 	if _, err := io.ReadFull(reader, data); err != nil {
 		return nil, err
@@ -256,6 +268,18 @@ func readLine(reader *bufio.Reader) ([]byte, error) {
 	return line[:len(line)-2], nil
 }
 
+// Cap-before-allocate is the defense: an over-cap header returns errIssue having allocated nothing.
+// That ordering is what matters, because an allocation the OS cannot satisfy is a fatal Go runtime
+// out of memory, not an error this package could return.
+//
+// An in-cap announced length is allocated up front, on purpose. The header arrives on our own pooled
+// socket to the configured Redis, not on a separate untrusted channel, so a lying in-cap header needs
+// a compromised server, a malfunctioning RESP proxy, or wire injection. go-redis caps nothing at all
+// (knowledge/research/ext_go-redis_proto_reader-limit/), so any cap is already stricter than the
+// reference client. Reading in fixed chunks and growing from arrived bytes was proposed and rejected:
+// it only narrows an already-bounded 64 MiB worst case, and it recopies every genuine large value up
+// the append ladder. Still open: no cumulative per-reply budget
+// (knowledge/debt/2026-09-12-simpleredis-cumulative-array-reply-budget.md).
 const (
 	maxBulkLength = 64 << 20 // largest $ payload this decoder will allocate
 	maxArrayCount = 1 << 20  // largest * count this decoder will allocate

@@ -21,7 +21,7 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 	h := &recHandler{}
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	const poolSize = 2
-	sr := New(Config{Host: addr, PoolSize: poolSize, PoolTimeout: 50 * time.Millisecond, MaxRetries: -1, Logger: recLogger(h)})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: poolSize, MaxIdleConns: poolSize, PoolTimeout: 50 * time.Millisecond, MaxRetries: -1, Logger: recLogger(h)})
 	t.Cleanup(sr.Close)
 
 	if _, err := sr.Get(context.Background(), "hit"); err != nil {
@@ -29,7 +29,7 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 	}
 
 	for i := 0; i < poolSize; i++ {
-		conn, err, _ := sr.borrow(context.Background())
+		conn, err, _, _ := sr.borrowSocket(context.Background(), false)
 		if err != nil {
 			t.Fatalf("borrow %d: %v", i, err)
 		}

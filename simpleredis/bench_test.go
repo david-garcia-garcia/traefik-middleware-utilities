@@ -34,7 +34,7 @@ const largeBulkBytes = 100 * 1024
 // BenchmarkGet measures end-to-end Get against the in-process fake server.
 func BenchmarkGet(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{"hit": "some-cached-value"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(b, Config{Host: addr})
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		b.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func BenchmarkMGet10(b *testing.B) {
 		store[names[i]] = "value-" + strconv.Itoa(i)
 	}
 	_, addr := startFakeRedis(b, store)
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(b, Config{Host: addr})
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -71,7 +71,7 @@ func BenchmarkMGet10(b *testing.B) {
 // BenchmarkIncr measures end-to-end Incr against the fake server.
 func BenchmarkIncr(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(b, Config{Host: addr})
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -85,7 +85,7 @@ func BenchmarkIncr(b *testing.B) {
 // BenchmarkEval measures end-to-end Eval of tokenBucketScript against the fake server.
 func BenchmarkEval(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(b, Config{Host: addr})
 	keys := []string{"bucket:1.2.3.4"}
 	args := []string{"10", "10", "1", "1700000000"}
 
@@ -224,7 +224,7 @@ func BenchmarkEncodeSet100KB(b *testing.B) { encodeSet100KB(b) }
 // BenchmarkGetParallel shows how many TCP sessions the pool burns above MaxIdleConns.
 func BenchmarkGetParallel(b *testing.B) {
 	fake, addr := startFakeRedis(b, map[string]string{"hit": "some-cached-value"})
-	redis := New(Config{Host: addr, PoolSize: 64})
+	redis := newTestRedis(b, Config{Host: addr, PoolSize: 64})
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -284,7 +284,7 @@ func TestConnectionChurnUnderLatency(t *testing.T) {
 	const goroutines = 64
 	const perGoroutine = 20
 	fake, addr := startSlowRedis(t, 500*time.Microsecond)
-	redis := New(Config{Host: addr, PoolSize: goroutines})
+	redis := newTestRedis(t, Config{Host: addr, PoolSize: goroutines})
 
 	var wg sync.WaitGroup
 	for i := 0; i < goroutines; i++ {
@@ -314,7 +314,7 @@ func TestConnectionChurnAcrossBursts(t *testing.T) {
 	const bursts = 5
 	const width = 64
 	fake, addr := startSlowRedis(t, 500*time.Microsecond)
-	redis := New(Config{Host: addr, PoolSize: width})
+	redis := newTestRedis(t, Config{Host: addr, PoolSize: width})
 
 	for burst := 0; burst < bursts; burst++ {
 		var wg sync.WaitGroup

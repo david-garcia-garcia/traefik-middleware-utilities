@@ -19,7 +19,7 @@ func TestLive_PeerCloseEOFRedial(t *testing.T) {
 func TestLive_SelectOutOfRange(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
 		t.Helper()
-		client := New(Config{Host: addr, Database: "99"})
+		client := newTestRedis(t, Config{Host: addr, Database: "99"})
 		t.Cleanup(client.Close)
 		_, err := client.Get(context.Background(), "k")
 		if err == nil || err.Error() != "ERR DB index is out of range" {
@@ -35,7 +35,7 @@ func TestLive_SelectOutOfRange(t *testing.T) {
 func TestLive_WrongPassword(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS_AUTH", "SIMPLEREDIS_LIVE_DRAGONFLY_AUTH", func(t *testing.T, addr string) {
 		t.Helper()
-		client := New(Config{Host: addr, Pass: "wrong-password"})
+		client := newTestRedis(t, Config{Host: addr, Pass: "wrong-password"})
 		t.Cleanup(client.Close)
 		_, err := client.Get(context.Background(), "k")
 		if err == nil || err.Error() != RedisNoAuth {
@@ -55,7 +55,7 @@ func runLivePoolBackend(t *testing.T, addr string) {
 	t.Cleanup(client.Close)
 
 	t.Run("waiterIsUnreachable", func(t *testing.T) {
-		conn, err, _ := client.borrow(context.Background())
+		conn, err, _, _ := client.borrowSocket(context.Background(), false)
 		if err != nil {
 			t.Fatalf("borrow: %v", err)
 		}
