@@ -62,8 +62,8 @@ Usage packet `knowledge/devdocs/std_go_reclaim.md` is enough to call the subsyst
 
 - Q: Which spec leaf gets the two Reset contracts that had no test (Sleep panic skips orphan and still disposes; Reset unmaps first regardless of `EnforceCloseBeforeOpen`)?
   Rank: additive asked — Desired names spec/devdocs deltas for those two documented contracts; new scenarios on leaves this change does not create
-  Decision: assumed — ADDED scenarios on `std_go_reclaim_value-lifecycle` (behaviour) and, if log order needs an explicit Reset-Sleep-panic exception, `std_go_reclaim_context-lease`. FindSpecHost in propose confirms. No new folder.
-  By: explore
+  Decision: resolved — fold `std_go_reclaim_value-lifecycle` (Reset Sleep-panic skip-orphan + Reset unmap-first SHALL) and `std_go_reclaim_context-lease` (orphan log exception). No new folder.
+  By: propose
 
 - Q: Will the parallel locking ticket rename `tab.mu` or `slot` fields before merge and break the white-box tests in `table_gaps_test.go`?
   Rank: additive incidental — no DestBranch rename exists today; the sibling branch is out of this run's scope
