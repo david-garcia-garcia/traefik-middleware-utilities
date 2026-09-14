@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-simpleredis-idle-arrival-desync
+jobName: 2026-09-13-simpleredis-idle-arrival-desync
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: aca513f40b56509304d59846894d4da9da5bcc8b5577b60ea48dec39e4a1c93f
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: none
+pr:
+  id: 83
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/83

@@ -19,3 +19,8 @@ description: Whether go-redis proto.Reader caps bulk-string or array allocations
 priority: normal
 local: ext_go-redis_yaegi-compatibility/
 description: Whether go-redis v9 can run inside Traefik's Yaegi interpreter with or without useUnsafe; the standing justification for simpleredis.
+
+## Idle conn unread-data check
+priority: normal
+local: ext_go-redis_pool_conn-check/
+description: How go-redis isHealthyConn/connCheck peeks the kernel receive queue on Unix and is a no-op on Windows.
