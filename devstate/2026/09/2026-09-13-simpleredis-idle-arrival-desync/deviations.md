@@ -1,0 +1,4 @@
+# Deviations
+
+- taken: propose left the written recommendation in a live OpenSpec change (`openspec/changes/simpleredis-idle-arrival-desync/`) → withdrew that folder and folded its decision record into the debt note — `knowledge/debt/2026-09-13-simpleredis-idle-arrival-desync.md` — Why: no product code ships, so a live change on master would advertise in-flight work that will never be implemented, while the debt note is the owner that already tracks this hole. Requester: confirmed.
+- taken: ticket Desired 1 and 5 asked to close the hole and land a permanent default-suite test that fails before the fix → shipped neither — `knowledge/debt/2026-09-13-simpleredis-idle-arrival-desync.md` — Why: ticket Desired 2 makes "stop after evaluating all three directions with a written recommendation" an accepted outcome, and a default-suite test for a hole that stays open would be red forever. Requester: confirmed.
