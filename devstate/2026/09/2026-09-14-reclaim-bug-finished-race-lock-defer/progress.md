@@ -6,7 +6,7 @@ JobName: 2026-09-14-reclaim-bug-finished-race-lock-defer
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-14T15:08:05Z |
 | explore | [x] | [x] | 2026-09-14T15:16:34Z |
-| propose | [ ] | [ ] | |
+| propose | [x] | [x] | 2026-09-14T15:21:46Z |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
 | devdocsimpact | [ ] | [ ] | |
