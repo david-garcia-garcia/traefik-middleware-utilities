@@ -110,7 +110,7 @@ func TestTable_ResetUnmapsBeforeCloseWithEnforce(t *testing.T) {
 	defer cancel2()
 	value, err := openReturned(ctx2, t, tab, "k", recLogger(h), func() (any, error) {
 		return nextIncarnation, nil
-	}, Hooks{})
+	}, Hooks{Close: func() {}})
 	if err != nil {
 		t.Fatalf("open 2: %v", err)
 	}
@@ -177,12 +177,12 @@ func TestTable_OpenReplacesAMappedGoneIncarnation(t *testing.T) {
 	gone := &slot{state: slotGone, ready: make(chan struct{}), logger: recLogger(h)}
 	close(gone.ready)
 	tab.mu.Lock()
-	tab.items["a"] = gone
+	tab.items["gone"] = gone
 	tab.mu.Unlock()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	value, err := openReturned(ctx, t, tab, "a", recLogger(h), func() (any, error) {
+	value, err := openReturned(ctx, t, tab, "gone", recLogger(h), func() (any, error) {
 		return unstuckValue, nil
 	}, Hooks{})
 	if err != nil {
@@ -191,10 +191,10 @@ func TestTable_OpenReplacesAMappedGoneIncarnation(t *testing.T) {
 	if value != unstuckValue {
 		t.Fatalf("Open value %v, want a fresh incarnation", value)
 	}
-	if got := mustSlot(t, tab, "a"); got == gone {
+	if got := mustSlot(t, tab, "gone"); got == gone {
 		t.Fatal("Open kept the gone incarnation mapped")
 	}
-	if n := countKeyMsg(h.events(), MsgPut, "a"); n != 1 {
+	if n := countKeyMsg(h.events(), MsgPut, "gone"); n != 1 {
 		t.Fatalf("%d put lines, want 1", n)
 	}
 }
