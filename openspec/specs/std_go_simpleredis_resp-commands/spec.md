@@ -371,17 +371,17 @@ The client SHALL encode each command as the same RESP array of bulk strings dest
 - **AND** Get is called for that key
 - **THEN** Get returns those exact bytes
 
-### Requirement: Encode benches guard compiled allocations and Yaegi strategies
-Compiled tests SHALL include `BenchmarkEncodeGet`, `BenchmarkEncodeEval`, and `BenchmarkEncodeMSetEX` that encode on the production encoder. Interpreter tests SHALL include `BenchmarkYaegiEncodeBufio` and `BenchmarkYaegiEncodeSingleWrite` as strategy probes. Production encode SHALL match the single-write strategy those Yaegi benches measure.
+### Requirement: RESP framing does not allocate, measured compiled
+Compiled tests SHALL include `BenchmarkEncodeGet`, `BenchmarkEncodeEval`, and `BenchmarkEncodeMSetEX` that encode on the production encoder. The framing itself SHALL NOT allocate: length headers MUST be written with `strconv.AppendInt` into a reused buffer and MUST NOT be built as a concatenated string. This requirement is anchored on the compiled numbers because the deployment this session is tuned for is compiled into Traefik; an interpreted measurement MUST NOT be the justification for an encoder shape. Interpreter tests MAY keep `BenchmarkYaegiEncodeBufio` and `BenchmarkYaegiEncodeSingleWrite` as portability probes for operators who install this as a Yaegi plugin.
 
 #### Scenario: Compiled encode benches exist
 - **WHEN** package `simpleredis` encode benches run
 - **THEN** `BenchmarkEncodeGet`, `BenchmarkEncodeEval`, and `BenchmarkEncodeMSetEX` execute against the production encoder
 
-#### Scenario: Yaegi encode strategy benches exist
-- **WHEN** Yaegi encode benches run
-- **THEN** `BenchmarkYaegiEncodeBufio` and `BenchmarkYaegiEncodeSingleWrite` execute as interpreted strategy probes
-- **AND** production encode matches the single-write strategy
+#### Scenario: Framing a command allocates nothing
+- **WHEN** `BenchmarkEncodeGet` and `BenchmarkEncodeMSetEX` run compiled
+- **THEN** each reports 0 allocs/op
+- **AND** any allocation `BenchmarkEncodeEval` reports comes from building the argv, not from framing it
 
 ### Requirement: Interpreter tests assert the unsafe conversion matrix
 Tests that import Yaegi SHALL assert which `string`/`[]byte` conversions the interpreter accepts under stdlib-only symbols, stdlib plus unsafe symbols, and unrestricted. Those tests MAY register Yaegi unsafe symbols and MAY import `unsafe` in `_test.go` files. Existing Init/Get/Set/Del/Incr/Eval/MSetEX interpreter tests MUST still use GOPATH with stdlib symbols only and `useunsafe` false. Named copy-versus-unsafe benches SHALL exist so a human can reproduce the measured ns/op; they MUST NOT fail `go test` without `-bench`. Those tests MUST NOT start Traefik.
