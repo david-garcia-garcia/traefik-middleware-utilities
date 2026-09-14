@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 	"net"
 	"strconv"
@@ -33,15 +34,15 @@ const largeBulkBytes = 100 * 1024
 // BenchmarkGet measures end-to-end Get against the in-process fake server.
 func BenchmarkGet(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{"hit": "some-cached-value"})
-	redis := New(Config{Host: addr})
-	if _, err := redis.Get("hit"); err != nil {
+	redis := newTestRedis(b, Config{Host: addr})
+	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		b.Fatal(err)
 	}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := redis.Get("hit"); err != nil {
+		if _, err := redis.Get(context.Background(), "hit"); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -56,12 +57,12 @@ func BenchmarkMGet10(b *testing.B) {
 		store[names[i]] = "value-" + strconv.Itoa(i)
 	}
 	_, addr := startFakeRedis(b, store)
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(b, Config{Host: addr})
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := redis.MGet(names); err != nil {
+		if _, err := redis.MGet(context.Background(), names); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -70,12 +71,12 @@ func BenchmarkMGet10(b *testing.B) {
 // BenchmarkIncr measures end-to-end Incr against the fake server.
 func BenchmarkIncr(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(b, Config{Host: addr})
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := redis.Incr("counter"); err != nil {
+		if _, err := redis.Incr(context.Background(), "counter"); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -84,14 +85,14 @@ func BenchmarkIncr(b *testing.B) {
 // BenchmarkEval measures end-to-end Eval of tokenBucketScript against the fake server.
 func BenchmarkEval(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(b, Config{Host: addr})
 	keys := []string{"bucket:1.2.3.4"}
 	args := []string{"10", "10", "1", "1700000000"}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := redis.Eval(tokenBucketScript, keys, args); err != nil {
+		if _, err := redis.Eval(context.Background(), tokenBucketScript, ScriptSHA1Hex(tokenBucketScript), keys, args); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -109,6 +110,7 @@ func encodeToDiscard(b *testing.B, buf []byte, args [][]byte) []byte {
 
 // encodeGet encodes a GET argv to Discard so CI can gate encode allocs/op and B/op.
 func encodeGet(b *testing.B) {
+	b.Helper()
 	const name = "session:9f2c1ab4-user-token"
 	buf := make([]byte, 0, 64)
 
@@ -121,6 +123,7 @@ func encodeGet(b *testing.B) {
 
 // encodeEval rebuilds and encodes an EVAL argv each op (KEYS declared, script copied).
 func encodeEval(b *testing.B) {
+	b.Helper()
 	keys := []string{"bucket:1.2.3.4"}
 	args := []string{"10", "10", "1", "1700000000"}
 	buf := make([]byte, 0, 512)
@@ -182,6 +185,7 @@ func benchDecode(b *testing.B, resp []byte) {
 
 // encodeSet100KB encodes a 100 KiB SET argv to Discard so buffer growth is gated.
 func encodeSet100KB(b *testing.B) {
+	b.Helper()
 	value := make([]byte, largeBulkBytes)
 	buf := make([]byte, 0, largeBulkBytes+32)
 
@@ -194,6 +198,7 @@ func encodeSet100KB(b *testing.B) {
 
 // encodeMSetEX encodes native MSETEX argv to Discard.
 func encodeMSetEX(b *testing.B) {
+	b.Helper()
 	args := msetexArgs([]string{"a", "b"}, [][]byte{[]byte("1"), []byte("2")}, "EX", 60)
 	buf := make([]byte, 0, 128)
 
@@ -238,13 +243,13 @@ func BenchmarkEncodeSet100KB(b *testing.B) { encodeSet100KB(b) }
 // BenchmarkGetParallel shows how many TCP sessions the pool burns above MaxIdleConns.
 func BenchmarkGetParallel(b *testing.B) {
 	fake, addr := startFakeRedis(b, map[string]string{"hit": "some-cached-value"})
-	redis := New(Config{Host: addr, PoolSize: 64})
+	redis := newTestRedis(b, Config{Host: addr, PoolSize: 64})
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			if _, err := redis.Get("hit"); err != nil {
+			if _, err := redis.Get(context.Background(), "hit"); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -255,13 +260,13 @@ func BenchmarkGetParallel(b *testing.B) {
 
 // startSlowRedis answers every command with a canned bulk after latency, so
 // concurrent callers actually overlap the way they do against a real server.
-func startSlowRedis(t testing.TB, latency time.Duration) (*fakeRedis, string) {
-	t.Helper()
+func startSlowRedis(tb testing.TB, latency time.Duration) (server *fakeRedis, listenAddr string) {
+	tb.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
-	t.Cleanup(func() { _ = listener.Close() })
+	tb.Cleanup(func() { _ = listener.Close() })
 
 	fake := &fakeRedis{store: map[string]string{}}
 	go func() {
@@ -298,7 +303,7 @@ func TestConnectionChurnUnderLatency(t *testing.T) {
 	const goroutines = 64
 	const perGoroutine = 20
 	fake, addr := startSlowRedis(t, 500*time.Microsecond)
-	redis := New(Config{Host: addr, PoolSize: goroutines})
+	redis := newTestRedis(t, Config{Host: addr, PoolSize: goroutines})
 
 	var wg sync.WaitGroup
 	for i := 0; i < goroutines; i++ {
@@ -306,7 +311,7 @@ func TestConnectionChurnUnderLatency(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < perGoroutine; j++ {
-				if _, err := redis.Get("hit"); err != nil {
+				if _, err := redis.Get(context.Background(), "hit"); err != nil {
 					t.Errorf("Get: %v", err)
 					return
 				}
@@ -328,7 +333,7 @@ func TestConnectionChurnAcrossBursts(t *testing.T) {
 	const bursts = 5
 	const width = 64
 	fake, addr := startSlowRedis(t, 500*time.Microsecond)
-	redis := New(Config{Host: addr, PoolSize: width})
+	redis := newTestRedis(t, Config{Host: addr, PoolSize: width})
 
 	for burst := 0; burst < bursts; burst++ {
 		var wg sync.WaitGroup
@@ -336,7 +341,7 @@ func TestConnectionChurnAcrossBursts(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				if _, err := redis.Get("hit"); err != nil {
+				if _, err := redis.Get(context.Background(), "hit"); err != nil {
 					t.Errorf("Get: %v", err)
 				}
 			}()
@@ -401,30 +406,46 @@ func TestAllocCeilingFailsWhenOverBudget(t *testing.T) {
 	}
 }
 
+// skipAllocCeilingIfRace skips dest alloc ceilings when the race detector inflates B/op.
+func skipAllocCeilingIfRace(t *testing.T) {
+	t.Helper()
+	if !raceDetectorOn {
+		return
+	}
+	t.Skip("alloc ceilings measure dest non-race builds; the detector inflates B/op")
+}
+
 func TestAllocEncodeGet(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "encode GET", testing.Benchmark(encodeGet), encodeGetAllocs, encodeGetBytes)
 }
 
 func TestAllocEncodeEval(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "encode EVAL", testing.Benchmark(encodeEval), encodeEvalAllocs, encodeEvalBytes)
 }
 
 func TestAllocDecodeBulk(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "decode bulk", testing.Benchmark(BenchmarkDecodeBulk), decodeBulkAllocs, decodeBulkBytes)
 }
 
 func TestAllocDecodeArray10(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "decode array10", testing.Benchmark(BenchmarkDecodeArray10), decodeArrayAllocs, decodeArrayBytes)
 }
 
 func TestAllocDecodeInteger(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "decode integer", testing.Benchmark(BenchmarkDecodeInteger), decodeIntegerAllocs, decodeIntegerBytes)
 }
 
 func TestAllocDecodeBulk100KB(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "decode 100KB bulk", testing.Benchmark(BenchmarkDecodeBulk100KB), decode100KBAllocs, decode100KBBytes)
 }
 
 func TestAllocEncodeSet100KB(t *testing.T) {
+	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "encode 100KB SET", testing.Benchmark(encodeSet100KB), encodeSet100KBAllocs, encodeSet100KBBytes)
 }

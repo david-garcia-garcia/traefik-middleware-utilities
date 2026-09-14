@@ -13,7 +13,7 @@ import (
 )
 
 // evalUnsafeProbe interprets src and returns Probe(). withUnsafe registers the
-// yaegi unsafe symbols; unrestricted sets interp's Unrestricted option.
+// Yaegi unsafe symbols; unrestricted sets interp's Unrestricted option.
 func evalUnsafeProbe(t *testing.T, src string, withUnsafe, unrestricted bool) (string, error) {
 	t.Helper()
 	goPath := t.TempDir()
@@ -38,10 +38,17 @@ func evalUnsafeProbe(t *testing.T, src string, withUnsafe, unrestricted bool) (s
 	return evaluated.Interface().(string), nil
 }
 
-// TestYaegiUnsafeVariants reports which zero-copy conversion the interpreter accepts.
+// TestYaegiUnsafeVariants asserts which string/[]byte conversions Yaegi accepts.
 func TestYaegiUnsafeVariants(t *testing.T) {
-	variants := map[string]string{
-		"go1.20 unsafe.Slice/unsafe.String": `package unsafeprobe
+	variants := []struct {
+		name         string
+		okWithUnsafe bool
+		src          string
+	}{
+		{
+			name:         "go-redis v9 unsafe.Slice/unsafe.String",
+			okWithUnsafe: false,
+			src: `package unsafeprobe
 
 import "unsafe"
 
@@ -50,7 +57,11 @@ func Probe() string {
 	return unsafe.String(unsafe.SliceData(b), len(b))
 }
 `,
-		"legacy bytes->string via unsafe.Pointer": `package unsafeprobe
+		},
+		{
+			name:         "legacy pointer-cast",
+			okWithUnsafe: true,
+			src: `package unsafeprobe
 
 import "unsafe"
 
@@ -59,7 +70,11 @@ func Probe() string {
 	return *(*string)(unsafe.Pointer(&b))
 }
 `,
-		"legacy string->bytes via struct header": `package unsafeprobe
+		},
+		{
+			name:         "legacy struct-header",
+			okWithUnsafe: true,
+			src: `package unsafeprobe
 
 import "unsafe"
 
@@ -75,9 +90,14 @@ func Probe() string {
 	return string(b)
 }
 `,
-		"reflect.StringHeader": `package unsafeprobe
+		},
+		{
+			name:         "reflect.StringHeader",
+			okWithUnsafe: true,
+			src: `package unsafeprobe
 
 import (
+	"context"
 	"reflect"
 	"unsafe"
 )
@@ -93,6 +113,7 @@ func Probe() string {
 	return string(out)
 }
 `,
+		},
 	}
 
 	modes := []struct {
@@ -106,20 +127,24 @@ func Probe() string {
 	}
 
 	for _, mode := range modes {
-		for name, src := range variants {
-			got, err := evalUnsafeProbe(t, src, mode.withUnsafe, mode.unrestricted)
-			if err != nil {
-				t.Logf("[%-26s] UNSUPPORTED %-40s", mode.label, name)
-				continue
+		for _, variant := range variants {
+			got, err := evalUnsafeProbe(t, variant.src, mode.withUnsafe, mode.unrestricted)
+			supported := err == nil
+			wantSupported := variant.okWithUnsafe && mode.withUnsafe
+			if supported != wantSupported {
+				t.Fatalf("%s / %s: supported=%v want %v (err=%v got=%q)",
+					mode.label, variant.name, supported, wantSupported, err, got)
 			}
-			t.Logf("[%-26s] OK          %-40s Probe() = %q", mode.label, name, got)
+			if wantSupported && got != "hello" {
+				t.Fatalf("%s / %s: Probe()=%q, want hello", mode.label, variant.name, got)
+			}
 		}
 	}
 }
 
 // stringToBytesUnsafe is the pre-v9 go-redis trick, the only form Yaegi accepts.
 func stringToBytesUnsafe(s string) []byte {
-	return *(*[]byte)(unsafe.Pointer(&struct {
+	return *(*[]byte)(unsafe.Pointer(&struct { //nolint:gosec
 		string
 		Cap int
 	}{s, len(s)}))
@@ -127,7 +152,7 @@ func stringToBytesUnsafe(s string) []byte {
 
 // bytesToStringUnsafe is the pre-v9 go-redis reverse trick.
 func bytesToStringUnsafe(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+	return *(*string)(unsafe.Pointer(&b)) //nolint:gosec
 }
 
 // BenchmarkCompiledEncodeEvalCopy is today's Eval encode: the script is copied.
@@ -187,6 +212,7 @@ func BenchmarkCompiledParseIntUnsafe(b *testing.B) {
 
 // benchmarkYaegiConvert runs one interpreted conversion loop from convertprobe.
 func benchmarkYaegiConvert(b *testing.B, loopName string) {
+	b.Helper()
 	goPath := b.TempDir()
 	writeGopathFile(b, goPath, "convertprobe", "convert.go", convertprobeSrc)
 
@@ -270,6 +296,7 @@ func UnsafeLoop(count int) int {
 
 // benchmarkYaegiEncode runs one interpreted encode loop from encodeprobe.
 func benchmarkYaegiEncode(b *testing.B, loopName string) {
+	b.Helper()
 	goPath := b.TempDir()
 	writeGopathFile(b, goPath, "encodeprobe", "encode.go", encodeprobeSrc)
 
@@ -405,14 +432,19 @@ func BenchmarkYaegiGet(b *testing.B) {
 const loopprobeSrc = `package loopprobe
 
 import (
+	"context"
+
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
 // GetLoop builds one client with New and runs count Get calls.
 func GetLoop(host string, count int) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	for i := 0; i < count; i++ {
-		if _, err := client.Get("hit"); err != nil {
+		if _, err := client.Get(context.Background(), "hit"); err != nil {
 			return "get:" + err.Error()
 		}
 	}

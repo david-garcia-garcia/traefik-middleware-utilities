@@ -1,0 +1,6 @@
+host: local
+ref: none
+title: "risk-06 — A client built without New spins the retry ladder instead of failing fast"
+url: none
+number: none
+source: simpleredisfixes2/risk-06-zero-value-client-spins-retries.md

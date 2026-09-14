@@ -1,0 +1,3 @@
+# SimpleRedis Eval requires caller SHA-1 hex; export scriptSHA1Hex
+
+SimpleRedis.Eval currently hashes the Lua body on every call (`simpleredis/commands_eval.go` `Eval` around line 18) via unexported `scriptSHA1Hex` (around line 30). The requester wants EVAL to require the SHA1HEX from the caller, calculated by exposing `scriptSHA1Hex`. Purpose: give the caller CONTROL, avoiding rehashing every time. Callers that reuse the same scripts (which is how this is always consumed) should first calculate and store SHA1 when their component is inited, to avoid rehashing all the time. Expose the hash function too.

@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-simpleredis-eval-fallback-comments
+jobName: 2026-09-13-simpleredis-eval-fallback-comments
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: b46536e49233790b8836d274a4e8543325e77c77a26eb2d910de7ad2f3b90038
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-eval-fallback-hop-comments
+pr:
+  id: "47"
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/47

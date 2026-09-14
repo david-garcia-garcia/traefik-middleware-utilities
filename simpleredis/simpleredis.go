@@ -3,29 +3,55 @@ package simpleredis
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// Error strings for redis.
+// Error strings for redis. Keep for display and legacy text matching.
 const (
-	RedisUnreachable = "redis:unreachable"
-	RedisMiss        = "redis:miss"
-	RedisTimeout     = "redis:timeout"
-	RedisNoAuth      = "redis:noauth"
-	RedisIssue       = "redis:issue?"
+	RedisUnreachable      = "redis:unreachable"
+	RedisMiss             = "redis:miss"
+	RedisTimeout          = "redis:timeout"
+	RedisNoAuth           = "redis:noauth"
+	RedisIssue            = "redis:issue?"
+	RedisUnsupportedReply = "redis:unsupported-reply"
 )
 
+// Exported sentinels. Match with errors.Is or IsMiss / IsUnreachable / IsPoolWait, not string equality.
 var (
-	errUnreachable = errors.New(RedisUnreachable)
-	// errPoolWait is a waiter past liveCap. Error() is redis:unreachable so callers still match that token. Distinct from errUnreachable so MaxRetries does not multiply poolTimeout.
-	errPoolWait = errors.New(RedisUnreachable)
-	errMiss     = errors.New(RedisMiss)
-	errTimeout  = errors.New(RedisTimeout)
-	errNoAuth   = errors.New(RedisNoAuth)
-	errIssue    = errors.New(RedisIssue)
+	ErrUnreachable      = errors.New(RedisUnreachable)
+	ErrMiss             = errors.New(RedisMiss)
+	ErrTimeout          = errors.New(RedisTimeout)
+	ErrNoAuth           = errors.New(RedisNoAuth)
+	ErrIssue            = errors.New(RedisIssue)
+	ErrUnsupportedReply = errors.New(RedisUnsupportedReply)
 )
+
+// ErrPoolWait is pool saturation. It wraps ErrUnreachable so callers matching the broad condition keep working.
+var ErrPoolWait = fmt.Errorf("%w", ErrUnreachable)
+
+var (
+	errUnreachable      = ErrUnreachable
+	errPoolWait         = ErrPoolWait
+	errMiss             = ErrMiss
+	errTimeout          = ErrTimeout
+	errNoAuth           = ErrNoAuth
+	errIssue            = ErrIssue
+	errUnsupportedReply = ErrUnsupportedReply
+	// errNotFromNew is a client that did not come from New (nil in-use-turn channel). Error() is redis:unreachable. Distinct from errUnreachable so MaxRetries does not sleep a programming error. Wraps ErrUnreachable so IsUnreachable stays true.
+	errNotFromNew = fmt.Errorf("%w", ErrUnreachable)
+)
+
+// IsMiss reports whether err is a Redis miss, including wrapping.
+func IsMiss(err error) bool { return errors.Is(err, ErrMiss) }
+
+// IsUnreachable reports whether err is redis:unreachable, including pool wait and wrapping.
+func IsUnreachable(err error) bool { return errors.Is(err, ErrUnreachable) }
+
+// IsPoolWait reports whether err is pool saturation, including wrapping.
+func IsPoolWait(err error) bool { return errors.Is(err, ErrPoolWait) }
 
 // SimpleRedis is a pooled TCP RESP client. Obtain one with New; commands dial on first use.
 // Pool, timeout, and retry knobs live on Config and are frozen at New; they are not fields on this type.
@@ -51,6 +77,8 @@ type SimpleRedis struct {
 	closed      atomic.Bool
 	// inUseTurns is a PoolSize-buffered semaphore of concurrent in-use sockets. Idle sockets do not hold a turn.
 	inUseTurns chan struct{}
+	// overFrees counts in-use-turn returns that were dropped because the semaphore was already full.
+	overFrees atomic.Int64
 
 	// groupWriteMu guards groupWrite (native MSETEX vs Lua fallback). Not idleConnsMu: that lock is the unused-socket list.
 	groupWriteMu sync.Mutex
@@ -58,8 +86,12 @@ type SimpleRedis struct {
 }
 
 // New copies cfg onto a client and builds the in-use-turn channel. Does not dial. Call before concurrent use.
-func New(cfg Config) *SimpleRedis {
-	cfg = cfg.applyDefaults()
+// An explicit MaxIdleConns above PoolSize returns ErrMaxIdleConnsAbovePoolSize and a nil client; a defaulted one follows PoolSize.
+func New(cfg Config) (*SimpleRedis, error) {
+	cfg, err := cfg.applyDefaults()
+	if err != nil {
+		return nil, err
+	}
 	sr := &SimpleRedis{
 		host:            cfg.Host,
 		pass:            cfg.Pass,
@@ -75,7 +107,7 @@ func New(cfg Config) *SimpleRedis {
 		ioTimeout:       cfg.IOTimeout,
 	}
 	sr.ensureInUseTurns()
-	return sr
+	return sr, nil
 }
 
 // Close drains unused pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval/MSetEX/MSetEXAt return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
@@ -102,9 +134,14 @@ func (sr *SimpleRedis) PoolSize() int {
 	return sr.liveCap()
 }
 
-// MaxIdleConns is the idle-list trim New froze.
+// MaxIdleConns is the idle-list trim New froze, never above PoolSize. New does not create a client when an explicit trim sits above PoolSize.
 func (sr *SimpleRedis) MaxIdleConns() int {
 	return sr.maxIdleConns
+}
+
+// OverFrees is how many extra in-use-turn returns were dropped because the semaphore was already full.
+func (sr *SimpleRedis) OverFrees() int64 {
+	return sr.overFrees.Load()
 }
 
 // PoolTimeout is how long a waiter past PoolSize blocks.
@@ -136,7 +173,7 @@ func (sr *SimpleRedis) IOTimeout() time.Duration {
 	return defaultIOTimeout
 }
 
-// MaxRetries is the retry sentinel New froze (0 default, -1 off).
+// MaxRetries is the extra-retry count New froze (1 after zero Config, -1 off).
 func (sr *SimpleRedis) MaxRetries() int {
 	return sr.maxRetries
 }

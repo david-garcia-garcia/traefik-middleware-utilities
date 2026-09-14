@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: A panic between borrow and release permanently bricks the pool and leaks the socket fd
+url: none
+number: none

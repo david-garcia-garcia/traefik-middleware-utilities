@@ -2,6 +2,7 @@ package simpleredis
 
 import (
 	"bufio"
+	"context"
 	"net"
 	"time"
 )
@@ -51,61 +52,114 @@ func (sr *SimpleRedis) ensureInUseTurns() {
 }
 
 // freeInUseTurn returns one in-use-socket token to the pool. No-op before the pool is created.
+// An extra return when the semaphore is already full is dropped and counted on OverFrees so the caller does not hang.
 func (sr *SimpleRedis) freeInUseTurn() {
 	if sr.inUseTurns == nil {
 		return
 	}
-	sr.inUseTurns <- struct{}{}
+	select {
+	case sr.inUseTurns <- struct{}{}:
+	default:
+		// Over-free: some path returned a turn it did not take. Drop so the request does not hang.
+		sr.overFrees.Add(1)
+	}
 }
 
-// borrow waits for an in-use turn, then takes an unused socket younger than idleTimeout, or dials.
-func (sr *SimpleRedis) borrow() (*pooledConn, error) {
+// borrowSocket waits for an in-use turn, then takes an unused socket younger than idleTimeout, or dials.
+// handshakeFailed is true only when a new dial's AUTH or SELECT failed after TCP succeeded.
+//
+// The unused list exists so a sequential burst on one client pays one dial plus one AUTH/SELECT instead of one per
+// command. Its cost is that a peer restart, a failover, or CLIENT KILL of every accepted socket leaves the parked
+// sockets dead while still younger than idleTimeout, so the idleTimeout sweep does not touch them and a borrow
+// hands out a corpse.
+//
+// skipIdle is how a command escapes that vintage: this command already failed I/O on a socket it took from the
+// unused list, so that list is no longer evidence the peer is up, and later attempts dial instead of popping the
+// next corpse. Without it one command spends every attempt on dead sockets and returns redis:unreachable while the
+// peer is healthy and accepting.
+//
+// go-redis instead refuses to hand out a dead socket at all: connCheck asks the fd directly (syscall.Conn to
+// RawConn.Read to a non-blocking syscall.Read; EAGAIN means healthy, zero bytes means the peer is gone). That is
+// closed to this client. Traefik registers syscall symbols only when useUnsafe is true in both the plugin manifest
+// and the operator's static config, and manifest-true with operator-false makes Traefik refuse to load the plugin
+// outright, which a middleware other people install cannot demand. The probe is also Unix-only, and Yaegi v0.16.1
+// ignores //go:build lines, so go-redis's own conn_check.go / conn_check_dummy.go split silently resolves to the
+// no-op. Detecting the dead socket by using it is what remains.
+// See knowledge/research/ext_traefik_plugins_useunsafe/ and knowledge/research/ext_traefik_plugins_yaegi-build-constraints/.
+//
+//nolint:revive,stylecheck // error stays before handshakeFailed; reordering would collide with in-flight SimpleRedis PRs.
+func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *pooledConn, err error, handshakeFailed bool, fromIdle bool) {
 	// closed is atomic; inUseTurns is written once in New before concurrent use.
 	if sr.closed.Load() {
-		return nil, errUnreachable
+		return nil, errUnreachable, false, false
 	}
 	if sr.inUseTurns == nil {
-		return nil, errUnreachable
+		return nil, errNotFromNew, false, false
+	}
+	if err := contextStop(ctx); err != nil {
+		return nil, err, false, false
 	}
 
 	// Uncontended borrow must not allocate a timer; the wait exists only for a waiter past poolSize.
 	select {
 	case <-sr.inUseTurns:
 	default:
-		// Waiter past poolSize: allocate a stoppable timer (not time.After).
+		// Waiter past poolSize: PoolTimeout timer, or ctx.Done when the command deadline is sooner.
 		timer := time.NewTimer(sr.inUseTurnWait())
 		select {
 		case <-sr.inUseTurns:
 			if !timer.Stop() {
 				<-timer.C
 			}
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, ctx.Err(), false, false
 		case <-timer.C:
-			return nil, errPoolWait
+			if err := contextStop(ctx); err != nil {
+				return nil, err, false, false
+			}
+			return nil, errPoolWait, false, false
 		}
 	}
 
-	// Prefer a young unused socket over a new dial.
-	reused, stale, closed := sr.takeIdleConn()
-	if closed {
-		sr.freeInUseTurn()
-		return nil, errUnreachable
+	// The turn is held from here. Return it on every path that does not hand a socket to the
+	// caller, including a panic in takeIdleConn or dial.
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			sr.freeInUseTurn()
+		}
+	}()
+
+	if !skipIdle {
+		// Prefer a young unused socket over a new dial.
+		reused, stale, closed := sr.takeIdleConn()
+		if closed {
+			return nil, errUnreachable, false, false
+		}
+		for _, idle := range stale {
+			idle.close()
+		}
+		if reused != nil {
+			handedOff = true
+			return reused, nil, false, true
+		}
+	} else if sr.closed.Load() {
+		// Close raced after the turn was taken; do not dial a client that is shutting down.
+		return nil, errUnreachable, false, false
 	}
-	for _, conn := range stale {
-		conn.close()
-	}
-	if reused != nil {
-		return reused, nil
-	}
-	// Idle miss: dial while still holding the turn.
-	conn, err := sr.dial()
+	// Idle miss, or skipIdle: dial while still holding the turn.
+	conn, err, handshakeFailed = sr.dial(ctx)
 	if err != nil {
-		sr.freeInUseTurn()
-		return nil, err
+		return nil, err, handshakeFailed, false
 	}
-	return conn, nil
+	handedOff = true
+	return conn, nil, false, false
 }
 
-// takeIdleConn pops unused sockets until one is younger than idleTimeout. Stale sockets are returned for close after the lock. closed is true when Close ran.
+// takeIdleConn sweeps unused sockets older than idleTimeout, then pops the newest survivor. Stale sockets are returned for close after the lock. closed is true when Close ran.
 func (sr *SimpleRedis) takeIdleConn() (reused *pooledConn, stale []*pooledConn, closed bool) {
 	sr.idleConnsMu.Lock()
 	defer sr.idleConnsMu.Unlock()
@@ -113,74 +167,86 @@ func (sr *SimpleRedis) takeIdleConn() (reused *pooledConn, stale []*pooledConn, 
 		return nil, nil, true
 	}
 	now := time.Now()
-	for len(sr.idleConns) > 0 {
-		conn := sr.idleConns[len(sr.idleConns)-1]
-		sr.idleConns = sr.idleConns[:len(sr.idleConns)-1]
+	// Keep still-young sockets in place; collect stale for close after unlock.
+	survivors := sr.idleConns[:0]
+	for _, conn := range sr.idleConns {
 		if now.Sub(conn.lastUsed) < sr.idleTimeout {
-			return conn, stale, false
+			survivors = append(survivors, conn)
+			continue
 		}
 		stale = append(stale, conn)
 	}
-	return nil, stale, false
+	sr.idleConns = survivors
+	// LIFO: reuse the newest survivor.
+	if n := len(sr.idleConns); n > 0 {
+		reused = sr.idleConns[n-1]
+		sr.idleConns = sr.idleConns[:n-1]
+	}
+	return reused, stale, false
 }
 
-// release returns a clean conn to idleConns and frees the in-use turn, or closes it when dirty, closed, or idleConns is full at the live cap.
+// release returns a clean conn to idleConns and frees the in-use turn, or closes it when dirty, closed, or idleConns is already at maxIdleConns.
 func (sr *SimpleRedis) release(conn *pooledConn, reusable bool) {
-	if !reusable {
-		conn.close()
-		sr.freeInUseTurn()
-		return
+	if reusable {
+		// Stamp before park so a later close-because-full still recorded lastUsed.
+		conn.lastUsed = time.Now()
 	}
-	conn.lastUsed = time.Now()
+	if !reusable || !sr.parkIdleConn(conn) {
+		conn.close()
+	}
+	sr.freeInUseTurn()
+}
 
+// parkIdleConn parks conn on idleConns when the client is open and unused sockets are under maxIdleConns. The idle mutex is released before return.
+func (sr *SimpleRedis) parkIdleConn(conn *pooledConn) bool {
 	sr.idleConnsMu.Lock()
-	// Close only when shut or idleConns is already maxIdleConns and live is at liveCap().
-	// inUse still includes this socket until freeInUseTurn runs.
-	idleConnsFull := len(sr.idleConns) >= sr.maxIdleConns
-	inUse := 0
-	if sr.inUseTurns != nil {
-		inUse = sr.liveCap() - len(sr.inUseTurns)
-	}
-	live := len(sr.idleConns) + inUse
-	if sr.closed.Load() || (idleConnsFull && live >= sr.liveCap()) {
-		sr.idleConnsMu.Unlock()
-		conn.close()
-		sr.freeInUseTurn()
-		return
+	defer sr.idleConnsMu.Unlock()
+	// Do not park when shut, or when unused sockets already equal the idle cap.
+	if sr.closed.Load() || len(sr.idleConns) >= sr.maxIdleConns {
+		return false
 	}
 	// Drop a huge encode scratch so one large SET cannot pin that idle conn.
 	if cap(conn.buf) > maxIdleEncodeBuf {
 		conn.buf = nil
 	}
 	sr.idleConns = append(sr.idleConns, conn)
-	sr.idleConnsMu.Unlock()
-	sr.freeInUseTurn()
+	return true
 }
 
 // dial opens TCP to host, then AUTH and SELECT when those New fields are set.
-func (sr *SimpleRedis) dial() (*pooledConn, error) {
-	dialer := net.Dialer{Timeout: sr.dialTimeout}
-	netConn, err := dialer.Dial("tcp", sr.host)
-	if err != nil {
-		return nil, errUnreachable
+// Dialer.Timeout is the per-attempt cap; DialContext also honors ctx (overall budget or caller).
+// handshakeFailed is true when TCP succeeded and AUTH or SELECT then failed; exec must not retry that error.
+//
+//nolint:revive // error stays before handshakeFailed; reordering would collide with in-flight SimpleRedis PRs.
+func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, handshakeFailed bool) {
+	if err := contextStop(ctx); err != nil {
+		return nil, err, false
 	}
-	conn := &pooledConn{
+	dialer := net.Dialer{Timeout: sr.DialTimeout()}
+	netConn, err := dialer.DialContext(ctx, "tcp", sr.host)
+	if err != nil {
+		if stop := contextStop(ctx); stop != nil {
+			return nil, stop, false
+		}
+		return nil, errUnreachable, false
+	}
+	conn = &pooledConn{
 		netConn: netConn,
 		reader:  bufio.NewReader(netConn),
 	}
 
 	// AUTH before SELECT so a passworded server accepts the session.
 	if sr.pass != "" {
-		if _, _, err = sr.do(conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("AUTH"), []byte(sr.pass)}); err != nil {
 			conn.close()
-			return nil, err
+			return nil, err, true
 		}
 	}
 	if sr.database != "" {
-		if _, _, err = sr.do(conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
+		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte("SELECT"), []byte(sr.database)}); err != nil {
 			conn.close()
-			return nil, err
+			return nil, err, true
 		}
 	}
-	return conn, nil
+	return conn, nil, false
 }

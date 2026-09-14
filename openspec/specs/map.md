@@ -7,6 +7,8 @@ Allowlist of root + domain: `openspec/specs/domains.md`.
 
 ### go
 
+- backendbackoff
+- ci
 - reclaim
 - simpleredis
 - tokenbucket

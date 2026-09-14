@@ -1,6 +1,7 @@
 package tokenbucket
 
 import (
+	"context"
 	"sync"
 	"time"
 )
@@ -51,11 +52,14 @@ func (m *Memory) SetNowForTest(now func() time.Time) {
 }
 
 // Allow consumes one token for key and returns whether it is allowed plus how long to wait.
-func (m *Memory) Allow(key string) (bool, time.Duration, error) {
-	now := m.now()
-	nowMicro := now.UnixMicro()
+func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, error) {
+	if err := ctx.Err(); err != nil {
+		return false, 0, err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	now := m.now()
+	nowMicro := now.UnixMicro()
 	// Idle longer than ttl is a new bucket (Traefik TTL map). Drop expired keys so the map cannot grow without bound.
 	entry := m.buckets[key]
 	if entry != nil && !now.Before(entry.expireAt) {
@@ -67,7 +71,8 @@ func (m *Memory) Allow(key string) (bool, time.Duration, error) {
 		if len(m.buckets) >= maxMemorySources {
 			m.dropOne(now)
 		}
-		entry = &memEntry{}
+		// Missing or TTL-expired key is a full bucket, then consumeOne.
+		entry = &memEntry{tokens: float64(m.clock.burst), last: nowMicro}
 		m.buckets[key] = entry
 	}
 	tokens, last, waitMicro := consumeOne(entry.tokens, entry.last, m.clock.limitPerMicro(), float64(m.clock.burst), nowMicro, m.clock.maxDelay.Microseconds())

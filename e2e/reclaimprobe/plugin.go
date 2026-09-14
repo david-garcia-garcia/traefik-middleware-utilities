@@ -30,6 +30,9 @@ type probeValue struct {
 
 var nextID atomic.Int64
 
+// table is the probe's one table so two Traefik New calls share an incarnation within grace.
+var table = reclaim.New(reclaim.Config{Grace: reclaim.DefaultGrace})
+
 // middleware is the HTTP handler Traefik chains in front of whoami.
 type middleware struct {
 	next http.Handler
@@ -52,7 +55,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	var created *probeValue
-	stored, err := reclaim.Open(ctx, key, logger, func() (any, error) {
+	stored, err := table.Open(ctx, key, logger, func() (any, error) {
 		created = &probeValue{id: nextID.Add(1)}
 		return created, nil
 	}, reclaim.Hooks{

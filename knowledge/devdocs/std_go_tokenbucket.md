@@ -17,8 +17,8 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket`
 ## How to use
 
 - `NewMemory(rate, burst, maxDelay, ttl)` or `NewRedis(client, rate, burst, maxDelay, ttl)` once.
-- Call `Allow(key)` per request. Match Redis errors by `Error()` text.
-- Prove with `go test ./tokenbucket/...`. Live files skip without `TOKENBUCKET_LIVE_REDIS` / `TOKENBUCKET_LIVE_DRAGONFLY` or under `-short`. CI must set both.
+- Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline. Match Redis errors by `Error()` text.
+- Prove with `go test -short ./tokenbucket/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
 
 ## Pattern snippet
 
@@ -27,7 +27,8 @@ limiter, err := tokenbucket.NewRedis(client, 100, 50, 5*time.Millisecond, 2*time
 if err != nil {
 	return err
 }
-allowed, wait, err := limiter.Allow("ip:" + ip)
+ctx := req.Context()
+allowed, wait, err := limiter.Allow(ctx, "ip:" + ip)
 if err != nil {
 	return err
 }
@@ -44,7 +45,10 @@ _ = wait
 
 ## Gotchas
 
-- `rate <= 0`, `burst < 1`, `maxDelay < 0`, or `ttl < 1s` fails New. Passthrough is skipping construction.
+- `rate <= 0`, NaN, Inf, `burst < 1`, `maxDelay < 0`, or a `ttl` that is not a whole number of seconds of at least 1s fails New. Redis EXPIRE is integer seconds; New must not accept a Duration Redis cannot represent. Passthrough is skipping construction. This package has no unlimited-rate constructor.
 - Lua always returns `"true"`; Go maps allowed from wait vs maxDelay and from refund.
+- A new or TTL-expired key starts at `burst`, then consume 1. Missing Redis hash does the same; do not assume `last=0` refill from Unix epoch.
+- A 3-field Eval wait that is not a finite number (`nan`, `+Inf`, `-Inf`, `inf`) is `errEvalWait` (`tokenbucket: eval wait is not a number`), same as a garbage string. Do not treat it as admit or deny.
 - EVAL scripts must list keys in `KEYS` (Dragonfly). Do not use `table.maxn`.
 - Two limiter instances on one Redis key share burst. Do not expect a second full burst.
+- Persisted `last` is never earlier than the previous `last`. Elapsed still clamps when now is behind `last` (no negative refill). Memory reads now after the mutex so lock order is clock order.
