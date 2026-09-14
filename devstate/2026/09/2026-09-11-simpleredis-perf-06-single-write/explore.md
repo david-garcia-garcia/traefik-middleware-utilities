@@ -38,11 +38,13 @@ intended encode
 - Q: After the encoder change, how do we prove every existing verb still works live on both Redis and Dragonfly with identical wire bytes?
   Rank: additive asked — Desired 3 names identical wire bytes and live Redis and Dragonfly; conductor hard-requirement names compose + Pester `/redis` `/dragonfly`, `e2e/simpleredisprobe`, compiled and Yaegi encode benches, Lua 5.1-safe, Dragonfly KEYS
   Decision: resolved — ran compose + Pester `/redis` and `/dragonfly` plus `e2e/simpleredisprobe` after the switch; did not rewrite the probe Eval script (`kongIncrbyExpireatScript` already lists `KEYS[1]`, no `table.maxn`) or the Dragonfly compose pin; kept `BenchmarkEncodeGet` / `BenchmarkEncodeEval` / `BenchmarkYaegiEncodeBufio` / `BenchmarkYaegiEncodeSingleWrite`; production encode matches the single-write strategy; existing protocol tests stay green
+  Superseded: the encoder shipped as variant D (`bufio` plus `strconv.AppendInt`), so the benches measure that shape; the live dual-engine proof is unchanged. See the archived `design.md`.
   By: implement
 
 - Q: Exact retained-buffer cap on `release`?
   Rank: additive asked — Desired 2 names the trim; finding example is 64 KB
   Decision: resolved — named const `maxIdleEncodeBuf = 64 * 1024`; on `release` of a reusable conn, if `cap(conn.buf) > maxIdleEncodeBuf` set `conn.buf = nil`; next command reallocates. Same package test: large SET then idle reuse leaves cap ≤ 64 KiB
+  Superseded: the question is moot. There is no growable scratch to retain, so `maxIdleEncodeBuf`, the trim and its test were removed with it. See the archived `design.md` Decision 3.
   By: implement
 
 - Q: Copy the untracked review `bench_test.go` / `interpretedcost_test.go` as-is, or rewrite them against the new `writeCommand`?
@@ -53,16 +55,19 @@ intended encode
 - Q: Does any spec leaf need an encode-path requirement, or are tests+e2e enough?
   Rank: additive incidental — Unknowns name the choice; no criterion requires a spec sentence about call count; Desired 3 is wire-identical behavior already specified as command shapes + dual-engine e2e
   Decision: resolved — fold wire-identical golden, dual-engine live proof (compose + Pester `/redis` `/dragonfly`, `e2e/simpleredisprobe`), and encode benches into `std_go_simpleredis_resp-commands`; fold idle encode-scratch trim into `std_go_simpleredis_tcp-session`. Do not add an encode-call-count or `bufio.Writer` SHALL. tcp-session stdlib-only / no `go-redis` stays as-is
+  Superseded: `resp-commands` now does carry a `bufio.Writer` SHALL, because the rejection of the single-write shape has to be enforceable; `tcp-session` went back to dest untouched with the scratch gone.
   By: propose
 
 - Q: What is `writeCommand`’s signature after `bufio.Writer` is gone?
   Rank: bounded asked — Desired 1 names scratch + one `netConn.Write` and dropping `bufio.Writer`; 1 product caller of `writeCommand` (`do` at `simpleredis.go:296`); 3 `pooledConn.writer` sites in `simpleredis.go` (`:44`, `:272`, `:296`); 0 dest test callers; neighbors use exported verbs only (searched `simpleredis/`, `tokenbucket/`, `windowcounter/`, `e2e/simpleredisprobe/` for `writeCommand` and `conn.writer`)
   Decision: resolved — unexported `writeCommand` takes `conn *pooledConn` and `args [][]byte`, appends into `conn.buf`, one `conn.netConn.Write`, stores the grown slice back. Compiled encode benches share the append loop via an unexported `appendRESP(buf []byte, args [][]byte) []byte` so they measure production framing without a live socket. Yaegi encodeprobe keeps its own copies of both strategies
+  Superseded: the signature stayed `writeCommand(conn *pooledConn, args [][]byte)`, but it writes through `conn.writer` with `strconv.AppendInt` into `conn.lenBuf`; `appendRESP` is gone and the benches call the production encoder over a `bufio.Writer`. See the archived `design.md` Decision 1.
   By: implement
 
 - Q: How should a short `Write` be handled once `bufio.Writer.Flush` is gone?
   Rank: additive incidental — no criterion names write-all vs one Write; it is a means to Desired 1
   Decision: resolved — one `Write`; `n != len(buf)` or non-nil err → return that error (`io.ErrShortWrite` when `n` is short and err is nil; `do` already marks the socket dirty). Do not loop to write the remainder (half-sent RESP + deadline retry would desync; extra interpreted calls)
+  Superseded: moot. `bufio.Writer.Flush` is back, so short writes are the writer's problem again and the `io.ErrShortWrite` branch was deleted.
   By: implement
 
 - Q: How do we prove wire bytes are identical, not only parsed argv?
