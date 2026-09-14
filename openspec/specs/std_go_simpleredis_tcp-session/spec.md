@@ -23,7 +23,7 @@ The session SHALL live in package `simpleredis` under folder `simpleredis/`. The
 
 Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` 200 milliseconds, `IOTimeout` 100 milliseconds. Retry fields on `Config`: `0` at `New` means 1 extra retry; `-1` means off (one send). An explicit `MaxRetries` of 3 means 3 extra retries. `MinRetryBackoff` / `MaxRetryBackoff` keep go-redis sentinels: `0` means 8ms / 512ms; `-1` means off.
 
-After those defaults, `New` SHALL return `ErrMaxIdleConnsAbovePoolSize` and a nil client when `MaxIdleConns` is above `PoolSize`. That includes an explicit trim above the live cap and a zero `MaxIdleConns` (default 8) against a smaller explicit `PoolSize`. `New` MUST NOT rewrite either knob. A trim below `PoolSize` SHALL still create a client.
+`New` SHALL return `ErrMaxIdleConnsAbovePoolSize` and a nil client when an **explicit** `MaxIdleConns` is above `PoolSize`, and MUST NOT rewrite either knob in that case. A zero `MaxIdleConns` is not a request for 8: it SHALL take `min(8, PoolSize)`, so a `Config` that sets only a `PoolSize` below 8 SHALL still create a client whose `MaxIdleConns()` equals that `PoolSize`. `New` MUST NOT rewrite `PoolSize`. A trim below `PoolSize` SHALL still create a client.
 
 #### Scenario: New does not open a socket
 - **WHEN** `New` is called with a host that refuses connections
@@ -31,13 +31,21 @@ After those defaults, `New` SHALL return `ErrMaxIdleConnsAbovePoolSize` and a ni
 - **THEN** `New` returns a client and a nil error
 - **AND** no TCP connection is opened
 
-#### Scenario: New rejects MaxIdleConns above PoolSize
+#### Scenario: New rejects an explicit MaxIdleConns above PoolSize
 - **WHEN** `New` is called with `PoolSize` 4 and `MaxIdleConns` 100
 - **THEN** `New` returns no client
 - **AND** the error is `ErrMaxIdleConnsAbovePoolSize`
-- **WHEN** `New` is called with `PoolSize` 2 and `MaxIdleConns` left at 0
+- **WHEN** `New` is called with `PoolSize` 4 and `MaxIdleConns` 5
 - **THEN** `New` returns no client
 - **AND** the error is `ErrMaxIdleConnsAbovePoolSize`
+
+#### Scenario: A defaulted MaxIdleConns follows a smaller PoolSize
+- **WHEN** `New` is called with `PoolSize` 2 and `MaxIdleConns` left at 0
+- **THEN** `New` returns a client
+- **AND** `MaxIdleConns()` is 2
+- **WHEN** `New` is called with `PoolSize` 1 and `MaxIdleConns` left at 0
+- **THEN** `New` returns a client
+- **AND** `MaxIdleConns()` is 1
 
 #### Scenario: Live cap is frozen at New
 - **WHEN** `Config.PoolSize` is 1 at `New` and `MaxIdleConns` is 1
@@ -426,6 +434,28 @@ Compiled tests MUST close the **accepted** socket from the server after the firs
 - **WHEN** Pester GETs `/redis/get` after Set
 - **THEN** the response body is the value Set wrote
 - **AND** POST `/redis/eval` lists its key in `KEYS` and is Lua 5.1-safe
+
+### Requirement: Peer-closed idle vintage is recovered sequentially
+When every unused pooled TCP connection is closed by the peer at once (restart, failover, or kill of every accepted socket) while those sockets are still younger than `IdleTimeout`, sequential commands SHALL succeed while the peer is accepting, using the existing `MaxRetries` policy. An I/O failure on a socket taken from idle MUST map to `redis:unreachable`. The next attempt of that command SHALL be a new dial, not another unused pooled socket. A later sequential command MAY still take one leftover dead unused socket and then force-dial on its own retry. A force-dial that itself fails with `redis:unreachable` SHALL consume `MaxRetries` as dest already does. When `MaxRetries` is `-1` (one send), that command SHALL still fail after one unused-socket I/O; a free extra send MUST NOT be added, because a lost reply on a reused socket is indistinguishable from a dead unused socket after a successful write. Timeouts, handshake AUTH or SELECT failures, pool wait, and a closed client MUST NOT skip idle. The in-use-turn channel SHALL stay full at rest with `OverFrees()` equal to 0. Compiled proof MUST warm unused sockets with simultaneous in-flight commands, close every accepted socket from the server, then issue sequential commands; it MUST NOT close the client-side file descriptors.
+
+The unused pool exists so that a sequential burst on one client pays one dial plus one AUTH/SELECT instead of one per command, and reacting to a failed borrow is the price of that reuse. A borrow-time liveness probe of the shape go-redis uses (`syscall.Conn` to `RawConn.Read` to a non-blocking `syscall.Read`, where `EAGAIN` means healthy and zero bytes means the peer is gone) MUST NOT be adopted to avoid this vintage. Traefik registers `syscall` symbols only when `useUnsafe` is true on **both** the plugin manifest and the operator's static config, and manifest-true with operator-false makes Traefik refuse to load the plugin at all, which a middleware other operators install cannot require. That probe is also Unix-only, and Yaegi v0.16.1 does not evaluate `//go:build` lines, so a `conn_check.go` / `conn_check_dummy.go` split of the kind go-redis ships loads both files and silently resolves to the no-op. The session SHALL therefore detect a dead unused socket by using it.
+
+#### Scenario: Sequential Gets succeed after every idle socket is dropped
+- **WHEN** `PoolSize` idle sockets have been warmed with simultaneous in-flight Gets
+- **AND** the fake closes every accepted socket while remaining up and accepting
+- **AND** sequential Gets are issued one after another with the zero-Config `MaxRetries` default
+- **THEN** those Gets succeed
+- **AND** none return `redis:unreachable` while the peer is accepting
+
+#### Scenario: Default pool sequential recovery
+- **WHEN** `PoolSize` is 8 and `MaxRetries` is the zero-Config default
+- **AND** every idle socket is closed from the server
+- **THEN** the next sequential Get succeeds
+
+#### Scenario: Turns stay balanced after vintage recovery
+- **WHEN** sequential Gets have recovered after every idle socket was dropped
+- **THEN** the in-use-turn channel is full
+- **AND** `OverFrees()` is 0
 
 ### Requirement: Lost-reply Incr and Eval are proven on live Redis and Dragonfly
 A request through the nested SimpleRedis Traefik plugin SHALL, with query `drop=1` on `/redis` and `/dragonfly` verb paths, send Incr and Eval through a compose RESP drop-relay in front of that request’s engine (`redis:6379` or `dragonfly:6379`). The drop-relay SHALL drop INCR, INCRBY, or EVAL only after that TCP session has already forwarded at least one command (Pester warms with GET). A retry on a new session whose first command is INCR or EVAL SHALL pass the reply through. Other verbs SHALL pass through. After drop Incr the body SHALL be the integer after two applies (`2`) and a Get without `drop=1` SHALL return stored `2`. After drop Eval of the Kong script (ARGV INCRBY `3`) the body SHALL be `6` and a Get without `drop=1` SHALL return stored `6`. Eval SHALL use a Lua 5.1-safe script that lists its key in KEYS. Happy-path Host stays `redis:6379` / `dragonfly:6379`. The Redis and Dragonfly Pester Describes MUST NOT stop `whoami-a` or `whoami-b`.

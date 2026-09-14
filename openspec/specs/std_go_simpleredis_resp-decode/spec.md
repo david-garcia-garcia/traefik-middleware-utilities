@@ -56,6 +56,13 @@ Bulk and array header lengths SHALL be parsed from the bytes after the type byte
 ### Requirement: Bulk and array headers above package ceilings do not allocate
 The decoder SHALL reject a bulk length greater than `64 << 20` bytes and an array element count greater than `1 << 20` after a successful length parse and after the bulk-miss check. Those ceilings MUST be package constants, not session `Config` fields. An over-ceiling bulk or array header SHALL return `redis:issue?` and MUST NOT allocate a payload buffer or an array of that announced size. Array `$` elements SHALL use the same bulk ceiling as a top-level bulk. Lengths at or under the bulk ceiling SHALL still allocate `length+2` bytes and read that many with a full read. `parseLen` overflow (a digit string that does not fit in `int`) SHALL remain `redis:issue?` without a wrap.
 
+An announced length at or under a ceiling MAY be allocated in full before any payload byte arrives. `maxBulkLength` and `maxArrayCount`, checked before allocation, SHALL be the only bound on a peer-controlled allocation; the header arrives on the session's own pooled socket to the configured Redis, not on a separate untrusted channel. The decoder MUST NOT read an in-cap bulk in fixed-size chunks and grow its buffer from arrived bytes, and MUST NOT append array slots as elements arrive. A cumulative per-reply budget across array elements is not required by this spec.
+
+#### Scenario: In-cap bulk allocates the announced length before the payload arrives
+- **WHEN** the peer replies with a `$` header at or under `64 << 20`
+- **THEN** the decoder allocates `length+2` bytes once and fills them with one full read
+- **AND** the decoder does not grow that buffer from arrived bytes
+
 #### Scenario: Bulk just over the ceiling is issue
 - **WHEN** the peer replies with a `$` header whose length is one more than `64 << 20`
 - **AND** no payload bytes follow

@@ -562,7 +562,7 @@ func assertIdleCapAfterSequentialRelease(t *testing.T, fake *fakeRedis, redis *S
 	t.Helper()
 	conns := make([]*pooledConn, liveCap)
 	for i := 0; i < liveCap; i++ {
-		conn, err, _ := redis.borrow(context.Background())
+		conn, err, _, _ := redis.borrowSocket(context.Background(), false)
 		if err != nil {
 			t.Fatalf("borrow %d: %v", i, err)
 		}

@@ -201,6 +201,7 @@ func readReply(reader *bufio.Reader) (values [][]byte, clean bool, err error) {
 		if count > maxArrayCount {
 			return nil, false, errIssue
 		}
+		// In-cap count is allocated up front, not appended element by element; see the cap const block.
 		values := make([][]byte, count)
 		for i := 0; i < count; i++ {
 			head, headErr := readLine(reader)
@@ -255,6 +256,7 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if length > maxBulkLength {
 		return nil, errIssue
 	}
+	// In-cap length is allocated up front, not grown from arrived bytes; see the cap const block.
 	data := make([]byte, length+2)
 	if _, err := io.ReadFull(reader, data); err != nil {
 		return nil, err
@@ -282,6 +284,18 @@ func readLine(reader *bufio.Reader) ([]byte, error) {
 	return line[:len(line)-2], nil
 }
 
+// Cap-before-allocate is the defense: an over-cap header returns errIssue having allocated nothing.
+// That ordering is what matters, because an allocation the OS cannot satisfy is a fatal Go runtime
+// out of memory, not an error this package could return.
+//
+// An in-cap announced length is allocated up front, on purpose. The header arrives on our own pooled
+// socket to the configured Redis, not on a separate untrusted channel, so a lying in-cap header needs
+// a compromised server, a malfunctioning RESP proxy, or wire injection. go-redis caps nothing at all
+// (knowledge/research/ext_go-redis_proto_reader-limit/), so any cap is already stricter than the
+// reference client. Reading in fixed chunks and growing from arrived bytes was proposed and rejected:
+// it only narrows an already-bounded 64 MiB worst case, and it recopies every genuine large value up
+// the append ladder. Still open: no cumulative per-reply budget
+// (knowledge/debt/2026-09-12-simpleredis-cumulative-array-reply-budget.md).
 const (
 	maxBulkLength = 64 << 20 // largest $ payload this decoder will allocate
 	maxArrayCount = 1 << 20  // largest * count this decoder will allocate

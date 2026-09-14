@@ -2188,3 +2188,89 @@ func TestTable_WakePanicIsReportedAsErrorNotLogged(t *testing.T) {
 		t.Errorf("%d hook panic lines for a Wake panic, want 0 (it is the Open error)", n)
 	}
 }
+
+func TestTable_WakePanicWaiterReceivesErrorWithEnforce(t *testing.T) {
+	h := &recHandler{}
+	tab := New(Config{Grace: graceNoRace})
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	wakeStarted := make(chan struct{})
+	releaseWake := make(chan struct{})
+	var created atomic.Bool
+
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
+		Wake: func() {
+			close(wakeStarted)
+			<-releaseWake
+			panic("wake boom")
+		},
+		Close:                  func() { close(closeEntered); <-releaseClose },
+		EnforceCloseBeforeOpen: true,
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgOrphan, "k")
+
+	reclaimErr := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(context.Background(), "k", recLogger(h), func() (any, error) {
+			return "unreachable", nil
+		}, Hooks{})
+		reclaimErr <- err
+	}()
+	select {
+	case <-wakeStarted:
+	case <-time.After(waitBudget):
+		t.Fatal("Wake did not start")
+	}
+
+	waiterErr := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(context.Background(), "k", recLogger(h), func() (any, error) {
+			created.Store(true)
+			return nextIncarnation, nil
+		}, Hooks{})
+		waiterErr <- err
+	}()
+	// Wake still holds slotBusy; this Open must park on that ready before Wake panics.
+	time.Sleep(50 * time.Millisecond)
+
+	close(releaseWake)
+	select {
+	case <-closeEntered:
+	case <-time.After(waitBudget):
+		t.Fatal("Close did not run after the Wake panic")
+	}
+
+	want := fmt.Sprintf("reclaim: wake %q: panic: %v", "k", "wake boom")
+	select {
+	case err := <-waiterErr:
+		if created.Load() {
+			t.Fatal("waiter created while Close of the panicking Wake was blocked")
+		}
+		if err == nil || err.Error() != want {
+			t.Fatalf("waiter: %v, want %s", err, want)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("waiter did not receive the wrapping Wake error")
+	}
+
+	close(releaseClose)
+	select {
+	case err := <-reclaimErr:
+		if err == nil || err.Error() != want {
+			t.Fatalf("reclaiming Open: %v, want %s", err, want)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("reclaiming Open did not return after Close returned")
+	}
+}
