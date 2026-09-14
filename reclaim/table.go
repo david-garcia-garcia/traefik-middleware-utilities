@@ -137,21 +137,17 @@ func requireContext(ctx context.Context) {
 	}
 }
 
-// waitCtx returns when ctx is done or this incarnation has ended. Prefer Done(); if it is nil
-// (Background), poll Err. incarnationEnded is true when finished closed first: the caller must
-// not drop, because the slot is already gone.
+// waitCtx returns when ctx is done or this incarnation has ended. Only a holder whose Done is nil
+// (Background, the Yaegi shape) gets here, because dropWhenDone hands every holder that has a Done
+// channel to context.AfterFunc, so this polls Err. incarnationEnded is true when finished closed
+// first: the caller must not drop, because the slot is already gone.
 func waitCtx(ctx context.Context, finished <-chan struct{}) (incarnationEnded bool) {
-	if done := ctx.Done(); done != nil {
-		select {
-		case <-done:
-			return false
-		case <-finished:
-			return true
-		}
-	}
 	tick := time.NewTicker(20 * time.Millisecond)
 	defer tick.Stop()
 	for {
+		// finished is read before Err, and again below against the tick, so an ended incarnation
+		// always wins over a done ctx. A holder that is canceled at the same time its slot ends
+		// must report ended: reporting done would send watch to drop a slot nobody owns.
 		select {
 		case <-finished:
 			return true
@@ -543,7 +539,10 @@ func (t *Table) claimDrop(incarnation *slot) dropStep {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if incarnation.state == slotBusy {
-		// A create, wake, sleep, or (when EnforceCloseBeforeOpen) close owns the slot.
+		// A create, wake, sleep, or (when EnforceCloseBeforeOpen) close owns the slot. No schedule
+		// the current state machine produces gets here — a busy slot only ever has holders that
+		// have not bound yet — so only TestTable_DropWaitsForAnInFlightTransition reaches it. The
+		// guard stays because the alternative is sleeping a value this goroutine does not own.
 		return dropStep{action: dropPark, ready: incarnation.ready}
 	}
 	if incarnation.holders == 0 && incarnation.state == slotAwake {
