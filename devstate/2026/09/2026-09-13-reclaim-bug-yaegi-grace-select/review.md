@@ -53,3 +53,10 @@ phase: pullrequest
 findings: none
 fixed: AfterFunc grace expire
 skipped: none
+
+## rebase (2026-09-14)
+
+phase: rebase onto origin/master 216b922
+findings: none
+fixed: table.go keeps finished + graceTimer + endBusyAfterPanic; spec keeps panic-ending and AfterFunc wording
+skipped: Go 1.21.13 Yaegi measurement (toolchain not on this runner)
