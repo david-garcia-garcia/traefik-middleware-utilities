@@ -39,3 +39,27 @@
   Why: same test as the three named in the ask — none of the five has an error value to site-tag. `over_free` and `panic` are exactly where the stash invented `fmt.Errorf("over-free")` / `panic: %v` and discarded the result; `socket_poisoned` happens on a command that succeeded; `retry` and `capability` are decisions, and `retry` is the only line that says four failures were one command and not four.
   By: implement
   Requester: not asked
+
+- [x] taken  compose site lines in place; no logSite helper
+  Asked: log the site that saw a failure through one helper that concatenates `<site>: <cause>`.
+  Instead: each call site emits `Debug`/`Warn`/`Error` with the composed message; no `logSite`; no constant block of site names, attribute keys, or reason values. `loggableCause` stays as the Pass/key trim.
+  Owner: `simpleredis/resp.go` `do`, `simpleredis/pool.go` `borrowSocket`/`dial`, `simpleredis/commands_exec.go` `exec`
+  Why: honouring a helper whose only job is concatenating site and cause reintroduced the logging facade the catalog reshape already rejected.
+  By: implement
+  Requester: confirmed
+
+- [x] taken  do not log panics
+  Asked: recover in `runOnConn`, log `simpleredis_panic`, re-raise so the release defer still runs.
+  Instead: the release defer alone; `reusable` starts false; the panic propagates; Traefik already logs panics.
+  Owner: `simpleredis/commands_exec.go` `runOnConn`
+  Why: recover-log-repanic duplicates Traefik's panic log and is extra machinery whose only job was the named event.
+  By: implement
+  Requester: confirmed
+
+- [x] taken  do not parse peer replies for the log
+  Asked: publish a peer reply as its leading error code so operators still see ERR/LOADING/NOSCRIPT.
+  Instead: log `<site>: redis error` and leave the full text on the returned error only.
+  Owner: `simpleredis/resp.go` `do`, `simpleredis/pool.go` `dial`
+  Why: a trim helper to keep Pass and keys off the line is extra machinery; not logging peer text at all is the simpler rule that still holds.
+  By: implement
+  Requester: confirmed

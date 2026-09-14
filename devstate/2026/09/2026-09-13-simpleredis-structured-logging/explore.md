@@ -28,8 +28,8 @@ PR #69 landed on dest during implement Sync. `do` now has pre-write and post-rep
 - Human reshape: no `log.go`, no `Msg*` constants, no nil-safe helpers. Freeze `logger *slog.Logger` on the client in `New`. Nil `Config.Logger` becomes a discard logger. Call sites use `sr.logger.Error/Warn/Debug("simpleredis_…")` with values already in scope. `New` still returns only `*SimpleRedis`.
 - Do not wrap control flow to capture extra log attributes (dial reason, short-bulk announced/read, idle-cap vs cancel close reason, Open knobs, Close idle count). Happy-path Get still does not log.
 - No Info tier. Never log `Pass`, Redis keys, or values.
-- Panic: keep the existing release defer first; add a second defer that recovers, logs `simpleredis_panic`, then re-panics. Do not swallow. Turns/idle/`OverFrees()==0` stay as today.
-- Emit inline at the decision site: panic, noauth, over-free, pool exhausted, short bulk, bad reply, handshake failed, leftover (poisoned / auth leftover), dial, idle swept, retry, timeout, canceled, capability, noscript, open. Do not emit not-from-new, socket-closed, or close.
+- Panic: keep the existing release defer. Do not recover, log, and re-panic — Traefik already logs panics. Turns/idle/`OverFrees()==0` stay as today.
+- Emit inline at the decision site: noauth, over-free, pool exhausted, short bulk, bad reply, handshake failed, leftover (poisoned / auth leftover), dial, idle swept, retry, timeout, canceled, capability, noscript, open. Do not emit panic, not-from-new, socket-closed, or close.
 - Tests: capturing `slog.Handler` local to simpleredis tests. Nil-logger (discard) on every public verb. Yaegi GOPATH probe observes `simpleredis_open`. Do not regress `interpretedcost_test.go`.
 - Spec: `std_go_simpleredis_tcp-session` (Logger freeze, discard-at-New). Event list: `std_go_simpleredis_slog-events`. Usage: `knowledge/devdocs/std_go_simpleredis.md`.
 
@@ -94,3 +94,13 @@ PR #69 landed on dest during implement Sync. `do` now has pre-write and post-rep
   Rank: additive asked — dest sync made the resolved "at the I/O site" answer unreachable on the exec path
   Decision: assumed — emit in `libraryTimeout`, which became a method on `*SimpleRedis`; `do` no longer emits. Measured: with the `exec` emit disabled, `TestLogTimeout` fails and the captured dump holds only `simpleredis_open` and `simpleredis_dial`. Caller deadline still stays silent.
   By: mergeconflictresolve
+
+- Q: Does a failure line go through a `logSite` helper with site/reason/attr constants, or is the message composed at the call site?
+  Rank: structural asked — human rejected the helper as extra machinery
+  Decision: resolved — compose `"<site>: <cause>"` at the call site with `Debug`/`Warn`/`Error`. No `logSite`. No `loggableCause`. No constant block of site names, attribute keys, or reason values. A peer reply is `<site>: redis error`, not parsed peer text.
+  By: implement
+
+- Q: Does `runOnConn` recover, log `simpleredis_panic`, and re-raise?
+  Rank: structural asked — human rejected recover-log-repanic because Traefik already logs panics
+  Decision: resolved — no. Keep the release defer (`reusable` starts false). Let the panic propagate. Do not emit `simpleredis_panic`.
+  By: implement
