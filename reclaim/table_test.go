@@ -1581,6 +1581,15 @@ func TestTable_NilTableOpenErrors(t *testing.T) {
 	}
 }
 
+func TestTable_ZeroValueOpenErrors(t *testing.T) {
+	tab := &Table{}
+	if _, err := tab.Open(context.Background(), "a", recLogger(&recHandler{}), func() (any, error) {
+		return ending(1, nil), nil
+	}, Hooks{}); err == nil {
+		t.Fatal("no error from a zero-value table")
+	}
+}
+
 func TestTable_NilOpenLoggerRejected(t *testing.T) {
 	tab := New(Config{Grace: time.Millisecond})
 	if _, err := tab.Open(context.Background(), "a", nil, func() (any, error) { return ending(1, nil), nil }, Hooks{}); err == nil {
