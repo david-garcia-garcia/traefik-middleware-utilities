@@ -16,7 +16,7 @@ One tenant's cached bytes can still be returned for another tenant's key after a
 ## Context
 Borrow-time options for a later ticket: a zero-deadline `Read` on the idle socket before the next command is written, or a `syscall` peek of the kernel receive buffer. Both need a Yaegi-safe, stdlib-only design and their own proofs. Current gate: leftover already in `conn.reader` at the reply boundary (`simpleredis/resp.go` `do`).
 
-Later measurement narrows those two options, in favour of the deadline read:
+Later measurement narrowed those two options, at first in favour of the deadline read:
 
 - The `syscall` peek is **not** blocked by missing symbols, contrary to the assumption above. Yaegi v0.16.1 exports everything go-redis's `connCheck` uses (`Read`, `EAGAIN`, `EWOULDBLOCK`, `Recvfrom`, `MSG_PEEK`, `MSG_DONTWAIT`, `SetNonblock`, and `Conn` / `RawConn` with correctly shaped wrappers). It is blocked by deployment: Traefik registers `syscall` only when `useUnsafe` is true on both the manifest and the operator's static config, and manifest-true with operator-false makes Traefik refuse to load the plugin outright (`knowledge/research/ext_traefik_plugins_useunsafe/`). CI here also fails if `useUnsafe` flips true.
 - A `syscall` peek is Unix-only and so wants a per-OS file split, which is a second trap: Yaegi ignores `//go:build`, so a `conn_check.go` / `conn_check_dummy.go` layout silently resolves to the no-op. Filename GOOS suffixes are the only mechanism that works (`knowledge/research/ext_traefik_plugins_yaegi-build-constraints/`).
