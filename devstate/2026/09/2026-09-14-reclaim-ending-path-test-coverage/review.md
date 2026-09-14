@@ -39,3 +39,9 @@ phase: archive
 findings: folded two Reset contracts into live leaves; moved change to archive/2026-09-14-reclaim-ending-path-test-coverage
 fixed: n/a
 skipped: n/a
+
+## pullrequest (2026-09-14)
+phase: pullrequest
+findings: CI run 34864508268 all eight jobs success; title dropped WIP
+fixed: n/a
+skipped: n/a
