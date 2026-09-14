@@ -258,7 +258,12 @@ emits `reclaim_dispose`. The table SHALL NOT let a Close panic escape, because C
 `AfterFunc` goroutine that would take the process down. The Close hook SHALL be called at most
 once per incarnation. Because the table waits, a Close hook that blocks blocks whoever ended the
 incarnation; Close hooks SHALL NOT block. Every goroutine the table starts for a key SHALL exit
-once that key's holder contexts are Done and its incarnation has ended.
+once that key's holder contexts are Done and its incarnation has ended. A watcher started for a
+holder whose `Done` is nil SHALL exit without dropping that holder when the incarnation has ended,
+even if `ctx.Err()` is still unset. That exit rule SHALL hold when the incarnation ends on a
+Sleep panic or a Wake panic, including when that incarnation stored `Hooks.EnforceCloseBeforeOpen`.
+When that holder's `Err()` is set while the incarnation is still live, the table SHALL still
+drop the holder.
 
 When the ending incarnation stored `Hooks.EnforceCloseBeforeOpen`, the table SHALL keep the key
 stored until Close has returned, so a concurrent `Open` for that key waits for Close instead of
@@ -291,6 +296,12 @@ Tests-only `Reset` MAY unmap first regardless of the field. Callers MUST NOT rac
 #### Scenario: Goroutines do not outlive the incarnation
 - **WHEN** many keys are opened, then every holder context is Done and every incarnation has ended
 - **THEN** the table owns no more goroutines than it did before those `Open` calls
+
+#### Scenario: Nil-Done watcher exits when the incarnation ends
+- **WHEN** many keys are opened with holder contexts whose `Done` is nil and whose `Err` is never set
+- **AND** `Reset` ends every incarnation
+- **THEN** the table owns no more goroutines than it did before those `Open` calls
+- **AND** a later `Open` of the same key creates a new incarnation that a stale holder drop MUST NOT dispose
 
 #### Scenario: Create does not start while previous Close is in flight
 - **WHEN** Close is in flight for a key (zero grace, after grace elapsed, Sleep panic, or Wake panic)
