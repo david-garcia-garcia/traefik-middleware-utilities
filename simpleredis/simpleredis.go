@@ -64,12 +64,12 @@ type SimpleRedis struct {
 	minRetryBackoff time.Duration
 	maxRetryBackoff time.Duration
 
-	poolSize     int
-	maxIdleConns int
-	poolTimeout  time.Duration
-	idleTimeout  time.Duration
-	dialTimeout  time.Duration
-	ioTimeout    time.Duration
+	poolSize       int
+	maxIdleConns   int
+	poolTimeout    time.Duration
+	idleTimeout    time.Duration
+	dialTimeout    time.Duration
+	commandTimeout time.Duration
 
 	// idleConnsMu guards idleConns (the unused sockets waiting for reuse).
 	idleConnsMu sync.Mutex
@@ -86,8 +86,12 @@ type SimpleRedis struct {
 }
 
 // New copies cfg onto a client and builds the in-use-turn channel. Does not dial. Call before concurrent use.
-func New(cfg Config) *SimpleRedis {
-	cfg = cfg.applyDefaults()
+// An explicit MaxIdleConns above PoolSize returns ErrMaxIdleConnsAbovePoolSize and a nil client; a defaulted one follows PoolSize.
+func New(cfg Config) (*SimpleRedis, error) {
+	cfg, err := cfg.applyDefaults()
+	if err != nil {
+		return nil, err
+	}
 	sr := &SimpleRedis{
 		host:            cfg.Host,
 		pass:            cfg.Pass,
@@ -100,10 +104,10 @@ func New(cfg Config) *SimpleRedis {
 		poolTimeout:     cfg.PoolTimeout,
 		idleTimeout:     cfg.IdleTimeout,
 		dialTimeout:     cfg.DialTimeout,
-		ioTimeout:       cfg.IOTimeout,
+		commandTimeout:  cfg.CommandTimeout,
 	}
 	sr.ensureInUseTurns()
-	return sr
+	return sr, nil
 }
 
 // Close drains unused pooled connections and stops pooling. Further Get/Set/Del/MGet/Incr/IncrBy/Expire/ExpireAt/Eval/MSetEX/MSetEXAt return redis:unreachable and do not dial. In-flight commands still finish; their sockets are closed on release. Safe to call more than once.
@@ -130,7 +134,7 @@ func (sr *SimpleRedis) PoolSize() int {
 	return sr.liveCap()
 }
 
-// MaxIdleConns is the idle-list trim New froze.
+// MaxIdleConns is the idle-list trim New froze, never above PoolSize. New does not create a client when an explicit trim sits above PoolSize.
 func (sr *SimpleRedis) MaxIdleConns() int {
 	return sr.maxIdleConns
 }
@@ -153,7 +157,7 @@ func (sr *SimpleRedis) IdleTimeout() time.Duration {
 	return defaultIdleTimeout
 }
 
-// DialTimeout is the TCP dial bound New froze.
+// DialTimeout is the per-attempt TCP dial bound New froze.
 func (sr *SimpleRedis) DialTimeout() time.Duration {
 	if sr.dialTimeout > 0 {
 		return sr.dialTimeout
@@ -161,15 +165,15 @@ func (sr *SimpleRedis) DialTimeout() time.Duration {
 	return defaultDialTimeout
 }
 
-// IOTimeout is the per-command deadline New froze.
-func (sr *SimpleRedis) IOTimeout() time.Duration {
-	if sr.ioTimeout > 0 {
-		return sr.ioTimeout
+// CommandTimeout is the whole-command bound New froze: every attempt, dial, AUTH, SELECT and command I/O share it.
+func (sr *SimpleRedis) CommandTimeout() time.Duration {
+	if sr.commandTimeout > 0 {
+		return sr.commandTimeout
 	}
-	return defaultIOTimeout
+	return defaultCommandTimeout
 }
 
-// MaxRetries is the extra-retry count New froze (1 after zero Config, -1 off).
+// MaxRetries is the extra-retry count New froze (1 after zero Config, -1 off). It bounds attempts, not wall time.
 func (sr *SimpleRedis) MaxRetries() int {
 	return sr.maxRetries
 }

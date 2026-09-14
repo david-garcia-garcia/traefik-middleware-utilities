@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: Sequential SimpleRedis requests fail with redis:unreachable after every pooled socket is dropped
+url: none
+number: none

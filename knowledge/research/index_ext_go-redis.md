@@ -15,6 +15,11 @@ priority: normal
 local: ext_go-redis_proto_reader-limit/
 description: Whether go-redis proto.Reader caps bulk-string or array allocations taken from a reply header.
 
+## go-redis under Yaegi
+priority: normal
+local: ext_go-redis_yaegi-compatibility/
+description: Whether go-redis v9 can run inside Traefik's Yaegi interpreter with or without useUnsafe; the standing justification for simpleredis.
+
 ## Idle conn unread-data check
 priority: normal
 local: ext_go-redis_pool_conn-check/

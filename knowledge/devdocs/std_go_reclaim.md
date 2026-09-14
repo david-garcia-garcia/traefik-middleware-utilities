@@ -23,15 +23,15 @@ The four events the table drives on one stored value: `create -> (sleep -> wake)
 _Avoid_: a house `dispose func(any)` on `Open`; cleanup in `Close` that `Sleep` already did
 
 **Sleep**:
-Optional `Hooks.Sleep`, called when the last holder's context is Done. The value stays stored and keeps its identity, and releases what is expensive to hold idle. It is not a close: the value must be resumable. If Sleep panics, the table does not park the value asleep: it Closes that incarnation and unmaps the key so a later Open creates.
+Optional `Hooks.Sleep`, called when the last holder's context is Done. The value stays stored and keeps its identity, and releases what is expensive to hold idle. It is not a close: the value must be resumable. If Sleep panics, the table does not park the value asleep: it Closes that incarnation and unmaps the key so a later Open creates. When that incarnation stored `EnforceCloseBeforeOpen`, the key stays mapped until Close returns, so a later Open waits and then creates; when the flag is unset, unmap happens first (a later Open may create during Close).
 _Avoid_: releasing something in `Sleep` that `Wake` cannot get back
 
 **Wake**:
-Optional `Hooks.Wake`, called when an `Open` finds a stored, sleeping value. `Open` does not return until `Wake` has returned, so a caller never receives a sleeping value. `Wake` has no resume-failure path: a value that cannot guarantee resume simply does not pass Sleep and Wake hooks. If Wake panics, that is a broken hook: `Open` returns an error wrapping the panic, not the pointer, and the incarnation is Closed and unmapped.
+Optional `Hooks.Wake`, called when an `Open` finds a stored, sleeping value. `Open` does not return until `Wake` has returned, so a caller never receives a sleeping value. `Wake` has no resume-failure path: a value that cannot guarantee resume simply does not pass Sleep and Wake hooks. If Wake panics, that is a broken hook: `Open` returns an error wrapping the panic, not the pointer, and the incarnation is Closed and unmapped. Concurrent waiters on that Wake receive the same error. When that incarnation stored `EnforceCloseBeforeOpen`, a later Open that arrives while Close is still in flight waits, then creates; waiters already parked on the Wake still receive the wrapping error.
 _Avoid_: an error return or a create-fallback on a Wake that returns; work in `Wake` slow enough to stall a Traefik reload
 
 **Close**:
-Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, or zero-grace drop), always after Sleep. The table emits `reclaim_dispose` after Close returns, or after a recovered Close panic (which also logs `reclaim_hook_panic` at error). By default the key is unmapped first, so a later `Open` may create during Close. When that incarnation stored `EnforceCloseBeforeOpen`, the key stays mapped until Close returns, so a later `Open` waits and then creates.
+Optional `Hooks.Close`, called once when the incarnation ends (grace elapsed, `Reset`, zero-grace drop, Sleep panic, or Wake panic), always after Sleep. The table emits `reclaim_dispose` after Close returns, or after a recovered Close panic (which also logs `reclaim_hook_panic` at error). By default the key is unmapped first, so a later `Open` may create during Close. When that incarnation stored `EnforceCloseBeforeOpen`, the key stays mapped until Close returns, so a later `Open` waits and then creates. That includes the Sleep-panic and Wake-panic endings.
 _Avoid_: cleanup in Close that Sleep already did; a Close hook that blocks; Traefik plugin `Close`
 
 **Grace**:

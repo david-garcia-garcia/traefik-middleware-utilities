@@ -21,9 +21,12 @@ import (
 
 // DialRetry Gets a refusing host so the retry loop and backoff jitter run.
 func DialRetry(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: 1, MinRetryBackoff: time.Millisecond, MaxRetryBackoff: 4 * time.Millisecond})
+	client, err := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: 1, MinRetryBackoff: time.Millisecond, MaxRetryBackoff: 4 * time.Millisecond})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	defer client.Close()
-	_, err := client.Get(context.Background(), "k")
+	_, err = client.Get(context.Background(), "k")
 	if err == nil {
 		return "ok-unexpected"
 	}
@@ -35,9 +38,12 @@ func DialRetry(host string) string {
 
 // StallTimeout Gets a peer that never replies.
 func StallTimeout(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1, IOTimeout: 40 * time.Millisecond, DialTimeout: 40 * time.Millisecond})
+	client, err := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1, CommandTimeout: 80 * time.Millisecond, DialTimeout: 40 * time.Millisecond})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	defer client.Close()
-	_, err := client.Get(context.Background(), "k")
+	_, err = client.Get(context.Background(), "k")
 	if err == nil {
 		return "ok-unexpected"
 	}
@@ -49,11 +55,14 @@ func StallTimeout(host string) string {
 
 // CancelMidCommand Gets with a short caller deadline.
 func CancelMidCommand(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client, err := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, MaxIdleConns: 1, CommandTimeout: 5 * time.Second, MaxRetries: -1})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	defer client.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
 	defer cancel()
-	_, err := client.Get(ctx, "hit")
+	_, err = client.Get(ctx, "hit")
 	if err == nil {
 		return "ok-unexpected"
 	}
@@ -65,7 +74,10 @@ func CancelMidCommand(host string) string {
 
 // PoolWait Gets when this client's live cap is already held by another Get.
 func PoolWait(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, PoolTimeout: 40 * time.Millisecond, IOTimeout: time.Second, MaxRetries: -1})
+	client, err := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: 40 * time.Millisecond, CommandTimeout: time.Second, MaxRetries: -1})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	defer client.Close()
 	started := make(chan struct{})
 	go func() {
@@ -74,7 +86,7 @@ func PoolWait(host string) string {
 	}()
 	<-started
 	time.Sleep(20 * time.Millisecond)
-	_, err := client.Get(context.Background(), "hit")
+	_, err = client.Get(context.Background(), "hit")
 	if err == nil {
 		return "ok-unexpected"
 	}
@@ -89,9 +101,12 @@ func PoolWait(host string) string {
 
 // TruncatedBulk Gets a short bulk then close.
 func TruncatedBulk(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1})
+	client, err := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	defer client.Close()
-	_, err := client.Get(context.Background(), "k")
+	_, err = client.Get(context.Background(), "k")
 	if err == nil {
 		return "ok-unexpected"
 	}

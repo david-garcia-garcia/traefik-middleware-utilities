@@ -12,7 +12,13 @@ import (
 var nopCancel context.CancelFunc = func() {}
 
 // exec borrows a connection, runs one RESP command, and retries retryable failures up to MaxRetries.
-// The library overall deadline is bound onto ctx (stdlib Dialer/Client shape). Caller cancel stays ctx.Err(); library expiry is redis:timeout. INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
+// After I/O on a socket taken from idle, later attempts of this command skip idle so they do not pop another corpse
+// (borrowSocket documents the vintage this escapes, and why the fd cannot be probed first).
+// skipIdle is per-command on purpose: leftover corpses stay parked, so each later command spends one and then dials.
+// A socket taken from idle that fails after its write is indistinguishable from a lost reply, so that attempt still
+// consumes MaxRetries and MaxRetries -1 still fails the command; no free extra send is added.
+// CommandTimeout is bound onto ctx (stdlib Dialer/Client shape), so retries stop at whichever comes first: the attempt
+// count or that budget. Caller cancel stays ctx.Err(); library expiry is redis:timeout. INCR/INCRBY/EVAL can double-apply when a reply is lost and the command is sent again; that is accepted.
 func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, error) {
 	if ctx == nil {
 		ctx = context.Background()
@@ -21,10 +27,11 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		return nil, err
 	}
 	maxRetries, minBackoff, maxBackoff := retryLimits(sr.maxRetries, sr.minRetryBackoff, sr.maxRetryBackoff)
-	ctx, cancel, libraryOwnsDeadline := sr.bindCommandDeadline(ctx, maxRetries)
+	ctx, cancel, libraryOwnsDeadline := sr.bindCommandDeadline(ctx)
 	defer cancel()
 
 	var last error
+	skipIdle := false
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if err := contextStop(ctx); err != nil {
 			return nil, libraryTimeout(err, libraryOwnsDeadline)
@@ -34,7 +41,7 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 				return nil, libraryTimeout(err, libraryOwnsDeadline)
 			}
 		}
-		conn, err, handshakeFailed := sr.borrow(ctx)
+		conn, err, handshakeFailed, fromIdle := sr.borrowSocket(ctx, skipIdle)
 		if err != nil {
 			if sr.isClosed() || !shouldRetry(err, handshakeFailed) {
 				return nil, libraryTimeout(err, libraryOwnsDeadline)
@@ -45,6 +52,9 @@ func (sr *SimpleRedis) exec(ctx context.Context, args ...[]byte) ([][]byte, erro
 		values, err := sr.runOnConn(ctx, conn, args)
 		if err == nil {
 			return values, nil
+		}
+		if fromIdle && isUnreachable(err) {
+			skipIdle = true
 		}
 		if !shouldRetry(err, false) {
 			return values, libraryTimeout(err, libraryOwnsDeadline)
@@ -71,11 +81,12 @@ func (sr *SimpleRedis) runOnConn(ctx context.Context, conn *pooledConn, args [][
 	return values, err
 }
 
-// bindCommandDeadline wraps ctx with (maxRetries+1)*(DialTimeout+IOTimeout) when that instant is sooner than the parent.
+// bindCommandDeadline wraps ctx with CommandTimeout when that instant is sooner than the parent.
 // Same shape as net.Dialer / http.Client: one child context, not a parallel time.Time next to ctx.
+// MaxRetries is not a multiplicand here: attempts share this one budget, so raising it cannot raise the ceiling.
 // libraryOwnsDeadline is true when DeadlineExceeded on the returned ctx is the library budget (maps to redis:timeout).
-func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context, maxRetries int) (context.Context, context.CancelFunc, bool) {
-	libraryDeadline := time.Now().Add(time.Duration(maxRetries+1) * (sr.DialTimeout() + sr.IOTimeout()))
+func (sr *SimpleRedis) bindCommandDeadline(ctx context.Context) (context.Context, context.CancelFunc, bool) {
+	libraryDeadline := time.Now().Add(sr.CommandTimeout())
 	if parent, ok := ctx.Deadline(); ok && !parent.After(libraryDeadline) {
 		return ctx, nopCancel, false
 	}
@@ -102,22 +113,6 @@ func contextStop(ctx context.Context) error {
 		return context.DeadlineExceeded
 	}
 	return nil
-}
-
-// clampTimeout is limit, or time left on ctx when that is shorter.
-func clampTimeout(ctx context.Context, limit time.Duration) time.Duration {
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		return limit
-	}
-	remaining := time.Until(deadline)
-	if remaining < limit {
-		if remaining < 0 {
-			return 0
-		}
-		return remaining
-	}
-	return limit
 }
 
 // waitUntil waits delay or until ctx fires. Library expiry is mapped at exec.

@@ -19,7 +19,7 @@ func (panicOnWrite) Write(_ []byte) (int, error) { panic("simulated panic inside
 func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	const poolSize = 2
-	sr := New(Config{Host: addr, PoolSize: poolSize, PoolTimeout: 50 * time.Millisecond, MaxRetries: -1})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: poolSize, MaxIdleConns: poolSize, PoolTimeout: 50 * time.Millisecond, MaxRetries: -1})
 	t.Cleanup(sr.Close)
 
 	// Warm one socket so the panic hits a pooled connection, not a fresh dial.
@@ -28,7 +28,7 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 	}
 
 	for i := 0; i < poolSize; i++ {
-		conn, err, _ := sr.borrow(context.Background())
+		conn, err, _, _ := sr.borrowSocket(context.Background(), false)
 		if err != nil {
 			t.Fatalf("borrow %d: %v", i, err)
 		}

@@ -23,7 +23,7 @@ func TestLifecycleNewUseCloseDoesNotLeak(t *testing.T) {
 	goroutinesBefore := runtime.NumGoroutine()
 
 	for i := 0; i < cycles; i++ {
-		client := New(Config{Host: addr, PoolSize: 4, MaxRetries: -1})
+		client := newTestRedis(t, Config{Host: addr, PoolSize: 4, MaxIdleConns: 4, MaxRetries: -1})
 		var wg sync.WaitGroup
 		wg.Add(4)
 		for j := 0; j < 4; j++ {
@@ -62,7 +62,7 @@ func TestCloseDuringHeldGetsReturnsTurns(t *testing.T) {
 	}
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.holdGetsForTest(t)
-	client := New(Config{Host: addr, PoolSize: held, IOTimeout: 5 * time.Second, MaxRetries: -1})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: held, MaxIdleConns: held, CommandTimeout: 5 * time.Second, MaxRetries: -1})
 
 	errCh := make(chan error, held)
 	for i := 0; i < held; i++ {
