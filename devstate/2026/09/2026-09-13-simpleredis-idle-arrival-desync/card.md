@@ -34,14 +34,14 @@ sequenceDiagram
 Documentation and research only, CI green on the merged head, and the recommendation is to accept the hole rather than probe for it. 1 item remains, and it is a human call, not work.
 
 Priority: P3 — docs and internal clarity; no product behaviour moves, so no user or operator harm changes either way
-Reviewed head: 2fd23e6
+Reviewed head: ab07587
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | Docs-only diff, CI 8/8 succeeded on 2fd23e6, no open comments |
-| CI proof | 6/6 | 8/8 succeeded ([run 34828420248](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34828420248)) |
+| Overall readiness | 6/6 | Docs-only diff, CI 8/8 succeeded on ab07587, no open comments |
+| CI proof | 6/6 | 8/8 succeeded ([run 34828870756](https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34828870756)) |
 | Local tests proof | N/A | `prHost` is github, CI proof covers it. `go build`, `go vet`, `go test ./... -count=1 -short` were still run locally and passed |
 | Review resolution | 6/6 | OPEN PR, no comments |
 
@@ -51,7 +51,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-09-13-simpleredis-idle-arrival-desync pushed | `git` / GitHub |
 | OpenSpec | none | `openspec/` — the live change folder was withdrawn |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/83 | pr-host List |
-| CI | run 34828420248 8/8 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34828420248 | pr-host CI |
+| CI | run 34828870756 8/8 success https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34828870756 | pr-host CI |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate has no comments.md |
 
@@ -66,7 +66,7 @@ None.
 - [ ] [Idle-arrival desync still poisons a pooled SimpleRedis socket](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-09-13-simpleredis-idle-arrival-desync/knowledge/debt/2026-09-13-simpleredis-idle-arrival-desync.md) — idle-arrival kernel probe has no portable Yaegi-safe cheap fix; dest still returns another key's Get with err == nil.
 
 ## How this fits together
-Ticket `2026-09-13-simpleredis-idle-arrival-desync` explored three directions, rejected all three, and stopped at the simplicity gate. Branch `2026-09-13-simpleredis-idle-arrival-desync`, PR 83, merged up to master at da1d245, CI run 34828420248 green. Implement and the later phases never ran because there is nothing to implement.
+Ticket `2026-09-13-simpleredis-idle-arrival-desync` explored three directions, rejected all three, and stopped at the simplicity gate. Branch `2026-09-13-simpleredis-idle-arrival-desync`, PR 83, merged up to master at da1d245, CI run 34828870756 green. Implement and the later phases never ran because there is nothing to implement.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -95,7 +95,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 2fd23e6c1d94dd98637e7c279f9423f4584056a9 | Card must match the branch you measured |
+| Reviewed head | ab075876bad62085a08e902f2046ebdde3a30231 | Card must match the branch you measured |
 
 ### Stored data model
 None.
@@ -109,8 +109,8 @@ Is this the best way to solve the issue? Yes for this PR's job, which is to reco
 
 ### Evidence
 What I checked:
-- `go build ./...`, `go vet ./...`, `go test ./... -count=1 -short` all pass on the merged head (local, 2fd23e6)
-- CI run 34828420248, 8/8 jobs succeeded on 2fd23e6 (pr-host CI)
+- `go build ./...`, `go vet ./...`, `go test ./... -count=1 -short` all pass on the merged head (local)
+- CI run 34828870756, 8/8 jobs succeeded on ab07587 (pr-host CI)
 - `validate_artifact_names` OK and `validate_spec_map` OK after removing the live change folder (opd-mcp, this worktree)
 - Merge of origin/master (da1d245) produced exactly one conflict, `knowledge/research/index_ext_go-redis.md`; both `ext_go-redis_yaegi-compatibility` and `ext_go-redis_pool_conn-check` entries kept (`git`)
 - `knowledge/research/ext_go-redis_pool_conn-check/.sources/conn_check.go.md` records `syscall.Recvfrom(fd, buf[:1], MSG_PEEK|MSG_DONTWAIT)`, contradicting master's devdocs bullet (`go-redis@7f3b3dff:internal/pool/conn_check.go`)
