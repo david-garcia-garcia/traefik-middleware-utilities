@@ -9,3 +9,9 @@ phase: explore
 findings: measured 94.4% / nine count-0 blocks; waitCtx poll fast path already count 2; two Reset contracts are missing tests not missing statements
 fixed: n/a
 skipped: did not delete unreachable waitCtx Done or drop busy-wait
+
+## propose (2026-09-14)
+phase: propose
+findings: folded Reset Sleep-panic and Reset-unmap into std_go_reclaim_value-lifecycle and std_go_reclaim_context-lease
+fixed: n/a
+skipped: no new spec folder
