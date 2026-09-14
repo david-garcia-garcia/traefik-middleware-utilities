@@ -351,7 +351,6 @@ func (t *Table) lookupOpen(key string, logger *slog.Logger) (openStep, error) {
 		if t.items[key] == incarnation {
 			delete(t.items, key)
 		}
-		return openStep{action: openRetry}, nil
 	}
 	return openStep{action: openRetry}, nil
 }
