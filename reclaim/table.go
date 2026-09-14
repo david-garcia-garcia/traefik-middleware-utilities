@@ -401,6 +401,8 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 			if err := t.createErrOf(step.incarnation); err != nil {
 				return nil, err
 			}
+		case openRetry:
+			// Gone incarnation was unmapped; look up again and create.
 		}
 	}
 }
