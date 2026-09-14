@@ -5,7 +5,7 @@ JobName: 2026-09-14-reclaim-ending-path-test-coverage
 | Phase | Work | Card | At |
 |-------|------|------|----|
 | prepare | [x] | [x] | 2026-09-14T15:06:22Z |
-| explore | [ ] | [ ] | |
+| explore | [x] | [ ] | |
 | propose | [ ] | [ ] | |
 | implement | [ ] | [ ] | |
 | codereview | [ ] | [ ] | |
