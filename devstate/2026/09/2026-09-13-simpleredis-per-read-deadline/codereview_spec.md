@@ -1,2 +1,6 @@
 # Spec
-none.
+
+1. [wrong] Zero-Config `CommandTimeout` does not preserve origin/master worst-case wait — `simpleredis/config.go:14` — `defaultCommandTimeout` is 900ms and the live requirement lists that default, but at fixed point `origin/master` (3933b0b) `bindCommandDeadline` used `(maxRetries+1)*(DialTimeout+IOTimeout)` with defaults `MaxRetries` 1, `DialTimeout` 200ms, `IOTimeout` 100ms, so zero-Config overall command wait was 600ms (master devdocs stated the same). The change proposal/design claim `(1+1)*(200ms+250ms)=900ms` and “worst case does not move: 900 ms before, 900 ms after”, which contradicts both the fixed-point code and the review ask to preserve today’s worst case via that formula (250ms is not the shipped `IOTimeout` default).
+   → Either set `defaultCommandTimeout` to `600 * time.Millisecond` and align the live spec zero-Config list, devdocs, and archive rationale with `(1+1)*(200ms+100ms)`, or document an intentional ceiling widen and drop the “preserves / does not move” claims and the 250ms term everywhere.
+   Status: done
+   Argument: kept 900ms (the ask fixed that value and it is the branch ceiling after the 100ms→250ms default raise this same change makes) and took the second option: proposal and design now state the raise explicitly, say the zero-Config ceiling moves 600ms→900ms against dest, attribute that move to the raise and 0ms to the collapse, and drop the "worst case does not move" claim. tasks.md gained 2.1a for the raise.

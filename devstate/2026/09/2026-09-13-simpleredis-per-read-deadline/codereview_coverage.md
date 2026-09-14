@@ -1,2 +1,11 @@
 # Test coverage
-none.
+
+1. [hard] Ticket job unproven — `simpleredis/commands_exec.go:88` — `MaxRetries` must not multiply the command deadline (proposal Why / live spec: raising `MaxRetries` must not raise the latency ceiling); `TestHandshakeStallIsBoundedByOverallDeadline` only uses zero-Config `MaxRetries` (1 extra retry) and asserts `elapsed <= CommandTimeout`, so reverting `bindCommandDeadline` to `(MaxRetries+1)*(DialTimeout+IOTimeout)` stays green for defaults and for high `MaxRetries` the stall could run far past `CommandTimeout` without failing any test
+   → Add e.g. `TestHighMaxRetriesStallBoundedByCommandTimeoutOnly`: `startStallRedis`, `Config{Host: addr, Pass: "p", Database: "1", MaxRetries: 10, MinRetryBackoff: -1, MaxRetryBackoff: -1, CommandTimeout: 400*time.Millisecond}`; `Get(context.Background(), "k")`; assert `elapsed <= CommandTimeout+50ms` (under the old product, `(11)*(DialTimeout+IOTimeout)` would exceed that bound)
+   Status: done
+   Argument: added `TestHighMaxRetriesIsStillBoundedByCommandTimeout` in `simpleredis/commands_deadline_test.go` (MaxRetries 10, backoff off, DialTimeout 100ms, CommandTimeout 300ms against `startStallRedis`; asserts elapsed <= budget+50ms). Measured 0.30s. Also added the matching live-spec scenario "A high MaxRetries does not raise the ceiling".
+
+2. [judgement] Happy path only — `simpleredis/resp.go:110` — `commandBudgetLeft` when `ctx` has no deadline returns `CommandTimeout` for direct `do`; only caller is `clientIDOnConnForTest` in `simpleredis_e2e_test.go:181`, which asserts a fast `CLIENT ID` success and does not bound wall time or timeout mapping on a stalled direct `do(context.Background(), …)`
+   → Stall fake + pooled conn + `do(context.Background(), …)` with short `CommandTimeout`; assert return within `CommandTimeout` slack and `redis:timeout` (proves the no-deadline branch stamps the full knob, not `time.Until` zero)
+   Status: skipped
+   Argument: judgement. The branch is a one-line fallback on a non-production path (the Dead axis reached the same place from the other side), and the ask requires it to exist so `do` stays correct on a deadline-free ctx. Building a stall harness plus a hand-made pooled conn to bound a seam no production caller reaches is machinery for its own sake; the production stamp is already pinned by the three bug3 tests.
