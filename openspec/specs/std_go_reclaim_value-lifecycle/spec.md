@@ -137,7 +137,11 @@ until `close` has returned, then SHALL NOT be stored. Unmapping the key before `
 MUST NOT happen on that incarnation's zero-grace ending path, when grace elapses, or on a
 Sleep-panic or Wake-panic ending. When that field is false (the zero value), the table SHALL
 unmap the key before Close, so a concurrent `Open` MAY create while Close is in flight.
-Tests-only `Reset` MAY unmap first regardless of the field.
+Tests-only `Reset` SHALL unmap first regardless of the field.
+
+If Sleep panics during `Reset` of an awake value, the table SHALL NOT emit `reclaim_orphan`.
+It SHALL still run Close and emit `reclaim_dispose` after Close returns or after a recovered
+Close panic.
 
 The positive-grace wait MUST be a compiled stdlib waiter (`time.AfterFunc` or equivalent). It
 MUST NOT be an interpreted goroutine that `select`s on a timer channel and a wake channel. The
@@ -175,6 +179,22 @@ is not asleep or that still has holders.
 - **AND** no `Open` arrives during grace
 - **THEN** each incarnation is disposed
 - **AND** Close of each incarnation runs
+
+#### Scenario: Reset Sleep panic skips orphan and still disposes
+- **WHEN** `Reset` is called on a table that still has an awake incarnation
+- **AND** Sleep panics
+- **THEN** Close of that incarnation runs
+- **AND** `reclaim_orphan` is not emitted for that key
+- **AND** `reclaim_dispose` is emitted for that key
+- **AND** the key is not stored after `Reset` returns
+
+#### Scenario: Reset unmaps first even when close is enforced
+- **WHEN** an incarnation stored `Hooks.EnforceCloseBeforeOpen`
+- **AND** `Reset` is called while that incarnation is still stored
+- **AND** Close of that incarnation is still in flight
+- **AND** `Open` is called for that key
+- **THEN** `create` runs before Close returns
+- **AND** that `Open` returns a new incarnation, not the one Reset is closing
 
 ### Requirement: Lifecycle events are optional Hooks passed to Open
 `sleep`, `wake`, and `close` SHALL be carried by optional `func()` fields on a `Hooks` value
