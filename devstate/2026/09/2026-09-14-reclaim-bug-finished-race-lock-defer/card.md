@@ -1,20 +1,20 @@
-Developer review: in progress — 2026-09-14T15:21:46Z
+Developer review: in progress — 2026-09-14T15:35:55Z
 
 ## What this changes
 **Operators.** None.
 
 **Admin users.** None.
 
-**Developers.** OpenSpec change `reclaim-finished-race-lock-defer` folds bind-time `finished` snapshot, deferred mutex unlock, and `Open` error on `Table{}` into `std_go_reclaim_context-lease`. `reclaim/table.go` is still DestBranch.
+**Developers.** `reclaim/table.go` snapshots `slot.finished` under `t.mu` and skips `watch` when that snapshot is nil; every lock-held region unlocks with `defer`; `Open` on `Table{}` returns an error. Repros in `reclaim/repro_finished_race_test.go` and `reclaim/repro_mutex_wedge_test.go`.
 
 **End users.** None.
 
 ## Motivation
 The reclaim table keeps one value per key and drops holders when their context ends. On `master`, two holes remain in that table.
 
-A nil-Done holder can bind while `Reset` ends the incarnation: `dropWhenDone` reads `slot.finished` without `t.mu`, `closeFinished` nils it under the lock, and the watcher starts on a nil channel. That watcher then polls `ctx.Err` for the life of the process. Measured: 20 leaked goroutines across 20 keys, and a Docker `-race` report at `table.go:414` against `table.go:192`.
+A nil-Done holder can bind while `Reset` ends the incarnation: `dropWhenDone` reads `slot.finished` without `t.mu`, `closeFinished` nils it under the lock, and the watcher starts on a nil channel. That watcher then polls `ctx.Err` for the life of the process.
 
-Separately, no lock-held region unlocks with `defer`. A panic under `t.mu` is recovered at the Yaegi plugin boundary, so the process keeps running with every later `Open` blocked. Measured: `Open` on `Table{}` panics `assignment to entry in nil map` and `Reset` never acquires the mutex.
+Separately, no lock-held region unlocked with `defer`. A panic under `t.mu` is recovered at the Yaegi plugin boundary, so the process keeps running with every later `Open` blocked.
 
 If we do not merge, CI `-race` can flake on the bind path, the nil-Done leak PR #77 claimed fixed stays open, and one recovered panic freezes that table for the rest of the Traefik process.
 
@@ -24,34 +24,33 @@ sequenceDiagram
     participant Reset as Reset
     participant Watch as watch goroutine
     Reset->>Reset: closeFinished under t.mu
-    Open->>Open: read finished without lock
-    Open->>Watch: start watch with nil channel
-    Watch->>Watch: poll ctx.Err forever
+    Open->>Open: finishedAtBind under t.mu
+    Open->>Open: skip watch when snapshot is nil
 ```
 
 ## Merge readiness
-Propose complete; implement not started. 5 workflow phases remain.
+Implement landed; code review, archive, and pullrequest remain.
 
 Priority: P2 — real process leak and mutex wedge under Yaegi with limited blast radius per table instance.
-Reviewed head: 5dd86a4
+Reviewed head: 0733eeb
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 3/6 | Proposal landed; product fix not applied |
-| CI proof | 6/6 | last measured workflow 34860199374 succeeded — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34860199374 |
-| Local tests proof | N/A | Remote PR; implement has not run local proof |
+| Overall readiness | 6/6 | CI green on the fix; remaining work is review/archive/PR title |
+| CI proof | 6/6 | workflow run 34862975920 succeeded — https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34862975920 |
+| Local tests proof | N/A | Remote PR; local `./reclaim/` passed, Docker `-race` passed, coverage 95.1% |
 | Review resolution | 6/6 | No open PR review comments inventoried |
 
 ## Verification
 | Check | Result | Evidence |
 | --- | --- | --- |
-| Branch | 2026-09-14-reclaim-bug-finished-race-lock-defer pushed | git HEAD 5dd86a4 |
+| Branch | 2026-09-14-reclaim-bug-finished-race-lock-defer pushed | git HEAD 0733eeb |
 | OpenSpec | reclaim-finished-race-lock-defer | openspec/changes/reclaim-finished-race-lock-defer/ |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/91 | handoff.yaml |
-| CI | build 34860199374 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34860199374 | last measured check runs on PR 91 |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 34862975920 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/34862975920 | GitHub check runs on PR 91 (Lint, Unit, Unit race, e2e, integration) |
+| Local tests | passed | handoff.yaml; `go test ./reclaim/` 7.2s; Docker `-race` ok; cover 95.1% |
 | PR comments | no comments | comments.md absent |
 
 ## Specs
@@ -64,7 +63,7 @@ None.
 None.
 
 ## How this fits together
-Local ticket spec → branch `2026-09-14-reclaim-bug-finished-race-lock-defer` → PR #91 → OpenSpec change `reclaim-finished-race-lock-defer` ready to apply.
+Local ticket spec → branch `2026-09-14-reclaim-bug-finished-race-lock-defer` → PR #91 → apply of `reclaim-finished-race-lock-defer` at 0733eeb → CI 34862975920 green.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -75,11 +74,12 @@ Local ticket spec → branch `2026-09-14-reclaim-bug-finished-race-lock-defer` �
 | Does this change need a Yaegi interp probe that recovers a panic under t.mu, or is compiled recover() enough? | additive incidental | assumed — compiled recover plus the put ready double-close injection is the proof; do not add a Traefik/Yaegi panic probe in this change | explore |
 
 ## Before merge
-- [ ] [P2] Implement synchronized `finished` read plus defer-unlock refactor in `reclaim/table.go`
-- [ ] [P2] Land repro tests and meet acceptance (`-race`, coverage floor)
-- [x] Prepare devstate bus and stub PR
-- [x] Explore: reproduce both defects and write assumed decisions
-- [x] Propose OpenSpec change `reclaim-finished-race-lock-defer`
+- [x] [P2] Implement synchronized `finished` read plus defer-unlock refactor in `reclaim/table.go`
+- [x] [P2] Land repro tests and meet acceptance (`-race`, coverage floor)
+- [x] Prepare, explore, propose
+- [ ] Code review seven axes
+- [ ] Archive the OpenSpec change
+- [ ] Drop WIP from the PR title
 
 ## Findings
 None.
@@ -94,24 +94,25 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | No PR thread inventory |
-| Reviewed head | 5dd86a426c4b4747fb3e35891f609187c4a56a08 | OpenSpec proposal commit |
+| Reviewed head | 0733eebe76cb531456a07168f98679daf918b8f7 | Lint-fix SHA after apply |
 
 ### Stored data model
 None.
 
 ### Technical review
-Best possible solution: not landed in `table.go` yet — DestBranch still has the unsynchronized `finished` read and bare unlocks. The change artifacts name the helper extraction and the `put` ready-injection repro.
+Best possible solution: yes versus DestBranch — locked `finished` snapshot plus nil skip closes the bind-path leak; 14 lock-held helpers all `defer Unlock`; `Open` on `Table{}` errors instead of panicking under the lock.
 
-Do we have a high-confidence way to reproduce? Yes. Leak, wedge, and Docker `-race` all failed on DestBranch in explore.
+Do we have a high-confidence way to reproduce? Yes. The three repros now pass; Docker `-race` is green; CI Unit race succeeded.
 
-Is this the best way to solve the issue? Yes versus DestBranch: locked snapshot plus nil skip, defer-unlock helpers, and `Open` error on `Table{}` as an addition.
+Is this the best way to solve the issue? Yes versus DestBranch. A nil-map guard alone would have skipped the wedge repro.
 
 ### Evidence
 What I checked:
-- FindSpecHost fold into `std_go_reclaim_context-lease` (candidates: context-lease, value-lifecycle)
-- `openspec validate --changes reclaim-finished-race-lock-defer --strict` passed
-- `validate_artifact_names` OK
-- Last CI on PR 91: workflow 34860199374 all success
+- `go test -count=1 -timeout 10m ./reclaim/` passed (7.2s)
+- Docker `golang:1.25 go test -race -count=1 -timeout 10m ./reclaim/` passed (10.96s)
+- Coverage 95.1% of statements (DestBranch floor 94.4%)
+- CI run 34862975920: Lint, Unit, Unit race, Go E2E Redis/Dragonfly, Integration Tests (Redis/Dragonfly) all success
+- 14 `t.mu.Lock()` sites, each followed by `defer t.mu.Unlock()`
 
 ### Rank-up moves
 None.

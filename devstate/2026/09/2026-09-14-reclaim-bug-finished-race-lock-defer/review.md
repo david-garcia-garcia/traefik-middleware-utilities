@@ -15,3 +15,9 @@ phase: propose
 findings: none
 fixed: n/a
 skipped: n/a
+
+## implement (2026-09-14)
+phase: implement
+findings: CI lint exhaustive switch (openRetry) then fixed
+fixed: table.go finishedAtBind + defer-unlock helpers; Open error on Table{}; wedge injection; exhaustive case
+skipped: n/a
