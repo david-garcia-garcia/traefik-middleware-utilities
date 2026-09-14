@@ -88,7 +88,12 @@ func TestBug3StreamingBulkBeyondIOTimeoutReturnsIntact(t *testing.T) {
 	assertTurnsFullAndNoOverFrees(t, client)
 }
 
-func TestBug3SilentMidReplyTimesOutOnStall(t *testing.T) {
+// TestBug3SilentMidReplyTimesOutAtCommandBudget pins the price of stamping the socket deadline from
+// the command budget: a peer that goes quiet mid-reply is no longer cut off after IOTimeout, it ends
+// the command when the budget runs out. That is the deliberate trade for not killing a large reply
+// that is still arriving, so the lower bound is asserted too — losing it would mean the socket
+// deadline drifted back to a per-operation cap.
+func TestBug3SilentMidReplyTimesOutAtCommandBudget(t *testing.T) {
 	addr := startBug3ChunkedBulkRedis(t, 4096, 16, 0x11, 0, 16)
 	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 40 * time.Millisecond,
 		MaxRetries: -1, MinRetryBackoff: -1, MaxRetryBackoff: -1, DialTimeout: 200 * time.Millisecond})
@@ -102,17 +107,17 @@ func TestBug3SilentMidReplyTimesOutOnStall(t *testing.T) {
 	if err == nil || err.Error() != RedisTimeout {
 		t.Fatalf("Get silent mid-reply = %v, want %s", err, RedisTimeout)
 	}
-	if elapsed > 150*time.Millisecond {
-		t.Fatalf("Get silent mid-reply elapsed %v, want stall-prompt (well under overall %v)", elapsed, budget)
+	if elapsed > budget+100*time.Millisecond {
+		t.Fatalf("Get silent mid-reply elapsed %v, want <= budget %v plus slack", elapsed, budget)
 	}
-	if elapsed > budget {
-		t.Fatalf("Get silent mid-reply elapsed %v, want < overall %v", elapsed, budget)
+	if elapsed < client.IOTimeout() {
+		t.Fatalf("Get silent mid-reply elapsed %v, want at least IOTimeout %v", elapsed, client.IOTimeout())
 	}
 	assertTurnsFullAndNoOverFrees(t, client)
 }
 
 func TestBug3DripPeerCannotPinTurnPastOverallBudget(t *testing.T) {
-	// 1-byte chunks every 20ms stay inside IOTimeout 50ms, so stall refresh alone would never fire.
+	// 1-byte chunks every 20ms keep arriving forever, so only the command budget can end this.
 	addr := startBug3ChunkedBulkRedis(t, 1<<20, 1, 0x22, 20*time.Millisecond, -1)
 	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, IOTimeout: 50 * time.Millisecond, DialTimeout: 50 * time.Millisecond,
 		MaxRetries: -1, MinRetryBackoff: -1, MaxRetryBackoff: -1, PoolTimeout: 80 * time.Millisecond})

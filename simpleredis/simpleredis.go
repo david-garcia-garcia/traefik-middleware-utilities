@@ -165,7 +165,7 @@ func (sr *SimpleRedis) DialTimeout() time.Duration {
 	return defaultDialTimeout
 }
 
-// IOTimeout is the stall bound New froze (quiet time between socket reads/writes).
+// IOTimeout is this hop's I/O share of the command budget New froze, not a per-operation cap.
 func (sr *SimpleRedis) IOTimeout() time.Duration {
 	if sr.ioTimeout > 0 {
 		return sr.ioTimeout

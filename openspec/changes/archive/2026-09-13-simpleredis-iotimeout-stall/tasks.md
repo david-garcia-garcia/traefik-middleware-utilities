@@ -1,19 +1,21 @@
 ## 1. Product
 
-- [x] 1.1 Add `stallConn` in `simpleredis/resp.go` with every `net.Conn` method declared (Yaegi does not promote embeds); `Read`/`Write` call `clampTimeout(ctx, stall)` then `SetReadDeadline`/`SetWriteDeadline`; `bound <= 0` returns `os.ErrDeadlineExceeded`
-- [x] 1.2 Wrap the TCP conn as `stallConn` in `dial` before `bufio.NewReader`/`NewWriter`
-- [x] 1.3 In `do`, assign `ctx` and `stall = IOTimeout` on `*stallConn`; keep start-of-command `ioBound` for `ioOrContext`; do not one-shot `SetDeadline` on the wrapped conn
-- [x] 1.4 Update `Config.IOTimeout` comment from per-command `SetDeadline` to stall (quiet-peer) bound
+- [x] 1.1 Add `commandBudgetLeft(ctx, fallback)` in `simpleredis/resp.go`: `time.Until(ctx.Deadline())`, or `fallback` when `ctx` carries no deadline
+- [x] 1.2 In `do`, stamp `SetDeadline` from `commandBudgetLeft(ctx, sr.IOTimeout())` instead of `clampTimeout(ctx, sr.IOTimeout())`
+- [x] 1.3 Drop `ioBound` / `ioTimeout` from `ioOrContext`; report `context.DeadlineExceeded` when `ctx` has a deadline and the error is `os.ErrDeadlineExceeded`, so `libraryTimeout` still separates library from caller
+- [x] 1.4 Raise `defaultIOTimeout` from 100 ms to 250 ms
+- [x] 1.5 Update `Config.IOTimeout`, the zero-Config default list, the worst-case wait, and the `IOTimeout()` accessor doc to say budget input rather than per-operation cap
 
 ## 2. Tests
 
-- [x] 2.1 Add `simpleredis/bug3_stall_deadline_test.go` with `bug3`-prefixed fakes: streaming bulk beyond `IOTimeout` returns intact; silent mid-reply times out promptly; drip returns within overall budget, `OverFrees()==0`, later Get obtains a turn
-- [x] 2.2 `go vet ./simpleredis/`
-- [x] 2.3 `go test ./simpleredis/ -count=1`
-- [x] 2.4 `go test ./... -count=1 -short`
-- [x] 2.5 `go test -tags simpleredis_bugs ./simpleredis/ -run TestBugValueLargerThanIOTimeout -v` from the caller checkout that has the tagged file (expect pass after the fix)
+- [x] 2.1 Add `simpleredis/bug3_command_budget_deadline_test.go` with `bug3`-prefixed fakes: streaming bulk beyond `IOTimeout` returns intact; silent mid-reply times out at the budget (elapsed `>= IOTimeout` and `<= budget + slack`); drip returns within budget, `OverFrees()==0`, later Get obtains a turn
+- [x] 2.2 Update `TestZeroConfigMaxRetriesIsOneExtra` to assert `IOTimeout() == 250ms`
+- [x] 2.3 `go vet ./simpleredis/`
+- [x] 2.4 `go test ./simpleredis/ -count=1`
+- [x] 2.5 `go test ./... -count=1 -short`
+- [x] 2.6 `go test -tags simpleredis_bugs ./simpleredis/ -run TestBugValueLargerThanIOTimeout -v` from the caller checkout that has the tagged file (expect pass after the fix)
 
 ## 3. Spec and usage
 
-- [x] 3.1 Update `knowledge/devdocs/std_go_simpleredis.md` so remaining-time wording says stall refresh, not one-shot per-command `SetDeadline`
+- [x] 3.1 Update `knowledge/devdocs/std_go_simpleredis.md`: budget numbers (900 ms), and a gotcha stating `IOTimeout` is a budget input and a second per-`Read` deadline must not be added back
 - [x] 3.2 `openspec validate --change simpleredis-iotimeout-stall --strict`

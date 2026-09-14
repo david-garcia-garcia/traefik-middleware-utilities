@@ -75,7 +75,7 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 		host = defaultHost
 	}
 
-	// Pester may Eval a 500ms TIME wait; zero-Config IOTimeout is 100ms and would abort that command.
+	// Pester may Eval a 500ms TIME wait; the zero-Config command budget would abort that command.
 	client, err := simpleredis.New(simpleredis.Config{Host: host, Pass: cfg.Password, Database: cfg.Database, IOTimeout: time.Second})
 	if err != nil {
 		return nil, err

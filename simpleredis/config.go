@@ -11,7 +11,7 @@ const (
 	defaultPoolSize     = 8
 	defaultIdleTimeout  = 30 * time.Second
 	defaultDialTimeout  = 200 * time.Millisecond
-	defaultIOTimeout    = 100 * time.Millisecond
+	defaultIOTimeout    = 250 * time.Millisecond
 	defaultPoolTimeout  = 200 * time.Millisecond
 	defaultMaxRetries   = 1
 )
@@ -22,9 +22,9 @@ var ErrMaxIdleConnsAbovePoolSize = errors.New("simpleredis: MaxIdleConns must no
 
 // Config is the freeze-at-New settings for a SimpleRedis client.
 // New copies these values onto the client. Later writes to this struct do not change a client that already ran New.
-// A zero Config uses the package defaults (live cap 8, idle trim 8, 200ms pool wait, 30s idle reuse gate, 200ms dial, 100ms I/O, 1 extra retry).
+// A zero Config uses the package defaults (live cap 8, idle trim 8, 200ms pool wait, 30s idle reuse gate, 200ms dial, 250ms I/O, 1 extra retry).
 // An explicit MaxIdleConns above PoolSize returns ErrMaxIdleConnsAbovePoolSize and no client. A zero MaxIdleConns is not a request for 8: it follows a smaller PoolSize, so PoolSize alone still builds. A trim below PoolSize stays as written: that trades a smaller idle footprint for closing (and later re-dialling) every socket released above the trim.
-// Worst-case command wait is (MaxRetries+1)*(DialTimeout+IOTimeout) (600ms at those defaults). Min/max backoff keep go-redis sentinels: 0 means 8ms / 512ms; -1 means off. MaxRetries 0 at New means 1 extra retry; -1 means none.
+// Worst-case command wait is (MaxRetries+1)*(DialTimeout+IOTimeout) (900ms at those defaults). Min/max backoff keep go-redis sentinels: 0 means 8ms / 512ms; -1 means off. MaxRetries 0 at New means 1 extra retry; -1 means none.
 type Config struct {
 	// Host is the TCP address New stores (host:port). New does not dial.
 	Host string
@@ -44,7 +44,9 @@ type Config struct {
 	IdleTimeout time.Duration
 	// DialTimeout is the TCP dial bound. 0 means 200ms.
 	DialTimeout time.Duration
-	// IOTimeout is the stall bound: quiet time between socket reads/writes. 0 means 100ms.
+	// IOTimeout is this hop's I/O share of the command budget, not a per-operation cap. 0 means 250ms.
+	// The socket deadline is what is left of (MaxRetries+1)*(DialTimeout+IOTimeout), so a large reply
+	// that keeps arriving is not cut off for its size while a quiet peer still ends the command.
 	IOTimeout time.Duration
 
 	// MaxRetries is extra retries after the first attempt. 0 at New means 1; -1 means none (one send).

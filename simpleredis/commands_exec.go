@@ -113,22 +113,6 @@ func contextStop(ctx context.Context) error {
 	return nil
 }
 
-// clampTimeout is limit, or time left on ctx when that is shorter.
-func clampTimeout(ctx context.Context, limit time.Duration) time.Duration {
-	deadline, ok := ctx.Deadline()
-	if !ok {
-		return limit
-	}
-	remaining := time.Until(deadline)
-	if remaining < limit {
-		if remaining < 0 {
-			return 0
-		}
-		return remaining
-	}
-	return limit
-}
-
 // waitUntil waits delay or until ctx fires. Library expiry is mapped at exec.
 func waitUntil(ctx context.Context, delay time.Duration) error {
 	if delay <= 0 {

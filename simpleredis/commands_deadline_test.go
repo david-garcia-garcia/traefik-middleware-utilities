@@ -185,8 +185,8 @@ func TestZeroConfigMaxRetriesIsOneExtra(t *testing.T) {
 	if client.DialTimeout() != 200*time.Millisecond {
 		t.Fatalf("DialTimeout() = %v, want 200ms", client.DialTimeout())
 	}
-	if client.IOTimeout() != 100*time.Millisecond {
-		t.Fatalf("IOTimeout() = %v, want 100ms", client.IOTimeout())
+	if client.IOTimeout() != 250*time.Millisecond {
+		t.Fatalf("IOTimeout() = %v, want 250ms", client.IOTimeout())
 	}
 }
 

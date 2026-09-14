@@ -21,7 +21,7 @@ The session SHALL live in package `simpleredis` under folder `simpleredis/`. The
 ### Requirement: New records settings and does not dial
 `New(Config)` SHALL copy `Config` onto a new client (host, password, database, pool knobs, I/O knobs, retry sentinels) and SHALL create the in-use-turn channel sized to `PoolSize` (const default 8 when `PoolSize` is 0). `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, or retry fields.
 
-Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` 200 milliseconds, `IOTimeout` 100 milliseconds. Retry fields on `Config`: `0` at `New` means 1 extra retry; `-1` means off (one send). An explicit `MaxRetries` of 3 means 3 extra retries. `MinRetryBackoff` / `MaxRetryBackoff` keep go-redis sentinels: `0` means 8ms / 512ms; `-1` means off.
+Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` 200 milliseconds, `IOTimeout` 250 milliseconds. Retry fields on `Config`: `0` at `New` means 1 extra retry; `-1` means off (one send). An explicit `MaxRetries` of 3 means 3 extra retries. `MinRetryBackoff` / `MaxRetryBackoff` keep go-redis sentinels: `0` means 8ms / 512ms; `-1` means off.
 
 `New` SHALL return `ErrMaxIdleConnsAbovePoolSize` and a nil client when an **explicit** `MaxIdleConns` is above `PoolSize`, and MUST NOT rewrite either knob in that case. A zero `MaxIdleConns` is not a request for 8: it SHALL take `min(8, PoolSize)`, so a `Config` that sets only a `PoolSize` below 8 SHALL still create a client whose `MaxIdleConns()` equals that `PoolSize`. `New` MUST NOT rewrite `PoolSize`. A trim below `PoolSize` SHALL still create a client.
 
@@ -76,7 +76,7 @@ The session SHALL keep unused TCP connections in an idle pool of at most `MaxIdl
 
 Every command (GET, MGET, SET, DEL, INCR, INCRBY, EXPIRE, EXPIREAT, EVAL) SHALL use go-redis-shaped command retry. `MaxRetries`, `MinRetryBackoff`, and `MaxRetryBackoff` live on `Config` and are copied at `New`. The retry loop SHALL be `for attempt := 0; attempt <= maxRetries; attempt++` (zero Config means 1 extra retry, at most two sends). Backoff SHALL wait only between retries (`attempt > 0`), using go-redis `RetryBackoff` (`math/rand` `Int63n` jitter), and MUST return when the command context is done or the overall command deadline has passed. Construction is `New(Config)`.
 
-A command SHALL retry when the error is `redis:unreachable` (EOF, unexpected EOF, dial failure, and other IO as this client maps them), including a fresh dial, unless the client is `Close`d (`redis:unreachable` from a closed client MUST NOT spin `MaxRetries`). A command SHALL also retry Redis error replies whose text is `ERR max number of clients reached` or has prefix `LOADING `, `READONLY `, `MASTERDOWN `, `CLUSTERDOWN `, or `TRYAGAIN ` (space after the word). A command MUST NOT retry `redis:timeout` (documented deviation from go-redis: `IOTimeout` default is 100 milliseconds), `redis:miss`, `redis:noauth`, `redis:issue?`, a cancelled or deadline-exceeded command context, or other Redis `-ERR` replies. A pool-wait timeout SHALL return `redis:unreachable` and MUST NOT be retried, so `MaxRetries` does not multiply `poolTimeout`.
+A command SHALL retry when the error is `redis:unreachable` (EOF, unexpected EOF, dial failure, and other IO as this client maps them), including a fresh dial, unless the client is `Close`d (`redis:unreachable` from a closed client MUST NOT spin `MaxRetries`). A command SHALL also retry Redis error replies whose text is `ERR max number of clients reached` or has prefix `LOADING `, `READONLY `, `MASTERDOWN `, `CLUSTERDOWN `, or `TRYAGAIN ` (space after the word). A command MUST NOT retry `redis:timeout` (documented deviation from go-redis: `IOTimeout` default is 250 milliseconds), `redis:miss`, `redis:noauth`, `redis:issue?`, a cancelled or deadline-exceeded command context, or other Redis `-ERR` replies. A pool-wait timeout SHALL return `redis:unreachable` and MUST NOT be retried, so `MaxRetries` does not multiply `poolTimeout`.
 
 INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is retried. That is accepted. A timeout on a reused connection MUST NOT be retried for any verb.
 
@@ -230,7 +230,7 @@ A command on a `SimpleRedis` that did not come from `New` SHALL return an error 
 - **THEN** that client has no in-use-turn channel
 
 ### Requirement: I/O deadline is timeout, not a net.Error assert
-When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `IOTimeout` default is 100 milliseconds). A timeout on a reused connection MUST NOT open a second connection.
+When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; `IOTimeout` default is 250 milliseconds). A timeout on a reused connection MUST NOT open a second connection.
 
 #### Scenario: I/O timeout is redis:timeout
 - **WHEN** the Redis peer does not complete a reply before the I/O deadline
@@ -492,7 +492,7 @@ When a caller returns an in-use-turn token while the in-use-turn channel is alre
 - **AND** `OverFrees()` is 0
 
 ### Requirement: Whole command has an overall deadline
-Each command SHALL compute one overall deadline at entry equal to `(maxRetries+1)*(DialTimeout+IOTimeout)` unless the caller's context deadline is sooner. When the library instant is sooner, the command SHALL bind it onto the caller's context (`context.WithDeadline`, same shape as `net.Dialer` / `http.Client`). Dial, AUTH, SELECT, and the command SHALL share the remaining time. AUTH and SELECT MUST NOT each add a fresh full `IOTimeout` on top of a completed TCP connect. Per-command socket I/O SHALL refresh `SetReadDeadline` and `SetWriteDeadline` to the lesser of `IOTimeout` and time remaining on each kernel `Read` and `Write`, so `IOTimeout` bounds quiet time rather than total transfer. When that overall library deadline expires, the command SHALL return `redis:timeout` and MUST NOT start another attempt. A sooner caller deadline SHALL return that context's `Err()`.
+Each command SHALL compute one overall deadline at entry equal to `(maxRetries+1)*(DialTimeout+IOTimeout)` unless the caller's context deadline is sooner. When the library instant is sooner, the command SHALL bind it onto the caller's context (`context.WithDeadline`, same shape as `net.Dialer` / `http.Client`). Dial, AUTH, SELECT, and the command SHALL share the remaining time. AUTH and SELECT MUST NOT each add a fresh full `IOTimeout` on top of a completed TCP connect. Per-command socket I/O SHALL set `SetDeadline` to the time remaining on that bound context, so `IOTimeout` shapes the budget rather than capping each socket operation separately. When that overall library deadline expires, the command SHALL return `redis:timeout` and MUST NOT start another attempt. A sooner caller deadline SHALL return that context's `Err()`.
 
 #### Scenario: Black-hole Get returns within the overall deadline
 - **WHEN** a zero-Config client Gets against `203.0.113.1:6379`
@@ -506,8 +506,10 @@ Each command SHALL compute one overall deadline at entry equal to `(maxRetries+1
 - **THEN** the command returns within the overall deadline
 - **AND** elapsed time is less than `DialTimeout + 2×IOTimeout` times the number of attempts that would fit if each step used a fresh `IOTimeout`
 
-### Requirement: IOTimeout is a stall bound on socket progress
-`IOTimeout` SHALL bound quiet time on the socket, not total transfer wall time. Each kernel `Read` and `Write` on a command socket SHALL set `SetReadDeadline` or `SetWriteDeadline` to the lesser of `IOTimeout` and time remaining on the command context. Mapping MUST keep `errors.Is` against `os.ErrDeadlineExceeded` and MUST NOT type-assert `net.Error`. A compliant peer that keeps sending a bulk whose transfer outlasts one `IOTimeout` SHALL still return that value when the transfer finishes inside the overall command budget. A peer that goes silent after sending a partial bulk SHALL still return `redis:timeout` (or the caller's `Err()` when that deadline is sooner) without waiting for the overall budget when the stall window is shorter. A peer that keeps sending slowly SHALL NOT hold an in-use turn past the overall command deadline; extra turn returns SHALL stay 0. The decoder's `maxBulkLength` cap SHALL stay a parse cap, not a time-derived size.
+### Requirement: The socket deadline is the command budget, not IOTimeout
+`IOTimeout` SHALL be an input to the overall command budget and MUST NOT also act as a separate per-operation cap on the same socket. A command socket's `SetDeadline` SHALL be the time remaining on the command context, which `bindCommandDeadline` has already set to `(maxRetries+1)*(DialTimeout+IOTimeout)` or the caller's sooner deadline. Mapping MUST keep `errors.Is` against `os.ErrDeadlineExceeded` and MUST NOT type-assert `net.Error`; because that deadline is now the command deadline, a fired socket deadline SHALL report the context deadline and let the retry layer decide library (`redis:timeout`) versus caller (`Err()`). A compliant peer that keeps sending a bulk whose transfer outlasts one `IOTimeout` SHALL still return that value when the transfer finishes inside the budget. A peer that keeps sending slowly SHALL NOT hold an in-use turn past the budget; extra turn returns SHALL stay 0. The decoder's `maxBulkLength` cap SHALL stay a parse cap, not a time-derived size.
+
+The accepted cost SHALL be that a peer which goes quiet mid-reply is no longer cut off after `IOTimeout` and instead ends the command when the budget runs out. Two bounds on one socket could only disagree, and the shorter of them made a large reply unreadable while the peer was healthy and still sending; a single bound is the resolution. Operators who need a shorter ceiling SHALL lower `IOTimeout` or `DialTimeout`, which lowers the budget itself.
 
 #### Scenario: Streaming bulk that outlasts one IOTimeout returns intact
 - **WHEN** a fake peer replies with a multi-megabyte bulk written in chunks whose pauses make the transfer longer than `IOTimeout`
@@ -516,11 +518,11 @@ Each command SHALL compute one overall deadline at entry equal to `(maxRetries+1
 - **THEN** the Get returns the payload bytes the peer sent
 - **AND** the error is nil
 
-#### Scenario: Silent mid-reply still times out on the stall bound
+#### Scenario: Silent mid-reply times out at the command budget
 - **WHEN** a fake peer writes a bulk header and some payload bytes then sends nothing more
 - **AND** a Get is issued with `IOTimeout` well under the overall command budget
 - **THEN** the command returns `redis:timeout`
-- **AND** elapsed time is less than the overall command budget
+- **AND** elapsed time is at least `IOTimeout` and no more than the overall command budget plus scheduling slack
 
 #### Scenario: Drip peer cannot pin the in-use turn past the overall budget
 - **WHEN** a fake peer sends bulk payload one small chunk at a time so each chunk arrives inside `IOTimeout` but the whole transfer would exceed the overall command deadline
