@@ -45,6 +45,21 @@ func TestYaegi_OpenHooksRunSleepWakeClose(t *testing.T) {
 	}
 }
 
+// TestYaegi_OpenTypedCallExpressionReturnsT proves OpenTyped as a call expression under Yaegi.
+func TestYaegi_OpenTypedCallExpressionReturnsT(t *testing.T) {
+	if raceDetectorOn {
+		t.Skip("Yaegi v0.16.1 select races inside the interp on context cancel; Unit without -race still runs this")
+	}
+	goPath := t.TempDir()
+	writeGopathReclaim(t, goPath)
+	writeGopathFile(t, goPath, "hookprobe", "typed.go", hookprobeTypedSrc)
+
+	got := evalHookprobe(t, goPath, `hookprobe.RunOpenTyped()`)
+	if got != "ok" {
+		t.Fatalf("OpenTyped call expression: %q, want ok", got)
+	}
+}
+
 // TestYaegi_GraceExpireDoesNotHang is the DestBranch hang: interpreted concurrent last-holder
 // drop with positive grace. Before AfterFunc, Go 1.21.13 missed Close and parked waitGraceOrWake
 // in interp._select. Fail in 3s, not the 5-minute package timeout.
@@ -231,6 +246,49 @@ func waitCount(hookCount *atomic.Int32) {
 	for hookCount.Load() == 0 && time.Now().Before(deadline) {
 		time.Sleep(time.Millisecond)
 	}
+}
+`
+
+const hookprobeTypedSrc = `package hookprobe
+
+import (
+	"context"
+	"io"
+	"log/slog"
+	"time"
+
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/reclaim"
+)
+
+type item struct {
+	n int
+}
+
+// RunOpenTyped calls OpenTyped as a call expression in this package, which can name item.
+func RunOpenTyped() string {
+	tab := reclaim.New(reclaim.Config{Grace: 20 * time.Millisecond})
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stored, err := reclaim.OpenTyped[*item](ctx, tab, "k", logger, func() (any, reclaim.Hooks, error) {
+		return &item{n: 7}, reclaim.Hooks{}, nil
+	})
+	if err != nil {
+		return "open:" + err.Error()
+	}
+	if stored == nil || stored.n != 7 {
+		return "value"
+	}
+	again, err := reclaim.OpenTyped[*item](ctx, tab, "k", logger, func() (any, reclaim.Hooks, error) {
+		return &item{n: 8}, reclaim.Hooks{}, nil
+	})
+	if err != nil {
+		return "bind:" + err.Error()
+	}
+	if again != stored {
+		return "identity"
+	}
+	return "ok"
 }
 `
 
