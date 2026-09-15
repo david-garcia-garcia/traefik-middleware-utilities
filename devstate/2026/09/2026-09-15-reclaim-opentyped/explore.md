@@ -51,5 +51,5 @@ OpenTyped[T]                 ← package func; same create; returns T or mismatc
 
 - Q: What error strings does OpenWithHooks use for nil table, logger, and create?
   Rank: additive asked — requirement names Open error precedence
-  Decision: assumed — the same three strings Open uses today, same order. Open's nil-create branch still reports table and logger first because the wrapping closure is never nil.
-  By: explore
+  Decision: resolved — the same three strings Open uses today, same order. Open's nil-create branch still reports table and logger first because the wrapping closure is never nil.
+  By: implement
