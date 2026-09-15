@@ -1,0 +1,4 @@
+host: local
+ref: none
+title: Port iplookup from traefik-geoblock PR 86 with CIDR metadata and reset
+url: none
