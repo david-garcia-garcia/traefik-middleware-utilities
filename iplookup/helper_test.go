@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func mustContains(t *testing.T, h *Helper, ip string) (bool, int, string) {
+func mustContains(t *testing.T, h *Helper, ip string) (found bool, prefixLen int, metadata string) {
 	t.Helper()
 	parsed := net.ParseIP(ip)
 	if parsed == nil {
@@ -207,10 +207,13 @@ func TestEmptyLabelAndMiss(t *testing.T) {
 
 func TestContainsNilIP(t *testing.T) {
 	h := New()
-	_, _, _, err := h.Contains(nil)
+	found, prefixLen, metadata, err := h.Contains(nil)
 	if err == nil {
 		t.Fatal("expected nil IP error")
 	}
+	_ = found
+	_ = prefixLen
+	_ = metadata
 }
 
 func TestConcurrentResetAndContains(t *testing.T) {
@@ -226,7 +229,11 @@ func TestConcurrentResetAndContains(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		_, _, _, _ = h.Contains(net.ParseIP("10.1.2.3"))
+		found, prefixLen, metadata, err := h.Contains(net.ParseIP("10.1.2.3"))
+		_ = found
+		_ = prefixLen
+		_ = metadata
+		_ = err
 	}()
 	wg.Wait()
 	found, _, _ := mustContains(t, h, "10.1.2.3")

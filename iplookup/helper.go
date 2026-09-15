@@ -3,6 +3,7 @@
 package iplookup
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -66,7 +67,7 @@ func (h *Helper) RemoveCIDR(cidr string) (removed bool, err error) {
 // Contains returns the longest stored prefix of the same family that covers ipAddr.
 func (h *Helper) Contains(ipAddr net.IP) (found bool, prefixLen int, metadata string, err error) {
 	if ipAddr == nil {
-		return false, 0, "", fmt.Errorf("iplookup: IP address is nil")
+		return false, 0, "", errors.New("iplookup: IP address is nil")
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
