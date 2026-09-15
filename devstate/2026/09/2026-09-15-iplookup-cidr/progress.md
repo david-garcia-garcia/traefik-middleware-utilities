@@ -10,5 +10,5 @@ JobName: 2026-09-15-iplookup-cidr
 | implement | [x] | [x] | 2026-09-15T06:40:39.478Z |
 | codereview | [x] | [x] | 2026-09-15T06:43:19.340Z |
 | devdocsimpact | [x] | [x] | 2026-09-15T06:45:30.613Z |
-| archive | [ ] | [ ] | |
+| archive | [x] | [ ] | |
 | pullrequest | [ ] | [ ] | |
