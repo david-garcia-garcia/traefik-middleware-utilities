@@ -31,3 +31,10 @@ phase: codereview
 findings: seven-axis review on ec2b22d; standards 1 done (godoc Yaegi harness); spec 1 skipped (research packet); CI run 34938059771 8/8 success
 fixed: standards finding via 6f07bfb before card
 skipped: spec axis research-in-diff marked skipped
+
+## devdocsimpact (2026-09-15)
+At: 2026-09-15T06:45:30.613Z
+phase: devdocsimpact
+findings: devdocs-impact none; units Helper, Match label, Family tree; std_go_iplookup.md aligned; PR 94 summary Set; CI pending on 0e8f4a0
+fixed: n/a
+skipped: n/a
