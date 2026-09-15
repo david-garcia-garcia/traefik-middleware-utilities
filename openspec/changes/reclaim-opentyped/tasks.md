@@ -24,4 +24,4 @@
 
 - [x] 5.1 `go test -count=1 ./reclaim/`
 - [x] 5.2 Repo lint (`.golangci.yml`)
-- [ ] 5.3 Run or skip-with-reason `Test-Integration.ps1` and `e2e/` as the repo requires; record outcomes
+- [x] 5.3 `Test-Integration.ps1 -Suite reclaim` failed locally: Docker bind 0.0.0.0:8000 already allocated. `e2e/reclaimprobe` unchanged (stays on `Open`). CI Integration Tests job is the measured Pester run.

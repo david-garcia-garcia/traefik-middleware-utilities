@@ -187,3 +187,26 @@ func TestTable_OpenNilCreateKeepsErrorPrecedence(t *testing.T) {
 		t.Fatalf("valid Open after precedence checks: %v", err)
 	}
 }
+
+func TestTable_OpenWithHooksNilArgsMatchOpenErrors(t *testing.T) {
+	logger := recLogger(&recHandler{})
+	var nilTable *Table
+	_, err := nilTable.OpenWithHooks(context.Background(), "a", logger, nil)
+	wantTable := `reclaim: open "a": nil table`
+	if err == nil || err.Error() != wantTable {
+		t.Fatalf("nil table: %v, want %s", err, wantTable)
+	}
+
+	tab := New(Config{Grace: time.Millisecond})
+	_, err = tab.OpenWithHooks(context.Background(), "a", nil, nil)
+	wantLogger := `reclaim: open "a": nil logger`
+	if err == nil || err.Error() != wantLogger {
+		t.Fatalf("nil logger: %v, want %s", err, wantLogger)
+	}
+
+	_, err = tab.OpenWithHooks(context.Background(), "a", logger, nil)
+	wantCreate := `reclaim: create "a": nil create`
+	if err == nil || err.Error() != wantCreate {
+		t.Fatalf("nil create: %v, want %s", err, wantCreate)
+	}
+}
