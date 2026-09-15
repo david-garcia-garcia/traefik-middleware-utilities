@@ -38,3 +38,10 @@ phase: devdocsimpact
 findings: devdocs-impact none; units Helper, Match label, Family tree; std_go_iplookup.md aligned; PR 94 summary Set; CI pending on 0e8f4a0
 fixed: n/a
 skipped: n/a
+
+## archive (2026-09-15)
+At: 2026-09-15T06:48:46.385Z
+phase: archive
+findings: reviewed head dc014a8; specs live openspec/specs/std_go_iplookup_*; change archived 2026-09-15-iplookup-cidr-helper; PR 94 summary Set; CI run 34938524721 in progress on dc014a8
+fixed: n/a
+skipped: n/a
