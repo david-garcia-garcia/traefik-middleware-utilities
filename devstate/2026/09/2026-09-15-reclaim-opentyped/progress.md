@@ -8,7 +8,7 @@ JobName: 2026-09-15-reclaim-opentyped
 | explore | [x] | [x] | 2026-09-15T16:02:23Z |
 | propose | [x] | [x] | 2026-09-15T16:04:38Z |
 | implement | [x] | [x] | 2026-09-15T16:09:20Z |
-| codereview | [x] | [ ] | |
-| devdocsimpact | [ ] | [ ] | |
-| archive | [ ] | [ ] | |
-| pullrequest | [ ] | [ ] | |
+| codereview | [x] | [x] | 2026-09-15T16:13:09Z |
+| devdocsimpact | [x] | [x] | 2026-09-15T16:13:09Z |
+| archive | [x] | [x] | 2026-09-15T16:13:09Z |
+| pullrequest | [x] | [x] | 2026-09-15T16:13:09Z |
