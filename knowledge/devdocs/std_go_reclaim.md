@@ -11,11 +11,19 @@ One value from `create` to `close`, together with the holders bound to it. A key
 _Avoid_: calling a new value after a reclaim "the same incarnation"; it is not, and its Close hook runs separately
 
 **Open**:
-Create-once for a key (`create` takes no args — Yaegi cannot call `func(context.Context) (any, error)`). The caller passes a `*slog.Logger` (required; no table logger and no fallback) and a `Hooks` value stored on the incarnation at put. A later `Open` does not run create, does not replace hooks, and wakes the value first if it was asleep. `ctx` must not be nil. Traefik's `New` ctx is `WithCancel`; the next dynamic config cancels it before the next `New`. `(value, nil)` means this call bound a holder that was still live at return; a canceled ctx at bind returns `(nil, ctx.Err())` and not the pointer.
+Create-once for a key (`create` takes no args — Yaegi cannot call `func(context.Context) (any, error)`). The caller passes a `*slog.Logger` (required; no table logger and no fallback) and a `Hooks` value stored on the incarnation at put. A later `Open` does not run create, does not replace hooks, and wakes the value first if it was asleep. `ctx` must not be nil. Traefik's `New` ctx is `WithCancel`; the next dynamic config cancels it before the next `New`. `(value, nil)` means this call bound a holder that was still live at return; a canceled ctx at bind returns `(nil, ctx.Err())` and not the pointer. Nil arguments error as table, then logger, then create.
 _Avoid_: Put vs Bind as two public calls; a nil holder context; assuming `Open` returns fast when the value has a slow `Wake`; type-switch discovery on the stored `any`; type-asserting when `err != nil`
 
+**OpenWithHooks**:
+`Open` with `create` returning `(any, Hooks, error)` instead of taking hooks beside it. Use this when Sleep, Wake, or Close must act on the value being created: those funcs are built inside `create` and stored at put. A later `Open` binds without running `create` and keeps the stored hooks, including `EnforceCloseBeforeOpen`.
+_Avoid_: declaring a variable before `Open` only so hooks can close over it; faking `EnforceCloseBeforeOpen` from outside the package
+
+**OpenTyped**:
+Package function `OpenTyped[T any]`: `OpenWithHooks` that returns the stored value as `T`. On a type mismatch it returns the zero `T` and `reclaim: open %q: want %T, got %T`. The instantiation must stay a call expression in a package that can name `T`.
+_Avoid_: a package-level var, type alias, or struct field whose type names a generic instantiation from another package (Yaegi v0.16.1); `Table[T]`
+
 **Hooks**:
-The optional `Sleep`, `Wake`, and `Close` funcs passed to `Open`, plus `EnforceCloseBeforeOpen`. A nil func skips that event. They belong to the incarnation created at put, not to the latest holder. `EnforceCloseBeforeOpen` defaults off: the table unmaps before Close, so a later `Open` of that key may create while Close is still in flight. Set it when the value owns something exclusive that cannot be held twice (an mmap, a file lock, a listening port, a connection). The cost of turning it on is that a slow or blocking Close now delays the next `create` for that key, which on the Traefik path means delaying a config reload. The ending path reads the stored flag, not a later `Open`'s argument.
+The optional `Sleep`, `Wake`, and `Close` funcs stored at put, plus `EnforceCloseBeforeOpen`. They arrive beside `create` on `Open`, or from `create` on `OpenWithHooks` and `OpenTyped`. A nil func skips that event. They belong to the incarnation created at put, not to the latest holder. `EnforceCloseBeforeOpen` defaults off: the table unmaps before Close, so a later `Open` of that key may create while Close is still in flight. Set it when the value owns something exclusive that cannot be held twice (an mmap, a file lock, a listening port, a connection). The cost of turning it on is that a slow or blocking Close now delays the next `create` for that key, which on the Traefik path means delaying a config reload. The ending path reads the stored flag, not a later `Open`'s argument.
 _Avoid_: optional methods on the stored value; replacing hooks on bind or reclaim; putting this knob on `Table` or `Config` (it is per incarnation, not per table)
 
 **Lifecycle**:
@@ -46,11 +54,11 @@ Because grace costs a sleeping value rather than a live one, a long grace is che
 
 ## How to use
 
-- Production: hold `reclaim.New(reclaim.Config{Grace: reclaim.DefaultGrace})` at package scope in the plugin and call `table.Open`. Tests: `New(Config{Grace: short})`. `logger` is required. Nil hook funcs skip that event.
+- Production: hold `reclaim.New(reclaim.Config{Grace: reclaim.DefaultGrace})` at package scope in the plugin and call `OpenTyped` (or `Open` / `OpenWithHooks`). Tests: `New(Config{Grace: short})`. `logger` is required. Nil hook funcs skip that event.
 - Watch stable `msg` + `key`. All five (`reclaim_put`, `reclaim_bind`, `reclaim_orphan`, `reclaim_reclaim`, `reclaim_dispose`) are debug. Put/bind/reclaim use that `Open`'s logger; orphan/dispose use the last `Open` on the key.
 - `reclaim_hook_panic` is the one error-level line: a hook panicked and was recovered. Alert on it — the table kept running, but that hook is broken.
 - `ctx` is the host teardown context (Traefik `New` ctx), not `req.Context()`, not `context.Background()`. `Open` returns `(nil, ctx.Err())` when that context is already done at bind; do not type-assert a nil pointer.
-- Pass `Hooks` that close over a pointer assigned inside `create`. Do not type-switch the stored `any` for Sleep, Wake, or Close.
+- Prefer `OpenTyped` so hooks are built inside `create` and the return is already `T`. `Open` still accepts hooks beside `create`. Do not type-switch the stored `any` for Sleep, Wake, or Close.
 - Write the Close hook assuming Sleep already ran. Do not block in Close.
 - Set `Hooks.EnforceCloseBeforeOpen` when the value owns an exclusive resource that cannot be held twice. Leave it off (the default) when overlap is acceptable.
 - Prefix keys when more than one type shares a table.
@@ -60,31 +68,30 @@ Because grace costs a sleeping value rather than a live one, a long grace is che
 ```go
 var table = reclaim.New(reclaim.Config{Grace: reclaim.DefaultGrace})
 
-var v *BIN
-stored, err := table.Open(ctx, "bin:"+hash, logger, func() (any, error) {
-	v = newBIN(cfg)
-	return v, nil
-}, reclaim.Hooks{
-	Sleep:                  func() { v.Sleep() },
-	Wake:                   func() { v.Wake() },
-	Close:                  func() { v.Close() },
-	EnforceCloseBeforeOpen: true,
+stored, err := reclaim.OpenTyped[*BIN](ctx, table, "bin:"+hash, logger, func() (any, reclaim.Hooks, error) {
+	v := newBIN(cfg)
+	return v, reclaim.Hooks{
+		Sleep:                  v.Sleep,
+		Wake:                   v.Wake,
+		Close:                  v.Close,
+		EnforceCloseBeforeOpen: true,
+	}, nil
 })
 if err != nil {
 	return nil, err
 }
-w := stored.(*BIN)
 ```
 
 ## Key files
 
-- `reclaim/table.go` — `Table`, `Config`, `New`, `Open`, the slot state machine, logs
+- `reclaim/table.go` — `Table`, `Config`, `New`, `Open`, `OpenWithHooks`, the slot state machine, logs
+- `reclaim/opentyped.go` — `OpenTyped`
 - `openspec/specs/std_go_reclaim_context-lease/spec.md`, `openspec/specs/std_go_reclaim_value-lifecycle/spec.md`
 
 ## Gotchas
 
 - Hosts that cancel before they call the constructor again need a positive grace (Traefik: ~1 ms, then `New`). `New(Config{Grace: 0})` ends the incarnation as soon as the last holder is gone.
-- Yaegi: do not write `Table[*T]` on a type from another package, and do not give `create` an argument. Do not park grace expire in an interpreted `go` + `select` on a timer and a wake channel — Yaegi v0.16.1 `_select` can miss the timer (use `time.AfterFunc`).
+- Yaegi: do not write `Table[*T]` on a type from another package, and do not give `create` an argument. `OpenTyped[T]` must stay a call expression in a package that can name `T`. Do not park grace expire in an interpreted `go` + `select` on a timer and a wake channel — Yaegi v0.16.1 `_select` can miss the timer (use `time.AfterFunc`).
 - A later `Open` uses the hooks stored at put; its own `Hooks` argument is ignored.
 - A second `Open` while the incarnation is live or in grace returns the same value when that `Open`'s context is still live at bind. If `ctx.Err()` is already set, `Open` returns that error and not the pointer; Close may already have run when that call was the last holder.
 - Tests assert the `msg` constants. A test that cancels a holder and immediately calls `Open` is usually not testing the wake branch — wait for `reclaim_orphan` first.
