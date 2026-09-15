@@ -22,6 +22,7 @@ func TestYaegi_FamilyMissAndHit(t *testing.T) {
 	}
 }
 
+// evalLookupprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalLookupprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
 	interpreter := interp.New(interp.Options{GoPath: goPath})
@@ -38,11 +39,13 @@ func evalLookupprobe(t *testing.T, goPath, expr string) string {
 	return evaluated.Interface().(string)
 }
 
+// writeGopathIplookup copies non-test iplookup sources into a GOPATH module tree.
 func writeGopathIplookup(t *testing.T, goPath string) {
 	t.Helper()
 	copyNonTestGo(t, callerDir(t), goPath, "iplookup")
 }
 
+// copyNonTestGo copies non-test .go files from srcDir into GOPATH/src/.../<pkg>.
 func copyNonTestGo(t *testing.T, srcDir, goPath, pkg string) {
 	t.Helper()
 	destDir := filepath.Join(goPath, "src", "github.com", "david-garcia-garcia", "traefik-middleware-utilities", pkg)
@@ -73,6 +76,7 @@ func copyNonTestGo(t *testing.T, srcDir, goPath, pkg string) {
 	}
 }
 
+// callerDir is the directory of this Yaegi harness file.
 func callerDir(t *testing.T) string {
 	t.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)
@@ -82,6 +86,7 @@ func callerDir(t *testing.T) string {
 	return filepath.Dir(thisFile)
 }
 
+// writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
 func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
 	t.Helper()
 	dir := filepath.Join(goPath, "src", pkg)
