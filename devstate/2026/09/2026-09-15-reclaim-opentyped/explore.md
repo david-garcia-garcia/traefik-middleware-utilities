@@ -36,8 +36,8 @@ OpenTyped[T]                 ← package func; same create; returns T or mismatc
 
 - Q: What OpenSpec change folder name, and which live spec leaf takes the delta?
   Rank: additive asked — requirement Desired names both functions; the hooks contract already lives on `std_go_reclaim_value-lifecycle`
-  Decision: assumed — change kebab `reclaim-opentyped`; FindSpecHost fold into `std_go_reclaim_value-lifecycle`; usage update on `std_go_reclaim.md`. Propose confirms the fold.
-  By: explore
+  Decision: resolved — change kebab `reclaim-opentyped`; FindSpecHost fold into `std_go_reclaim_value-lifecycle` (high; candidates also `std_go_reclaim_context-lease`). Usage update on `std_go_reclaim.md`.
+  By: propose
 
 - Q: Does this run add a Yaegi harness case for OpenTyped?
   Rank: additive asked — requirement Unknowns and the ticket obligation name the harness if it exists
