@@ -12,7 +12,7 @@ import (
 // Helper stores CIDR prefixes and returns the winning longest-prefix match.
 // Callers pass net.IP they already selected; Helper does not read HTTP.
 type Helper struct {
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	ipv4Tree *ipRadixTree
 	ipv6Tree *ipRadixTree
 	count    int
@@ -69,8 +69,8 @@ func (h *Helper) Contains(ipAddr net.IP) (found bool, prefixLen int, metadata st
 	if ipAddr == nil {
 		return false, 0, "", errors.New("iplookup: IP address is nil")
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	found, prefixLen, metadata = h.treeFor(ipAddr).contains(ipAddr)
 	return found, prefixLen, metadata, nil
 }
@@ -86,7 +86,7 @@ func (h *Helper) Reset() {
 
 // Count is the number of stored prefixes, not the number of AddCIDR calls.
 func (h *Helper) Count() int {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	return h.count
 }

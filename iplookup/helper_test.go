@@ -325,3 +325,22 @@ func TestConcurrentResetAndContains(t *testing.T) {
 		t.Fatal("Contains after Reset still found a prefix")
 	}
 }
+
+func TestConcurrentContains(t *testing.T) {
+	h := New()
+	if err := h.AddCIDR("10.0.0.0/8", "office"); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			found, prefixLen, metadata, err := h.Contains(net.ParseIP("10.1.2.3"))
+			if err != nil || !found || prefixLen != 8 || metadata != "office" {
+				t.Errorf("Contains: found=%v prefix=%d meta=%q err=%v", found, prefixLen, metadata, err)
+			}
+		}()
+	}
+	wg.Wait()
+}
