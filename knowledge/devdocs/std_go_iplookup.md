@@ -54,5 +54,6 @@ _ = label
 
 - `1.2.3.4/32` does not match `102:304::1`. List both families when both should match.
 - `10.0.0.1/8` and `10.0.0.0/8` are the same stored prefix after `ParseCIDR`.
+- An IPv4-mapped CIDR (`To4()` non-nil and mask `bits==128`, such as `::ffff:0:0/96`) remaps to IPv4 prefix `ones-96` on the v4 tree. Do not walk `ones` from bit 96. Membership matches `net.IPNet.Contains` (IPv4 and IPv4-mapped hit; native IPv6 miss).
 - Traefik request lookup can overlap a reload: Helper serializes mutations with Contains.
 - Do not import geoblock `pkg/iplookup`; this module is the reusable copy.

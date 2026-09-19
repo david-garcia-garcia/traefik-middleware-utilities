@@ -58,6 +58,90 @@ func TestIPv4MappedUsesIPv4Tree(t *testing.T) {
 	}
 }
 
+func TestIPv4MappedCIDRInsertDoesNotPanic(t *testing.T) {
+	h := New()
+	if err := h.AddCIDR("::ffff:0:0/96", "mapped-all"); err != nil {
+		t.Fatalf("AddCIDR ::ffff:0:0/96: %v", err)
+	}
+
+	_, mappedSlash96, err := net.ParseCIDR("::ffff:0:0/96")
+	if err != nil {
+		t.Fatalf("ParseCIDR ::ffff:0:0/96: %v", err)
+	}
+
+	tests := []struct {
+		name string
+		ip   string
+	}{
+		{"IPv4", "192.0.2.1"},
+		{"IPv4-mapped", "::ffff:192.0.2.1"},
+		{"native IPv6", "2001:db8::1"},
+		{"loopback IPv6", "::1"},
+		{"unspecified IPv6", "::"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ip := net.ParseIP(tt.ip)
+			if ip == nil {
+				t.Fatalf("Invalid IP address: %s", tt.ip)
+			}
+			want := mappedSlash96.Contains(ip)
+			found, _, meta, containErr := h.Contains(ip)
+			if containErr != nil {
+				t.Fatalf("Contains returned error: %v", containErr)
+			}
+			if found != want {
+				t.Errorf("Contains(%s) = %v meta=%q, want Contains %v", tt.ip, found, meta, want)
+			}
+		})
+	}
+
+	found, prefixLen, meta := mustContains(t, h, "192.0.2.1")
+	if !found || prefixLen != 0 || meta != "mapped-all" {
+		t.Fatalf("remapped /96: found=%v prefix=%d meta=%q", found, prefixLen, meta)
+	}
+}
+
+func TestIPv4MappedSlash120IsIPv4Slash24(t *testing.T) {
+	h := New()
+	if err := h.AddCIDR("::ffff:192.0.2.0/120", "mapped-24"); err != nil {
+		t.Fatalf("AddCIDR ::ffff:192.0.2.0/120: %v", err)
+	}
+	_, mappedSlash120, err := net.ParseCIDR("::ffff:192.0.2.0/120")
+	if err != nil {
+		t.Fatalf("ParseCIDR ::ffff:192.0.2.0/120: %v", err)
+	}
+	query := net.ParseIP("192.0.2.10")
+	found, prefixLen, meta, err := h.Contains(query)
+	if err != nil {
+		t.Fatalf("Contains 192.0.2.10: %v", err)
+	}
+	if !found || !mappedSlash120.Contains(query) {
+		t.Fatalf("Contains(192.0.2.10) = %v, net Contains = %v; want both true", found, mappedSlash120.Contains(query))
+	}
+	if prefixLen != 24 || meta != "mapped-24" {
+		t.Fatalf("Contains(192.0.2.10) prefix=%d meta=%q, want 24 mapped-24", prefixLen, meta)
+	}
+}
+
+func TestRemoveIPv4MappedCIDR(t *testing.T) {
+	h := New()
+	if err := h.AddCIDR("::ffff:0:0/96", "mapped-all"); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := h.RemoveCIDR("::ffff:0:0/96")
+	if err != nil || !removed {
+		t.Fatalf("remove mapped /96: removed=%v err=%v", removed, err)
+	}
+	if h.Count() != 0 {
+		t.Fatalf("count after mapped remove = %d", h.Count())
+	}
+	found, _, _ := mustContains(t, h, "192.0.2.1")
+	if found {
+		t.Fatal("IPv4 still matched after removing mapped /96")
+	}
+}
+
 func TestCatchAllIsFamilyLocal(t *testing.T) {
 	h := New()
 	if err := h.AddCIDR("0.0.0.0/0", "all-v4"); err != nil {

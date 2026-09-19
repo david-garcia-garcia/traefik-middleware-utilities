@@ -23,8 +23,7 @@ func newIPRadixTree() *ipRadixTree {
 
 // insert stores cidr's endpoint and metadata. added is true when the prefix was not already present.
 func (tree *ipRadixTree) insert(cidr *net.IPNet, metadata string) (added bool) {
-	ip, bitStart, _ := familyWalk(cidr.IP)
-	prefixLen, _ := cidr.Mask.Size()
+	ip, bitStart, prefixLen := prefixWalk(cidr)
 
 	current := tree.root
 	// Walk each prefix bit; create missing children.
@@ -83,8 +82,7 @@ func (tree *ipRadixTree) contains(ip net.IP) (found bool, prefixLen int, metadat
 
 // remove clears the endpoint for cidr and prunes nodes that hold nothing.
 func (tree *ipRadixTree) remove(cidr *net.IPNet) bool {
-	ip, bitStart, _ := familyWalk(cidr.IP)
-	prefixLen, _ := cidr.Mask.Size()
+	ip, bitStart, prefixLen := prefixWalk(cidr)
 
 	path := make([]*radixNode, 0, prefixLen+1)
 	current := tree.root
@@ -133,6 +131,21 @@ func familyWalk(ip net.IP) (walk net.IP, bitStart, maxPrefixLen int) {
 		return ip.To4().To16(), 96, 32
 	}
 	return ip, 0, 128
+}
+
+// prefixWalk is the insert/remove walk for cidr: familyWalk of the network plus
+// the prefix length to store. An IPv4-mapped CIDR (To4() non-nil and mask bits
+// 128) remaps to IPv4 length ones-96 so the walk stays on the 32-bit mapped
+// suffix and membership matches net.IPNet.Contains. Native IPv4 (bits 32) and
+// native IPv6 keep Mask.Size().
+func prefixWalk(cidr *net.IPNet) (walk net.IP, bitStart, prefixLen int) {
+	walk, bitStart, _ = familyWalk(cidr.IP)
+	ones, bits := cidr.Mask.Size()
+	prefixLen = ones
+	if cidr.IP.To4() != nil && bits == 128 && ones >= 96 {
+		prefixLen = ones - 96
+	}
+	return walk, bitStart, prefixLen
 }
 
 // bitAt is the bit at actualBitPos in walk, most-significant bit first in each byte.
