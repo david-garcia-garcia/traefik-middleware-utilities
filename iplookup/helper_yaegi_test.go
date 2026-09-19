@@ -22,6 +22,17 @@ func TestYaegi_FamilyMissAndHit(t *testing.T) {
 	}
 }
 
+func TestYaegi_IPv4MappedCIDRInsert(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathIplookup(t, goPath)
+	writeGopathFile(t, goPath, "lookupprobe", "roundtrip.go", lookupprobeSrc)
+
+	got := evalLookupprobe(t, goPath, `lookupprobe.MappedCIDRInsert()`)
+	if got != "ok" {
+		t.Fatalf("yaegi mapped CIDR: %q, want ok", got)
+	}
+}
+
 // evalLookupprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalLookupprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -119,6 +130,28 @@ func HitAndFamilyMiss() string {
 		return "miss-hit"
 	}
 	found, _, _, err = h.Contains(net.ParseIP("102:304::1"))
+	if err != nil {
+		return err.Error()
+	}
+	if found {
+		return "cross-family"
+	}
+	return "ok"
+}
+
+func MappedCIDRInsert() string {
+	h := iplookup.New()
+	if err := h.AddCIDR("::ffff:0:0/96", "mapped-all"); err != nil {
+		return err.Error()
+	}
+	found, prefixLen, metadata, err := h.Contains(net.ParseIP("192.0.2.1"))
+	if err != nil {
+		return err.Error()
+	}
+	if !found || prefixLen != 0 || metadata != "mapped-all" {
+		return "miss-v4"
+	}
+	found, _, _, err = h.Contains(net.ParseIP("2001:db8::1"))
 	if err != nil {
 		return err.Error()
 	}
