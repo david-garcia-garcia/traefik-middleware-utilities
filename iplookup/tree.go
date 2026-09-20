@@ -125,18 +125,20 @@ func (tree *ipRadixTree) remove(cidr *net.IPNet) bool {
 	return true
 }
 
-// familyWalk maps ip onto the 16-byte walk used by insert and contains.
+// familyWalk maps ip onto the bit string used by insert and contains.
+// IPv4 (including IPv4-mapped) walks the 4-byte To4() form from bit 0 on the
+// v4 tree. Do not To16(); that allocates and the trees are already split.
 func familyWalk(ip net.IP) (walk net.IP, bitStart, maxPrefixLen int) {
-	if ip.To4() != nil {
-		return ip.To4().To16(), 96, 32
+	if v4 := ip.To4(); v4 != nil {
+		return v4, 0, 32
 	}
 	return ip, 0, 128
 }
 
 // prefixWalk is the insert/remove walk for cidr: familyWalk of the network plus
 // the prefix length to store. An IPv4-mapped CIDR (To4() non-nil and mask bits
-// 128) remaps to IPv4 length ones-96 so the walk stays on the 32-bit mapped
-// suffix and membership matches net.IPNet.Contains. Native IPv4 (bits 32) and
+// 128) remaps to IPv4 length ones-96 so the walk stays on the 4-byte IPv4
+// form and membership matches net.IPNet.Contains. Native IPv4 (bits 32) and
 // native IPv6 keep Mask.Size().
 func prefixWalk(cidr *net.IPNet) (walk net.IP, bitStart, prefixLen int) {
 	walk, bitStart, _ = familyWalk(cidr.IP)
