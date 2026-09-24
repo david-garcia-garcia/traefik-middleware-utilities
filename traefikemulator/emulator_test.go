@@ -169,7 +169,7 @@ func TestApply_SharedMiddlewareNameConstructsTwice(t *testing.T) {
 
 func TestApply_DuplicateRouteNameInOneApply(t *testing.T) {
 	var calls int
-	generation := New(func(_ context.Context, next http.Handler, _ any, middlewareName string) (http.Handler, error) {
+	generation := New(func(_ context.Context, _ http.Handler, _ any, middlewareName string) (http.Handler, error) {
 		calls++
 		if middlewareName != "dup" {
 			t.Fatalf("middleware name %q", middlewareName)
