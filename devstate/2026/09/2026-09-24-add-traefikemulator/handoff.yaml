@@ -12,7 +12,7 @@ localTests: none
 requirement: requirement.md
 comments: none
 explore: explore.md
-change: none
+change: 2026-09-24-add-traefikemulator
 pr:
   id: 99
   url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/99

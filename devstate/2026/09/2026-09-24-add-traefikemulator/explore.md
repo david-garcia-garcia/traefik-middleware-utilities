@@ -76,8 +76,8 @@ Outside facts: bouncer `docs/traefikemulator.md` describes usage; not copied in 
 
 - Q: Should OpenSpec gain new `std_go_traefikemulator_*` specs?
   Rank: additive incidental — new package; requirement does not name OpenSpec ids
-  Decision: assumed — propose adds minimal specs for generation cancel/shared context and partial failure semantics **or** records `none — no live contract` with rationale in `specs.md` if the librarian treats helpers as non-contract. Default lean: one leaf `std_go_traefikemulator_generation` mirroring the six behavioral tests unless propose finds catalog rules forbid helper specs.
-  By: explore
+  Decision: assumed — one **new** live leaf `std_go_traefikemulator_generation` (FindSpecHost verdict `new`; no existing family on `map.md`). Delta covers generation cancel, shared context, partial failure, duplicate names, Stop, Serve/Handler, stdlib-only. Not `none — no live contract` because this change publishes new observable API behavior.
+  By: propose
 
 - Q: Who owns the plugin constructor and request identity passed into `Serve`?
   Rank: additive asked — One job, one owner for facts on the request path
