@@ -80,25 +80,25 @@ Follow existing reclaim test style: `NewTable(shortGrace)`, `waitBudget`, log/ms
 
 - Q: Which OpenSpec change folder name and spec leaf take the alias / `Peek` delta?
   Rank: additive asked — Desired names faithful delta and extensive tests; lifecycle spec already owns reclaim behavior
-  Decision: assumed — propose change slug `reclaim-alias` (or `2026-09-24-reclaim-alias` aligned with IssueKey); primary fold `std_go_reclaim_value-lifecycle`; usage update on `std_go_reclaim.md` in devdocsimpact.
-  By: explore
+  Decision: resolved — change `reclaim-alias`; fold `std_go_reclaim_value-lifecycle`; usage update on `std_go_reclaim.md` in devdocsimpact.
+  By: propose
 
 - Q: Retain the vendor file header comment on `alias.go` verbatim?
   Rank: additive asked — requirement Unknowns
-  Decision: assumed — replace ad-hoc “vendor override” banner with standard package/API comments; keep Yaegi constraint lines on exported types.
-  By: explore
+  Decision: resolved — replace ad-hoc “vendor override” banner with standard package/API comments; keep Yaegi constraint lines on exported types.
+  By: propose
 
 - Q: Post-merge tag / release for bouncer `go.mod`?
   Rank: additive incidental — requirement Out of scope and Unknowns; no criterion names a release in this repo
   Decision: assumed — out of this PR; note on card for consumer re-vendor after tag exists.
-  By: explore
+  By: propose
 
 - Q: Add Yaegi harness cases for `SetAlias` / `Watch` / `Peek`?
   Rank: additive asked — requirement Desired “extensive test coverage”; `reclaim/yaegi_test.go` exists for reclaim
-  Decision: assumed — compiled table tests are mandatory minimum; add Yaegi cases only where interpreter constraints matter (`Published` as `func(any)` argument, `Box` in `atomic.Value`), mirroring prior reclaim Yaegi patterns; skip under `-race` like existing interp tests.
-  By: explore
+  Decision: resolved — compiled alias/peek/teardown tests are mandatory; Yaegi cases only for `Published`/`Box` interpreter constraints (task 5.1); skip under `-race`.
+  By: propose
 
 - Q: Who owns the public alias string (instance name) vs the table’s bind state?
   Rank: additive asked — alias API separates publisher/group from table internals; bouncer already constructs names
-  Decision: assumed — **caller** owns opaque alias/publisher/group strings; **Table** owns incarnation and aliasEntry graph; utilities PR does not embed Traefik instance naming.
-  By: explore
+  Decision: resolved — **caller** owns opaque alias/publisher/group strings; **Table** owns incarnation and aliasEntry graph; utilities PR does not embed Traefik instance naming.
+  By: propose
