@@ -1,0 +1,18 @@
+issueKey: 2026-09-24-add-traefikemulator
+jobName: 2026-09-24-add-traefikemulator
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 180538d9fd023fcad182cd9f68a221d76f5ebf5ed217db8d9c802532c5543e43
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: 2026-09-24-add-traefikemulator
+pr:
+  id: 99
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/99

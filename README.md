@@ -155,6 +155,24 @@ if found && label == "office" {
 
 The same canonical prefix stored again replaces the label. `RemoveCIDR` drops one prefix. `Reset` clears both families.
 
+## Traefik emulator
+
+Package `traefikemulator/`. A stdlib test helper that stands in for Traefik `RouterFactory.CreateRouters`. One configuration generation at a time: `Apply` cancels the previous context, constructs each route with your plugin `New`, and `Serve` / `Handler` hit the current generation by route name. No live Traefik, Redis, or Yaegi — compiled `go test` only.
+
+```go
+emu := traefikemulator.New(myPluginNew)
+t.Cleanup(emu.Stop)
+if failed := emu.Apply([]traefikemulator.Route{{Name: "mw", Next: next, Config: cfg}}); failed != nil {
+	t.Fatal(failed)
+}
+rec := httptest.NewRecorder()
+if !emu.Serve("mw", rec, httptest.NewRequest(http.MethodGet, "/", nil)) {
+	t.Fatal("route missing")
+}
+```
+
+Constructor errors omit that route and leave siblings on the same generation context. Duplicate route names in one `Apply` fail without replacing an earlier success.
+
 ## Yaegi
 
 This code is interpreted inside Traefik, not compiled into it. Treat that as a hard constraint, not a later port.
@@ -176,6 +194,7 @@ windowcounter/   sliding-window hit counter
 tokenbucket/     Traefik token bucket (in-process and Redis)
 backendbackoff/  in-memory backend backoff gate
 iplookup/         CIDR lookup helper (family-isolated)
+traefikemulator/  Traefik router factory test helper (stdlib)
 e2e/             fake Traefik plugins + Pester harness (Yaegi)
 ```
 
