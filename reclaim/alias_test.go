@@ -31,12 +31,8 @@ func Unbox(dest *atomic.Value) any {
 func watchInto(ctx context.Context, tab *Table, alias string, dest *atomic.Value, empty any, onChange func()) {
 	tab.Watch(ctx, alias, empty, func(published any) {
 		notice, _ := published.(Published)
-		prev := dest.Load()
-		if boxed, ok := prev.(*Box); ok {
-			boxed.Value = notice.Value
-		} else {
-			dest.Store(&Box{Value: notice.Value})
-		}
+		// Always Store a new Box so concurrent loads do not race in-place writes.
+		dest.Store(&Box{Value: notice.Value})
 		if onChange != nil {
 			onChange()
 		}

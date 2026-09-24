@@ -225,12 +225,7 @@ func RunWatchPublished() string {
 		if !ok {
 			return
 		}
-		prev := dest.Load()
-		if boxed, ok := prev.(*reclaim.Box); ok {
-			boxed.Value = notice.Value
-		} else {
-			dest.Store(&reclaim.Box{Value: notice.Value})
-		}
+		dest.Store(&reclaim.Box{Value: notice.Value})
 	})
 	c := &client{id: "A"}
 	if _, err := tab.OpenWithHooks(ctx, "owner", logger, func() (any, reclaim.Hooks, error) {
