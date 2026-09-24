@@ -17,8 +17,8 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 3e75a16
-Owner decision: None.
+Reviewed head: 383fbb9
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -51,7 +51,10 @@ None.
 Ticket 2026-09-24-add-traefikemulator on branch 2026-09-24-add-traefikemulator targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/99; CI not seen.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| What extra tests beyond the six bouncer cases are required to match reclaim/iplookup depth? | additive asked — requirement Desired: “contributed tests plus any additional cases needed so coverage matches sibling packages” | assumed — port all six tests; then add focused unit tests for duplicate route, missing `Serve`/`Handler`, and `Stop` lifecycle; run `go test -cover ./traefikemulator/` in implement and stop when coverage ≥ ~95% or uncovered lines are only the `New(nil)` panic branch (document if left untested). No repro_* or race-detector suite unless implement finds a data race (none expected). | explore |
+
 
 ## Findings
 None.
@@ -66,7 +69,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 3e75a16565dd719a4e165b2659f6723a6e6d37c5 | Card must match the branch you measured |
+| Reviewed head | 383fbb9d5816cb74b4e63e87213b0d255a6595ca | Card must match the branch you measured |
 
 ### Stored data model
 None.
