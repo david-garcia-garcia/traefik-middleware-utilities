@@ -45,6 +45,21 @@ func TestYaegi_OpenHooksRunSleepWakeClose(t *testing.T) {
 	}
 }
 
+// TestYaegi_WatchPublishedDeliveredToFuncAny proves Watch delivers Published to func(any) under Yaegi.
+func TestYaegi_WatchPublishedDeliveredToFuncAny(t *testing.T) {
+	if raceDetectorOn {
+		t.Skip("Yaegi v0.16.1 select races inside the interp on context cancel; Unit without -race still runs this")
+	}
+	goPath := t.TempDir()
+	writeGopathReclaim(t, goPath)
+	writeGopathFile(t, goPath, "aliasprobe", "watch.go", aliasWatchYaegiSrc)
+
+	got := evalAliasprobe(t, goPath, `aliasprobe.RunWatchPublished()`)
+	if got != "ok" {
+		t.Fatalf("Watch Published under Yaegi: %q, want ok", got)
+	}
+}
+
 // TestYaegi_OpenTypedCallExpressionReturnsT proves OpenTyped as a call expression under Yaegi.
 func TestYaegi_OpenTypedCallExpressionReturnsT(t *testing.T) {
 	if raceDetectorOn {
@@ -103,6 +118,22 @@ func TestYaegi_GraceExpireDoesNotHang(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("interpreted concurrent grace expire hung")
 	}
+}
+
+func evalAliasprobe(t *testing.T, goPath, expr string) string {
+	t.Helper()
+	interpreter := interp.New(interp.Options{GoPath: goPath})
+	if err := interpreter.Use(stdlib.Symbols); err != nil {
+		t.Fatalf("use stdlib: %v", err)
+	}
+	if _, err := interpreter.Eval(`import "aliasprobe"`); err != nil {
+		t.Fatalf("import aliasprobe: %v", err)
+	}
+	evaluated, err := interpreter.Eval(expr)
+	if err != nil {
+		t.Fatalf("eval %s: %v", expr, err)
+	}
+	return evaluated.Interface().(string)
 }
 
 // evalHookprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
@@ -169,6 +200,55 @@ func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
 		t.Fatal(err)
 	}
 }
+
+const aliasWatchYaegiSrc = `package aliasprobe
+
+import (
+	"context"
+	"io"
+	"log/slog"
+	"sync/atomic"
+
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/reclaim"
+)
+
+type client struct{ id string }
+
+// RunWatchPublished stores Published in atomic.Value via func(any) and SetAlias.
+func RunWatchPublished() string {
+	tab := reclaim.New(reclaim.Config{Grace: 0})
+	logger := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	var dest atomic.Value
+	ctx := context.Background()
+	tab.Watch(ctx, "alias:shared", (*client)(nil), func(published any) {
+		notice, ok := published.(reclaim.Published)
+		if !ok {
+			return
+		}
+		prev := dest.Load()
+		if boxed, ok := prev.(*reclaim.Box); ok {
+			boxed.Value = notice.Value
+		} else {
+			dest.Store(&reclaim.Box{Value: notice.Value})
+		}
+	})
+	c := &client{id: "A"}
+	if _, err := tab.OpenWithHooks(ctx, "owner", logger, func() (any, reclaim.Hooks, error) {
+		return c, reclaim.Hooks{}, nil
+	}); err != nil {
+		return "open:" + err.Error()
+	}
+	if err := tab.SetAlias("owner", "alias:shared", "p", "g"); err != nil {
+		return "alias:" + err.Error()
+	}
+	prev := dest.Load()
+	boxed, ok := prev.(*reclaim.Box)
+	if !ok || boxed.Value != c {
+		return "value"
+	}
+	return "ok"
+}
+`
 
 const hookprobeCheckSrc = `package hookprobe
 
