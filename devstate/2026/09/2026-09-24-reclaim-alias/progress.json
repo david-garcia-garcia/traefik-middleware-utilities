@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-09-24-reclaim-alias",
+  "jobName": "2026-09-24-reclaim-alias",
+  "startedAt": "2026-09-24T08:20:30.128Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-09-24T08:23:37.521Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-09-24T08:26:19.551Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-09-24T08:29:08.134Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-09-24T08:43:21.720Z"
+    },
+    "codereview": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "devdocsimpact": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "archive": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "pullrequest": {
+      "work": false,
+      "card": false,
+      "at": null
+    }
+  }
+}
