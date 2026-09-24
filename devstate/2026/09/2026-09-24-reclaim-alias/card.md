@@ -14,17 +14,17 @@ Not yet.
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: efa7e98
+Reviewed head: e540119
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/35976691238 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -34,8 +34,8 @@ Owner decision: None.
 | Branch | 2026-09-24-reclaim-alias pushed | `git` |
 | OpenSpec | reclaim-alias | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/100 | pr-host |
-| CI | not seen | ci-host |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 35976691238 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/35976691238 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/35976691238 |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
@@ -50,7 +50,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-09-24-reclaim-alias on branch 2026-09-24-reclaim-alias targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/100; CI not seen.
+Ticket 2026-09-24-reclaim-alias on branch 2026-09-24-reclaim-alias targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/100; CI build 35976691238 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/35976691238.
 
 ## Explore Decisions
 None.
@@ -68,7 +68,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | efa7e98fde4601dc81b88ec87e162a4856b123a2 | Card must match the branch you measured |
+| Reviewed head | e540119dc38fb8bf1aa07195cf6bb90923c7af6f | Card must match the branch you measured |
 
 ### Stored data model
 None.
