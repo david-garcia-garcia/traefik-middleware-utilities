@@ -1,23 +1,22 @@
 ## Motivation
-Not yet.
+`Gate.Allow` comprobaba `context.Context` solo para devolver `ctx.Err()` antes de tomar el mutex. Eso acopla la máquina de estados síncrona (crédito, OPEN/HALF-OPEN/CLOSED) al ciclo de vida del request HTTP, duplicando una decisión que el middleware ya puede tomar antes de intentar admisión. Mientras el contrato vivo y los devdocs exigían pasar `req.Context()` y negar en cancelación, cualquier caller que quisiera una admisión puramente local debía arrastrar contexto sin beneficio para la lógica interna.
+
+Priority: P3 — contrato público y documentación; sin daño operativo inmediato en este árbol (solo el paquete `backendbackoff` importa la API aquí).
 
 ## Implementation
-Not yet.
+Se cambió la firma a `Allow(key string)`, se eliminó el early return por contexto y se actualizaron tests, probe Yaegi, benchmark y devdocs. El delta OpenSpec en `openspec/changes/backendbackoff-allow-nocontext/` sustituye el escenario de cancelación interna por responsabilidad del caller antes de llamar; `Report` sigue sin contexto. La spec del catálogo vivo se fusionará en archive.
 
 ## What this changes
 **Operators.** None.
-
 **Admin users.** None.
-
-**Developers.** None.
-
+**Developers.** BREAKING: invocar `Allow(key)` sin contexto; comprobar cancelación o deadline del request antes de llamar; no esperar `context.Canceled` ni `DeadlineExceeded` desde `Allow`.
 **End users.** None.
 
 ## Merge readiness
 Ready for review. 0 items remain.
 
-Priority: unknown — motivation not written
-Reviewed head: cfa35cc
+Priority: P3 — contrato público y documentación; sin daño operativo inmediato en este árbol (solo el paquete `backendbackoff` importa la API aquí).
+Reviewed head: 6f03425
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -62,7 +61,15 @@ Ticket 2026-10-16-backendbackoff-allow-nocontext on branch 2026-10-16-backendbac
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/devstate/2026/10/2026-10-16-backendbackoff-allow-nocontext/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/devstate/2026/10/2026-10-16-backendbackoff-allow-nocontext/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/devstate/2026/10/2026-10-16-backendbackoff-allow-nocontext/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Scope](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/devstate/2026/10/2026-10-16-backendbackoff-allow-nocontext/codereview_scope.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/devstate/2026/10/2026-10-16-backendbackoff-allow-nocontext/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/devstate/2026/10/2026-10-16-backendbackoff-allow-nocontext/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/devstate/2026/10/2026-10-16-backendbackoff-allow-nocontext/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/devstate/2026/10/2026-10-16-backendbackoff-allow-nocontext/codereview_coverage.md) — 0 total, 0 pending, 0 completed
+
 
 ## Agent review details
 
@@ -71,7 +78,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | cfa35cc4c464c30f4a8bbe1ab49312a09919a014 | Card must match the branch you measured |
+| Reviewed head | 6f03425e1ae39887344d2af2474269b9e6ad6dd9 | Card must match the branch you measured |
 
 ### Stored data model
 None.
