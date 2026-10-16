@@ -1,0 +1,18 @@
+issueKey: 2026-10-16-backendbackoff-allow-nocontext
+jobName: 2026-10-16-backendbackoff-allow-nocontext
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: ab2206e621a9cbab6fa22e98f97b560d4317291a2c01bdd5154f75fcc2ee7532
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: backendbackoff-allow-nocontext
+pr:
+  id: 101
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/101

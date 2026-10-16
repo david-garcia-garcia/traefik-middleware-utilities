@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-10-16-backendbackoff-allow-nocontext",
+  "jobName": "2026-10-16-backendbackoff-allow-nocontext",
+  "startedAt": "2026-10-16T15:14:50.010Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-10-16T15:15:56.003Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-10-16T15:17:47.833Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-10-16T15:19:32.861Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-10-16T15:24:30.352Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-10-16T15:25:39.342Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-10-16T15:26:52.541Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-10-16T15:33:47.892Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-10-16T15:36:43.658Z"
+    }
+  }
+}

@@ -1,15 +1,11 @@
 package backendbackoff
 
 import (
-	"context"
 	"time"
 )
 
 // Allow returns whether a backend attempt for key may proceed, plus how long to wait if not.
-func (g *Gate) Allow(ctx context.Context, key string) (bool, time.Duration, error) {
-	if err := ctx.Err(); err != nil {
-		return false, 0, err
-	}
+func (g *Gate) Allow(key string) (bool, time.Duration, error) {
 	now := g.now()
 	g.mu.Lock()
 	defer g.mu.Unlock()

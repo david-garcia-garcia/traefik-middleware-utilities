@@ -7,8 +7,8 @@ An in-memory per-key admission gate. Package `backendbackoff`. Credit decides wh
 _Avoid_: naming the package `circuitbreaker`; importing `tokenbucket`; reading HTTP inside the library
 
 **Allow**:
-Whether a real backend attempt for an opaque key may proceed, plus how long to wait if not. Denied requests are not backend attempts. The library does not sleep.
-_Avoid_: HTTP 503 inside the library; Reporting a denied Allow
+Whether a real backend attempt for an opaque key may proceed, plus how long to wait if not. Denied requests are not backend attempts. The library does not sleep and does not read `context.Context`; the caller must not invoke Allow after the request context is canceled or past deadline.
+_Avoid_: HTTP 503 inside the library; Reporting a denied Allow; passing `req.Context()` into Allow
 
 **Report**:
 The boolean outcome of a real backend attempt the gate admitted. No context argument: a canceled request that already hit the backend still lands.
@@ -25,7 +25,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/backendbacko
 ## How to use
 
 - `New(Config{})` once (zeros apply defaults) or pass knobs. `FailureRatio` is `p`; `TripFailures` is how many consecutive failures trip a dead backend.
-- Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline. If not allowed, the caller may set `Retry-After` from the wait; the library does not.
+- Before each request, if `req.Context()` is already done, skip Allow and the backend call. Otherwise call `Allow(key)`. If not allowed, the caller may set `Retry-After` from the wait; the library does not.
 - On an admitted attempt, call the backend, then `Report(key, success)`. Never Report a deny.
 - Prove with `go test -short ./backendbackoff/...`. No live Redis/Dragonfly (see `knowledge/devdocs/std_go_test-suites.md`).
 
@@ -36,7 +36,10 @@ gate, err := backendbackoff.New(backendbackoff.Config{})
 if err != nil {
 	return err
 }
-allowed, retryAfter, err := gate.Allow(req.Context(), "backend:"+host)
+if err := req.Context().Err(); err != nil {
+	return err
+}
+allowed, retryAfter, err := gate.Allow("backend:"+host)
 if err != nil {
 	return err
 }

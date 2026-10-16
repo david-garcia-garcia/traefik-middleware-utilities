@@ -1,7 +1,6 @@
 package backendbackoff
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -19,14 +18,13 @@ func BenchmarkAllowWarm(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	ctx := context.Background()
-	if _, _, err := gate.Allow(ctx, "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		b.Fatal(err)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, _, err := gate.Allow(ctx, "k"); err != nil {
+		if _, _, err := gate.Allow("k"); err != nil {
 			b.Fatal(err)
 		}
 	}
