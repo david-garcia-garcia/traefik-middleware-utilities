@@ -16,14 +16,14 @@ Se cambió la firma a `Allow(key string)`, se eliminó el early return por conte
 Ready for review. 0 items remain.
 
 Priority: P3 — contrato público y documentación; sin daño operativo inmediato en este árbol (solo el paquete `backendbackoff` importa la API aquí).
-Reviewed head: 32ae608
+Reviewed head: b8744c0
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38924224492 |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38925075013 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -33,7 +33,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-10-16-backendbackoff-allow-nocontext pushed | `git` |
 | OpenSpec | backendbackoff-allow-nocontext | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/101 | pr-host |
-| CI | build 38924224492 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38924224492 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38924224492 |
+| CI | build 38925075013 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38925075013 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38925075013 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -52,7 +52,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-10-16-backendbackoff-allow-nocontext on branch 2026-10-16-backendbackoff-allow-nocontext targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/101; CI build 38924224492 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38924224492.
+Ticket 2026-10-16-backendbackoff-allow-nocontext on branch 2026-10-16-backendbackoff-allow-nocontext targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/101; CI build 38925075013 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38925075013.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -81,7 +81,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 32ae6082348db3b0b4f3834c30d13a701c4d8d76 | Card must match the branch you measured |
+| Reviewed head | b8744c0a5dfb39065b5739bed07195f0b23bf0a6 | Card must match the branch you measured |
 
 ### Stored data model
 None.
