@@ -16,7 +16,7 @@ Se cambió la firma a `Allow(key string)`, se eliminó el early return por conte
 Ready for review. 0 items remain.
 
 Priority: P3 — contrato público y documentación; sin daño operativo inmediato en este árbol (solo el paquete `backendbackoff` importa la API aquí).
-Reviewed head: 6f03425
+Reviewed head: 4624c71
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -78,7 +78,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 6f03425e1ae39887344d2af2474269b9e6ad6dd9 | Card must match the branch you measured |
+| Reviewed head | 4624c71d6a7b824b06601623263384f51e2d7c9b | Card must match the branch you measured |
 
 ### Stored data model
 None.
