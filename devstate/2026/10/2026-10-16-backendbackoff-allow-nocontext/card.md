@@ -17,8 +17,8 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 7ea9dbb
-Owner decision: None.
+Reviewed head: d0c406a
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -51,7 +51,10 @@ None.
 Ticket 2026-10-16-backendbackoff-allow-nocontext on branch 2026-10-16-backendbackoff-allow-nocontext targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/101; CI not seen.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| ¿Existen plugins Traefik u otros consumidores fuera de este repositorio que sigan en `Allow(ctx, key)` y deban migrarse en este PR? | additive asked — no reshape en árbol; **Unknowns** en `requirement.md` nombra la incertidumbre sin pedir migración externa | assumed — fuera de alcance de este repo; el cambio de firma es breaking a propósito; no bloquear implement; quien despliegue copias externas migra en su propio ciclo. | explore |
+
 
 ## Findings
 None.
@@ -66,7 +69,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 7ea9dbbfb8e4f65e004fe4d89e233b1d0d8aeaf4 | Card must match the branch you measured |
+| Reviewed head | d0c406a797ffc4e6cef6df1b7f17f4c1a77287e1 | Card must match the branch you measured |
 
 ### Stored data model
 None.
