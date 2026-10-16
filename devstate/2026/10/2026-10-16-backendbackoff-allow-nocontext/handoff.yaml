@@ -1,0 +1,14 @@
+issueKey: 2026-10-16-backendbackoff-allow-nocontext
+jobName: 2026-10-16-backendbackoff-allow-nocontext
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
