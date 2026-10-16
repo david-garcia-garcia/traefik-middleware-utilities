@@ -16,14 +16,14 @@ Se cambió la firma a `Allow(key string)`, se eliminó el early return por conte
 Ready for review. 0 items remain.
 
 Priority: P3 — contrato público y documentación; sin daño operativo inmediato en este árbol (solo el paquete `backendbackoff` importa la API aquí).
-Reviewed head: 4624c71
+Reviewed head: 32ae608
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38923235017 |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38924224492 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -33,13 +33,16 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-10-16-backendbackoff-allow-nocontext pushed | `git` |
 | OpenSpec | backendbackoff-allow-nocontext | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/101 | pr-host |
-| CI | build 38923235017 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38923235017 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38923235017 |
+| CI | build 38924224492 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38924224492 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38924224492 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
 Worktree:
-- [std_go_backendbackoff_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/openspec/changes/backendbackoff-allow-nocontext/proposal.md) — modified
+- [std_go_backendbackoff_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/openspec/changes/archive/2026-10-16-backendbackoff-allow-nocontext/proposal.md) — modified
+
+Completed:
+- [std_go_backendbackoff_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-10-16-backendbackoff-allow-nocontext/openspec/specs/std_go_backendbackoff_allow/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -49,7 +52,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-10-16-backendbackoff-allow-nocontext on branch 2026-10-16-backendbackoff-allow-nocontext targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/101; CI build 38923235017 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38923235017.
+Ticket 2026-10-16-backendbackoff-allow-nocontext on branch 2026-10-16-backendbackoff-allow-nocontext targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/101; CI build 38924224492 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/38924224492.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -76,9 +79,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 4624c71d6a7b824b06601623263384f51e2d7c9b | Card must match the branch you measured |
+| Reviewed head | 32ae6082348db3b0b4f3834c30d13a701c4d8d76 | Card must match the branch you measured |
 
 ### Stored data model
 None.
