@@ -101,7 +101,6 @@ func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
 const tripprobeSrc = `package tripprobe
 
 import (
-	"context"
 	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/backendbackoff"
@@ -119,9 +118,8 @@ func TripAfterFailures() string {
 	if err != nil {
 		return "new:" + err.Error()
 	}
-	ctx := context.Background()
 	for i := 0; i < 5; i++ {
-		allowed, _, allowErr := gate.Allow(ctx, "k")
+		allowed, _, allowErr := gate.Allow("k")
 		if allowErr != nil {
 			return "allow:" + allowErr.Error()
 		}
@@ -132,7 +130,7 @@ func TripAfterFailures() string {
 			return "report:" + reportErr.Error()
 		}
 	}
-	allowed, _, err := gate.Allow(ctx, "k")
+	allowed, _, err := gate.Allow("k")
 	if err != nil {
 		return "deny:" + err.Error()
 	}
