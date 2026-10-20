@@ -79,8 +79,13 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 	entry.tokens = tokens
 	entry.last = last
 	entry.expireAt = now.Add(m.clock.ttl)
-	wait := waitDuration(waitMicro)
-	return allowedFromWait(wait, m.clock.maxDelay), wait, nil
+	// Admit uses whole microseconds, same units as consumeOne refund and Lua ARGV.
+	allowed := waitMicro <= float64(m.clock.maxDelay.Microseconds())
+	wait := time.Duration(0)
+	if waitMicro > 0 {
+		wait = time.Duration(waitMicro * float64(time.Microsecond))
+	}
+	return allowed, wait, nil
 }
 
 // dropExpired removes buckets whose ttl has elapsed.

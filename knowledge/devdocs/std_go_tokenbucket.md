@@ -46,7 +46,7 @@ _ = wait
 ## Gotchas
 
 - `rate <= 0`, NaN, Inf, `burst < 1`, `maxDelay < 0`, or a `ttl` that is not a whole number of seconds of at least 1s fails New. Redis EXPIRE is integer seconds; New must not accept a Duration Redis cannot represent. Passthrough is skipping construction. This package has no unlimited-rate constructor.
-- Lua always returns `"true"`; Go maps allowed from wait vs maxDelay and from refund.
+- Lua always returns `"true"`; Go maps allowed from wait microseconds vs maxDelay microseconds (Lua refunds on `>`). The wait duration return is not the admit gate.
 - A new or TTL-expired key starts at `burst`, then consume 1. Missing Redis hash does the same; do not assume `last=0` refill from Unix epoch.
 - A 3-field Eval wait that is not a finite number (`nan`, `+Inf`, `-Inf`, `inf`) is `errEvalWait` (`tokenbucket: eval wait is not a number`), same as a garbage string. Do not treat it as admit or deny.
 - EVAL scripts must list keys in `KEYS` (Dragonfly). Do not use `table.maxn`.

@@ -83,16 +83,3 @@ func consumeOne(tokens float64, last int64, limitPerMicro, burst float64, nowMic
 	}
 	return tokens, persistLast, waitMicro
 }
-
-// waitDuration converts Lua wait microseconds to a Go duration.
-func waitDuration(waitMicro float64) time.Duration {
-	if waitMicro <= 0 {
-		return 0
-	}
-	return time.Duration(waitMicro * float64(time.Microsecond))
-}
-
-// allowedFromWait is true when wait is at most maxDelay (Lua refund leaves wait > maxDelay).
-func allowedFromWait(wait, maxDelay time.Duration) bool {
-	return wait <= maxDelay
-}
