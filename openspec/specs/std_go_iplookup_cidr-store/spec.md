@@ -33,6 +33,31 @@ Callers insert, remove, and clear CIDR prefixes on a Helper. Count is the number
 - **THEN** err is not nil
 - **AND** Count is unchanged
 
+### Requirement: AddEntry stores a CIDR or one address
+`AddEntry(entry, metadata)` SHALL trim surrounding whitespace. Text containing `/` SHALL be stored exactly as `AddCIDR` would store it. Any other text SHALL parse as one address and be stored as `HostCIDR` of that address. An entry that is neither SHALL return an error that names the entry and MUST NOT change Count.
+
+`HostCIDR(ip)` SHALL be `a.b.c.d/32` when `ip.To4()` is non-nil (IPv4 and IPv4-mapped IPv6) and `ip/128` otherwise. An IPv4-mapped literal MUST NOT become an IPv6 `/32`.
+
+#### Scenario: Bare IPv4-mapped address is the IPv4 host
+- **WHEN** AddEntry is called with `::ffff:10.10.60.5`
+- **THEN** Contains for `10.10.60.5` is found with prefix length 32
+- **AND** Contains for `::5` is not found
+
+#### Scenario: Bare IPv6 address is a /128
+- **WHEN** AddEntry is called with `2001:db8::1`
+- **THEN** Contains for `2001:db8::1` is found with prefix length 128
+- **AND** Contains for `2001:db8::2` is not found
+
+#### Scenario: CIDR entry is the AddCIDR prefix
+- **WHEN** AddEntry is called with `::ffff:10.0.0.0/104`
+- **AND** AddCIDR is called with `::ffff:10.0.0.0/104`
+- **THEN** Count is 1
+
+#### Scenario: Invalid entry is rejected
+- **WHEN** AddEntry is called with `not-an-ip`
+- **THEN** err is not nil and names `not-an-ip`
+- **AND** Count is unchanged
+
 ### Requirement: RemoveCIDR drops one stored prefix
 `RemoveCIDR(cidr)` SHALL parse the CIDR and remove that stored prefix (same canonical network and mask length as AddCIDR). When the prefix is not stored, removed SHALL be false and err SHALL be nil. Parse failure SHALL return an error. Other prefixes, including overlapping different lengths, SHALL stay.
 

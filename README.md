@@ -155,6 +155,16 @@ if found && label == "office" {
 
 The same canonical prefix stored again replaces the label. `RemoveCIDR` drops one prefix. `Reset` clears both families.
 
+For config lists that mix CIDRs and single addresses, use `AddEntry`. A bare address is stored as its host prefix (`HostCIDR`): `10.0.0.1/32`, `2001:db8::1/128`, and an IPv4-mapped `::ffff:10.0.0.1` as the IPv4 host `10.0.0.1/32`.
+
+```go
+for _, entry := range cfg.TrustedProxies { // "10.0.0.0/8", "192.0.2.10", "2001:db8::1"
+	if err := h.AddEntry(entry, "proxy"); err != nil {
+		return err
+	}
+}
+```
+
 ## Traefik emulator
 
 Package `traefikemulator/`. A stdlib test helper that stands in for Traefik `RouterFactory.CreateRouters`. One configuration generation at a time: `Apply` cancels the previous context, constructs each route with your plugin `New`, and `Serve` / `Handler` hit the current generation by route name. No live Traefik, Redis, or Yaegi — compiled `go test` only.

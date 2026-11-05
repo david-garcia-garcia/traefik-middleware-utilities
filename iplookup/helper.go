@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 )
 
@@ -47,6 +48,40 @@ func (h *Helper) AddCIDR(cidr, metadata string) error {
 		h.count++
 	}
 	return nil
+}
+
+// AddEntry stores a CIDR or a bare address. A bare address becomes HostCIDR of
+// that address, so an IPv4-mapped literal such as ::ffff:10.0.0.1 is the IPv4
+// host 10.0.0.1/32, not an IPv6 /32. Surrounding whitespace is ignored.
+func (h *Helper) AddEntry(entry, metadata string) error {
+	cidr, err := entryCIDR(entry)
+	if err != nil {
+		return err
+	}
+	return h.AddCIDR(cidr, metadata)
+}
+
+// HostCIDR is the single-address prefix for ip: /32 for IPv4 and IPv4-mapped
+// IPv6 (written as dotted IPv4), /128 for native IPv6.
+func HostCIDR(ip net.IP) string {
+	if v4 := ip.To4(); v4 != nil {
+		return v4.String() + "/32"
+	}
+	return ip.String() + "/128"
+}
+
+// entryCIDR is entry as a CIDR string. Text with '/' is passed through for
+// AddCIDR to parse; anything else must be one address.
+func entryCIDR(entry string) (string, error) {
+	trimmed := strings.TrimSpace(entry)
+	if strings.IndexByte(trimmed, '/') >= 0 {
+		return trimmed, nil
+	}
+	ip := net.ParseIP(trimmed)
+	if ip == nil {
+		return "", fmt.Errorf("iplookup: parse address or CIDR %q", entry)
+	}
+	return HostCIDR(ip), nil
 }
 
 // RemoveCIDR drops one stored prefix. Missing prefix returns false, nil error.

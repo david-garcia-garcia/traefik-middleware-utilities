@@ -21,6 +21,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/iplookup`. T
 ## How to use
 
 - `New()` once. `AddCIDR(cidr, metadata)` per prefix. The same canonical network+length replaces the label and does not bump `Count`.
+- Config lists that accept a CIDR or a bare address (trusted proxies, allow/deny lists): call `AddEntry(entry, metadata)`. Do not append `/32` or `/128` in the caller; `HostCIDR(ip)` is the one host-prefix rule.
 - `Contains(ip)` per request. Pass the `net.IP` the plugin already chose. On a miss, metadata is empty and prefixLen is 0.
 - `RemoveCIDR` drops one prefix. Missing prefix returns false and a nil error.
 - `Reset` clears both families. Safe to call more than once.
@@ -46,7 +47,7 @@ _ = label
 
 ## Key files
 
-- `iplookup/helper.go` — `Helper`, `New`, `AddCIDR`, `RemoveCIDR`, `Contains`, `Reset`, `Count`
+- `iplookup/helper.go` — `Helper`, `New`, `AddCIDR`, `AddEntry`, `HostCIDR`, `RemoveCIDR`, `Contains`, `Reset`, `Count`
 - `iplookup/tree.go` — family-agnostic radix insert, contains, remove
 - `openspec/specs/std_go_iplookup_family-match/spec.md`, `openspec/specs/std_go_iplookup_cidr-store/spec.md`, `openspec/specs/std_go_iplookup_match-label/spec.md`
 
@@ -54,6 +55,7 @@ _ = label
 
 - `1.2.3.4/32` does not match `102:304::1`. List both families when both should match.
 - `10.0.0.1/8` and `10.0.0.0/8` are the same stored prefix after `ParseCIDR`.
+- `"::ffff:10.0.0.1" + "/32"` is an IPv6 `/32` (`::/32`), not the IPv4 host. That is why callers use `AddEntry` / `HostCIDR` instead of choosing the suffix from `To4()` and appending it to the original text.
 - An IPv4-mapped CIDR (`To4()` non-nil and mask `bits==128`, such as `::ffff:0:0/96`) remaps to IPv4 prefix `ones-96` on the v4 tree. Do not walk `ones` from bit 96. Membership matches `net.IPNet.Contains` (IPv4 and IPv4-mapped hit; native IPv6 miss).
 - Traefik request lookup can overlap a reload: Helper serializes mutations with Contains.
 - Do not import geoblock `pkg/iplookup`; this module is the reusable copy.

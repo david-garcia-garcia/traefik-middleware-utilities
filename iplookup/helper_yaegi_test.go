@@ -33,6 +33,17 @@ func TestYaegi_IPv4MappedCIDRInsert(t *testing.T) {
 	}
 }
 
+func TestYaegi_AddEntryMappedHost(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathIplookup(t, goPath)
+	writeGopathFile(t, goPath, "lookupprobe", "roundtrip.go", lookupprobeSrc)
+
+	got := evalLookupprobe(t, goPath, `lookupprobe.EntryMappedHost()`)
+	if got != "ok" {
+		t.Fatalf("yaegi AddEntry mapped host: %q, want ok", got)
+	}
+}
+
 // evalLookupprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalLookupprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -157,6 +168,28 @@ func MappedCIDRInsert() string {
 	}
 	if found {
 		return "cross-family"
+	}
+	return "ok"
+}
+
+func EntryMappedHost() string {
+	h := iplookup.New()
+	if err := h.AddEntry("::ffff:10.10.60.5", "proxy"); err != nil {
+		return err.Error()
+	}
+	found, prefixLen, _, err := h.Contains(net.ParseIP("10.10.60.5"))
+	if err != nil {
+		return err.Error()
+	}
+	if !found || prefixLen != 32 {
+		return "miss-v4-host"
+	}
+	found, _, _, err = h.Contains(net.ParseIP("::5"))
+	if err != nil {
+		return err.Error()
+	}
+	if found {
+		return "ipv6-slash32"
 	}
 	return "ok"
 }
