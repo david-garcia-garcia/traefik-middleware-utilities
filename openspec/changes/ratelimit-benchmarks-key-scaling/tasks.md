@@ -45,7 +45,7 @@
 
 ## 8. Integration
 
-- [ ] 8.1 `go test -short -count=1 ./...`, `golangci-lint run`, and `go test -run '^$' -bench . -benchtime 100x ./tokenbucket/ ./windowcounter/` all green; CI `e2e-redis` and `e2e-dragonfly` green
+- [x] 8.1 `go test -short -count=1 ./...`, `golangci-lint run`, and `go test -run '^$' -bench . -benchtime 100x ./tokenbucket/ ./windowcounter/` all green; CI `e2e-redis` and `e2e-dragonfly` green
 - [x] 8.2 Close the two `take` rows in `devstate/.../issues.md` (`[x]`, `Taken:`) and delete `knowledge/debt/2026-11-21-tokenbucket-memory-new-source-scan.md` and `knowledge/debt/2026-11-21-windowcounter-serial-flush.md`
 
 ## Workflow follow-up

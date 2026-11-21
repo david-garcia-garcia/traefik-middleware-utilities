@@ -316,8 +316,8 @@ Recomendación: **A**. Usa solo `Eval`, que ya existe, sigue el precedente multi
 
 - Q: ¿Funciona en Dragonfly un flush que toca varias claves en un EVAL?
   Rank: additive asked — script nuevo que solo usa claves declaradas en `KEYS`; Desired 4b ("seguras bajo Yaegi, sin dependencias nuevas") y la Unknown de Dragonfly
-  Decision: assumed — sí, por inferencia: Dragonfly exige declarar en `KEYS` todas las claves (`ext_dragonfly_eval`), y el `msetexFallbackScript` multiclave ya corre en `e2e-dragonfly` (`simpleredis/commands_msetex_e2e_test.go`, porque Dragonfly no tiene `MSETEX`). No se ha medido aún con el script de flush; implement lo prueba en Go E2E Dragonfly.
-  By: explore
+  Decision: resolved — sí. `windowcounter/limiter_flush_batch_e2e_test.go` (`TestLive_FlushBatchSeveralKeys`: 266 claves, dos EVAL, el primero con 256) pasó en CI `Go E2E Redis` y `Go E2E Dragonfly` sobre `049e9ab9` (run 44890987232); esos jobs fijan `WINDOWCOUNTER_LIVE_REDIS` / `WINDOWCOUNTER_LIVE_DRAGONFLY` y corren sin `-short` (`.github/workflows/ci.yml`); no se leyó el log del job.
+  By: implement
 
 - Q: ¿Necesita la optimización (b) algo de `simpleredis/` que hoy no expone?
   Rank: additive asked — ningún cambio en `simpleredis/`; Out of scope ("cambiar `simpleredis/` salvo que el punto 4b lo exija")
