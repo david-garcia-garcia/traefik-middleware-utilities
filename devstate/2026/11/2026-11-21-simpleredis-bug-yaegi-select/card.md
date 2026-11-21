@@ -28,7 +28,7 @@ Para la regresión hay tres piezas. La primera es una guarda AST determinista, `
 In progress. 1 items remain.
 
 Priority: P1 — la Motivation describe código de producción bajo Traefik (Yaegi v0.16.1) que hoy puede entrar en pánico y perder turnos del pool de forma permanente.
-Reviewed head: 2b6d8484
+Reviewed head: d57c4499
 Owner decision: None.
 
 ## Review scores
@@ -51,8 +51,12 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-bug-yaegi-select/openspec/changes/simpleredis-drop-select-under-yaegi/proposal.md) — modified
-- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-bug-yaegi-select/openspec/changes/simpleredis-drop-select-under-yaegi/proposal.md) — modified
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-bug-yaegi-select/openspec/changes/archive/2026-11-21-simpleredis-drop-select-under-yaegi/proposal.md) — modified
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-bug-yaegi-select/openspec/changes/archive/2026-11-21-simpleredis-drop-select-under-yaegi/proposal.md) — modified
+
+Completed:
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-bug-yaegi-select/openspec/specs/std_go_simpleredis_resp-commands/spec.md) — modified
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-bug-yaegi-select/openspec/specs/std_go_simpleredis_tcp-session/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -87,9 +91,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 2b6d84846e29897ae8a429c64b1449ff8c0ba542 | Card must match the branch you measured |
+| Reviewed head | d57c4499559d19f3924dc99f2b7ef8c5f64d271e | Card must match the branch you measured |
 
 ### Stored data model
 None.
