@@ -17,7 +17,7 @@ Not yet.
 In progress. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 4baaa597
+Reviewed head: 022de02b
 Owner decision: None.
 
 ## Review scores
@@ -67,7 +67,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 4baaa5970d38bf9d259e385ffb708ae7d80a3831 | Card must match the branch you measured |
+| Reviewed head | 022de02b0ee48e44610bad92a6eb2e20040705db | Card must match the branch you measured |
 
 ### Stored data model
 None.
