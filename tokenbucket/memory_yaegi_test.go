@@ -61,19 +61,19 @@ func CapAndExpiry() string {
 		return msg
 	}
 	// Store is full of live sources: one more evicts one, and is admitted as a full bucket.
-	allowed, _, err := limiter.Allow(ctx, "extra")
+	status, err := limiter.Allow(ctx, "extra")
 	if err != nil {
 		return "extra:" + err.Error()
 	}
-	if !allowed {
+	if !status.Allowed {
 		return "extra-denied"
 	}
 	// extra is still stored with its only token spent, so it denies.
-	allowed, _, err = limiter.Allow(ctx, "extra")
+	status, err = limiter.Allow(ctx, "extra")
 	if err != nil {
 		return "extra-again:" + err.Error()
 	}
-	if allowed {
+	if status.Allowed {
 		return "extra-refilled"
 	}
 	return "ok"
@@ -82,11 +82,11 @@ func CapAndExpiry() string {
 // allowAll Allows count new keys prefix0..prefix(count-1) and wants every one admitted.
 func allowAll(ctx context.Context, limiter *tokenbucket.Memory, prefix string, count int) string {
 	for i := 0; i < count; i++ {
-		allowed, _, err := limiter.Allow(ctx, prefix+strconv.Itoa(i))
+		status, err := limiter.Allow(ctx, prefix+strconv.Itoa(i))
 		if err != nil {
 			return prefix + "allow:" + err.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return prefix + strconv.Itoa(i) + "-denied"
 		}
 	}

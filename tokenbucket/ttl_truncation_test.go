@@ -37,7 +37,7 @@ func TestTTLTruncation_RejectsFractionalTTL(t *testing.T) {
 		t.Fatal(err)
 	}
 	limiter.SetNowForTest(func() time.Time { return t0 })
-	if _, _, allowErr := limiter.Allow(context.Background(), "ttl-whole"); allowErr != nil {
+	if _, allowErr := limiter.Allow(context.Background(), "ttl-whole"); allowErr != nil {
 		t.Fatal(allowErr)
 	}
 	eval := fake.lastEvalCommand()

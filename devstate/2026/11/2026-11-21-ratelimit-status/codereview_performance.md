@@ -1,0 +1,10 @@
+# Performance
+
+1. [judgement] Hot-path struct build — `tokenbucket/status.go:37` — `newStatus` corre en cada `Allow` y escribía campos sobre un `Status` ya construido; el perfil compilado (`BenchmarkMemoryAllow/hot-key`) ponía ~20 % del tiempo en la copia de retorno (lectura de 8 bytes sobre una escritura de 1 byte: store-forwarding). No crece con datos ni tráfico, por eso judgement
+   Fix: Calcular los campos en variables locales y devolver un único literal, mismos valores
+   Status: done
+   Argument: Aplicado en `7baa8f7c`. Medido en la misma sesión (mediana de 5, `ee9f5c11` → rama): `BenchmarkMemoryAllow/hot-key` 19,8 → 36,5 ns (antes del arreglo 41 ns en esta sesión; 42,0 en la tabla previa), `rotating-10k` 29,6 → 40,0, `hot-key-parallel` 58,3 → 67,2; Yaegi `hot-key` 9.175 → 11.077 ns (neutro frente a la versión anterior). Resto intrínseco: ~5 ns son el sumidero de 56 bytes del propio benchmark y el resto la devolución de 7 campos + error (9 registros enteros); bajo Yaegi, una llamada interpretada más (`newStatus`). Probado y descartado: soltar el mutex antes de `newStatus` (sin ganancia) y quitar la división de `Reset` (sin ganancia una vez quitada la parada).
+2. [judgement] Hot-path struct build — `windowcounter/status.go:35` — mismo patrón en `newStatus`, que corre en cada `Take` y `Peek`; coste por llamada, sin crecimiento
+   Fix: Calcular los campos en variables locales y devolver un único literal, mismos valores
+   Status: done
+   Argument: Aplicado en `7baa8f7c`. Aislado: `BenchmarkTake/sync-rate-20ms/hot-key` ~219 → ~210 ns (base 194); en la corrida completa 225 → 258 ns, igual que la tabla previa (229 → 258), es decir dentro del ruido. Yaegi `sync-rate-20ms/hot-key` 17.476 → 19.783 ns, neutro frente a la versión anterior. Resto intrínseco: `newStatus` interpretado y el `slidingWindow` más grande. Probado y descartado: pasar `slidingWindow` por puntero, `Reset` por aritmética de enteros y volver a escribir `weightAt` en línea en `slidingAt` (sin ganancia compilado ni Yaegi).

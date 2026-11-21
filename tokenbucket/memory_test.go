@@ -48,11 +48,11 @@ func prefillCapTestSources(limiter *Memory, prefix string, count int, last, expi
 // allowNewFullBucket Allows key and fails unless it is admitted as a full bucket (burst - 1 tokens left).
 func allowNewFullBucket(t *testing.T, limiter *Memory, key string) {
 	t.Helper()
-	allowed, _, err := limiter.Allow(context.Background(), key)
+	status, err := limiter.Allow(context.Background(), key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !allowed {
+	if !status.Allowed {
 		t.Fatalf("Allow(%q) denied, want a full bucket", key)
 	}
 	if tokens := limiter.buckets[key].tokens; tokens != 1 {
@@ -131,7 +131,7 @@ func TestMemory_ReusedSourceMovesBehindExpiring(t *testing.T) {
 	// The other sources expire with hot's first Allow and are stored behind it, so hot is the list head.
 	prefillCapTestSources(limiter, "other:", maxMemorySources-1, start, start.Add(testTTL))
 	now = start.Add(testTTL / 2)
-	if _, _, err := limiter.Allow(context.Background(), "hot"); err != nil {
+	if _, err := limiter.Allow(context.Background(), "hot"); err != nil {
 		t.Fatal(err)
 	}
 	hotEntry := limiter.buckets["hot"]
@@ -195,7 +195,7 @@ func TestMemory_AllowRelinksExpiryList(t *testing.T) {
 		{key: "a", want: "c,d,b,a"}, // tail stays
 		{key: "d", want: "c,b,a,d"}, // middle next to the head
 	} {
-		if _, _, err := limiter.Allow(context.Background(), step.key); err != nil {
+		if _, err := limiter.Allow(context.Background(), step.key); err != nil {
 			t.Fatal(err)
 		}
 		if got := strings.Join(expiryListKeysForTest(t, limiter), ","); got != step.want {

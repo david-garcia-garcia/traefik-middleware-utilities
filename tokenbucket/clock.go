@@ -8,21 +8,23 @@ import (
 )
 
 var (
-	errRate     = errors.New("tokenbucket: rate must be greater than 0")
-	errBurst    = errors.New("tokenbucket: burst must be at least 1")
-	errDelay    = errors.New("tokenbucket: maxDelay must not be negative")
-	errTTL      = errors.New("tokenbucket: ttl must be a whole number of seconds (at least 1s)")
-	errRedis    = errors.New("tokenbucket: redis is required")
-	errEvalLen  = errors.New("tokenbucket: eval reply must have 3 fields")
-	errEvalWait = errors.New("tokenbucket: eval wait is not a number")
+	errRate       = errors.New("tokenbucket: rate must be greater than 0")
+	errBurst      = errors.New("tokenbucket: burst must be at least 1")
+	errDelay      = errors.New("tokenbucket: maxDelay must not be negative")
+	errTTL        = errors.New("tokenbucket: ttl must be a whole number of seconds (at least 1s)")
+	errRedis      = errors.New("tokenbucket: redis is required")
+	errEvalLen    = errors.New("tokenbucket: eval reply must have 3 fields")
+	errEvalWait   = errors.New("tokenbucket: eval wait is not a number")
+	errEvalTokens = errors.New("tokenbucket: eval tokens is not a number")
 )
 
-// clockConfig is rate, burst, maxDelay, and ttl shared by both stores.
+// clockConfig is rate, burst, maxDelay, and ttl shared by both stores, plus the Status period derived from rate and burst.
 type clockConfig struct {
 	rate     float64
 	burst    int64
 	maxDelay time.Duration
 	ttl      time.Duration
+	period   time.Duration
 }
 
 // validateClock rejects non-positive or non-finite rate, burst below 1, negative maxDelay, and ttl that would expire immediately or disagree with Redis EXPIRE seconds.

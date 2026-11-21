@@ -115,13 +115,17 @@ func (l *Limiter) SetNowForTest(now func() time.Time) {
 	l.now = now
 }
 
-// slidingWindow is the Redis keys, previous-window weight, and TTL for one Take or Peek at now.
+// slidingWindow is the Redis keys, previous-window weight, and TTL for one Take or Peek, plus the clock reading and the
+// whole-second window that fixed them, so the Status of that call uses the same instant.
 type slidingWindow struct {
 	currentKey  string
 	previousKey string
 	weight      float64
 	ttlSec      int64
 	expireAt    int64
+	now         time.Time
+	windowSec   int64
+	windowStart int64
 }
 
 // slidingAt builds the current and previous window keys and the previous-window weight.
@@ -138,114 +142,120 @@ func (l *Limiter) slidingAt(key string, window time.Duration) (slidingWindow, er
 	now := l.now()
 	windowStart := now.Unix() / windowSec * windowSec
 	previousStart := windowStart - windowSec
-	elapsed := time.Duration(now.Unix()-windowStart) * time.Second
-	weight := 1 - float64(elapsed)/(float64(windowSec)*float64(time.Second))
-	if weight < 0 {
-		weight = 0
-	}
 	ttlSec := 2 * windowSec
 	return slidingWindow{
 		currentKey:  redisWindowKey(key, windowStart),
 		previousKey: redisWindowKey(key, previousStart),
-		weight:      weight,
+		weight:      weightAt(now.Unix()-windowStart, windowSec),
 		ttlSec:      ttlSec,
 		expireAt:    windowStart + ttlSec,
+		now:         now,
+		windowSec:   windowSec,
+		windowStart: windowStart,
 	}, nil
 }
 
-// Take counts one hit on key against limit and window, then returns whether it is allowed and the sliding estimate.
-func (l *Limiter) Take(ctx context.Context, key string, limit int64, window time.Duration) (allowed bool, estimated float64, err error) {
-	if err := ctx.Err(); err != nil {
-		return false, 0, err
+// weightAt is the previous window's weight elapsedSec whole seconds into a window of windowSec seconds: 1 - elapsed/window,
+// never below 0. slidingAt and the retry-after search share it, so the retry rule is the admission rule.
+func weightAt(elapsedSec, windowSec int64) float64 {
+	elapsed := time.Duration(elapsedSec) * time.Second
+	weight := 1 - float64(elapsed)/(float64(windowSec)*float64(time.Second))
+	if weight < 0 {
+		weight = 0
 	}
-	sliding, err := l.slidingAt(key, window)
-	if err != nil {
-		return false, 0, err
-	}
-	if l.syncRate == 0 {
-		return l.takeExact(ctx, sliding.currentKey, sliding.previousKey, sliding.ttlSec, sliding.weight, limit)
-	}
-	return l.takeBuffered(ctx, sliding.currentKey, sliding.previousKey, sliding.expireAt, sliding.weight, limit)
+	return weight
 }
 
-// Peek reports whether already-used occupancy is at or under limit, and the sliding estimate, without recording a hit.
-// allowed is occupancy, not whether the next Take would admit.
-func (l *Limiter) Peek(ctx context.Context, key string, limit int64, window time.Duration) (allowed bool, estimated float64, err error) {
+// Take counts one hit on key against limit and window, then returns its Status: whether it is allowed, the sliding estimate,
+// and the window values for rate-limit headers. The Status is the zero value when the error is non-nil.
+func (l *Limiter) Take(ctx context.Context, key string, limit int64, window time.Duration) (Status, error) {
 	if err := ctx.Err(); err != nil {
-		return false, 0, err
+		return Status{}, err
 	}
 	sliding, err := l.slidingAt(key, window)
 	if err != nil {
-		return false, 0, err
+		return Status{}, err
 	}
 	if l.syncRate == 0 {
-		return l.peekExact(ctx, sliding.currentKey, sliding.previousKey, sliding.weight, limit)
+		return l.takeExact(ctx, sliding, limit)
 	}
-	return l.peekBuffered(ctx, sliding.currentKey, sliding.previousKey, sliding.expireAt, sliding.weight, limit)
+	return l.takeBuffered(ctx, sliding, limit)
+}
+
+// Peek returns the Status of already-used occupancy without recording a hit: Allowed is whether occupancy is at or under
+// limit, not whether the next Take would admit. The Status is the zero value when the error is non-nil.
+func (l *Limiter) Peek(ctx context.Context, key string, limit int64, window time.Duration) (Status, error) {
+	if err := ctx.Err(); err != nil {
+		return Status{}, err
+	}
+	sliding, err := l.slidingAt(key, window)
+	if err != nil {
+		return Status{}, err
+	}
+	if l.syncRate == 0 {
+		return l.peekExact(ctx, sliding, limit)
+	}
+	return l.peekBuffered(ctx, sliding, limit)
 }
 
 // Allow is an alias for Take for callers who prefer Allow.
-func (l *Limiter) Allow(ctx context.Context, key string, limit int64, window time.Duration) (allowed bool, estimated float64, err error) {
+func (l *Limiter) Allow(ctx context.Context, key string, limit int64, window time.Duration) (Status, error) {
 	return l.Take(ctx, key, limit, window)
 }
 
-// takeExact EVAL INCR plus EXPIRE-if-no-TTL on the current window, GET previous, then compare the estimate.
-func (l *Limiter) takeExact(ctx context.Context, currentKey, previousKey string, ttlSec int64, weight float64, limit int64) (allowed bool, estimated float64, err error) {
-	values, err := l.redis.Eval(ctx, takeExactScript, takeExactScriptDigest, []string{currentKey}, []string{
-		strconv.FormatInt(ttlSec, 10),
+// takeExact EVAL INCR plus EXPIRE-if-no-TTL on the current window, GET previous, then builds the Status from both counts.
+func (l *Limiter) takeExact(ctx context.Context, sliding slidingWindow, limit int64) (Status, error) {
+	values, err := l.redis.Eval(ctx, takeExactScript, takeExactScriptDigest, []string{sliding.currentKey}, []string{
+		strconv.FormatInt(sliding.ttlSec, 10),
 	})
 	if err != nil {
-		return false, 0, err
+		return Status{}, err
 	}
 	current, convErr := parseEvalInt(values)
 	if convErr != nil {
-		return false, 0, convErr
+		return Status{}, convErr
 	}
-	previous, err := l.getCount(ctx, previousKey)
+	previous, err := l.getCount(ctx, sliding.previousKey)
 	if err != nil {
-		return false, 0, err
+		return Status{}, err
 	}
-	estimated = float64(current) + float64(previous)*weight
-	return estimated <= float64(limit), estimated, nil
+	return newStatus(sliding, limit, current, previous), nil
 }
 
 // takeBuffered admits from redis_known + local_delta and leaves Redis to the flush ticker.
 // During a Redis outage it keeps this instance's limit and returns a nil error.
-func (l *Limiter) takeBuffered(ctx context.Context, currentKey, previousKey string, expireAt int64, weight float64, limit int64) (allowed bool, estimated float64, err error) {
+func (l *Limiter) takeBuffered(ctx context.Context, sliding slidingWindow, limit int64) (Status, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	currentState := l.windowLocked(ctx, currentKey, expireAt)
-	previous := l.takeBufferedPreviousLocked(ctx, previousKey)
+	currentState := l.windowLocked(ctx, sliding.currentKey, sliding.expireAt)
+	previous := l.takeBufferedPreviousLocked(ctx, sliding.previousKey)
 	currentState.localDelta++
 	current := currentState.redisKnown + currentState.localDelta
-	estimated = float64(current) + float64(previous)*weight
-	return estimated <= float64(limit), estimated, nil
+	return newStatus(sliding, limit, current, previous), nil
 }
 
-// peekExact GETs current and previous without INCR or EXPIRE, then compares the estimate.
-func (l *Limiter) peekExact(ctx context.Context, currentKey, previousKey string, weight float64, limit int64) (allowed bool, estimated float64, err error) {
-	current, err := l.getCount(ctx, currentKey)
+// peekExact GETs current and previous without INCR or EXPIRE, then builds the Status from both counts.
+func (l *Limiter) peekExact(ctx context.Context, sliding slidingWindow, limit int64) (Status, error) {
+	current, err := l.getCount(ctx, sliding.currentKey)
 	if err != nil {
-		return false, 0, err
+		return Status{}, err
 	}
-	previous, err := l.getCount(ctx, previousKey)
+	previous, err := l.getCount(ctx, sliding.previousKey)
 	if err != nil {
-		return false, 0, err
+		return Status{}, err
 	}
-	estimated = float64(current) + float64(previous)*weight
-	return estimated <= float64(limit), estimated, nil
+	return newStatus(sliding, limit, current, previous), nil
 }
 
 // peekBuffered reads redis_known + local_delta under the Take lock without incrementing.
-func (l *Limiter) peekBuffered(ctx context.Context, currentKey, previousKey string, expireAt int64, weight float64, limit int64) (allowed bool, estimated float64, err error) {
+func (l *Limiter) peekBuffered(ctx context.Context, sliding slidingWindow, limit int64) (Status, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	current := l.peekCountLocked(ctx, currentKey, expireAt)
-	previous := l.bufferedCountLocked(ctx, previousKey)
-	estimated = float64(current) + float64(previous)*weight
-	return estimated <= float64(limit), estimated, nil
+	current := l.peekCountLocked(ctx, sliding.currentKey, sliding.expireAt)
+	previous := l.bufferedCountLocked(ctx, sliding.previousKey)
+	return newStatus(sliding, limit, current, previous), nil
 }
 
 // peekCountLocked returns redis_known + local_delta without incrementing. GET only on first sight of

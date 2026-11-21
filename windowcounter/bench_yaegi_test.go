@@ -176,7 +176,7 @@ func Setup(host string, keyCount int) string {
 	limiter.SetNowForTest(func() time.Time { return now })
 	ctx := context.Background()
 	for i := 0; i < keyCount; i++ {
-		if _, _, err := limiter.Take(ctx, "ip:"+strconv.Itoa(i), int64(1)<<40, time.Minute); err != nil {
+		if _, err := limiter.Take(ctx, "ip:"+strconv.Itoa(i), int64(1)<<40, time.Minute); err != nil {
 			return "take:" + err.Error()
 		}
 	}
@@ -233,7 +233,7 @@ func HotKeyLoop(host string, syncRateMs int64, count int) string {
 	}
 	ctx := context.Background()
 	for i := 0; i < count; i++ {
-		if _, _, err := limiter.Take(ctx, "ip:1.2.3.4", int64(1)<<40, time.Minute); err != nil {
+		if _, err := limiter.Take(ctx, "ip:1.2.3.4", int64(1)<<40, time.Minute); err != nil {
 			limiter.Close()
 			return "take:" + err.Error()
 		}

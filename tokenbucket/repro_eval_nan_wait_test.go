@@ -27,21 +27,15 @@ func TestRepro_EvalWaitNaNFailOpen(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			allowed, wait, allowErr := limiter.Allow(context.Background(), "k")
-			if allowed && allowErr == nil {
-				t.Fatalf("fail-open: Allow wait %q returned (true, %v, nil)", tc.wait, wait)
-			}
-			if allowErr == nil {
-				t.Fatalf("want error for wait %q, got allowed=%v wait=%v err=nil", tc.wait, allowed, wait)
+			status, allowErr := limiter.Allow(context.Background(), "k")
+			if status.Allowed && allowErr == nil {
+				t.Fatalf("fail-open: Allow wait %q returned an allowed status %+v with a nil error", tc.wait, status)
 			}
 			if !errors.Is(allowErr, errEvalWait) {
 				t.Fatalf("wait %q: want errEvalWait, got %v", tc.wait, allowErr)
 			}
-			if wait != 0 {
-				t.Fatalf("wait %q: want wait 0, got %v", tc.wait, wait)
-			}
-			if allowed {
-				t.Fatalf("wait %q: want allowed false, got true", tc.wait)
+			if status != (Status{}) {
+				t.Fatalf("wait %q: want the zero Status, got %+v", tc.wait, status)
 			}
 		})
 	}

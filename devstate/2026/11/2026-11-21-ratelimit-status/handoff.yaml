@@ -1,0 +1,16 @@
+issueKey: 2026-11-21-ratelimit-status
+jobName: 2026-11-21-ratelimit-status
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: e6f8f42721b2c402
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: ratelimit-status
+pr: { id: 106, url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106 }

@@ -33,6 +33,7 @@ func NewRedis(redis *simpleredis.SimpleRedis, rate float64, burst int64, maxDela
 			burst:    burst,
 			maxDelay: maxDelay,
 			ttl:      ttl,
+			period:   refillPeriod(rate, burst),
 		},
 		now:   time.Now,
 		redis: redis,
@@ -48,10 +49,11 @@ func (r *Redis) SetNowForTest(now func() time.Time) {
 	r.now = now
 }
 
-// Allow consumes one token for key via Eval and returns whether it is allowed plus how long to wait.
-func (r *Redis) Allow(ctx context.Context, key string) (bool, time.Duration, error) {
+// Allow consumes one token for key via Eval and returns its Status: whether it is allowed, the wait as Delay or RetryAfter,
+// and the bucket the script kept. The Status is the zero value when the error is non-nil.
+func (r *Redis) Allow(ctx context.Context, key string) (Status, error) {
 	if err := ctx.Err(); err != nil {
-		return false, 0, err
+		return Status{}, err
 	}
 	nowMicro := r.now().UnixMicro()
 	args := []string{
@@ -61,24 +63,32 @@ func (r *Redis) Allow(ctx context.Context, key string) (bool, time.Duration, err
 		strconv.FormatInt(nowMicro, 10),
 		strconv.FormatInt(r.clock.maxDelay.Microseconds(), 10),
 	}
-	// Script owns HGETALL/HSET/EXPIRE. Go only maps wait to allowed.
+	// Script owns HGETALL/HSET/EXPIRE. Go maps its wait and tokens to a Status.
 	values, err := r.redis.Eval(ctx, allowScript, allowScriptDigest, []string{key}, args)
 	if err != nil {
-		return false, 0, err
+		return Status{}, err
 	}
 	if len(values) != 3 {
-		return false, 0, errEvalLen
+		return Status{}, errEvalLen
 	}
-	waitMicro, convErr := strconv.ParseFloat(string(values[1]), 64)
-	// ParseFloat accepts nan/Inf with err nil; those are not a wait.
-	if convErr != nil || math.IsNaN(waitMicro) || math.IsInf(waitMicro, 0) {
-		return false, 0, errEvalWait
+	// Wait is checked first, so a reply with both fields bad is still errEvalWait.
+	waitMicro, ok := parseEvalNumber(values[1])
+	if !ok {
+		return Status{}, errEvalWait
 	}
-	// Admit uses whole microseconds, same units as Lua refund (ARGV maxDelay.Microseconds()).
-	allowed := waitMicro <= float64(r.clock.maxDelay.Microseconds())
-	wait := time.Duration(0)
-	if waitMicro > 0 {
-		wait = time.Duration(waitMicro * float64(time.Microsecond))
+	tokens, ok := parseEvalNumber(values[2])
+	if !ok {
+		return Status{}, errEvalTokens
 	}
-	return allowed, wait, nil
+	return newStatus(r.clock, tokens, waitMicro), nil
+}
+
+// parseEvalNumber reads one Eval reply field as a finite float. ParseFloat accepts nan and Inf with a nil error; those are not a
+// number here.
+func parseEvalNumber(field []byte) (number float64, ok bool) {
+	number, err := strconv.ParseFloat(string(field), 64)
+	if err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
+		return 0, false
+	}
+	return number, true
 }

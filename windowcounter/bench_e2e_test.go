@@ -29,7 +29,7 @@ func BenchmarkLiveTake(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						if _, _, err := limiter.Take(ctx, hotKey, benchLimit, benchWindow); err != nil {
+						if _, err := limiter.Take(ctx, hotKey, benchLimit, benchWindow); err != nil {
 							b.Fatal(err)
 						}
 					}
@@ -47,7 +47,7 @@ func BenchmarkLiveTake(b *testing.B) {
 					b.ReportAllocs()
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						if _, _, err := limiter.Take(ctx, keys[i%len(keys)], benchLimit, benchWindow); err != nil {
+						if _, err := limiter.Take(ctx, keys[i%len(keys)], benchLimit, benchWindow); err != nil {
 							b.Fatal(err)
 						}
 					}

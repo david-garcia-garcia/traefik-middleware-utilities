@@ -46,6 +46,7 @@ func NewMemory(rate float64, burst int64, maxDelay, ttl time.Duration) (*Memory,
 			burst:    burst,
 			maxDelay: maxDelay,
 			ttl:      ttl,
+			period:   refillPeriod(rate, burst),
 		},
 		now:     time.Now,
 		buckets: map[string]*memEntry{},
@@ -61,10 +62,11 @@ func (m *Memory) SetNowForTest(now func() time.Time) {
 	m.now = now
 }
 
-// Allow consumes one token for key and returns whether it is allowed plus how long to wait.
-func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, error) {
+// Allow consumes one token for key and returns its Status: whether it is allowed, the wait as Delay or RetryAfter, and the
+// bucket after this consume. The Status is the zero value when the error is non-nil.
+func (m *Memory) Allow(ctx context.Context, key string) (Status, error) {
 	if err := ctx.Err(); err != nil {
-		return false, 0, err
+		return Status{}, err
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -90,13 +92,7 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 	entry.tokens = tokens
 	entry.last = last
 	entry.expireAt = now.Add(m.clock.ttl)
-	// Admit uses whole microseconds, same units as consumeOne refund and Lua ARGV.
-	allowed := waitMicro <= float64(m.clock.maxDelay.Microseconds())
-	wait := time.Duration(0)
-	if waitMicro > 0 {
-		wait = time.Duration(waitMicro * float64(time.Microsecond))
-	}
-	return allowed, wait, nil
+	return newStatus(m.clock, tokens, waitMicro), nil
 }
 
 // makeRoomLocked removes expired sources from the head of the expiry list, then the head itself when the store is

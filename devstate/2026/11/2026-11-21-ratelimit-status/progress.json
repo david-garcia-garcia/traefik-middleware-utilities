@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-21-ratelimit-status",
+  "jobName": "2026-11-21-ratelimit-status",
+  "startedAt": "2026-11-21T11:33:22.736Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T11:36:14.677Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T11:45:40.744Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T11:54:18.925Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T13:14:08.238Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T15:14:53.185Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T15:20:11.511Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T15:24:57.664Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T15:29:05.969Z"
+    }
+  }
+}

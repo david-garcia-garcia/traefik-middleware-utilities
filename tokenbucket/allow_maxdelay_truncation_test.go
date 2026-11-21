@@ -49,29 +49,29 @@ func reproMaxDelayTruncationFailOpen(t *testing.T, rate float64, maxDelay time.D
 	t.Logf("waitMicro=%v maxDelayMicro=%d wait=%s maxDelay=%s refunds=%v allowedFromWait=%v",
 		waitMicro, maxDelayMicro, wait, maxDelay, refunds, admits)
 
-	first, _, firstErr := limiter.Allow(context.Background(), "k")
+	firstStatus, firstErr := limiter.Allow(context.Background(), "k")
 	if firstErr != nil {
 		t.Fatal(firstErr)
 	}
-	if !first {
+	if !firstStatus.Allowed {
 		t.Fatal("first Allow must consume the burst token")
 	}
 
-	second, _, secondErr := limiter.Allow(context.Background(), "k")
+	secondStatus, secondErr := limiter.Allow(context.Background(), "k")
 	if secondErr != nil {
 		t.Fatal(secondErr)
 	}
 	tokensAfterSecond := limiter.buckets["k"].tokens
 
-	third, _, thirdErr := limiter.Allow(context.Background(), "k")
+	thirdStatus, thirdErr := limiter.Allow(context.Background(), "k")
 	if thirdErr != nil {
 		t.Fatal(thirdErr)
 	}
 
-	t.Logf("first=%v second=%v tokensAfterSecond=%v third=%v", first, second, tokensAfterSecond, third)
+	t.Logf("first=%v second=%v tokensAfterSecond=%v third=%v", firstStatus.Allowed, secondStatus.Allowed, tokensAfterSecond, thirdStatus.Allowed)
 
-	if refunds && admits && second && tokensAfterSecond >= 0 && third {
-		t.Fatalf("fail-open: refunded consume still admitted (second=%v tokens=%v third=%v)", second, tokensAfterSecond, third)
+	if refunds && admits && secondStatus.Allowed && tokensAfterSecond >= 0 && thirdStatus.Allowed {
+		t.Fatalf("fail-open: refunded consume still admitted (second=%v tokens=%v third=%v)", secondStatus.Allowed, tokensAfterSecond, thirdStatus.Allowed)
 	}
 }
 
@@ -89,27 +89,27 @@ func TestRedis_MaxDelayTruncationFailOpen(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 
-	first, _, firstErr := limiter.Allow(context.Background(), "k")
+	firstStatus, firstErr := limiter.Allow(context.Background(), "k")
 	if firstErr != nil {
 		t.Fatal(firstErr)
 	}
-	if !first {
+	if !firstStatus.Allowed {
 		t.Fatal("first Allow must consume the burst token")
 	}
 
-	second, _, secondErr := limiter.Allow(context.Background(), "k")
+	secondStatus, secondErr := limiter.Allow(context.Background(), "k")
 	if secondErr != nil {
 		t.Fatal(secondErr)
 	}
-	if second {
+	if secondStatus.Allowed {
 		t.Fatal("fail-open: Redis Allow admitted a refunded consume")
 	}
 
-	third, _, thirdErr := limiter.Allow(context.Background(), "k")
+	thirdStatus, thirdErr := limiter.Allow(context.Background(), "k")
 	if thirdErr != nil {
 		t.Fatal(thirdErr)
 	}
-	if third {
+	if thirdStatus.Allowed {
 		t.Fatal("fail-open: following Redis Allow was a stacked consume")
 	}
 }

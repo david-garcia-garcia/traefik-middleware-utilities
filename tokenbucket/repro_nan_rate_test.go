@@ -55,14 +55,14 @@ func TestRepro_NaNRateAllowFailOpen(t *testing.T) {
 	limiter.SetNowForTest(func() time.Time { return now })
 	alwaysAllowed := true
 	for i := 0; i < 5; i++ {
-		allowed, wait, allowErr := limiter.Allow(context.Background(), "k")
-		t.Logf("Allow[%d] allowed=%v wait=%v err=%v", i, allowed, wait, allowErr)
+		status, allowErr := limiter.Allow(context.Background(), "k")
+		t.Logf("Allow[%d] allowed=%v wait=%v err=%v", i, status.Allowed, status.Delay+status.RetryAfter, allowErr)
 		if allowErr != nil {
 			t.Errorf("Allow[%d] err %v", i, allowErr)
 			alwaysAllowed = false
 			continue
 		}
-		if !allowed {
+		if !status.Allowed {
 			alwaysAllowed = false
 		}
 	}

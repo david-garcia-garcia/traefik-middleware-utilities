@@ -25,7 +25,7 @@ func TestRepro_FractionalWindowAccepted(t *testing.T) {
 	now := time.Unix(1_700_000_001, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 
-	_, _, takeErr := limiter.Take(context.Background(), opaqueKey, 100, window)
+	_, takeErr := limiter.Take(context.Background(), opaqueKey, 100, window)
 
 	t.Run("A", func(t *testing.T) {
 		if takeErr == nil {
@@ -59,12 +59,12 @@ func TestRepro_FractionalWindowAccepted(t *testing.T) {
 
 		const fill int64 = 6
 		for i := int64(1); i < fill; i++ {
-			allowed, estimated, fillErr := limiter.Take(context.Background(), opaqueKey, 100, window)
+			status, fillErr := limiter.Take(context.Background(), opaqueKey, 100, window)
 			if fillErr != nil {
 				t.Fatal(fillErr)
 			}
-			if !allowed {
-				t.Fatalf("fill take %d denied, estimated %v", i+1, estimated)
+			if !status.Allowed {
+				t.Fatalf("fill take %d denied, estimated %v", i+1, status.Estimated)
 			}
 		}
 		if got := redisCountOrZero(t, client, oneSecKey); got != fill {
@@ -72,12 +72,12 @@ func TestRepro_FractionalWindowAccepted(t *testing.T) {
 		}
 
 		now = time.Unix(1_700_000_002, 0)
-		allowed, estimated, takeErr := limiter.Take(context.Background(), opaqueKey, 100, window)
+		status, takeErr := limiter.Take(context.Background(), opaqueKey, 100, window)
 		if takeErr != nil {
 			t.Fatal(takeErr)
 		}
-		if !allowed {
-			t.Fatalf("take at +1s denied, estimated %v", estimated)
+		if !status.Allowed {
+			t.Fatalf("take at +1s denied, estimated %v", status.Estimated)
 		}
 
 		rolledOneSecKey := redisWindowKey(opaqueKey, now.Unix()/1*1)
@@ -92,10 +92,10 @@ func TestRepro_FractionalWindowAccepted(t *testing.T) {
 		twoSecFormula := float64(twoSecCurrent) + float64(twoSecPrevious)*(1-float64(elapsedTwoSec)/2)
 		weightIfElapsedOneAndDenomWindow := 1 - float64(time.Second)/float64(window)
 		estimateIfElapsedOneAndDenomWindow := float64(current) + float64(previous)*weightIfElapsedOneAndDenomWindow
-		impliedWeight := (estimated - float64(current)) / float64(previous)
+		impliedWeight := (status.Estimated - float64(current)) / float64(previous)
 
 		t.Logf("at +1s (still inside 1.5s from fill): allowed=%v estimated=%v currentKey=%q current=%d previousKey=%q previous=%d elapsedOneSec=%d impliedWeight=%v",
-			allowed, estimated, rolledOneSecKey, current, oneSecKey, previous, elapsedOneSec, impliedWeight)
+			status.Allowed, status.Estimated, rolledOneSecKey, current, oneSecKey, previous, elapsedOneSec, impliedWeight)
 		t.Logf("1s formula=%v 2s formula=%v estimate if elapsed=1s and denom=1.5s=%v (weight=%v)",
 			oneSecFormula, twoSecFormula, estimateIfElapsedOneAndDenomWindow, weightIfElapsedOneAndDenomWindow)
 
@@ -105,15 +105,15 @@ func TestRepro_FractionalWindowAccepted(t *testing.T) {
 		if previous != fill {
 			t.Fatalf("previous 1-second bucket %q count %d, want %d", oneSecKey, previous, fill)
 		}
-		if estimated != oneSecFormula {
-			t.Fatalf("estimated %v != 1s whole-second formula current+previous*(1-elapsed/1)=%v (weight denom 1.5s changed the number)", estimated, oneSecFormula)
+		if status.Estimated != oneSecFormula {
+			t.Fatalf("estimated %v != 1s whole-second formula current+previous*(1-elapsed/1)=%v (weight denom 1.5s changed the number)", status.Estimated, oneSecFormula)
 		}
-		if estimated == estimateIfElapsedOneAndDenomWindow {
-			t.Fatalf("estimated %v used 1.5s denom with elapsed=1s; keys still rolled as 1s buckets", estimated)
+		if status.Estimated == estimateIfElapsedOneAndDenomWindow {
+			t.Fatalf("estimated %v used 1.5s denom with elapsed=1s; keys still rolled as 1s buckets", status.Estimated)
 		}
-		if estimated != twoSecFormula {
+		if status.Estimated != twoSecFormula {
 			t.Fatalf("estimated %v matches 1s formula %v (implied weight %v, elapsed=%d, window=1.5s) not 2s whole-second formula %v; Redis rolled to %q after 1s",
-				estimated, oneSecFormula, impliedWeight, elapsedOneSec, twoSecFormula, rolledOneSecKey)
+				status.Estimated, oneSecFormula, impliedWeight, elapsedOneSec, twoSecFormula, rolledOneSecKey)
 		}
 	})
 }

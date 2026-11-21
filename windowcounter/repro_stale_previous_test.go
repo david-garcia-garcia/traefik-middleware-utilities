@@ -34,19 +34,19 @@ func TestRepro_BufferedStalePreviousAtBoundary(t *testing.T) {
 	a.SetNowForTest(clock)
 	b.SetNowForTest(clock)
 
-	allowed, estimated, takeErr := a.Take(context.Background(), "k", limit, window)
+	status, takeErr := a.Take(context.Background(), "k", limit, window)
 	if takeErr != nil {
 		t.Fatal(takeErr)
 	}
-	if !allowed {
-		t.Fatalf("A window-1 take denied, estimated %v", estimated)
+	if !status.Allowed {
+		t.Fatalf("A window-1 take denied, estimated %v", status.Estimated)
 	}
-	allowed, estimated, takeErr = b.Take(context.Background(), "k", limit, window)
+	status, takeErr = b.Take(context.Background(), "k", limit, window)
 	if takeErr != nil {
 		t.Fatal(takeErr)
 	}
-	if !allowed {
-		t.Fatalf("B window-1 take denied, estimated %v", estimated)
+	if !status.Allowed {
+		t.Fatalf("B window-1 take denied, estimated %v", status.Estimated)
 	}
 
 	// A flushes first so its redisKnown stays 1; B then writes the shared total of 2.
@@ -54,16 +54,16 @@ func TestRepro_BufferedStalePreviousAtBoundary(t *testing.T) {
 	b.Sleep()
 
 	now = start.Add(window)
-	allowed, estimated, err = a.Take(context.Background(), "k", limit, window)
+	status, err = a.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("boundary Take allowed=%v estimated=%v (fresh previous would deny at estimated=3)", allowed, estimated)
-	if allowed {
-		t.Fatalf("boundary take allowed=%v estimated=%v; want denied estimated=3 (current=1 + previous=2 * weight=1)", allowed, estimated)
+	t.Logf("boundary Take allowed=%v estimated=%v (fresh previous would deny at estimated=3)", status.Allowed, status.Estimated)
+	if status.Allowed {
+		t.Fatalf("boundary take allowed=%v estimated=%v; want denied estimated=3 (current=1 + previous=2 * weight=1)", status.Allowed, status.Estimated)
 	}
-	if estimated != 3 {
-		t.Fatalf("boundary estimated %v, want 3", estimated)
+	if status.Estimated != 3 {
+		t.Fatalf("boundary estimated %v, want 3", status.Estimated)
 	}
 }
 
@@ -84,26 +84,26 @@ func TestTake_BufferedUnflushedPreviousNotGet(t *testing.T) {
 	now := start.Add(9 * time.Second)
 	limiter.SetNowForTest(func() time.Time { return now })
 
-	allowed, estimated, takeErr := limiter.Take(context.Background(), "k", limit, window)
+	status, takeErr := limiter.Take(context.Background(), "k", limit, window)
 	if takeErr != nil {
 		t.Fatal(takeErr)
 	}
-	if !allowed {
-		t.Fatalf("window-1 take denied, estimated %v", estimated)
+	if !status.Allowed {
+		t.Fatalf("window-1 take denied, estimated %v", status.Estimated)
 	}
 	getsAfterWindow1 := fake.getCallCount()
 
 	now = start.Add(window)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, estimated, err = limiter.Take(context.Background(), "k", limit, window)
+	status, err = limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !allowed {
-		t.Fatalf("window-2 take denied, estimated %v", estimated)
+	if !status.Allowed {
+		t.Fatalf("window-2 take denied, estimated %v", status.Estimated)
 	}
-	if estimated != 2 {
-		t.Fatalf("unflushed previous estimated %v, want 2 (current=1 + previous localDelta=1)", estimated)
+	if status.Estimated != 2 {
+		t.Fatalf("unflushed previous estimated %v, want 2 (current=1 + previous localDelta=1)", status.Estimated)
 	}
 	if fake.getCallCount() != getsAfterWindow1+1 {
 		t.Fatalf("GET count %d after roll, want %d (new current only)", fake.getCallCount(), getsAfterWindow1+1)
@@ -141,7 +141,7 @@ func TestTake_BufferedPreviousRefreshBoundedBySyncRate(t *testing.T) {
 	const limit int64 = 1000
 
 	for _, limiter := range []*Limiter{a, b} {
-		if _, _, takeErr := limiter.Take(ctx, "k", limit, window); takeErr != nil {
+		if _, takeErr := limiter.Take(ctx, "k", limit, window); takeErr != nil {
 			t.Fatal(takeErr)
 		}
 	}
@@ -153,7 +153,7 @@ func TestTake_BufferedPreviousRefreshBoundedBySyncRate(t *testing.T) {
 	now = time.Unix(firstStart+windowSec+60, 0)
 	getsBefore := fake.getCallCount()
 	for i := 0; i < 20; i++ {
-		if _, _, takeErr := a.Take(ctx, "k", limit, window); takeErr != nil {
+		if _, takeErr := a.Take(ctx, "k", limit, window); takeErr != nil {
 			t.Fatal(takeErr)
 		}
 	}
@@ -169,7 +169,7 @@ func TestTake_BufferedPreviousRefreshBoundedBySyncRate(t *testing.T) {
 		t.Fatal(flushErr)
 	}
 	getsBefore = fake.getCallCount()
-	if _, _, takeErr := a.Take(ctx, "k", limit, window); takeErr != nil {
+	if _, takeErr := a.Take(ctx, "k", limit, window); takeErr != nil {
 		t.Fatal(takeErr)
 	}
 	if got := fake.getCallCount() - getsBefore; got != 0 {
@@ -178,7 +178,7 @@ func TestTake_BufferedPreviousRefreshBoundedBySyncRate(t *testing.T) {
 
 	// One sync_rate later A refreshes previous once and sees B's late flush.
 	now = now.Add(syncRate)
-	if _, _, takeErr := a.Take(ctx, "k", limit, window); takeErr != nil {
+	if _, takeErr := a.Take(ctx, "k", limit, window); takeErr != nil {
 		t.Fatal(takeErr)
 	}
 	if got := fake.getCallCount() - getsBefore; got != 1 {
