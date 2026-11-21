@@ -15,7 +15,7 @@ Priority: P2 — dolor real de operador y usuario final (paradas bajo el mutex y
 ## Implementation
 Benchmarks en `tokenbucket/` y `windowcounter/` en tres variantes: compilada contra el Redis falso en proceso, interpretada bajo Yaegi siguiendo el patrón de `BenchmarkYaegiGet` (GOPATH temporal con las fuentes no-test y un bucle probe dentro de un único `Eval`), y live compilada (`-bench Live`, con `TOKENBUCKET_LIVE_*` / `WINDOWCOUNTER_LIVE_*`, saltada con `-short`). Cubren clave caliente, 10 000 claves en rotación, variantes `RunParallel` (solo compiladas), alta de clave nueva con la tabla de `NewMemory` llena y un flush directo de 1000 claves sucias, y reportan `redis-cmds/op`. Para que el falso represente un Redis con la caché de scripts caliente, cada `testFakeRedis` gana una caché de digests opt-in (apagada por defecto, la activan solo los benchmarks) y un contador de comandos; los helpers de test pasan de `*testing.T` a `testing.TB`.
 
-Alta O(1) en `tokenbucket.Memory`: cada entrada se enlaza en una lista doblemente enlazada intrusiva (`key`/`prev`/`next` en `memEntry`, `head`/`tail` en `Memory`). Como `ttl` es fijo y cada `Allow` fija `expireAt = now + ttl`, mover la entrada al final en cada `Allow` deja la lista ordenada por caducidad. Una fuente nueva saca caducadas por la cabeza y, si el almacén sigue en 65536, saca la cabeza (la fuente menos usada). Se usan punteros concretos y no `container/list`, cuyo `Value` de tipo `any` es un riesgo bajo Yaegi. Un reloj de test que retrocede puede dejar una caducada detrás de la cabeza hasta que se consulta, sin cambiar decisiones ni tope.
+Alta O(1) en `tokenbucket.Memory`: cada entrada se enlaza en una lista doblemente enlazada intrusiva (`key`/`prev`/`next` en `memEntry`, `head`/`tail` en `Memory`). Como `ttl` es fijo y cada `Allow` fija `expireAt = now + ttl`, mover la entrada al final en cada `Allow` deja la lista ordenada por caducidad. Una fuente nueva saca caducadas por la cabeza y, si el almacén sigue en 65536, saca la cabeza (la fuente menos usada). Se usan punteros concretos y no `container/list`, cuyo `Value` de tipo `any` es un riesgo bajo Yaegi. Un reloj de test que retrocede puede dejar una caducada detrás de la cabeza hasta que se consulta; con la tabla en el tope eso puede desalojar una fuente viva mientras la caducada sigue guardada. `time.Now` no retrocede, así que en producción se mantiene el orden caducadas primero (el spec delta lo acota así).
 
 Flush por lotes en `windowcounter`: `flushBatchScript` sustituye a `flushScript` y lleva hasta 256 claves por EVAL (`flushBatchKeys`; el spec fija el techo en 1024), todas declaradas en `KEYS` y con un bucle numérico sobre `#KEYS` (Dragonfly). Cada clave corre bajo `redis.pcall` y ocupa una posición en una respuesta plana: el entero de `INCRBY` o la cadena `err:<mensaje>`, porque `simpleredis.Eval` rechaza tablas anidadas. En Go, `parseFlushSlot` y `applyFlushOutcomeLocked` conservan la semántica por clave: aplicada, `redisKnown` toma el resultado y `localDelta` baja en lo enviado; fallida, conserva su `localDelta` para el siguiente flush; una respuesta sin una posición por clave o un error del EVAL entero hace fallar todas las claves del lote (`redis:issue?`); el primer error se guarda como hasta ahora. El mutex se suelta por lote y las claves de lotes posteriores siguen marcadas en vuelo hasta que vuelve su EVAL.
 
@@ -33,7 +33,7 @@ Documentación: nueva sección `## Rate limiters compared` en el README (tabla p
 In progress. 1 items remain.
 
 Priority: P2 — dolor real de operador y usuario final (paradas bajo el mutex y sincronización que se estira), limitado a conjuntos grandes de claves en `NewMemory` y en modo buffered.
-Reviewed head: 62f10971
+Reviewed head: ac3d6884
 Owner decision: None.
 
 ## Review scores
@@ -94,7 +94,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 62f109716c0fcbf28e7ed7c258c4fabbb656883a | Card must match the branch you measured |
+| Reviewed head | ac3d688496025110157ad626e3559801f8bd654c | Card must match the branch you measured |
 
 ### Stored data model
 None.
