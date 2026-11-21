@@ -2,6 +2,7 @@ package windowcounter
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -41,6 +42,18 @@ type testFakeRedis struct {
 	loadedScripts map[string]string
 	// commands counts every served command so benchmarks can report Redis round trips per operation.
 	commands int
+
+	// flushEvalKeys is the key count of every flush batch EVAL served, in order; lastFlushKeys is the last batch's KEYS.
+	flushEvalKeys []int
+	lastFlushKeys []string
+	// incrbyFailPrefix and incrbyFailRemaining fail the INCRBY of the next N flushed keys with that prefix inside the batch.
+	incrbyFailPrefix    string
+	incrbyFailRemaining int
+	// flushReply, when set, is the RESP reply of the next flush batch EVAL instead of running the script.
+	flushReply string
+	// flushHoldEntered and flushHoldRelease hold the next flush batch EVAL until released (see holdNextFlush).
+	flushHoldEntered chan struct{}
+	flushHoldRelease chan struct{}
 }
 
 // startTestFakeRedis listens on a local TCP port and serves an in-process RESP map.
@@ -136,23 +149,9 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 			}
 			// break in an inner case leaves only this switch; nothing follows it in case "EVAL".
 			switch {
-			case args[1] == flushScript && len(args) >= 6:
-				key := args[3]
-				delta, convErr := strconv.ParseInt(args[4], 10, 64)
-				if convErr != nil {
-					_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
-					break
-				}
-				_, existed := f.store[key]
-				n, incrErr := incrementTestStore(f.store, key, delta)
-				if incrErr != nil {
-					_, _ = io.WriteString(conn, "-ERR value is not an integer or out of range\r\n")
-					break
-				}
-				if !existed {
-					f.lastExpire = []string{"EXPIREAT", key, args[5]}
-				}
-				_, _ = fmt.Fprintf(conn, ":%d\r\n", n)
+			case args[1] == flushBatchScript:
+				f.waitFlushHoldLocked()
+				_, _ = io.WriteString(conn, f.flushBatchReplyLocked(args))
 			case args[1] == takeExactScript && len(args) >= 5:
 				key := args[3]
 				ttl, convErr := strconv.ParseInt(args[4], 10, 64)
@@ -198,6 +197,111 @@ func (f *testFakeRedis) commandCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.commands
+}
+
+// flushBatchReplyLocked runs flushBatchScript on EVAL argv (EVAL, script, numkeys, KEYS..., delta/expireAt pairs) and returns
+// the RESP array: one integer per applied key, one "err:" bulk per key whose INCRBY failed. Caller holds f.mu.
+func (f *testFakeRedis) flushBatchReplyLocked(args []string) string {
+	numKeys, convErr := strconv.Atoi(args[2])
+	if convErr != nil || len(args) != 3+3*numKeys {
+		return "-ERR wrong number of arguments for flush batch\r\n"
+	}
+	keys := args[3 : 3+numKeys]
+	argv := args[3+numKeys:]
+	f.flushEvalKeys = append(f.flushEvalKeys, numKeys)
+	f.lastFlushKeys = append([]string(nil), keys...)
+	if f.flushReply != "" {
+		reply := f.flushReply
+		f.flushReply = ""
+		return reply
+	}
+	var reply strings.Builder
+	fmt.Fprintf(&reply, "*%d\r\n", numKeys)
+	for i, key := range keys {
+		n, incrErr := f.flushIncrByLocked(key, argv[2*i], argv[2*i+1])
+		if incrErr != nil {
+			slot := flushErrorSlotPrefix + incrErr.Error()
+			fmt.Fprintf(&reply, "$%d\r\n%s\r\n", len(slot), slot)
+			continue
+		}
+		fmt.Fprintf(&reply, ":%d\r\n", n)
+	}
+	return reply.String()
+}
+
+// flushIncrByLocked is one key of the batch script: INCRBY delta, then record EXPIREAT when the key did not exist. Caller holds f.mu.
+func (f *testFakeRedis) flushIncrByLocked(key, rawDelta, rawExpireAt string) (int64, error) {
+	if f.incrbyFailRemaining > 0 && strings.HasPrefix(key, f.incrbyFailPrefix) {
+		f.incrbyFailRemaining--
+		return 0, errors.New("ERR injected incrby failure")
+	}
+	delta, convErr := strconv.ParseInt(rawDelta, 10, 64)
+	if convErr != nil {
+		return 0, errors.New("ERR value is not an integer or out of range")
+	}
+	_, existed := f.store[key]
+	n, incrErr := incrementTestStore(f.store, key, delta)
+	if incrErr != nil {
+		return 0, errors.New("ERR value is not an integer or out of range")
+	}
+	if !existed {
+		f.lastExpire = []string{"EXPIREAT", key, rawExpireAt}
+	}
+	return n, nil
+}
+
+// failNextFlushIncrBy fails the INCRBY of the next n flushed keys whose Redis key has prefix; other keys in the batch apply.
+func (f *testFakeRedis) failNextFlushIncrBy(prefix string, n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.incrbyFailPrefix = prefix
+	f.incrbyFailRemaining = n
+}
+
+// replyNextFlush makes the next flush batch EVAL answer reply without applying anything.
+func (f *testFakeRedis) replyNextFlush(reply string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.flushReply = reply
+}
+
+// holdNextFlush holds the next flush batch EVAL until release is called. entered closes once that EVAL is held.
+func (f *testFakeRedis) holdNextFlush() (entered <-chan struct{}, release func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	enteredCh := make(chan struct{})
+	releaseCh := make(chan struct{})
+	f.flushHoldEntered = enteredCh
+	f.flushHoldRelease = releaseCh
+	var once sync.Once
+	return enteredCh, func() { once.Do(func() { close(releaseCh) }) }
+}
+
+// waitFlushHoldLocked waits out a holdNextFlush with f.mu released, so other connections are served meanwhile. Caller holds f.mu.
+func (f *testFakeRedis) waitFlushHoldLocked() {
+	entered, release := f.flushHoldEntered, f.flushHoldRelease
+	if release == nil {
+		return
+	}
+	f.flushHoldEntered, f.flushHoldRelease = nil, nil
+	f.mu.Unlock()
+	close(entered)
+	<-release
+	f.mu.Lock()
+}
+
+// flushEvalKeyCounts returns the key count of every flush batch EVAL served so far.
+func (f *testFakeRedis) flushEvalKeyCounts() []int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]int(nil), f.flushEvalKeys...)
+}
+
+// lastFlushBatchKeys returns the KEYS of the last flush batch EVAL.
+func (f *testFakeRedis) lastFlushBatchKeys() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.lastFlushKeys...)
 }
 
 // failNextExpireCommands replies -ERR to the next n EXPIRE commands, then succeeds.

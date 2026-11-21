@@ -18,21 +18,21 @@
 ## 4. Baseline (commit 1)
 
 - [x] 4.1 Run `go test -short -count=1 ./...` and `golangci-lint run` (v1.63.4); both green
-- [ ] 4.2 Run `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/` on the reference machine (Core Ultra 7 265K, Windows 11, go1.25.6), keep the raw output, compute medians; checkpoint commit 1 with benchmarks only and record its SHA for the README "before" column
+- [x] 4.2 Run `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/` on the reference machine (Core Ultra 7 265K, Windows 11, go1.25.6), keep the raw output, compute medians; checkpoint commit 1 with benchmarks only and record its SHA for the README "before" column
 
 ## 5. `tokenbucket.Memory` O(1) admission (commit 2)
 
-- [ ] 5.1 Add the cap/eviction test first (full table with expired and live sources → expired removed, live kept; full table of live sources → `len` stays 65536, new key starts at `burst - 1`; evicted key comes back full); verify it passes on the commit-1 code
-- [ ] 5.2 Implement the intrusive expiry-ordered list in `tokenbucket/memory.go` (design D3): `key`, `prev`, `next` on `memEntry`, `head`/`tail` on `Memory`, move-to-tail on every `Allow`, pop expired heads on a new source, pop the head at the cap; remove `dropExpired`/`dropOne`; no `container/list`, no `any`
-- [ ] 5.3 Route `allow_wait_duration_overflow_test.go`'s hand-inserted `memEntry` through the link helper; verify `go test -short -count=1 ./tokenbucket/` passes with no other test edits (including `TestMemory_*`, `TestRepro_*`, `allow_maxdelay*`, Yaegi tests) and the 5.1 test still passes
+- [x] 5.1 Add the cap/eviction test first (full table with expired and live sources → expired removed, live kept; full table of live sources → `len` stays 65536, new key starts at `burst - 1`; evicted key comes back full); verify it passes on the commit-1 code
+- [x] 5.2 Implement the intrusive expiry-ordered list in `tokenbucket/memory.go` (design D3): `key`, `prev`, `next` on `memEntry`, `head`/`tail` on `Memory`, move-to-tail on every `Allow`, pop expired heads on a new source, pop the head at the cap; remove `dropExpired`/`dropOne`; no `container/list`, no `any`
+- [x] 5.3 Route `allow_wait_duration_overflow_test.go`'s hand-inserted `memEntry` through the link helper; verify `go test -short -count=1 ./tokenbucket/` passes with no other test edits (including `TestMemory_*`, `TestRepro_*`, `allow_maxdelay*`, Yaegi tests) and the 5.1 test still passes
 - [ ] 5.4 Add the source cap and "removes expired sources first, victim unspecified" gotcha to `knowledge/devdocs/std_go_tokenbucket.md`; verify it matches the `std_go_tokenbucket_allow` delta
 
 ## 6. `windowcounter` batched flush (commit 2)
 
-- [ ] 6.1 Teach `windowcounter/fake_redis_test.go` the batch script (numkeys, KEYS, ARGV pairs, array reply, `EXPIREAT` recorded for new keys) and add per-key INCRBY failure injection; replace the single-key `flushScript` branch
-- [ ] 6.2 Replace `flushScript` with the batch script and batch the flush in `flushPendingLocked` (design D4: K = 256, per-key `redis.pcall`, `err:` slot marker, slot-count check, first error stored, `l.mu` dropped per batch); keep `flushPending` callers (`flushAfterTick`, `Sleep`, `Close`) unchanged
-- [ ] 6.3 Add tests: (i) one key fails inside a batch while the others apply; (ii) a Take during an in-flight batch keeps its hit; (iii) applied keys of a partially failed batch are not re-sent; slot-count mismatch fails every key of that batch; 1000 dirty keys take fewer EVALs than keys; verify they pass
-- [ ] 6.4 Verify the existing flush/outage tests pass unchanged: `go test -short -count=1 ./windowcounter/` (including `TestBuffered_*`, `TestTake_Buffered*`, `TestPeek_Buffered*`, `repro_buffered_outage_test.go`, `repro_stale_previous_test.go`, `repro_lock_during_get_test.go`, `repro_sleep_wake_race_test.go`, `yaegi_flush_stop_test.go`)
+- [x] 6.1 Teach `windowcounter/fake_redis_test.go` the batch script (numkeys, KEYS, ARGV pairs, array reply, `EXPIREAT` recorded for new keys) and add per-key INCRBY failure injection; replace the single-key `flushScript` branch
+- [x] 6.2 Replace `flushScript` with the batch script and batch the flush in `flushPendingLocked` (design D4: K = 256, per-key `redis.pcall`, `err:` slot marker, slot-count check, first error stored, `l.mu` dropped per batch); keep `flushPending` callers (`flushAfterTick`, `Sleep`, `Close`) unchanged
+- [x] 6.3 Add tests: (i) one key fails inside a batch while the others apply; (ii) a Take during an in-flight batch keeps its hit; (iii) applied keys of a partially failed batch are not re-sent; slot-count mismatch fails every key of that batch; 1000 dirty keys take fewer EVALs than keys; verify they pass
+- [x] 6.4 Verify the existing flush/outage tests pass unchanged: `go test -short -count=1 ./windowcounter/` (including `TestBuffered_*`, `TestTake_Buffered*`, `TestPeek_Buffered*`, `repro_buffered_outage_test.go`, `repro_stale_previous_test.go`, `repro_lock_during_get_test.go`, `repro_sleep_wake_race_test.go`, `yaegi_flush_stop_test.go`)
 - [ ] 6.5 Add a live multi-key flush case to `windowcounter/limiter_e2e_test.go` (several keys in one EVAL, every delta applied once) so `e2e-redis` and `e2e-dragonfly` prove it; verify locally against at least one engine or rely on the CI jobs
 - [ ] 6.6 Update `knowledge/devdocs/std_go_windowcounter.md`: batched flush (K keys per EVAL, per-key outcome), the lost-reply double-apply now per batch, and the cluster/CROSSSLOT limitation; verify it matches the `std_go_windowcounter_sync-flush` delta
 
