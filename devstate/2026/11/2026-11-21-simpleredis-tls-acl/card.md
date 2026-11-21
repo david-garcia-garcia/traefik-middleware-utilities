@@ -52,7 +52,7 @@ Los certificados se generan en cada ejecución con stdlib y no se versionan. Nin
 In progress. 0 items remain.
 
 Priority: P2 — un usuario de la librería no puede conectar con despliegues de Redis/Dragonfly con TLS o usuarios ACL, y hoy solo tiene un rodeo: red privada en claro o usuario `default`.
-Reviewed head: cb009530
+Reviewed head: 0ff14ce7
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -120,7 +120,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 1 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | cb009530ef85af081ef79d0c874423a47314f8d9 | Card must match the branch you measured |
+| Reviewed head | 0ff14ce7e88078b30f3fca39a00b6b44c4c33d65 | Card must match the branch you measured |
 
 ### Stored data model
 None.
