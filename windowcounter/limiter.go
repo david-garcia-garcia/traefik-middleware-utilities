@@ -23,8 +23,18 @@ if exists == 0 then
 end
 return value`
 
+// takeExactScript INCR then EXPIRE if the key has no TTL. KEYS must list the key (Dragonfly).
+const takeExactScript = `local n = redis.call("INCR", KEYS[1])
+if redis.call("PTTL", KEYS[1]) < 0 then
+  redis.call("EXPIRE", KEYS[1], ARGV[1])
+end
+return n`
+
 // flushScriptDigest is Redis sha1hex of flushScript, computed once at package init.
 var flushScriptDigest = simpleredis.ScriptSHA1Hex(flushScript)
+
+// takeExactScriptDigest is Redis sha1hex of takeExactScript, computed once at package init.
+var takeExactScriptDigest = simpleredis.ScriptSHA1Hex(takeExactScript)
 
 // Limiter admits hits on opaque keys against a sliding Redis window. Local memory is only the sync_rate buffer.
 type Limiter struct {
@@ -50,9 +60,11 @@ type windowState struct {
 	localDelta int64
 	expireAt   int64
 	flushDelta int64 // amount copied for an in-flight EVAL; 0 means none
+	// previousGetAt is when buffered Take last GET this key as the previous window; zero means never.
+	previousGetAt time.Time
 }
 
-// New builds a limiter on a SimpleRedis from simpleredis.New. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (INCR every Take, Redis errors on that call). Positive syncRate buffers locally and returns a retained flush error (or a probe after one missed sync_rate) instead of a silent nil.
+// New builds a limiter on a SimpleRedis from simpleredis.New. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (EVAL INCR plus EXPIRE-if-no-TTL every Take, Redis errors on that call). Positive syncRate buffers locally and returns a retained flush error (or a probe after one missed sync_rate) instead of a silent nil.
 func New(redis *simpleredis.SimpleRedis, syncRate time.Duration) (*Limiter, error) {
 	if redis == nil {
 		return nil, errors.New("windowcounter: redis is required")
@@ -158,16 +170,17 @@ func (l *Limiter) Allow(ctx context.Context, key string, limit int64, window tim
 	return l.Take(ctx, key, limit, window)
 }
 
-// takeExact INCR the current window, EXPIRE on first hit, GET previous, then compare the estimate.
+// takeExact EVAL INCR plus EXPIRE-if-no-TTL on the current window, GET previous, then compare the estimate.
 func (l *Limiter) takeExact(ctx context.Context, currentKey, previousKey string, ttlSec int64, weight float64, limit int64) (allowed bool, estimated float64, err error) {
-	current, err := l.redis.Incr(ctx, currentKey)
+	values, err := l.redis.Eval(ctx, takeExactScript, takeExactScriptDigest, []string{currentKey}, []string{
+		strconv.FormatInt(ttlSec, 10),
+	})
 	if err != nil {
 		return false, 0, err
 	}
-	if current == 1 {
-		if expireErr := l.redis.Expire(ctx, currentKey, ttlSec); expireErr != nil {
-			return false, 0, expireErr
-		}
+	current, convErr := parseEvalInt(values)
+	if convErr != nil {
+		return false, 0, convErr
 	}
 	previous, err := l.getCount(ctx, previousKey)
 	if err != nil {
@@ -186,7 +199,7 @@ func (l *Limiter) takeBuffered(ctx context.Context, currentKey, previousKey stri
 	if err != nil {
 		return false, 0, err
 	}
-	previous, err := l.bufferedCountLocked(ctx, previousKey)
+	previous, err := l.takeBufferedPreviousLocked(ctx, previousKey)
 	if err != nil {
 		return false, 0, err
 	}
@@ -264,6 +277,31 @@ func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt in
 	}
 	l.lastRedisOK = l.now()
 	return l.applyGetLocked(redisKey, known, expireAt), nil
+}
+
+// takeBufferedPreviousLocked is redis_known + local_delta for previous on Take.
+// Other instances may flush into this key after this instance's last flush (Sleep order, or
+// their sync_rate tick after the window roll). Take GETs it the first time it is used as previous,
+// then at most once per sync_rate, so the refresh cadence matches the current window (one GET per
+// flush cycle) instead of one GET per Take. While localDelta is greater than 0 the memory count
+// wins: Redis does not hold this instance's unflushed delta. The GET drops l.mu like windowLocked.
+func (l *Limiter) takeBufferedPreviousLocked(ctx context.Context, redisKey string) (int64, error) {
+	now := l.now()
+	state := l.windows[redisKey]
+	if state != nil {
+		refreshed := !state.previousGetAt.IsZero() && now.Sub(state.previousGetAt) < l.syncRate
+		if state.localDelta != 0 || refreshed {
+			return state.redisKnown + state.localDelta, nil
+		}
+	}
+	known, err := l.getCountUnlocked(ctx, redisKey)
+	if err != nil {
+		return 0, err
+	}
+	l.lastRedisOK = l.now()
+	state = l.applyGetLocked(redisKey, known, 0)
+	state.previousGetAt = now
+	return state.redisKnown + state.localDelta, nil
 }
 
 // bufferedCountLocked is redis_known + local_delta, GET-seeding a key the limiter has not seen.
