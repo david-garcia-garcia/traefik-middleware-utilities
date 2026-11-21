@@ -26,7 +26,7 @@ La revisión de código dejó `newStatus` de ambos paquetes calculando los campo
 In progress. 0 items remain.
 
 Priority: P2 — dolor real para quien opera el middleware y sus clientes (429 sin `Retry-After` ni cabeceras de cupo), sin daño de datos ni contrato público roto hoy.
-Reviewed head: b8caa6bd
+Reviewed head: a9b44be7
 Owner decision: None.
 
 ## Review scores
@@ -49,10 +49,16 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/ratelimit-status/proposal.md) — modified
-- [std_go_tokenbucket_status](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/ratelimit-status/proposal.md) — added
-- [std_go_windowcounter_sliding-take](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/ratelimit-status/proposal.md) — modified
-- [std_go_windowcounter_status](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/ratelimit-status/proposal.md) — added
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/archive/2026-11-21-ratelimit-status/proposal.md) — modified
+- [std_go_tokenbucket_status](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/archive/2026-11-21-ratelimit-status/proposal.md) — added
+- [std_go_windowcounter_sliding-take](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/archive/2026-11-21-ratelimit-status/proposal.md) — modified
+- [std_go_windowcounter_status](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/archive/2026-11-21-ratelimit-status/proposal.md) — added
+
+Completed:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/specs/std_go_tokenbucket_allow/spec.md) — modified
+- [std_go_tokenbucket_status](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/specs/std_go_tokenbucket_status/spec.md) — added
+- [std_go_windowcounter_sliding-take](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/specs/std_go_windowcounter_sliding-take/spec.md) — modified
+- [std_go_windowcounter_status](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/specs/std_go_windowcounter_status/spec.md) — added
 
 
 ## Deviations from the ask
@@ -101,9 +107,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 2 added / 2 modified | Same list as ## Specs |
+| Specs in this PR | 4 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | b8caa6bd1fdfeb579e36d7a46b7d8382ea8d0870 | Card must match the branch you measured |
+| Reviewed head | a9b44be7642521dc428a0063301106ede988bee4 | Card must match the branch you measured |
 
 ### Stored data model
 None.
