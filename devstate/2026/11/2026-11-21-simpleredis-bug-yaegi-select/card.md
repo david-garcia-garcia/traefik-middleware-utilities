@@ -17,7 +17,7 @@ Not yet.
 In progress. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 5d212f47
+Reviewed head: 04e0b469
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -32,14 +32,17 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-11-21-simpleredis-bug-yaegi-select pushed | `git` |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | simpleredis-drop-select-under-yaegi | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/104 | pr-host |
 | CI | not seen | caller omitted CI snapshot |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
-None.
+Worktree:
+- [std_go_simpleredis_resp-commands](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-bug-yaegi-select/openspec/changes/simpleredis-drop-select-under-yaegi/proposal.md) — modified
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-bug-yaegi-select/openspec/changes/simpleredis-drop-select-under-yaegi/proposal.md) — modified
+
 
 ## Deviations from the ask
 None.
@@ -68,9 +71,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 5d212f47484b6b7ab6dd010444d32453e1a51bc9 | Card must match the branch you measured |
+| Reviewed head | 04e0b4697bf1f9e6ca3c31ee8d3d24a085f9e92f | Card must match the branch you measured |
 
 ### Stored data model
 None.
