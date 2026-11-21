@@ -6,9 +6,11 @@ prHost: github
 ciHost: github
 repoSlug: traefik-middleware-utilities
 destBranch: master
+qualify: qualified-with-gaps
+src: 0a11e3d05515f17d760ba3f1b5aeae00a7c49eb00bb906c82fe2c04bcbc9586d
 localTests: none
 requirement: requirement.md
 comments: none
 explore: none
 change: none
-pr: none
+pr: { id: 104, url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/104 }
