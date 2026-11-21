@@ -17,7 +17,7 @@ Not yet.
 In progress. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: f56804f1
+Reviewed head: cdf66e9b
 Owner decision: None.
 
 ## Review scores
@@ -32,14 +32,17 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-11-21-ratelimit-benchmarks pushed | `git` |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | ratelimit-benchmarks-key-scaling | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/105 | pr-host |
 | CI | not seen | caller omitted CI snapshot |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
-None.
+Worktree:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/openspec/changes/ratelimit-benchmarks-key-scaling/proposal.md) — modified
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/openspec/changes/ratelimit-benchmarks-key-scaling/proposal.md) — modified
+
 
 ## Deviations from the ask
 None.
@@ -65,9 +68,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | f56804f1154c48e3c800b29941924a9b7b93b03d | Card must match the branch you measured |
+| Reviewed head | cdf66e9b94326e1f31ecda11b091506df97901d3 | Card must match the branch you measured |
 
 ### Stored data model
 None.
