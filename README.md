@@ -141,7 +141,7 @@ Traefik Hub `DistributedRateLimit` (commercial; only its documentation was read,
 
 ### Benchmarks
 
-Measured on 2026-11-21 on an Intel Core Ultra 7 265K (20 threads), Windows 11, `go1.25.6 windows/amd64`, with Yaegi v0.16.1 (the version Traefik v3.7.11 pins). Each value is the median of five runs. The ns/op, `redis-cmds/op`, and allocation columns come from one run at commit `21fc591e`; the "before" columns come from the same command at commit `ee9f5c11`, run right before it on the same machine:
+Measured on 2026-11-21 on an Intel Core Ultra 7 265K (20 threads), Windows 11, `go1.25.6 windows/amd64`, with Yaegi v0.16.1 (the version Traefik v3.7.11 pins). Each value is the median of five runs. The ns/op, `redis-cmds/op`, and allocation columns come from one run at commit `7baa8f7c`; the "before" columns come from the same command at commit `ee9f5c11`, run right before it on the same machine:
 
 ```text
 go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
@@ -156,25 +156,25 @@ How to read the numbers:
 - The fake serves one command at a time, so the `-parallel` rows against it measure the client plus a serialized server, not how Redis scales. `BenchmarkLiveRedisAllow` and `BenchmarkLiveTake` (`-bench Live` with `TOKENBUCKET_LIVE_*` / `WINDOWCOUNTER_LIVE_*` set) run against a real engine; they are not in this table.
 - Yaegi rows run the same code interpreted inside one `Eval` per timed loop, through a probe package. `BenchmarkYaegiFlush` calls the interpreted flush from Go once per iteration and re-dirties the keys with the timer stopped, like `BenchmarkFlush`. Yaegi rows have no allocation column.
 - `sync_rate` 20 ms is the floor, the buffered setting with the most Redis traffic. The flush rows time one flush of 1000 dirty keys. In buffered mode `redis-cmds/op` is the background flush spread over the Takes of the run, so a slower Take shows slightly more.
-- The "before" columns are commit `ee9f5c11`, before `Allow`, `Take`, and `Peek` returned a `Status`. Building it is the difference on the in-process rows: about 20 to 30 ns compiled and about 2 µs under Yaegi per `tokenbucket.NewMemory` `Allow` and per buffered `Take`. Rows that wait on a Redis round trip moved by less than the run-to-run noise (up to about 8% here), and `redis-cmds/op` and allocations did not change: the `Status` adds no Redis command.
+- The "before" columns are commit `ee9f5c11`, before `Allow`, `Take`, and `Peek` returned a `Status`. Building it is the difference on the in-process rows: about 10 to 35 ns compiled and about 1 to 2.5 µs under Yaegi per `tokenbucket.NewMemory` `Allow` and per buffered `Take`. Rows that wait on a Redis round trip moved by less than the run-to-run noise (up to about 8% here), and `redis-cmds/op` and allocations did not change: the `Status` adds no Redis command.
 - The optimizations of commit `3623aafd` are not re-measured here. At `d940bf43`, before them, a new source in `tokenbucket.NewMemory` with 65536 live sources cost 1,516,150 ns compiled and 37,716,769 ns under Yaegi (it walked every stored source under the mutex), and the 1000-key flush cost 31,947,335 and 105,819,980 ns (one `EVAL` per key instead of one per batch of up to 256).
 
 | Benchmark | Compiled ns/op | Compiled before | Yaegi ns/op | Yaegi before | redis-cmds/op | Compiled allocs/op |
 |---|---:|---:|---:|---:|---:|---:|
-| `tokenbucket.NewMemory`, hot key (`BenchmarkMemoryAllow/hot-key` / `BenchmarkYaegiMemoryAllow/hot-key`) | 42.0 | 19.7 | 11,228 | 9,438 | — | 0 |
-| `tokenbucket.NewMemory`, 10k rotating keys (`BenchmarkMemoryAllow/rotating-10k` / `BenchmarkYaegiMemoryAllow/rotating-10k`) | 54.7 | 37.0 | 11,691 | 9,697 | — | 0 |
-| `tokenbucket.NewMemory`, new key, 65536 live sources (`BenchmarkMemoryAllow/new-key-full-table` / `BenchmarkYaegiMemoryAllow/new-key-full-table`) | 177 | 176 | 16,138 | 15,746 | — | 2 |
-| `tokenbucket.NewMemory`, hot key, parallel (`BenchmarkMemoryAllow/hot-key-parallel`) | 76.9 | 61.1 | — | — | — | 0 |
-| `tokenbucket.NewRedis`, hot key (`BenchmarkRedisAllow/hot-key` / `BenchmarkYaegiRedisAllow/hot-key`) | 32,097 | 32,029 | 189,839 | 178,769 | 1 | 74 |
-| `tokenbucket.NewRedis`, 10k rotating keys (`BenchmarkRedisAllow/rotating-10k`) | 30,955 | 31,935 | — | — | 1 | 72 |
-| `tokenbucket.NewRedis`, hot key, parallel (`BenchmarkRedisAllow/hot-key-parallel`) | 23,423 | 23,674 | — | — | 1 | 80 |
-| `windowcounter`, `sync_rate` 0, hot key (`BenchmarkTake/sync-rate-0/hot-key` / `BenchmarkYaegiTake/sync-rate-0/hot-key`) | 50,111 | 52,505 | 280,328 | 282,798 | 2 | 68 |
-| `windowcounter`, `sync_rate` 0, 10k rotating keys (`BenchmarkTake/sync-rate-0/rotating-10k`) | 49,684 | 54,144 | — | — | 2 | 67 |
-| `windowcounter`, `sync_rate` 0, hot key, parallel (`BenchmarkTake/sync-rate-0/hot-key-parallel`) | 26,024 | 26,766 | — | — | 2 | 81 |
-| `windowcounter`, `sync_rate` 20 ms, hot key (`BenchmarkTake/sync-rate-20ms/hot-key` / `BenchmarkYaegiTake/sync-rate-20ms/hot-key`) | 258 | 229 | 19,731 | 17,457 | 3.35e-05 | 4 |
-| `windowcounter`, `sync_rate` 20 ms, 10k rotating keys (`BenchmarkTake/sync-rate-20ms/rotating-10k`) | 53,304 | 56,167 | — | — | 2.005 | 67 |
-| `windowcounter`, `sync_rate` 20 ms, hot key, parallel (`BenchmarkTake/sync-rate-20ms/hot-key-parallel`) | 232 | 212 | — | — | 0.000272 | 4 |
-| `windowcounter` flush, 1000 dirty keys (`BenchmarkFlush/dirty-keys-1000` / `BenchmarkYaegiFlush/dirty-keys-1000`) | 903,003 | 901,889 | 13,254,524 | 13,646,997 | 4 | 15932 |
+| `tokenbucket.NewMemory`, hot key (`BenchmarkMemoryAllow/hot-key` / `BenchmarkYaegiMemoryAllow/hot-key`) | 36.5 | 19.8 | 11,077 | 9,175 | — | 0 |
+| `tokenbucket.NewMemory`, 10k rotating keys (`BenchmarkMemoryAllow/rotating-10k` / `BenchmarkYaegiMemoryAllow/rotating-10k`) | 40.0 | 29.6 | 11,156 | 9,470 | — | 0 |
+| `tokenbucket.NewMemory`, new key, 65536 live sources (`BenchmarkMemoryAllow/new-key-full-table` / `BenchmarkYaegiMemoryAllow/new-key-full-table`) | 162 | 150 | 14,029 | 12,907 | — | 2 |
+| `tokenbucket.NewMemory`, hot key, parallel (`BenchmarkMemoryAllow/hot-key-parallel`) | 67.2 | 58.3 | — | — | — | 0 |
+| `tokenbucket.NewRedis`, hot key (`BenchmarkRedisAllow/hot-key` / `BenchmarkYaegiRedisAllow/hot-key`) | 30,393 | 32,017 | 175,465 | 169,434 | 1 | 74 |
+| `tokenbucket.NewRedis`, 10k rotating keys (`BenchmarkRedisAllow/rotating-10k`) | 31,485 | 31,442 | — | — | 1 | 72 |
+| `tokenbucket.NewRedis`, hot key, parallel (`BenchmarkRedisAllow/hot-key-parallel`) | 22,740 | 22,735 | — | — | 1 | 80 |
+| `windowcounter`, `sync_rate` 0, hot key (`BenchmarkTake/sync-rate-0/hot-key` / `BenchmarkYaegiTake/sync-rate-0/hot-key`) | 47,975 | 49,496 | 286,938 | 271,226 | 2 | 68 |
+| `windowcounter`, `sync_rate` 0, 10k rotating keys (`BenchmarkTake/sync-rate-0/rotating-10k`) | 47,435 | 47,416 | — | — | 2 | 67 |
+| `windowcounter`, `sync_rate` 0, hot key, parallel (`BenchmarkTake/sync-rate-0/hot-key-parallel`) | 26,281 | 25,956 | — | — | 2 | 81 |
+| `windowcounter`, `sync_rate` 20 ms, hot key (`BenchmarkTake/sync-rate-20ms/hot-key` / `BenchmarkYaegiTake/sync-rate-20ms/hot-key`) | 258 | 225 | 19,783 | 17,476 | 3.32e-05 | 4 |
+| `windowcounter`, `sync_rate` 20 ms, 10k rotating keys (`BenchmarkTake/sync-rate-20ms/rotating-10k`) | 51,216 | 53,038 | — | — | 2.005 | 67 |
+| `windowcounter`, `sync_rate` 20 ms, hot key, parallel (`BenchmarkTake/sync-rate-20ms/hot-key-parallel`) | 226 | 206 | — | — | 0.00026 | 4 |
+| `windowcounter` flush, 1000 dirty keys (`BenchmarkFlush/dirty-keys-1000` / `BenchmarkYaegiFlush/dirty-keys-1000`) | 879,041 | 868,129 | 13,512,090 | 13,624,990 | 4 | 15945 |
 
 ## Backend backoff
 
