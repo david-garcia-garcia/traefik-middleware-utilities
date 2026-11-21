@@ -13,13 +13,13 @@ Si se deja así, con conjuntos grandes de claves (por ejemplo, una clave por IP)
 Priority: P2 — dolor real de operador y usuario final (paradas bajo el mutex y sincronización que se estira), limitado a conjuntos grandes de claves en `NewMemory` y en modo buffered.
 
 ## Implementation
-Benchmarks en `tokenbucket/` y `windowcounter/` en tres variantes: compilada contra el Redis falso en proceso, interpretada bajo Yaegi siguiendo el patrón de `BenchmarkYaegiGet` (GOPATH temporal con las fuentes no-test y un bucle probe dentro de un único `Eval`), y live compilada (`-bench Live`, con `TOKENBUCKET_LIVE_*` / `WINDOWCOUNTER_LIVE_*`, saltada con `-short`). Cubren clave caliente, 10 000 claves en rotación, variantes `RunParallel` (solo compiladas), alta de clave nueva con la tabla de `NewMemory` llena y un flush directo de 1000 claves sucias, y reportan `redis-cmds/op`. Para que el falso represente un Redis con la caché de scripts caliente, cada `testFakeRedis` gana una caché de digests opt-in (apagada por defecto, la activan solo los benchmarks) y un contador de comandos; los helpers de test pasan de `*testing.T` a `testing.TB`.
+Benchmarks en `tokenbucket/` y `windowcounter/` en tres variantes: compilada contra el Redis falso en proceso, interpretada bajo Yaegi siguiendo el patrón de `BenchmarkYaegiGet` (GOPATH temporal con las fuentes no-test y un bucle probe dentro de un único `Eval`), y live compilada (`-bench Live`, con `TOKENBUCKET_LIVE_*` / `WINDOWCOUNTER_LIVE_*`, saltada con `-short`). Cubren clave caliente, 10 000 claves en rotación, variantes `RunParallel` (solo compiladas), alta de clave nueva con la tabla de `NewMemory` llena y un flush directo de 1000 claves sucias, compiladas y bajo Yaegi, y reportan `redis-cmds/op`. Las variantes Yaegi de rotación, tabla llena y flush escriben un `zz_bench_hooks.go` solo de test en la copia GOPATH temporal del intérprete, nunca en el paquete real. Para que el falso represente un Redis con la caché de scripts caliente, cada `testFakeRedis` gana una caché de digests opt-in (apagada por defecto, la activan solo los benchmarks) y un contador de comandos; los helpers de test pasan de `*testing.T` a `testing.TB`.
 
-Alta O(1) en `tokenbucket.Memory`: cada entrada se enlaza en una lista doblemente enlazada intrusiva (`key`/`prev`/`next` en `memEntry`, `head`/`tail` en `Memory`). Como `ttl` es fijo y cada `Allow` fija `expireAt = now + ttl`, mover la entrada al final en cada `Allow` deja la lista ordenada por caducidad. Una fuente nueva saca caducadas por la cabeza y, si el almacén sigue en 65536, saca la cabeza (la fuente menos usada). Se usan punteros concretos y no `container/list`, cuyo `Value` de tipo `any` es un riesgo bajo Yaegi. Un reloj de test que retrocede puede dejar una caducada detrás de la cabeza hasta que se consulta; con la tabla en el tope eso puede desalojar una fuente viva mientras la caducada sigue guardada. `time.Now` no retrocede, así que en producción se mantiene el orden caducadas primero (el spec delta lo acota así).
+Alta O(1) en `tokenbucket.Memory`: cada entrada se enlaza en una lista doblemente enlazada intrusiva (`key`/`prev`/`next` en `memEntry`, `head`/`tail` en `Memory`). Como `ttl` es fijo y cada `Allow` fija `expireAt = now + ttl`, mover la entrada al final en cada `Allow` deja la lista ordenada por caducidad; `moveToBackLocked` hace ese relink en sitio, sin llamar a `unlinkLocked` y `pushBackLocked`, porque bajo Yaegi cada llamada a método cuesta microsegundos. Una fuente nueva saca caducadas por la cabeza y, si el almacén sigue en 65536, saca la cabeza (la fuente menos usada). Se usan punteros concretos y no `container/list`, cuyo `Value` de tipo `any` es un riesgo bajo Yaegi. Un reloj de test que retrocede puede dejar una caducada detrás de la cabeza hasta que se consulta; con la tabla en el tope eso puede desalojar una fuente viva mientras la caducada sigue guardada. `time.Now` no retrocede, así que en producción se mantiene el orden caducadas primero (el spec delta lo acota así).
 
 Flush por lotes en `windowcounter`: `flushBatchScript` sustituye a `flushScript` y lleva hasta 256 claves por EVAL (`flushBatchKeys`; el spec fija el techo en 1024), todas declaradas en `KEYS` y con un bucle numérico sobre `#KEYS` (Dragonfly). Cada clave corre bajo `redis.pcall` y ocupa una posición en una respuesta plana: el entero de `INCRBY` o la cadena `err:<mensaje>`, porque `simpleredis.Eval` rechaza tablas anidadas. En Go, `parseFlushSlot` y `applyFlushOutcomeLocked` conservan la semántica por clave: aplicada, `redisKnown` toma el resultado y `localDelta` baja en lo enviado; fallida, conserva su `localDelta` para el siguiente flush; una respuesta sin una posición por clave o un error del EVAL entero hace fallar todas las claves del lote (`redis:issue?`); el primer error se guarda como hasta ahora. El mutex se suelta por lote y las claves de lotes posteriores siguen marcadas en vuelo hasta que vuelve su EVAL.
 
-Resultado (medianas del README y de `bench-before.txt` / `bench-after.txt`): alta con la tabla llena de 1 516 150 a 189 ns/op; flush de 1000 claves de 31 947 335 a 907 582 ns/op y de 1000 a 4 `redis-cmds/op`; `BenchmarkTake/sync-rate-20ms/rotating-10k` de 76 738 a 62 485 ns/op y de 3,01 a 2,0 `redis-cmds/op`.
+Resultado compilado (medianas del README; `bench-before.txt` en `d940bf43` y `bench-after.txt` en `3623aafd`): alta con la tabla llena de 1 516 150 a 160 ns/op; flush de 1000 claves de 31 947 335 a 659 105 ns/op y de 1000 a 4 `redis-cmds/op`; `BenchmarkTake/sync-rate-20ms/rotating-10k` de 76 738 a 39 948 ns/op y de 3,01 a 2,0 `redis-cmds/op`. Bajo Yaegi (par consecutivo `bench-yaegi-before.txt` / `bench-yaegi-after.txt`): alta con la tabla llena de 37 716 769 a 12 673 ns/op; flush de 1000 claves de 105 819 980 a 10 701 576 ns/op; 10k fuentes en rotación de 6 733 a 7 549 ns/op, porque cada `Allow` mueve ahora la fuente en la lista (dentro del ±11 % que el README da para ese par). El "antes" compilado es de una ejecución anterior: filas sin cambio de código se movieron hasta un 30 % entre ambas.
 
 Documentación: nueva sección `## Rate limiters compared` en el README (tabla por limitador, ventajas e inconvenientes, comparación con Traefik Proxy y Hub limitada a lo documentado en `knowledge/research/ext_traefik_*`, tabla de benchmarks con máquina, comando y columna "antes" en `d940bf43`); la introducción, `## Yaegi` y el devdoc de SimpleRedis dicen ahora que el código corre compilado e interpretado. Dos deltas de spec fijan el tope y el orden de desalojo de `NewMemory` (sin prometer qué fuente viva sale) y el flush por lotes con resultado por clave. Una nota de deuda recoge que el spec vivo `std_go_simpleredis_resp-commands` aún dice que el despliegue es solo compilado.
 
@@ -30,17 +30,17 @@ Documentación: nueva sección `## Rate limiters compared` en el README (tabla p
 **End users.** None.
 
 ## Merge readiness
-Ready for review. 1 items remain.
+In progress. 1 items remain.
 
 Priority: P2 — dolor real de operador y usuario final (paradas bajo el mutex y sincronización que se estira), limitado a conjuntos grandes de claves en `NewMemory` y en modo buffered.
-Reviewed head: 63044ddb
+Reviewed head: 0d849079
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44894289060 |
+| Overall readiness | 1/6 | Not ready |
+| CI proof | 1/6 | not seen |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -50,7 +50,7 @@ Owner decision: None.
 | Branch | 2026-11-21-ratelimit-benchmarks pushed | `git` |
 | OpenSpec | ratelimit-benchmarks-key-scaling | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/105 | pr-host |
-| CI | build 44894289060 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44894289060 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44894289060 |
+| CI | not seen | caller omitted CI snapshot |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -68,7 +68,7 @@ None.
 
 
 ## How this fits together
-Ticket 2026-11-21-ratelimit-benchmarks on branch 2026-11-21-ratelimit-benchmarks targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/105; CI build 44894289060 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44894289060.
+Ticket 2026-11-21-ratelimit-benchmarks on branch 2026-11-21-ratelimit-benchmarks targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/105; CI not seen.
 
 ## Explore Decisions
 None.
@@ -80,11 +80,11 @@ None.
 [Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_standards.md) — 4 total, 0 pending, 3 completed, 1 skipped
 [Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_nitpicks.md) — 5 total, 0 pending, 5 completed
 [Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_spec.md) — 1 total, 0 pending, 1 completed
-[Scope](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_scope.md) — 1 total, 0 pending, 0 completed, 1 skipped
+[Scope](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_scope.md) — 1 total, 0 pending, 1 completed
 [Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_security.md) — 0 total, 0 pending, 0 completed
-[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_performance.md) — 5 total, 0 pending, 1 completed, 4 skipped
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_performance.md) — 5 total, 0 pending, 2 completed, 3 skipped
 [Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_dead.md) — 0 total, 0 pending, 0 completed
-[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_coverage.md) — 4 total, 0 pending, 3 completed, 1 skipped
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/devstate/2026/11/2026-11-21-ratelimit-benchmarks/codereview_coverage.md) — 5 total, 0 pending, 4 completed, 1 skipped
 
 
 ## Agent review details
@@ -94,7 +94,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 63044ddba40d0e5cf855b369b9a2a29a6a6328ba | Card must match the branch you measured |
+| Reviewed head | 0d849079d8007a1adcb1dac7e0d3b5427fa01a78 | Card must match the branch you measured |
 
 ### Stored data model
 None.
