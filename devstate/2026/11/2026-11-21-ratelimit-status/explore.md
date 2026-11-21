@@ -163,7 +163,7 @@ Raíces buscadas: todo el worktree, `*.go` con `\.(Allow|Take|Peek)\(` y con imp
 
 - Q: ¿Qué precisión tiene `Reset` en `windowcounter` (reloj en segundos enteros)?
   Rank: additive asked — campo nuevo; Desired 5 fija la semántica.
-  Decision: resolved (semántica, Desired 5) / assumed (precisión) — `Reset = time.Unix(windowStart + W, 0).Sub(now)`, con el `now` del mismo `slidingAt`: en `(0, W]`, con fracción de segundo. No se redondea; el formato es del middleware. Al fin de la ventana el peso de la anterior no es cero, así que `Reset` no implica cupo completo (Tension registrada en requirement.md; no es error).
+  Decision: assumed — la semántica la resolvió el humano (Desired 5); lo asumido es la precisión: `Reset = time.Unix(windowStart + W, 0).Sub(now)`, con el `now` del mismo `slidingAt`: en `(0, W]`, con fracción de segundo. No se redondea; el formato es del middleware. Al fin de la ventana el peso de la anterior no es cero, así que `Reset` no implica cupo completo (Tension registrada en requirement.md; no es error).
   By: explore
 
 - Q: En modo buffered (`sync_rate > 0`), ¿son aceptables valores locales (`redisKnown + localDelta`) y, en caída de Redis, del cupo de esta instancia?
