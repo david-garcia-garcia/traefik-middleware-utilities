@@ -14,17 +14,17 @@ Not yet.
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 50db4252
+Reviewed head: efd1cd69
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44903536059 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -34,8 +34,8 @@ Owner decision: None.
 | Branch | 2026-11-21-ratelimit-status pushed | `git` |
 | OpenSpec | ratelimit-status | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 44903536059 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44903536059 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44903536059 |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
@@ -53,12 +53,12 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-21-ratelimit-status on branch 2026-11-21-ratelimit-status targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106; CI not seen.
+Ticket 2026-11-21-ratelimit-status on branch 2026-11-21-ratelimit-status targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106; CI build 44903536059 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44903536059.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
 | --- | --- | --- | --- |
-| ¿Qué valores tiene `tokenbucket.Status` (Limit, Remaining, Period, Reset)? | additive asked — campos de un tipo nuevo; Desired 3 pide Remaining, Limit, Period y Reset. | assumed — `Limit = burst`; `Remaining = floor(max(tokens_after, 0))`; `Period = burst / rate` (derivado: tiempo en rellenar el bucket entero; documentar que no es un `period` de configuración); `Reset = max(burst − tokens_after, 0) / rate` (tiempo hasta bucket lleno). `tokens_after` es el valor que queda tras este Allow, ya reembolsado si se denegó (lo que persiste el store). Así `Limit/Period = rate` y `Remaining ≤ Limit` siempre. | explore |
+| ¿Qué valores tiene `tokenbucket.Status` (Limit, Remaining, Period, Reset)? | additive asked — campos de un tipo nuevo; Desired 3 pide Remaining, Limit, Period y Reset. | assumed — `Limit = burst`; `Remaining = floor(max(tokens_after, 0))`; `Period = burst / rate` (derivado: tiempo en rellenar el bucket entero; documentar que no es un `period` de configuración); `Reset = max(burst − tokens_after, 0) / rate` (tiempo hasta bucket lleno). `tokens_after` es el valor que queda tras este Allow, ya reembolsado si se denegó (lo que persiste el store). Así `Limit/Period = rate` y `Remaining ≤ Limit` siempre. Implement: `Period` (precalculado por limitador) y `Reset` se calculan como `tokens × 1e9 / rate` ns (multiplicar antes de dividir), no `tokens / limitPerMicro`: medido, `5 / (10/1e6)` da 499999.99999999994 µs → 499.999999ms, y el escenario del spec exige 500ms exactos. Misma magnitud, sin cambio de decisión. | implement |
 | Con `maxDelay > 0`, ¿qué valen `RetryAfter`, `Remaining` y la espera en una admisión diferida y en una denegación con refund? | additive asked — campo nuevo `Delay` en un tipo nuevo; Desired 2 y 3. | assumed — admitido (`waitMicro <= maxDelay`): `Allowed = true`, `Delay = wait`, `RetryAfter = 0`. Denegado: `Allowed = false`, `Delay = 0`, `RetryAfter = wait`. `Remaining` y `Reset` usan los tokens tras el consume (negativos en admisión diferida → `Remaining = 0`; reembolsados en denegación, que pueden ser negativos por deuda — sonda: `-2`). La espera bruta de hoy es `Delay + RetryAfter`; no se pierde información y el llamador mantiene el comportamiento de hoy (dormir `Delay`). | explore |
 | Al denegar, ¿`RetryAfter` es la espera completa (`wait`) o el primer instante en que se admitiría (`wait − maxDelay`)? | additive asked — valor de un campo nuevo; Desired 2. | assumed — `RetryAfter = wait`. Es el `delay` sobre el que Traefik ya emite `Retry-After` en su propio limitador (`knowledge/research/ext_traefik_ratelimiter_token-bucket/.sources/rate-limiter-go.md`) y, reintentando entonces, el token ya está disponible sin espera. `wait − maxDelay` sería el mínimo; se documenta como diferencia y no se expone. | explore |
 | ¿Basta el tercer campo de la respuesta Lua (`tostring(tokens)`) en Redis y Dragonfly, o hay que tocar el script? | additive incidental — se lee un campo que la respuesta ya trae; ningún criterio nombra el parseo de `values[2]` (es medio para Desired 3). | assumed — basta; no se toca `allowScript`. Medido en Redis 7 y Dragonfly v1.40.2 (tabla en Concepts): siempre decimal finito parseable con `strconv.ParseFloat`. | explore |
@@ -86,7 +86,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 2 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 50db425266c776012e63dcfc92ac189165d77c86 | Card must match the branch you measured |
+| Reviewed head | efd1cd6938fe2021e4781d57db0312b60df484aa | Card must match the branch you measured |
 
 ### Stored data model
 None.
