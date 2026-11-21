@@ -34,32 +34,32 @@ func reproPeekAllowsWhenNextTakeDenies(t *testing.T, syncRate time.Duration) {
 	const limit int64 = 3
 	window := time.Minute
 	for i := int64(0); i < limit; i++ {
-		allowed, estimated, takeErr := limiter.Take(context.Background(), "k", limit, window)
+		status, takeErr := limiter.Take(context.Background(), "k", limit, window)
 		if takeErr != nil {
 			t.Fatal(takeErr)
 		}
-		if !allowed {
-			t.Fatalf("fill take %d denied, estimated %v", i+1, estimated)
+		if !status.Allowed {
+			t.Fatalf("fill take %d denied, estimated %v", i+1, status.Estimated)
 		}
 	}
-	peekAllowed, peekEstimated, err := limiter.Peek(context.Background(), "k", limit, window)
+	peekStatus, err := limiter.Peek(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
-	takeAllowed, takeEstimated, err := limiter.Take(context.Background(), "k", limit, window)
+	takeStatus, err := limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !peekAllowed {
-		t.Fatalf("Peek after %d takes denied, estimated %v", limit, peekEstimated)
+	if !peekStatus.Allowed {
+		t.Fatalf("Peek after %d takes denied, estimated %v", limit, peekStatus.Estimated)
 	}
-	if peekEstimated != float64(limit) {
-		t.Fatalf("Peek estimated %v, want %d", peekEstimated, limit)
+	if peekStatus.Estimated != float64(limit) {
+		t.Fatalf("Peek estimated %v, want %d", peekStatus.Estimated, limit)
 	}
-	if takeAllowed {
-		t.Fatalf("Take after occupancy %d allowed, estimated %v", limit, takeEstimated)
+	if takeStatus.Allowed {
+		t.Fatalf("Take after occupancy %d allowed, estimated %v", limit, takeStatus.Estimated)
 	}
-	if takeEstimated != float64(limit)+1 {
-		t.Fatalf("Take estimated %v, want %d", takeEstimated, limit+1)
+	if takeStatus.Estimated != float64(limit)+1 {
+		t.Fatalf("Take estimated %v, want %d", takeStatus.Estimated, limit+1)
 	}
 }

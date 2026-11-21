@@ -29,6 +29,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounte
 ## How to use
 
 - `New(redis, syncRate)` once. `sync_rate == 0` for exact counts; `> 0` to buffer.
+- Take, Peek, and Allow return a `Status`: `Allowed` and `Estimated` (the sliding estimate), plus `Limit`, `Remaining` (Takes that still fit now), `Period` (the window), `Reset`, and `RetryAfter` for rate-limit headers. Formatting is the middleware's job. On a non-nil error the `Status` is the zero value.
 - Call `Peek(ctx, key, limit, window)` to observe occupancy without counting a hit. Do not treat Peek allowed as a reservation for a later Take. Call `Take` when the hit should occupy the window (for example after a backend failure). Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
 - Match Redis miss with `simpleredis.IsMiss` (works through wrapping). Exact mode (`sync_rate == 0`) returns the Redis error on that Take/Peek. Buffered mode during a Redis outage returns a nil error and keeps this instance's `limit` (per-node cap). Combined admits across instances can exceed the global `limit`. Other Redis errors still propagate by `Error()` text until those callers convert.
 - Buffered Peek (`sync_rate > 0`) is a memory read after the first sight of a window key. It does not GET Redis on every call while `local_delta` stays 0. Buffered Take GETs the previous-window key when `local_delta` is 0 the first time it uses that key as previous, then at most once per `sync_rate` (another instance may flush into it after this instance did). Not once per Take. When previous still has `local_delta` greater than 0, Take keeps memory and MUST NOT GET that key. Exact Peek (`sync_rate == 0`) GETs current and previous every call.
@@ -43,27 +44,31 @@ if err != nil {
 	return err
 }
 ctx := req.Context()
-allowed, estimated, err := counter.Peek(ctx, "ip:"+ip, 100, time.Minute)
+status, err := counter.Peek(ctx, "ip:"+ip, 100, time.Minute)
 if err != nil {
 	return err
 }
-if !allowed {
-	return errLimited
+if !status.Allowed {
+	return errLimited // 429 with Retry-After from status.RetryAfter
 }
 // call backend; on failure:
-_, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
+_, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 ```
 
 ## Key files
 
-- `windowcounter/` — sliding-window hit counter
+- `windowcounter/` — sliding-window hit counter; `status.go` builds the `Status` and the retry-after search
 - `windowcounter/bench_test.go`, `bench_yaegi_test.go`, `bench_e2e_test.go` — compiled, interpreted, and live benchmarks
 - `openspec/specs/std_go_windowcounter_sliding-take/spec.md`, `openspec/specs/std_go_windowcounter_sync-flush/spec.md`
 
 ## Gotchas
 
 - Window length is whole seconds (Redis TTL is integer seconds). Take and Peek reject a window that is shorter than one second or not an integer number of seconds (for example 1500ms); they do not truncate into second buckets.
-- Denied Takes still increment. Peek does not.
+- Denied Takes still increment. Peek does not. A client that keeps hammering after a deny pushes its own `RetryAfter` further; it is not compensated.
+- `Reset` is the time to the end of the current epoch-aligned window, with the fraction of a second of the clock reading. The previous window still weighs at that instant, so the full `limit` is not back at `Reset`.
+- `RetryAfter` is 0 when `Allowed` (Peek too). When denied it is the time to the first whole second at which one more Take, with no other traffic, is admitted, checked with the same weight function as Take; at most two windows. With `limit < 1` no Take is ever admitted and `RetryAfter` equals `Reset`.
+- `Remaining` is `floor(max(limit - Estimated, 0))`. `Estimated` is not `Remaining`.
+- Buffered `Status` fields come from this instance's view (`redis_known + local_delta`), the same counts that decide `Allowed`, including the per-node cap during an outage. No GET or EVAL is added to fill them.
 - After occupancy equals limit, Peek allows and the next Take denies and still increments.
 - `Sleep` flushes pending deltas then stops the flush timer. Concurrent `Wake` during Sleep does not start a timer and Sleep still returns. After Sleep returns, `Wake` starts the timer again when `sync_rate` is greater than zero. After `Close`, do not start a new flush timer. The SimpleRedis client is still the caller's.
 - Buffered flush uses `time.AfterFunc` because this package is interpreted under Yaegi. Do not put `go` plus `select` on a ticker and a stop channel in a limiter method; Yaegi v0.16.1 can miss the close and `Sleep`/`Close` hang.

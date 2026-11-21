@@ -19,28 +19,28 @@ func TestAllow_MaxDelayZeroWaitDurationTruncFailOpen(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 
-	first, _, firstErr := limiter.Allow(context.Background(), "k")
+	firstStatus, firstErr := limiter.Allow(context.Background(), "k")
 	if firstErr != nil {
 		t.Fatal(firstErr)
 	}
-	if !first {
+	if !firstStatus.Allowed {
 		t.Fatal("first Allow must spend the burst token")
 	}
 
-	second, _, secondErr := limiter.Allow(context.Background(), "k")
+	secondStatus, secondErr := limiter.Allow(context.Background(), "k")
 	if secondErr != nil {
 		t.Fatal(secondErr)
 	}
-	if second {
+	if secondStatus.Allowed {
 		t.Fatalf("second Allow admitted with maxDelay=0: waitDuration truncated below 1ns while consumeOne refunds (rate=%g waitMicro=%g)",
 			rate, 1e6/rate)
 	}
 
-	third, _, thirdErr := limiter.Allow(context.Background(), "k")
+	thirdStatus, thirdErr := limiter.Allow(context.Background(), "k")
 	if thirdErr != nil {
 		t.Fatal(thirdErr)
 	}
-	if third {
+	if thirdStatus.Allowed {
 		t.Fatal("third Allow admitted; refunded consume left the bucket reusable")
 	}
 }

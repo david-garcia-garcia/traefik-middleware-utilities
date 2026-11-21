@@ -99,20 +99,20 @@ func runLiveBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 3; i++ {
-			allowed, _, allowErr := limiter.Allow(context.Background(), key)
+			status, allowErr := limiter.Allow(context.Background(), key)
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
-			if !allowed {
+			if !status.Allowed {
 				t.Fatalf("burst %d denied", i+1)
 			}
 		}
-		allowed, wait, err := limiter.Allow(context.Background(), key)
+		status, err := limiter.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !allowed || wait <= 0 {
-			t.Fatalf("want delayed admit, allowed %v wait %v", allowed, wait)
+		if !status.Allowed || (status.Delay+status.RetryAfter) <= 0 {
+			t.Fatalf("want delayed admit, allowed %v wait %v", status.Allowed, status.Delay+status.RetryAfter)
 		}
 	})
 	t.Run("twoInstancesShare", func(t *testing.T) {
@@ -130,19 +130,19 @@ func runLiveBackend(t *testing.T, addr string) {
 		b.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 3; i++ {
-			allowed, _, allowErr := a.Allow(context.Background(), key)
+			status, allowErr := a.Allow(context.Background(), key)
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
-			if !allowed {
+			if !status.Allowed {
 				t.Fatalf("a burst %d denied", i+1)
 			}
 		}
-		allowed, _, err := b.Allow(context.Background(), key)
+		status, err := b.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if allowed {
+		if status.Allowed {
 			t.Fatal("second instance granted another burst")
 		}
 	})
@@ -159,20 +159,15 @@ func runLiveBackend(t *testing.T, addr string) {
 		red.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 4; i++ {
-			mAllowed, mWait, mErr := mem.Allow(context.Background(), key)
+			mStatus, mErr := mem.Allow(context.Background(), key)
 			if mErr != nil {
 				t.Fatal(mErr)
 			}
-			rAllowed, rWait, rErr := red.Allow(context.Background(), key)
+			rStatus, rErr := red.Allow(context.Background(), key)
 			if rErr != nil {
 				t.Fatal(rErr)
 			}
-			if mAllowed != rAllowed {
-				t.Fatalf("step %d allowed mem %v redis %v", i, mAllowed, rAllowed)
-			}
-			if waitClass(mWait) != waitClass(rWait) {
-				t.Fatalf("step %d wait mem %v redis %v", i, mWait, rWait)
-			}
+			assertStatusAgrees(t, i, mStatus, rStatus)
 		}
 	})
 	t.Run("refundPastMaxDelay", func(t *testing.T) {
@@ -183,30 +178,30 @@ func runLiveBackend(t *testing.T, addr string) {
 		limiter.SetNowForTest(func() time.Time { return now })
 		key := t.Name()
 		for i := 0; i < 3; i++ {
-			allowed, _, allowErr := limiter.Allow(context.Background(), key)
+			status, allowErr := limiter.Allow(context.Background(), key)
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
-			if !allowed {
+			if !status.Allowed {
 				t.Fatalf("burst %d denied", i+1)
 			}
 		}
-		allowed, wait, err := limiter.Allow(context.Background(), key)
+		status, err := limiter.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if allowed || wait <= time.Microsecond {
-			t.Fatalf("want deny wait>maxDelay, got allowed %v wait %v", allowed, wait)
+		if status.Allowed || (status.Delay+status.RetryAfter) <= time.Microsecond {
+			t.Fatalf("want deny wait>maxDelay, got allowed %v wait %v", status.Allowed, status.Delay+status.RetryAfter)
 		}
-		allowedAfterRefund, waitAfterRefund, err := limiter.Allow(context.Background(), key)
+		statusAfterRefund, err := limiter.Allow(context.Background(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if allowedAfterRefund {
+		if statusAfterRefund.Allowed {
 			t.Fatal("refund must not admit a stacked consume")
 		}
-		if waitAfterRefund != wait {
-			t.Fatalf("wait after refund %v want %v (not stacked)", waitAfterRefund, wait)
+		if (statusAfterRefund.Delay + statusAfterRefund.RetryAfter) != (status.Delay + status.RetryAfter) {
+			t.Fatalf("wait after refund %v want %v (not stacked)", statusAfterRefund.Delay+statusAfterRefund.RetryAfter, status.Delay+status.RetryAfter)
 		}
 	})
 }

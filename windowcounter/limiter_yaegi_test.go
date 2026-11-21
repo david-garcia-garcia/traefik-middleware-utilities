@@ -139,20 +139,24 @@ func UntilDeny(host, key string, limit int) string {
 	}
 	n := int64(limit)
 	for i := int64(0); i < n; i++ {
-		allowed, _, takeErr := limiter.Take(context.Background(), key, n, time.Minute)
+		status, takeErr := limiter.Take(context.Background(), key, n, time.Minute)
 		if takeErr != nil {
 			return "take:" + takeErr.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return "early"
 		}
 	}
-	allowed, _, err := limiter.Take(context.Background(), key, n, time.Minute)
+	// The deny reports no room left, a retry second ahead, and the end of the current window.
+	status, err := limiter.Take(context.Background(), key, n, time.Minute)
 	if err != nil {
 		return "deny:" + err.Error()
 	}
-	if allowed {
+	if status.Allowed {
 		return "not-denied"
+	}
+	if status.Remaining != 0 || status.RetryAfter <= 0 || status.Reset <= 0 || status.Reset > time.Minute {
+		return "deny-status:" + strconv.FormatInt(status.Remaining, 10) + "/" + status.RetryAfter.String() + "/" + status.Reset.String()
 	}
 	return "ok"
 }
@@ -178,28 +182,28 @@ func BufferedShare(host, key string) string {
 	const limit int64 = 3
 	window := time.Minute
 	for i := 0; i < 2; i++ {
-		allowed, _, takeErr := a.Take(context.Background(), key, limit, window)
+		status, takeErr := a.Take(context.Background(), key, limit, window)
 		if takeErr != nil {
 			return "a:" + takeErr.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return "a-early"
 		}
-		allowed, _, takeErr = b.Take(context.Background(), key, limit, window)
+		status, takeErr = b.Take(context.Background(), key, limit, window)
 		if takeErr != nil {
 			return "b:" + takeErr.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return "b-early"
 		}
 	}
 	a.Sleep()
 	b.Sleep()
-	allowed, _, err := a.Take(context.Background(), key, limit, window)
+	status, err := a.Take(context.Background(), key, limit, window)
 	if err != nil {
 		return "share:" + err.Error()
 	}
-	if allowed {
+	if status.Allowed {
 		return "last-write-wins"
 	}
 	a.Close()
@@ -223,21 +227,21 @@ func SlidingBoundary(host, key string) string {
 	now := time.Unix(start, 0).Add(9 * time.Second)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := int64(0); i < limit; i++ {
-		allowed, _, takeErr := limiter.Take(context.Background(), key, limit, window)
+		status, takeErr := limiter.Take(context.Background(), key, limit, window)
 		if takeErr != nil {
 			return "fill:" + takeErr.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return "fill-early"
 		}
 	}
 	now = time.Unix(start, 0).Add(window)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, _, err := limiter.Take(context.Background(), key, limit, window)
+	status, err := limiter.Take(context.Background(), key, limit, window)
 	if err != nil {
 		return "boundary:" + err.Error()
 	}
-	if allowed {
+	if status.Allowed {
 		return "doubled"
 	}
 	return "ok"
@@ -256,25 +260,25 @@ func PeekThenTake(host, key string) string {
 	const limit int64 = 5
 	window := time.Minute
 	for i := 0; i < 3; i++ {
-		allowed, estimated, peekErr := limiter.Peek(context.Background(), key, limit, window)
+		status, peekErr := limiter.Peek(context.Background(), key, limit, window)
 		if peekErr != nil {
 			return "peek:" + peekErr.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return "peek-denied"
 		}
-		if estimated != 0 {
+		if status.Estimated != 0 {
 			return "peek-est"
 		}
 	}
-	allowed, estimated, err := limiter.Take(context.Background(), key, limit, window)
+	status, err := limiter.Take(context.Background(), key, limit, window)
 	if err != nil {
 		return "take:" + err.Error()
 	}
-	if !allowed {
+	if !status.Allowed {
 		return "take-denied"
 	}
-	if estimated != 1 {
+	if status.Estimated != 1 {
 		return "take-est"
 	}
 	return "ok"
@@ -296,36 +300,36 @@ func PeekDeniedThenSlides(host, key string) string {
 	now := start
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := int64(0); i < limit+1; i++ {
-		if _, _, takeErr := limiter.Take(context.Background(), key, limit, window); takeErr != nil {
+		if _, takeErr := limiter.Take(context.Background(), key, limit, window); takeErr != nil {
 			return "fill:" + takeErr.Error()
 		}
 	}
-	allowed, _, err := limiter.Peek(context.Background(), key, limit, window)
+	status, err := limiter.Peek(context.Background(), key, limit, window)
 	if err != nil {
 		return "peek-fill:" + err.Error()
 	}
-	if allowed {
+	if status.Allowed {
 		return "peek-fill-allowed"
 	}
 	now = start.Add(window)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, _, err = limiter.Peek(context.Background(), key, limit, window)
+	status, err = limiter.Peek(context.Background(), key, limit, window)
 	if err != nil {
 		return "peek-boundary:" + err.Error()
 	}
-	if allowed {
+	if status.Allowed {
 		return "peek-boundary-allowed"
 	}
 	now = start.Add(window + 4*time.Second)
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, estimated, err := limiter.Peek(context.Background(), key, limit, window)
+	status, err = limiter.Peek(context.Background(), key, limit, window)
 	if err != nil {
 		return "peek-slide:" + err.Error()
 	}
-	if !allowed {
+	if !status.Allowed {
 		return "peek-slide-denied"
 	}
-	if estimated > float64(limit) {
+	if status.Estimated > float64(limit) {
 		return "peek-slide-est"
 	}
 	return "ok"
@@ -346,25 +350,25 @@ func BufferedPeek(host, key string) string {
 	const limit int64 = 5
 	window := time.Minute
 	for i := 0; i < 5; i++ {
-		allowed, estimated, peekErr := limiter.Peek(context.Background(), key, limit, window)
+		status, peekErr := limiter.Peek(context.Background(), key, limit, window)
 		if peekErr != nil {
 			return "peek:" + peekErr.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return "peek-denied"
 		}
-		if estimated != 0 {
+		if status.Estimated != 0 {
 			return "peek-est"
 		}
 	}
-	allowed, estimated, err := limiter.Take(context.Background(), key, limit, window)
+	status, err := limiter.Take(context.Background(), key, limit, window)
 	if err != nil {
 		return "take:" + err.Error()
 	}
-	if !allowed {
+	if !status.Allowed {
 		return "take-denied"
 	}
-	if estimated != 1 {
+	if status.Estimated != 1 {
 		return "take-est"
 	}
 	limiter.Close()
@@ -384,7 +388,7 @@ func ExpireOnFirstHit(host, key string) string {
 	window := 10 * time.Second
 	now := time.Unix(1700000000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Take(context.Background(), key, 5, window); err != nil {
+	if _, err := limiter.Take(context.Background(), key, 5, window); err != nil {
 		return "take:" + err.Error()
 	}
 	windowStart := now.Unix() / 10 * 10

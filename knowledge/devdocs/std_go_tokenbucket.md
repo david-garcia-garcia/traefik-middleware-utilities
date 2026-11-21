@@ -18,6 +18,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket`
 
 - `NewMemory(rate, burst, maxDelay, ttl)` or `NewRedis(client, rate, burst, maxDelay, ttl)` once.
 - Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline. Match Redis errors by `Error()` text.
+- Read the returned `Status`: deny on `!Allowed` and put `RetryAfter` in `Retry-After`; sleep `Delay` when allowed to keep Traefik's delayed admit; take `Limit`, `Remaining`, `Period`, and `Reset` for `X-RateLimit-*`. Formatting (whole seconds, HTTP date) is the middleware's job. On a non-nil error the `Status` is the zero value.
 - Prove with `go test -short ./tokenbucket/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
 - Benchmark with `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/`: `bench_test.go` (compiled, fake Redis with a warm script cache, `redis-cmds/op`), `bench_yaegi_test.go` (interpreted: hot key, 10k rotating sources, new key at a full table; it writes a test-only `zz_bench_hooks.go` into the interpreter's GOPATH copy of the package to prefill sources without `Allow`), `bench_e2e_test.go` (`-bench Live`, needs `TOKENBUCKET_LIVE_*`, skips under `-short`). CI does not run benchmarks. Results and machine: `README.md` `## Rate limiters compared`.
 
@@ -29,26 +30,31 @@ if err != nil {
 	return err
 }
 ctx := req.Context()
-allowed, wait, err := limiter.Allow(ctx, "ip:" + ip)
+status, err := limiter.Allow(ctx, "ip:"+ip)
 if err != nil {
 	return err
 }
-if !allowed {
-	return errLimited
+if !status.Allowed {
+	return errLimited // 429 with Retry-After from status.RetryAfter
 }
-_ = wait
+time.Sleep(status.Delay)
 ```
 
 ## Key files
 
-- `tokenbucket/` — Traefik token bucket
+- `tokenbucket/` — Traefik token bucket; `status.go` builds the `Status` both stores return
 - `tokenbucket/bench_test.go`, `bench_yaegi_test.go`, `bench_e2e_test.go` — compiled, interpreted, and live benchmarks
 - `openspec/specs/std_go_tokenbucket_allow/spec.md`, `openspec/specs/std_go_tokenbucket_lua-eval/spec.md`
 
 ## Gotchas
 
 - `rate <= 0`, NaN, Inf, `burst < 1`, `maxDelay < 0`, or a `ttl` that is not a whole number of seconds of at least 1s fails New. Redis EXPIRE is integer seconds; New must not accept a Duration Redis cannot represent. Passthrough is skipping construction. This package has no unlimited-rate constructor.
-- Lua always returns `"true"`; Go maps allowed from wait microseconds vs maxDelay microseconds (Lua refunds on `>`). The wait duration return is not the admit gate.
+- Lua always returns `"true"`; Go maps `Allowed` from wait microseconds vs maxDelay microseconds (Lua refunds on `>`). The `Delay` and `RetryAfter` durations are not the admit gate.
+- The wait is `Delay` when allowed and `RetryAfter` when denied; the other is 0, and `Delay + RetryAfter` is the single wait `Allow` used to return. `RetryAfter` is the full wait (the delay Traefik puts in `Retry-After`), not `wait - maxDelay`.
+- `Period` is derived: `burst / rate`, the time to refill an empty bucket. The library never sees Traefik's `average`/`period`; `Limit / Period = rate`.
+- `Remaining` and `Reset` come from the tokens kept after this Allow, after the refund when denied. Admitted-with-delay leaves tokens negative (debt): `Remaining` is 0 and `Reset` is longer than `Period`.
+- Duration fields saturate at the maximum `time.Duration` instead of overflowing, and are never negative. Saturation does not change `Allowed`.
+- Redis reads the tokens left from the third Eval field. Redis writes it with 14 significant digits and Dragonfly appends `.0`, so memory and Redis agree on `Remaining`/`Reset` while tokens stay whole and may differ only when that rounding crosses an integer. A tokens field that is not a finite number is `errEvalTokens` (`tokenbucket: eval tokens is not a number`); the wait is checked first, so a reply with both bad is still `errEvalWait`.
 - A new or TTL-expired key starts at `burst`, then consume 1. Missing Redis hash does the same; do not assume `last=0` refill from Unix epoch.
 - A 3-field Eval wait that is not a finite number (`nan`, `+Inf`, `-Inf`, `inf`) is `errEvalWait` (`tokenbucket: eval wait is not a number`), same as a garbage string. Do not treat it as admit or deny.
 - EVAL scripts must list keys in `KEYS` (Dragonfly). Do not use `table.maxn`.

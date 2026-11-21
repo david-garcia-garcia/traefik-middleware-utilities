@@ -24,13 +24,13 @@ func TestAllow_WaitDurationOverflowFailOpen(t *testing.T) {
 		expireAt: now.Add(testTTL),
 	})
 
-	allowed, _, allowErr := limiter.Allow(context.Background(), "k")
+	status, allowErr := limiter.Allow(context.Background(), "k")
 	if allowErr != nil {
 		t.Fatal(allowErr)
 	}
 	waitMicro := 1 / (rate / 1e6)
 	wait := waitDurationForTest(waitMicro)
-	if allowed {
+	if status.Allowed {
 		t.Fatalf("Allow admitted empty bucket with waitDuration=%s waitMicro=%g (overflow fail-open vs hour maxDelay)",
 			wait, waitMicro)
 	}

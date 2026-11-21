@@ -36,6 +36,19 @@ func TestYaegi_AllowRefund(t *testing.T) {
 	}
 }
 
+// TestYaegi_MemoryAgrees runs the interpreted memory/Redis status agreement probe against the compiled fake.
+func TestYaegi_MemoryAgrees(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	goPath := t.TempDir()
+	writeGopathTokenbucket(t, goPath)
+	writeGopathFile(t, goPath, "allowprobe", "roundtrip.go", allowprobeSrc)
+
+	got := evalAllowprobe(t, goPath, fmt.Sprintf(`allowprobe.MemoryAgrees(%q, %q)`, addr, "yaegi-agree"))
+	if got != "ok" {
+		t.Fatalf("yaegi memory/redis agreement: %q, want ok", got)
+	}
+}
+
 // evalAllowprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalAllowprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -118,6 +131,7 @@ const allowprobeSrc = `package allowprobe
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket"
@@ -136,19 +150,23 @@ func BurstAfterIdle(host, key string) string {
 	now := time.Unix(1700000000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 3; i++ {
-		allowed, _, allowErr := limiter.Allow(context.Background(), key)
+		status, allowErr := limiter.Allow(context.Background(), key)
 		if allowErr != nil {
 			return "allow:" + allowErr.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return "early"
 		}
+		if status.Remaining != int64(2-i) {
+			return "remaining:" + strconv.FormatInt(status.Remaining, 10)
+		}
 	}
-	allowed, wait, err := limiter.Allow(context.Background(), key)
+	// The fourth Allow is admitted with a delay: tokens go negative, so nothing remains and nothing is retried.
+	status, err := limiter.Allow(context.Background(), key)
 	if err != nil {
 		return "delay:" + err.Error()
 	}
-	if !allowed || wait <= 0 {
+	if !status.Allowed || status.Delay <= 0 || status.RetryAfter != 0 || status.Remaining != 0 {
 		return "not-delayed"
 	}
 	return "ok"
@@ -175,19 +193,19 @@ func TwoShare(host, key string) string {
 	a.SetNowForTest(func() time.Time { return now })
 	b.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 3; i++ {
-		allowed, _, allowErr := a.Allow(context.Background(), key)
+		status, allowErr := a.Allow(context.Background(), key)
 		if allowErr != nil {
 			return "a:" + allowErr.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return "a-early"
 		}
 	}
-	allowed, _, err := b.Allow(context.Background(), key)
+	status, err := b.Allow(context.Background(), key)
 	if err != nil {
 		return "b:" + err.Error()
 	}
-	if allowed {
+	if status.Allowed {
 		return "double-burst"
 	}
 	return "ok"
@@ -210,21 +228,25 @@ func MemoryAgrees(host, key string) string {
 	mem.SetNowForTest(func() time.Time { return now })
 	red.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 4; i++ {
-		mAllowed, mWait, mErr := mem.Allow(context.Background(), key)
+		mStatus, mErr := mem.Allow(context.Background(), key)
 		if mErr != nil {
 			return "m:" + mErr.Error()
 		}
-		rAllowed, rWait, rErr := red.Allow(context.Background(), key)
+		rStatus, rErr := red.Allow(context.Background(), key)
 		if rErr != nil {
 			return "r:" + rErr.Error()
 		}
-		if mAllowed != rAllowed {
+		if mStatus.Allowed != rStatus.Allowed {
 			return "allowed-mismatch"
 		}
-		if (mWait == 0) != (rWait == 0) {
+		// Tokens stay whole numbers here, so the bucket fields match exactly.
+		if mStatus.Limit != rStatus.Limit || mStatus.Remaining != rStatus.Remaining || mStatus.Period != rStatus.Period || mStatus.Reset != rStatus.Reset {
+			return "bucket-mismatch"
+		}
+		if (mStatus.Delay == 0) != (rStatus.Delay == 0) || (mStatus.RetryAfter == 0) != (rStatus.RetryAfter == 0) {
 			return "wait-mismatch"
 		}
-		if (mWait > time.Millisecond) != (rWait > time.Millisecond) {
+		if (mStatus.Delay+mStatus.RetryAfter > time.Millisecond) != (rStatus.Delay+rStatus.RetryAfter > time.Millisecond) {
 			return "class-mismatch"
 		}
 	}
@@ -243,26 +265,27 @@ func RefundAfterBurst(host, key string) string {
 	now := time.Unix(1700000000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 3; i++ {
-		allowed, _, allowErr := limiter.Allow(context.Background(), key)
+		status, allowErr := limiter.Allow(context.Background(), key)
 		if allowErr != nil {
 			return "allow:" + allowErr.Error()
 		}
-		if !allowed {
+		if !status.Allowed {
 			return "early"
 		}
 	}
-	allowed, wait, err := limiter.Allow(context.Background(), key)
+	// The fourth Allow is denied: the full wait is RetryAfter, and the refunded bucket has nothing left.
+	status, err := limiter.Allow(context.Background(), key)
 	if err != nil {
 		return "deny:" + err.Error()
 	}
-	if allowed || wait <= time.Microsecond {
+	if status.Allowed || status.RetryAfter <= time.Microsecond || status.Delay != 0 || status.Remaining != 0 {
 		return "not-denied"
 	}
-	allowedAfterRefund, waitAfterRefund, err := limiter.Allow(context.Background(), key)
+	statusAfterRefund, err := limiter.Allow(context.Background(), key)
 	if err != nil {
 		return "refund:" + err.Error()
 	}
-	if allowedAfterRefund || waitAfterRefund != wait {
+	if statusAfterRefund.Allowed || statusAfterRefund.RetryAfter != status.RetryAfter {
 		return "stacked"
 	}
 	return "ok"

@@ -34,7 +34,7 @@ func runLiveFlushBatchSeveralKeys(t *testing.T, addr string) {
 	for i := 0; i < keyCount; i++ {
 		key := keyPrefix + strconv.Itoa(i)
 		for hit := 0; hit < 2; hit++ {
-			if _, _, takeErr := limiter.Take(ctx, key, 1000, window); takeErr != nil {
+			if _, takeErr := limiter.Take(ctx, key, 1000, window); takeErr != nil {
 				t.Fatal(takeErr)
 			}
 		}
@@ -83,7 +83,7 @@ func runLiveFlushBatchFailedKeyKeepsDelta(t *testing.T, addr string) {
 	redisKeyOf := map[string]string{}
 	for _, name := range []string{"applied-a", "failing", "applied-b"} {
 		key := keyPrefix + name
-		if _, _, takeErr := limiter.Take(ctx, key, 1000, window); takeErr != nil {
+		if _, takeErr := limiter.Take(ctx, key, 1000, window); takeErr != nil {
 			t.Fatal(takeErr)
 		}
 		sliding, slidingErr := limiter.slidingAt(key, window)

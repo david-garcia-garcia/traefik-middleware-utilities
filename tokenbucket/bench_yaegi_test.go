@@ -137,7 +137,7 @@ func SetupMemoryRotating(count int) string {
 func MemoryRotatingLoop(count int) string {
 	ctx := context.Background()
 	for i := 0; i < count; i++ {
-		if _, _, err := benchMemory.Allow(ctx, benchKeys[i%len(benchKeys)]); err != nil {
+		if _, err := benchMemory.Allow(ctx, benchKeys[i%len(benchKeys)]); err != nil {
 			return "allow:" + err.Error()
 		}
 	}
@@ -162,7 +162,7 @@ func MemoryNewKeyLoop(count int) string {
 	ctx := context.Background()
 	for i := 0; i < count; i++ {
 		benchNewKeys++
-		if _, _, err := benchMemory.Allow(ctx, "new:"+strconv.Itoa(benchNewKeys)); err != nil {
+		if _, err := benchMemory.Allow(ctx, "new:"+strconv.Itoa(benchNewKeys)); err != nil {
 			return "allow:" + err.Error()
 		}
 	}
@@ -177,7 +177,7 @@ func MemoryHotKeyLoop(count int) string {
 	}
 	ctx := context.Background()
 	for i := 0; i < count; i++ {
-		if _, _, err := limiter.Allow(ctx, "ip:1.2.3.4"); err != nil {
+		if _, err := limiter.Allow(ctx, "ip:1.2.3.4"); err != nil {
 			return "allow:" + err.Error()
 		}
 	}
@@ -196,7 +196,7 @@ func RedisHotKeyLoop(host string, count int) string {
 	}
 	ctx := context.Background()
 	for i := 0; i < count; i++ {
-		if _, _, err := limiter.Allow(ctx, "ip:1.2.3.4"); err != nil {
+		if _, err := limiter.Allow(ctx, "ip:1.2.3.4"); err != nil {
 			return "allow:" + err.Error()
 		}
 	}

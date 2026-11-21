@@ -24,12 +24,12 @@ func TestRepro_BufferedTakeHidesRedisOutage(t *testing.T) {
 	const limit int64 = 2
 	window := 2 * time.Hour
 
-	allowed, estimated, err := limiter.Take(context.Background(), "k", limit, window)
+	status, err := limiter.Take(context.Background(), "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !allowed {
-		t.Fatalf("healthy take denied, estimated %v", estimated)
+	if !status.Allowed {
+		t.Fatalf("healthy take denied, estimated %v", status.Estimated)
 	}
 
 	// Dest fail-closed only returns a Redis error after one missed sync_rate; freeze past that so this lock cannot pass on dest.
@@ -88,31 +88,31 @@ func TestBuffered_PeekOnlyRecoversAfterTransientOutage(t *testing.T) {
 	const limit int64 = 5
 
 	for i := 0; i < 10; i++ {
-		if _, _, takeErr := writer.Take(ctx, "hot", limit, window); takeErr != nil {
+		if _, takeErr := writer.Take(ctx, "hot", limit, window); takeErr != nil {
 			t.Fatal(takeErr)
 		}
 	}
 	rememberOutageForTest(peeker)
 
 	getsBefore := fake.getCallCount()
-	allowed, estimated, err := peeker.Peek(ctx, "hot", limit, window)
+	status, err := peeker.Peek(ctx, "hot", limit, window)
 	if err != nil {
 		t.Fatalf("Peek during stored outage err %v, want nil", err)
 	}
-	if !allowed || estimated != 0 {
-		t.Fatalf("Peek during stored outage allowed=%v estimated=%v, want local view allowed=true estimated=0", allowed, estimated)
+	if !status.Allowed || status.Estimated != 0 {
+		t.Fatalf("Peek during stored outage allowed=%v estimated=%v, want local view allowed=true estimated=0", status.Allowed, status.Estimated)
 	}
 	if got := fake.getCallCount() - getsBefore; got != 0 {
 		t.Fatalf("Peek GETs within sync_rate of the outage = %d, want 0", got)
 	}
 
 	now = now.Add(syncRate)
-	allowed, estimated, err = peeker.Peek(ctx, "hot", limit, window)
+	status, err = peeker.Peek(ctx, "hot", limit, window)
 	if err != nil {
 		t.Fatalf("Peek after sync_rate err %v, want nil", err)
 	}
-	if allowed || estimated != 10 {
-		t.Fatalf("Peek after sync_rate allowed=%v estimated=%v, want denied at the shared count 10", allowed, estimated)
+	if status.Allowed || status.Estimated != 10 {
+		t.Fatalf("Peek after sync_rate allowed=%v estimated=%v, want denied at the shared count 10", status.Allowed, status.Estimated)
 	}
 	if outageStoredForTest(peeker) {
 		t.Fatal("outage still stored after a successful GET")
@@ -146,18 +146,18 @@ func TestBuffered_TakeOutageSeedGetsSharedCountFromFlush(t *testing.T) {
 	const limit int64 = 100
 
 	for i := 0; i < 3; i++ {
-		if _, _, takeErr := writer.Take(ctx, "k", limit, window); takeErr != nil {
+		if _, takeErr := writer.Take(ctx, "k", limit, window); takeErr != nil {
 			t.Fatal(takeErr)
 		}
 	}
 	rememberOutageForTest(taker)
 
-	_, estimated, err := taker.Take(ctx, "k", limit, window)
+	status, err := taker.Take(ctx, "k", limit, window)
 	if err != nil {
 		t.Fatalf("Take during stored outage err %v, want nil", err)
 	}
-	if estimated != 1 {
-		t.Fatalf("Take during stored outage estimated %v, want 1 (this instance only)", estimated)
+	if status.Estimated != 1 {
+		t.Fatalf("Take during stored outage estimated %v, want 1 (this instance only)", status.Estimated)
 	}
 
 	if flushErr := taker.flushPending(ctx); flushErr != nil {
@@ -166,11 +166,11 @@ func TestBuffered_TakeOutageSeedGetsSharedCountFromFlush(t *testing.T) {
 	if outageStoredForTest(taker) {
 		t.Fatal("outage still stored after a successful flush")
 	}
-	_, estimated, err = taker.Take(ctx, "k", limit, window)
+	status, err = taker.Take(ctx, "k", limit, window)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if estimated != 5 {
-		t.Fatalf("Take after recovery estimated %v, want 5 (3 shared + 1 flushed + 1 new)", estimated)
+	if status.Estimated != 5 {
+		t.Fatalf("Take after recovery estimated %v, want 5 (3 shared + 1 flushed + 1 new)", status.Estimated)
 	}
 }

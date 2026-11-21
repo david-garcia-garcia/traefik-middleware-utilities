@@ -64,7 +64,7 @@ Set `Pass` and `Database` on `Config` when AUTH or SELECT is needed. Match error
 
 Package `windowcounter/`. A sliding-window hit counter: how many hits landed on a key in the last window. Kong-style, not Traefik RateLimit.
 
-`Take` records one hit and returns whether it is still under `limit`, plus the sliding estimate. `Peek` is the same observation without recording a hit. The estimate mixes this window with the previous one so the count slides instead of resetting at the boundary.
+`Take` records one hit and returns a `windowcounter.Status`: `Allowed` (still under `limit`) and `Estimated` (the sliding estimate), plus what a middleware needs for rate-limit headers: `Limit`, `Remaining` (Takes that still fit now), `Period` (the window), `Reset` (until the end of the current fixed, epoch-aligned window) and, when denied, `RetryAfter` (until the first whole second at which one more Take would be admitted). `Peek` is the same observation without recording a hit. The estimate mixes this window with the previous one so the count slides instead of resetting at the boundary; that is also why the full `limit` is not back at `Reset`.
 
 Build it on a SimpleRedis you already constructed. Prefix keys in the caller. Do not mix this clock with `tokenbucket/`.
 
@@ -73,15 +73,15 @@ counter, err := windowcounter.New(client, 0)
 if err != nil {
 	return err
 }
-allowed, estimated, err := counter.Peek(req.Context(), "ip:"+ip, 100, time.Minute)
+status, err := counter.Peek(req.Context(), "ip:"+ip, 100, time.Minute)
 if err != nil {
 	return err
 }
-if !allowed {
-	return errLimited
+if !status.Allowed {
+	return errLimited // the middleware writes 429 and Retry-After from status.RetryAfter
 }
 // call backend; on failure:
-_, _, err = counter.Take(req.Context(), "ip:"+ip, 100, time.Minute)
+_, err = counter.Take(req.Context(), "ip:"+ip, 100, time.Minute)
 ```
 
 `sync_rate` `0` talks to Redis on every Take or Peek and returns that call's Redis error. A positive duration batches locally and flushes on that interval; while Redis is down, buffered Take/Peek keep this instance's `limit` with a nil error (per-node cap), not a retained flush error, and retry Redis one `sync_rate` after the last failure. Pass `Sleep` / `Wake` / `Close` into reclaim when the counter is the stored value. Do not close the Redis client from the counter.
@@ -90,21 +90,21 @@ _, _, err = counter.Take(req.Context(), "ip:"+ip, 100, time.Minute)
 
 Package `tokenbucket/`. Traefik RateLimit's clock: tokens refill at `rate` per second, cap at `burst`, one token per `Allow`. It is not a hit counter.
 
-`NewMemory` is in-process. `NewRedis` shares the bucket across Traefik instances on a SimpleRedis you already constructed. `Allow` returns whether the request is allowed and how long to wait. The library does not sleep and does not write HTTP 429 — the middleware does.
+`NewMemory` is in-process. `NewRedis` shares the bucket across Traefik instances on a SimpleRedis you already constructed. `Allow` returns a `tokenbucket.Status`: `Allowed`; the wait as `Delay` when allowed (sleep it to keep Traefik's delayed admit) or `RetryAfter` when denied; and the bucket after this consume as `Limit` (`burst`), `Remaining` (whole tokens left), `Period` (`burst / rate`, the time to refill an empty bucket) and `Reset` (until the bucket is full). The library does not sleep and does not write HTTP 429 or headers — the middleware does.
 
 ```go
 limiter, err := tokenbucket.NewRedis(client, 100, 50, 5*time.Millisecond, 2*time.Second)
 if err != nil {
 	return err
 }
-allowed, wait, err := limiter.Allow(req.Context(), "ip:"+ip)
+status, err := limiter.Allow(req.Context(), "ip:"+ip)
 if err != nil {
 	return err
 }
-if !allowed {
-	return errLimited
+if !status.Allowed {
+	return errLimited // the middleware writes 429 and Retry-After from status.RetryAfter
 }
-_ = wait
+time.Sleep(status.Delay) // zero unless maxDelay admitted this request with a wait
 ```
 
 Compute `rate` from Traefik `average/period`. Prefix keys in the caller. Two limiter instances on one Redis key share burst. Do not mix this clock with `windowcounter/`.

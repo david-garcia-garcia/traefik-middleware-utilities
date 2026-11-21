@@ -57,12 +57,17 @@ func reportRedisCmdsPerOp(b *testing.B, fake *testFakeRedis, startCommands int) 
 	b.ReportMetric(float64(fake.commandCount()-startCommands)/float64(b.N), "redis-cmds/op")
 }
 
-// takeForBench is one Take that fails the benchmark on error.
+// benchStatusSink keeps each timed Take's Status alive so the compiler cannot drop building it.
+var benchStatusSink Status
+
+// takeForBench is one Take that fails the benchmark on error and stores its Status in benchStatusSink.
 func takeForBench(b *testing.B, limiter *Limiter, key string) {
 	b.Helper()
-	if _, _, err := limiter.Take(context.Background(), key, benchLimit, benchWindow); err != nil {
+	status, err := limiter.Take(context.Background(), key, benchLimit, benchWindow)
+	if err != nil {
 		b.Fatal(err)
 	}
+	benchStatusSink = status
 }
 
 // BenchmarkTake measures Take in exact mode and at sync_rate 20ms against the fake with a warm script cache:
@@ -105,7 +110,7 @@ func BenchmarkTake(b *testing.B) {
 			startCommands := fake.commandCount()
 			b.RunParallel(func(pb *testing.PB) {
 				for pb.Next() {
-					if _, _, err := limiter.Take(context.Background(), benchHotKey, benchLimit, benchWindow); err != nil {
+					if _, err := limiter.Take(context.Background(), benchHotKey, benchLimit, benchWindow); err != nil {
 						b.Error(err)
 						return
 					}

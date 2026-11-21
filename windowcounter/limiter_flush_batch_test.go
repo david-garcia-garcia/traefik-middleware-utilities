@@ -30,7 +30,7 @@ func newFlushTestLimiter(t *testing.T, addr string) *Limiter {
 // takeFlushTestHit Takes one hit on key and fails on a non-nil error.
 func takeFlushTestHit(t *testing.T, limiter *Limiter, key string) {
 	t.Helper()
-	if _, _, err := limiter.Take(context.Background(), key, 1000, flushTestWindow); err != nil {
+	if _, err := limiter.Take(context.Background(), key, 1000, flushTestWindow); err != nil {
 		t.Fatalf("Take(%q): %v", key, err)
 	}
 }

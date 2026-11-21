@@ -38,7 +38,7 @@ func TestRepro_BufferedTakeHoldsLockDuringRedisGet(t *testing.T) {
 	limiter.SetNowForTest(func() time.Time { return now })
 
 	go func() {
-		_, _, _ = limiter.Take(context.Background(), "slow", 100, time.Minute)
+		_, _ = limiter.Take(context.Background(), "slow", 100, time.Minute)
 	}()
 	if !fake.waitGetBlocked(5 * time.Second) {
 		t.Fatal("GET on slow never started")
@@ -47,7 +47,7 @@ func TestRepro_BufferedTakeHoldsLockDuringRedisGet(t *testing.T) {
 	started := time.Now()
 	done := make(chan error, 1)
 	go func() {
-		_, _, takeErr := limiter.Take(context.Background(), "fast", 100, time.Minute)
+		_, takeErr := limiter.Take(context.Background(), "fast", 100, time.Minute)
 		done <- takeErr
 	}()
 

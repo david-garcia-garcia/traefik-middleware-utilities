@@ -63,7 +63,7 @@ func newBenchRedis(tb testing.TB) (*Redis, *testFakeRedis) {
 		tb.Fatal(err)
 	}
 	// First Eval is EVALSHA NOSCRIPT then EVAL; later Evals are one EVALSHA, like a warm engine.
-	if _, _, err := limiter.Allow(context.Background(), "warm-up"); err != nil {
+	if _, err := limiter.Allow(context.Background(), "warm-up"); err != nil {
 		tb.Fatal(err)
 	}
 	return limiter, fake
@@ -75,6 +75,9 @@ func reportRedisCmdsPerOp(b *testing.B, fake *testFakeRedis, startCommands int) 
 	b.ReportMetric(float64(fake.commandCount()-startCommands)/float64(b.N), "redis-cmds/op")
 }
 
+// benchStatusSink keeps each timed Allow's Status alive so the compiler cannot drop building it.
+var benchStatusSink Status
+
 // BenchmarkMemoryAllow measures in-process Allow: one hot key, 10k rotating keys, a never-seen key against a full table of live sources, and a hot key from parallel goroutines.
 func BenchmarkMemoryAllow(b *testing.B) {
 	ctx := context.Background()
@@ -83,9 +86,11 @@ func BenchmarkMemoryAllow(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, _, err := limiter.Allow(ctx, benchHotKey); err != nil {
+			status, err := limiter.Allow(ctx, benchHotKey)
+			if err != nil {
 				b.Fatal(err)
 			}
+			benchStatusSink = status
 		}
 	})
 	b.Run("rotating-10k", func(b *testing.B) {
@@ -95,9 +100,11 @@ func BenchmarkMemoryAllow(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, _, err := limiter.Allow(ctx, keys[i%len(keys)]); err != nil {
+			status, err := limiter.Allow(ctx, keys[i%len(keys)])
+			if err != nil {
 				b.Fatal(err)
 			}
+			benchStatusSink = status
 		}
 	})
 	b.Run("new-key-full-table", func(b *testing.B) {
@@ -109,9 +116,11 @@ func BenchmarkMemoryAllow(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, _, err := limiter.Allow(ctx, "new:"+strconv.Itoa(i)); err != nil {
+			status, err := limiter.Allow(ctx, "new:"+strconv.Itoa(i))
+			if err != nil {
 				b.Fatal(err)
 			}
+			benchStatusSink = status
 		}
 	})
 	b.Run("hot-key-parallel", func(b *testing.B) {
@@ -120,7 +129,7 @@ func BenchmarkMemoryAllow(b *testing.B) {
 		b.ResetTimer()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				if _, _, err := limiter.Allow(ctx, benchHotKey); err != nil {
+				if _, err := limiter.Allow(ctx, benchHotKey); err != nil {
 					b.Error(err)
 					return
 				}
@@ -138,9 +147,11 @@ func BenchmarkRedisAllow(b *testing.B) {
 		b.ResetTimer()
 		startCommands := fake.commandCount()
 		for i := 0; i < b.N; i++ {
-			if _, _, err := limiter.Allow(ctx, benchHotKey); err != nil {
+			status, err := limiter.Allow(ctx, benchHotKey)
+			if err != nil {
 				b.Fatal(err)
 			}
+			benchStatusSink = status
 		}
 		b.StopTimer()
 		reportRedisCmdsPerOp(b, fake, startCommands)
@@ -149,7 +160,7 @@ func BenchmarkRedisAllow(b *testing.B) {
 		limiter, fake := newBenchRedis(b)
 		keys := benchKeyNames("ip:", benchRotatingKeys)
 		for _, key := range keys {
-			if _, _, err := limiter.Allow(ctx, key); err != nil {
+			if _, err := limiter.Allow(ctx, key); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -157,9 +168,11 @@ func BenchmarkRedisAllow(b *testing.B) {
 		b.ResetTimer()
 		startCommands := fake.commandCount()
 		for i := 0; i < b.N; i++ {
-			if _, _, err := limiter.Allow(ctx, keys[i%len(keys)]); err != nil {
+			status, err := limiter.Allow(ctx, keys[i%len(keys)])
+			if err != nil {
 				b.Fatal(err)
 			}
+			benchStatusSink = status
 		}
 		b.StopTimer()
 		reportRedisCmdsPerOp(b, fake, startCommands)
@@ -171,7 +184,7 @@ func BenchmarkRedisAllow(b *testing.B) {
 		startCommands := fake.commandCount()
 		b.RunParallel(func(pb *testing.PB) {
 			for pb.Next() {
-				if _, _, err := limiter.Allow(ctx, benchHotKey); err != nil {
+				if _, err := limiter.Allow(ctx, benchHotKey); err != nil {
 					b.Error(err)
 					return
 				}

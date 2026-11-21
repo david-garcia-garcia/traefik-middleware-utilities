@@ -22,13 +22,13 @@ func BenchmarkLiveRedisAllow(b *testing.B) {
 			runPrefix := "tokenbucket-bench:" + strconv.FormatInt(time.Now().UnixNano(), 36) + ":"
 			b.Run("hot-key", func(b *testing.B) {
 				hotKey := runPrefix + benchHotKey
-				if _, _, err := limiter.Allow(ctx, hotKey); err != nil {
+				if _, err := limiter.Allow(ctx, hotKey); err != nil {
 					b.Fatal(err)
 				}
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					if _, _, err := limiter.Allow(ctx, hotKey); err != nil {
+					if _, err := limiter.Allow(ctx, hotKey); err != nil {
 						b.Fatal(err)
 					}
 				}
@@ -36,14 +36,14 @@ func BenchmarkLiveRedisAllow(b *testing.B) {
 			b.Run("rotating-10k", func(b *testing.B) {
 				keys := benchKeyNames(runPrefix+"ip:", benchRotatingKeys)
 				for _, key := range keys {
-					if _, _, err := limiter.Allow(ctx, key); err != nil {
+					if _, err := limiter.Allow(ctx, key); err != nil {
 						b.Fatal(err)
 					}
 				}
 				b.ReportAllocs()
 				b.ResetTimer()
 				for i := 0; i < b.N; i++ {
-					if _, _, err := limiter.Allow(ctx, keys[i%len(keys)]); err != nil {
+					if _, err := limiter.Allow(ctx, keys[i%len(keys)]); err != nil {
 						b.Fatal(err)
 					}
 				}

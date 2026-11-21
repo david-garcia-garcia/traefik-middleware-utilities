@@ -27,29 +27,29 @@ func TestRepro_NewKeyFillsToBurstAtEpoch(t *testing.T) {
 		t.Logf("now UnixMicro=%d (zero-value UnixMicro=%d)", now.UnixMicro(), time.Time{}.UnixMicro())
 
 		for i := 0; i < int(burst); i++ {
-			allowed, wait, allowErr := limiter.Allow(context.Background(), "new-key")
+			status, allowErr := limiter.Allow(context.Background(), "new-key")
 			if allowErr != nil {
 				t.Fatal(allowErr)
 			}
 			tokens := limiter.buckets["new-key"].tokens
-			if !allowed {
+			if !status.Allowed {
 				t.Fatalf("Allow %d of burst %d denied (want allowed true when filled to burst)", i+1, burst)
 			}
 			if tokens < 0 {
 				t.Fatalf("Allow %d of burst %d delayed: tokens=%v wait=%v last=%d (want filled to burst so tokens>=0 after consume)",
-					i+1, burst, tokens, wait, limiter.buckets["new-key"].last)
+					i+1, burst, tokens, status.Delay+status.RetryAfter, limiter.buckets["new-key"].last)
 			}
 		}
 
-		sixth, wait, sixthErr := limiter.Allow(context.Background(), "new-key")
+		sixthStatus, sixthErr := limiter.Allow(context.Background(), "new-key")
 		if sixthErr != nil {
 			t.Fatal(sixthErr)
 		}
-		if !sixth {
+		if !sixthStatus.Allowed {
 			t.Fatal("6th Allow: want allowed true when maxDelay is 1h")
 		}
-		if wait <= 0 {
-			t.Fatalf("6th Allow wait %v want > 0", wait)
+		if (sixthStatus.Delay + sixthStatus.RetryAfter) <= 0 {
+			t.Fatalf("6th Allow wait %v want > 0", sixthStatus.Delay+sixthStatus.RetryAfter)
 		}
 	})
 
@@ -62,11 +62,11 @@ func TestRepro_NewKeyFillsToBurstAtEpoch(t *testing.T) {
 		now := time.Unix(1_700_000_000, 0)
 		limiter.SetNowForTest(func() time.Time { return now })
 
-		allowed, _, allowErr := limiter.Allow(context.Background(), "new-key")
+		status, allowErr := limiter.Allow(context.Background(), "new-key")
 		if allowErr != nil {
 			t.Fatal(allowErr)
 		}
-		if !allowed {
+		if !status.Allowed {
 			t.Fatal("first Allow denied")
 		}
 		tokens := limiter.buckets["new-key"].tokens
@@ -107,11 +107,11 @@ func assertRedisFakeFilledToBurst(t *testing.T, now time.Time, burst int64) {
 		t.Fatal(err)
 	}
 	limiter.SetNowForTest(func() time.Time { return now })
-	allowed, _, allowErr := limiter.Allow(context.Background(), "new-key")
+	status, allowErr := limiter.Allow(context.Background(), "new-key")
 	if allowErr != nil {
 		t.Fatal(allowErr)
 	}
-	if !allowed {
+	if !status.Allowed {
 		t.Fatal("first Allow denied")
 	}
 	fake.mu.Lock()

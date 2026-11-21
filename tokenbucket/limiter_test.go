@@ -36,18 +36,18 @@ func TestMemory_IdlePastTTLStartsFull(t *testing.T) {
 	}
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Allow(context.Background(), "k"); err != nil {
+	if _, err := limiter.Allow(context.Background(), "k"); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(testTTL)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 2; i++ {
-		allowed, wait, allowErr := limiter.Allow(context.Background(), "k")
+		status, allowErr := limiter.Allow(context.Background(), "k")
 		if allowErr != nil {
 			t.Fatal(allowErr)
 		}
-		if !allowed || wait != 0 {
-			t.Fatalf("fresh burst %d: allowed %v wait %v", i+1, allowed, wait)
+		if !status.Allowed || (status.Delay+status.RetryAfter) != 0 {
+			t.Fatalf("fresh burst %d: allowed %v wait %v", i+1, status.Allowed, status.Delay+status.RetryAfter)
 		}
 	}
 }
@@ -60,12 +60,12 @@ func TestRedis_EvalBadReply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = limiter.Allow(context.Background(), "k")
+	_, err = limiter.Allow(context.Background(), "k")
 	if !errors.Is(err, errEvalLen) {
 		t.Fatalf("want errEvalLen, got %v", err)
 	}
 	fake.setEvalReply("*3\r\n$4\r\ntrue\r\n$3\r\nxyz\r\n$1\r\n0\r\n")
-	_, _, err = limiter.Allow(context.Background(), "k")
+	_, err = limiter.Allow(context.Background(), "k")
 	if !errors.Is(err, errEvalWait) {
 		t.Fatalf("want errEvalWait, got %v", err)
 	}
@@ -94,23 +94,23 @@ func TestMemory_BurstAfterIdle(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 3; i++ {
-		allowed, wait, allowErr := limiter.Allow(context.Background(), "k")
+		status, allowErr := limiter.Allow(context.Background(), "k")
 		if allowErr != nil {
 			t.Fatal(allowErr)
 		}
-		if !allowed || wait != 0 {
-			t.Fatalf("burst %d: allowed %v wait %v", i+1, allowed, wait)
+		if !status.Allowed || (status.Delay+status.RetryAfter) != 0 {
+			t.Fatalf("burst %d: allowed %v wait %v", i+1, status.Allowed, status.Delay+status.RetryAfter)
 		}
 	}
-	allowed, wait, err := limiter.Allow(context.Background(), "k")
+	status, err := limiter.Allow(context.Background(), "k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !allowed {
+	if !status.Allowed {
 		t.Fatal("want delayed admit when maxDelay is large")
 	}
-	if wait <= 0 {
-		t.Fatalf("wait %v want > 0", wait)
+	if (status.Delay + status.RetryAfter) <= 0 {
+		t.Fatalf("wait %v want > 0", status.Delay+status.RetryAfter)
 	}
 }
 
@@ -122,30 +122,30 @@ func TestMemory_RefundWhenWaitExceedsMaxDelay(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 3; i++ {
-		allowed, _, allowErr := limiter.Allow(context.Background(), "k")
+		status, allowErr := limiter.Allow(context.Background(), "k")
 		if allowErr != nil {
 			t.Fatal(allowErr)
 		}
-		if !allowed {
+		if !status.Allowed {
 			t.Fatalf("burst %d denied", i+1)
 		}
 	}
-	allowed, wait, err := limiter.Allow(context.Background(), "k")
+	status, err := limiter.Allow(context.Background(), "k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed || wait <= time.Microsecond {
-		t.Fatalf("want deny wait>maxDelay, got allowed %v wait %v", allowed, wait)
+	if status.Allowed || (status.Delay+status.RetryAfter) <= time.Microsecond {
+		t.Fatalf("want deny wait>maxDelay, got allowed %v wait %v", status.Allowed, status.Delay+status.RetryAfter)
 	}
-	allowedAfterRefund, waitAfterRefund, err := limiter.Allow(context.Background(), "k")
+	statusAfterRefund, err := limiter.Allow(context.Background(), "k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowedAfterRefund {
+	if statusAfterRefund.Allowed {
 		t.Fatal("refund must not admit a stacked consume")
 	}
-	if waitAfterRefund != wait {
-		t.Fatalf("wait after refund %v want %v (not stacked)", waitAfterRefund, wait)
+	if (statusAfterRefund.Delay + statusAfterRefund.RetryAfter) != (status.Delay + status.RetryAfter) {
+		t.Fatalf("wait after refund %v want %v (not stacked)", statusAfterRefund.Delay+statusAfterRefund.RetryAfter, status.Delay+status.RetryAfter)
 	}
 }
 
@@ -158,7 +158,7 @@ func TestRedis_EvalEncoding(t *testing.T) {
 	}
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	if _, _, err := limiter.Allow(context.Background(), "src"); err != nil {
+	if _, err := limiter.Allow(context.Background(), "src"); err != nil {
 		t.Fatal(err)
 	}
 	got := fake.lastEvalCommand()
@@ -183,19 +183,19 @@ func TestRedis_TwoInstancesShareBurst(t *testing.T) {
 	a.SetNowForTest(func() time.Time { return now })
 	b.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 3; i++ {
-		allowed, _, allowErr := a.Allow(context.Background(), "shared")
+		status, allowErr := a.Allow(context.Background(), "shared")
 		if allowErr != nil {
 			t.Fatal(allowErr)
 		}
-		if !allowed {
+		if !status.Allowed {
 			t.Fatalf("a burst %d denied", i+1)
 		}
 	}
-	allowed, _, err := b.Allow(context.Background(), "shared")
+	status, err := b.Allow(context.Background(), "shared")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed {
+	if status.Allowed {
 		t.Fatal("second instance granted another burst")
 	}
 }
@@ -215,20 +215,15 @@ func TestMemoryAndRedis_Agree(t *testing.T) {
 	mem.SetNowForTest(func() time.Time { return now })
 	red.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < 4; i++ {
-		mAllowed, mWait, mErr := mem.Allow(context.Background(), "k")
+		mStatus, mErr := mem.Allow(context.Background(), "k")
 		if mErr != nil {
 			t.Fatal(mErr)
 		}
-		rAllowed, rWait, rErr := red.Allow(context.Background(), "k")
+		rStatus, rErr := red.Allow(context.Background(), "k")
 		if rErr != nil {
 			t.Fatal(rErr)
 		}
-		if mAllowed != rAllowed {
-			t.Fatalf("step %d allowed mem %v redis %v", i, mAllowed, rAllowed)
-		}
-		if waitClass(mWait) != waitClass(rWait) {
-			t.Fatalf("step %d wait mem %v redis %v", i, mWait, rWait)
-		}
+		assertStatusAgrees(t, i, mStatus, rStatus)
 	}
 }
 
@@ -238,9 +233,24 @@ func TestRedis_Unreachable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = limiter.Allow(context.Background(), "k")
+	_, err = limiter.Allow(context.Background(), "k")
 	if err == nil || err.Error() != simpleredis.RedisUnreachable {
 		t.Fatalf("want redis:unreachable, got %v", err)
+	}
+}
+
+// assertStatusAgrees fails when one Allow step's memory and Redis statuses differ: Allowed and the bucket fields exactly (the
+// sequences keep tokens whole), Delay and RetryAfter by waitClass.
+func assertStatusAgrees(t *testing.T, step int, mStatus, rStatus Status) {
+	t.Helper()
+	if mStatus.Allowed != rStatus.Allowed {
+		t.Fatalf("step %d allowed mem %v redis %v", step, mStatus.Allowed, rStatus.Allowed)
+	}
+	if mStatus.Limit != rStatus.Limit || mStatus.Remaining != rStatus.Remaining || mStatus.Period != rStatus.Period || mStatus.Reset != rStatus.Reset {
+		t.Fatalf("step %d bucket mem %+v redis %+v", step, mStatus, rStatus)
+	}
+	if waitClass(mStatus.Delay) != waitClass(rStatus.Delay) || waitClass(mStatus.RetryAfter) != waitClass(rStatus.RetryAfter) {
+		t.Fatalf("step %d wait mem %+v redis %+v", step, mStatus, rStatus)
 	}
 }
 

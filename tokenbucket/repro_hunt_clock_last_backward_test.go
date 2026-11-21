@@ -28,11 +28,11 @@ func TestRepro_StaleNowRewindsLastDoubleRefill(t *testing.T) {
 		mustAllow(t, limiter, false, "stale t1 must deny")
 
 		limiter.SetNowForTest(func() time.Time { return t2 })
-		allowed, _, err := limiter.Allow(context.Background(), "k")
+		status, err := limiter.Allow(context.Background(), "k")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if allowed {
+		if status.Allowed {
 			t.Fatalf("Allow at t2 after stale t1 admitted; last rewound to t1 and refilled %s already granted at t2 (last=%d want last at t2)",
 				t2.Sub(t1), limiter.buckets["k"].last)
 		}
@@ -58,13 +58,13 @@ func TestRepro_StaleNowRewindsLastDoubleRefill(t *testing.T) {
 		firstDone := make(chan struct{})
 		go func() {
 			defer close(firstDone)
-			_, _, _ = limiter.Allow(context.Background(), "k")
+			_, _ = limiter.Allow(context.Background(), "k")
 		}()
 		<-firstInNow
 		secondDone := make(chan struct{})
 		go func() {
 			defer close(secondDone)
-			_, _, _ = limiter.Allow(context.Background(), "k")
+			_, _ = limiter.Allow(context.Background(), "k")
 		}()
 		select {
 		case <-secondDone:
@@ -79,11 +79,11 @@ func TestRepro_StaleNowRewindsLastDoubleRefill(t *testing.T) {
 		<-secondDone
 
 		limiter.SetNowForTest(func() time.Time { return t2 })
-		allowed, _, err := limiter.Allow(context.Background(), "k")
+		status, err := limiter.Allow(context.Background(), "k")
 		if err != nil {
 			t.Fatal(err)
 		}
-		if allowed {
+		if status.Allowed {
 			t.Fatalf("after stale now (t1) overwrote fresh last (t2), Allow at t2 admitted; last=%d", limiter.buckets["k"].last)
 		}
 	})
@@ -109,11 +109,11 @@ func newBurst1Delay0(t *testing.T) *Memory {
 
 func mustAllow(t *testing.T, limiter *Memory, want bool, step string) {
 	t.Helper()
-	got, _, err := limiter.Allow(context.Background(), "k")
+	gotStatus, err := limiter.Allow(context.Background(), "k")
 	if err != nil {
 		t.Fatalf("%s: %v", step, err)
 	}
-	if got != want {
-		t.Fatalf("%s: allowed=%v want %v", step, got, want)
+	if gotStatus.Allowed != want {
+		t.Fatalf("%s: allowed=%v want %v", step, gotStatus.Allowed, want)
 	}
 }
