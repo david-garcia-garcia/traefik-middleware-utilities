@@ -1,0 +1,51 @@
+# Yaegi rows AFTER (first run): commit 2c504a9b
+# machine: Intel Core Ultra 7 265K (20 threads), Windows 11, go1.25.6 windows/amd64, Yaegi v0.16.1; started 2026-11-21T10:15:40Z
+# command: go test -run '^$' -bench Yaegi -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
+goos: windows
+goarch: amd64
+pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket
+cpu: Intel(R) Core(TM) Ultra 7 265K
+BenchmarkYaegiMemoryAllow/hot-key-20         	  141904	      8452 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  159001	      8534 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  123448	      9314 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  122124	     10824 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  126020	      8967 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  101718	     11899 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  102913	     11703 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	   99163	     12117 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	   91471	     12149 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  100881	     12340 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   71703	     16653 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   75532	     15958 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   71215	     15245 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   76100	     15243 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   78198	     15652 ns/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    6068	    181934 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    5823	    183081 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    5898	    196618 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    6529	    181661 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    5829	    187099 ns/op	         1.000 redis-cmds/op
+PASS
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket	35.518s
+goos: windows
+goarch: amd64
+pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter
+cpu: Intel(R) Core(TM) Ultra 7 265K
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5929	    199419 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5283	    236249 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    4249	    275147 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    3799	    282348 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    3806	    291812 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   74864	     18998 ns/op	         0.002565 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   61398	     18245 ns/op	         0.002525 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   64003	     16790 ns/op	         0.002172 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   78549	     14991 ns/op	         0.001986 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   81720	     15770 ns/op	         0.002093 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      92	  12796013 ns/op	         4.000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      92	  12169076 ns/op	         4.000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      86	  12296236 ns/op	         4.000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      99	  12961695 ns/op	         4.000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      88	  15156653 ns/op	         4.000 redis-cmds/op
+PASS
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter	24.530s
+exit=0

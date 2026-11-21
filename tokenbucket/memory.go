@@ -140,12 +140,25 @@ func (m *Memory) unlinkLocked(entry *memEntry) {
 
 // moveToBackLocked moves a linked entry to the tail of the expiry list. The tail itself stays put, so a hot key costs no
 // relink. Caller holds m.mu.
+//
+// It relinks in place instead of calling unlinkLocked then pushBackLocked: this runs on every Allow of a stored source that
+// is not the tail, and under Yaegi each method call costs microseconds (BenchmarkYaegiMemoryAllow/rotating-10k).
 func (m *Memory) moveToBackLocked(entry *memEntry) {
 	if entry == m.tail {
 		return
 	}
-	m.unlinkLocked(entry)
-	m.pushBackLocked(entry)
+	// Unlink. entry is not the tail, so entry.next is set.
+	if entry.prev != nil {
+		entry.prev.next = entry.next
+	} else {
+		m.head = entry.next
+	}
+	entry.next.prev = entry.prev
+	// Append after the current tail.
+	entry.prev = m.tail
+	entry.next = nil
+	m.tail.next = entry
+	m.tail = entry
 }
 
 // pushBackLocked appends an unlinked entry at the tail of the expiry list. Caller holds m.mu.
