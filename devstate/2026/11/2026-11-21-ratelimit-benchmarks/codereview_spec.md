@@ -8,4 +8,4 @@
    ```
    Fix: Acotar el requisito en el spec delta a un reloj del limitador que no retrocede (como acepta D3) y corregir la frase del devdoc para decir que, con reloj de test hacia atrás y la tabla en el tope, puede salir una fuente viva aunque quede una caducada
    Status: done
-   Argument: Requisito acotado en `specs/std_go_tokenbucket_allow/spec.md` (el orden vale mientras el reloj del limitador no retrocede; un reloj de test hacia atrás MAY dejar una caducada al desalojar una viva en el tope) y frase corregida en `knowledge/devdocs/std_go_tokenbucket.md`. Sin cambio de código.
+   Argument: Requisito acotado en `specs/std_go_tokenbucket_allow/spec.md` (el orden vale mientras el reloj del limitador no retrocede; un reloj de test hacia atrás MAY dejar una caducada al desalojar una viva en el tope) y frase corregida en `knowledge/devdocs/std_go_tokenbucket.md`. Sin cambio de código. Commit `197172e8`.

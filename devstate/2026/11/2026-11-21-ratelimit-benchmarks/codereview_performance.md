@@ -14,7 +14,7 @@
    ```
    Fix: Mover `l.mu.Unlock()` / `defer l.mu.Lock()` antes del bucle que construye `keys` y `args`
    Status: done
-   Argument: `flushBatchEvalUnlocked` suelta `l.mu` antes de construir `keys`/`args` (batch es copia local).
+   Argument: `flushBatchEvalUnlocked` suelta `l.mu` antes de construir `keys`/`args` (batch es copia local). Commit `197172e8`.
 2. [judgement] Recorrido completo bajo el mutex en cada tick — `windowcounter/limiter.go:488` — `flushPendingLocked` sigue recorriendo todo `l.windows` dos veces con `l.mu` tomado (snapshot de sucias en :488 y purga de caducadas en :524) cada `sync_rate` (mínimo 20 ms). Crece con todas las ventanas en búfer (TTL de dos ventanas, sin tope de tamaño), no solo con las sucias; Take/Peek buffered se bloquean durante el recorrido. Es anterior a este diff (líneas de contexto sin cambios), pero el README nuevo (`README.md:122`) dice "Flush cost grows with dirty keys", que se queda corto
    Note:
    ```
