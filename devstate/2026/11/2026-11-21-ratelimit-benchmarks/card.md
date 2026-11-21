@@ -14,10 +14,10 @@ Not yet.
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+In progress. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 9755fe34
+Reviewed head: e3625d33
 Owner decision: None.
 
 ## Review scores
@@ -45,7 +45,8 @@ None.
 None.
 
 ## Follow-up issues
-None.
+- [ ] [Stop scanning every bucket when `tokenbucket.Memory` admits a new source](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/knowledge/debt/2026-11-21-tokenbucket-memory-new-source-scan.md) — `tokenbucket.Memory` walks every bucket under its mutex on each new source (≈0.8–1.6 ms at 60k–65k sources).
+
 
 ## How this fits together
 Ticket 2026-11-21-ratelimit-benchmarks on branch 2026-11-21-ratelimit-benchmarks targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/105; CI not seen.
@@ -66,7 +67,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 9755fe34d03959261a400824237511555e070660 | Card must match the branch you measured |
+| Reviewed head | e3625d33e3a9841725c3fb3168a9f83cdee3babb | Card must match the branch you measured |
 
 ### Stored data model
 None.
