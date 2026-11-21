@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-windowcounter-bug-peek-occupancy
+jobName: 2026-09-13-windowcounter-bug-peek-occupancy
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: c481866bd29794284c1255023f92102568dcc6276bbe218c2814e4c82ee48848
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: windowcounter-peek-occupancy
+pr:
+  id: 64
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/64

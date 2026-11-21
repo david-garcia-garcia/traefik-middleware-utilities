@@ -13,7 +13,7 @@ import (
 )
 
 func TestUnreachableHost(t *testing.T) {
-	redis := New(Config{Host: "127.0.0.1:1"})
+	redis := newTestRedis(t, Config{Host: "127.0.0.1:1"})
 
 	if _, err := redis.Get(context.Background(), "a"); err == nil || err.Error() != RedisUnreachable {
 		t.Fatalf("Get = %v, want %s", err, RedisUnreachable)
@@ -25,7 +25,7 @@ func TestUnreachableHost(t *testing.T) {
 
 func TestCloseDrainsIdleAndDoesNotRedial(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("Get: %v", err)
@@ -52,7 +52,7 @@ func TestCloseDrainsIdleAndDoesNotRedial(t *testing.T) {
 func TestCloseDuringInFlightCommandClosesSocketOnRelease(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	fake.holdGetsForTest(t)
-	redis := New(Config{Host: addr, IOTimeout: 5 * time.Second})
+	redis := newTestRedis(t, Config{Host: addr, CommandTimeout: 5 * time.Second})
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -79,7 +79,7 @@ func TestCloseDuringInFlightCommandClosesSocketOnRelease(t *testing.T) {
 
 func TestClosedClientUnreachableIsNotRetried(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
-	redis := New(Config{Host: addr})
+	redis := newTestRedis(t, Config{Host: addr})
 	if _, err := redis.Get(context.Background(), "hit"); err != nil {
 		t.Fatalf("Get: %v", err)
 	}

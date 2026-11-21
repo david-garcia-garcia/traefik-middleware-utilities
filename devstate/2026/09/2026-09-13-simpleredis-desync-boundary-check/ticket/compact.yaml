@@ -1,0 +1,5 @@
+host: local
+ref: none
+title: A desynced pooled socket is never evicted and serves the PREVIOUS command's reply forever
+url: none
+number: none

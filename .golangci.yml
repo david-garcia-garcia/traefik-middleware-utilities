@@ -1,12 +1,63 @@
+run:
+  timeout: 5m
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-dirs:
+    - apm_modules
+    - .agents
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - forcetypeassert
+
 linters:
   enable:
-  - asciicheck
-  - exhaustive
-  - gochecknoinits
-  - goconst
-  - gofmt
-  - gosec
-  - predeclared
-  - unconvert
-  - unparam
-  - wastedassign
+    - asciicheck
+    - decorder
+    - dogsled
+    - dupword
+    - durationcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - forcetypeassert
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - godot
+    - gofmt
+    - gosec
+    - makezero
+    - mirror
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnesserr
+    - perfsprint
+    - prealloc
+    - predeclared
+    - reassign
+    - recvcheck
+    - revive
+    - stylecheck
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - usestdlibvars
+    - wastedassign
+    - whitespace
+
+linters-settings:
+  gocritic:
+    enabled-checks:
+      - unnamedResult
+    settings:
+      unnamedResult:
+        # checkExported: false is the STRONGER setting. Empirically, true means
+        # "check exported functions ONLY" and is therefore weaker. Do not
+        # "tighten" this to true.
+        checkExported: false

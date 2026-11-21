@@ -1,0 +1,3 @@
+Port the IP lookup component from https://github.com/david-garcia-garcia/traefik-geoblock/pull/86 into this repo (traefik-middleware-utilities) so other libraries can import and reuse it. The PR fixed IPv4/IPv6 overlap (CIDR allow/block lists must match by address family; IpLookupHelper stores IPv4 and IPv6 on separate trees). Also improve the component: (A) support for REMOVING a CIDR; (B) when a CIDR is stored or retrieved, a string can be associated with the match (metadata). Storing the same CIDR twice overrides existing metadata with the new string. The component also needs a RESET() that clears stored CIDRs.
+
+The human confirmed start prepare. They did not attach a tracker issue.

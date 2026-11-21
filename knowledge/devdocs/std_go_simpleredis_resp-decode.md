@@ -43,6 +43,7 @@ return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 
 - `simpleredis/resp.go` — `readLine`, `readReply`, `readBulk`, `parseLen`
 - `simpleredis/resp_test.go` — copy-on-escape, `ErrBufferFull` (`redis:issue?`, ≤4096 bytes from the peer), over-cap `$`/`*` headers
+- `simpleredis/resp_fuzz_test.go` — `FuzzReadReply` (no panic, no values on a dirty stream) and `FuzzParseLen` (no `length+2` overflow)
 - `simpleredis/fake_redis_test.go` — `startSequentialRedis` for distinct later-read payloads
 - `simpleredis/bench_test.go` — `BenchmarkDecodeBulk`, `BenchmarkDecodeArray10`, `BenchmarkDecodeInteger`
 - `openspec/specs/std_go_simpleredis_resp-decode/spec.md`
@@ -55,3 +56,4 @@ return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 - `parseLen` overflow is `false` (`redis:issue?`), not a wrap.
 - A `$` or `*` length that fits in `int` but is above the package cap is also `redis:issue?`. Do not `make` first: a later short `ReadFull` is EOF → `redis:unreachable` and retries.
 - A full bulk whose trailer is not CRLF is `redis:issue?`, not a clean payload. Short `ReadFull` stays `redis:unreachable`. Do not pool that socket.
+- A panic in `readReply` leaks a pool turn forever because `exec` releases without `defer`. Prove with `FuzzReadReply` (never panic; never return values when `clean == false`) and `FuzzParseLen` (never overflow `length+2`).

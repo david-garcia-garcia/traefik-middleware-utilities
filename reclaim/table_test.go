@@ -25,8 +25,17 @@ const waitBudget = 10 * time.Second
 // unstuckValue is what a later Open creates after a panicking hook unstuck the key.
 const unstuckValue = "next"
 
+// firstIncarnation and nextIncarnation are the stored values in Close-vs-create overlap tests.
+const firstIncarnation = "first"
+const nextIncarnation = "second"
+
 // graceNoRace is long enough that a test asserting the reclaim branch cannot lose the grace race.
 const graceNoRace = 5 * time.Second
+
+// NewTable builds a table for tests. Production callers use New(Config).
+func NewTable(grace time.Duration) *Table {
+	return New(Config{Grace: grace})
+}
 
 // box is a disposable stand-in stored on the table in tests.
 type box struct {
@@ -194,7 +203,7 @@ type hookPanicLine struct {
 func (h *recHandler) hookPanics() []hookPanicLine {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	var out []hookPanicLine
+	out := make([]hookPanicLine, 0, len(h.recs))
 	for _, r := range h.recs {
 		if r.Message != MsgHookPanic {
 			continue
@@ -287,7 +296,7 @@ func waitUntil(t *testing.T, cond func() bool) {
 }
 
 // openReturned is Open that must come back. A leftover busy slot hangs until waitBudget, then the test fails.
-func openReturned(t *testing.T, tab *Table, ctx context.Context, key string, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
+func openReturned(ctx context.Context, t *testing.T, tab *Table, key string, logger *slog.Logger, create func() (any, error), hooks Hooks) (any, error) {
 	t.Helper()
 	type finished struct {
 		value any
@@ -392,7 +401,7 @@ func testCloseHook(onClose func()) Hooks {
 
 func TestTable_OpenCancelDispose(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(30 * time.Millisecond)
+	tab := New(Config{Grace: 30 * time.Millisecond})
 	ctx, cancel := context.WithCancel(context.Background())
 	var ended atomic.Bool
 	stored := ending(1, &ended)
@@ -417,7 +426,7 @@ func TestTable_OpenCancelDispose(t *testing.T) {
 
 func TestTable_LifecycleIsCreateSleepWakeClose(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	life := &lifecycle{}
 	created := 0
 
@@ -463,7 +472,7 @@ func TestTable_LifecycleIsCreateSleepWakeClose(t *testing.T) {
 
 func TestTable_LaterOpenDoesNotReplaceHooks(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	life := &lifecycle{}
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
@@ -501,7 +510,7 @@ func TestTable_SleepPrecedesCloseAtEveryGrace(t *testing.T) {
 	for _, grace := range []time.Duration{0, 5 * time.Millisecond} {
 		t.Run(grace.String(), func(t *testing.T) {
 			h := &recHandler{}
-			tab := NewTable(grace)
+			tab := New(Config{Grace: grace})
 			life := &lifecycle{}
 			ctx, cancel := context.WithCancel(context.Background())
 			if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
@@ -518,7 +527,7 @@ func TestTable_SleepPrecedesCloseAtEveryGrace(t *testing.T) {
 
 func TestTable_OpenWaitsForWake(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	release := make(chan struct{})
 	life := &lifecycle{onWake: func() { <-release }}
 
@@ -564,7 +573,7 @@ func TestTable_OpenWaitsForWake(t *testing.T) {
 func TestTable_ConcurrentOpensOnSleepingValueWakeOnce(t *testing.T) {
 	const openers = 8
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	life := &lifecycle{}
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
@@ -606,7 +615,7 @@ func TestTable_ConcurrentOpensOnSleepingValueWakeOnce(t *testing.T) {
 func TestTable_ConcurrentFirstOpensCreateOnce(t *testing.T) {
 	const openers = 8
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	var created atomic.Int32
 	var values []*counterClose
 	var valuesMu sync.Mutex
@@ -662,7 +671,7 @@ func TestTable_ConcurrentFirstOpensCreateOnce(t *testing.T) {
 func TestTable_CreateErrorReachesEveryWaiter(t *testing.T) {
 	const openers = 4
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	boom := errors.New("create failed")
 	var created atomic.Int32
 
@@ -709,7 +718,7 @@ func TestTable_CreateErrorReachesEveryWaiter(t *testing.T) {
 
 func TestTable_OpenDuringGraceReclaims(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	var ended atomic.Bool
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	first, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return ending(1, &ended), nil }, Hooks{})
@@ -743,7 +752,7 @@ func TestTable_OpenDuringGraceReclaims(t *testing.T) {
 
 func TestTable_SecondCreateDisposeIgnored(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	created := 0
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -766,7 +775,7 @@ func TestTable_SecondCreateDisposeIgnored(t *testing.T) {
 
 func TestTable_TwoOpensOneDispose(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(10 * time.Millisecond)
+	tab := New(Config{Grace: 10 * time.Millisecond})
 	var ended atomic.Bool
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	ctx2, cancel2 := context.WithCancel(context.Background())
@@ -791,14 +800,14 @@ func TestTable_TwoOpensOneDispose(t *testing.T) {
 }
 
 func TestTable_NegativeGraceUsesDefault(t *testing.T) {
-	if got := NewTable(-1).grace; got != DefaultGrace {
+	if got := New(Config{Grace: -1}).grace; got != DefaultGrace {
 		t.Fatalf("grace %v, want %v", got, DefaultGrace)
 	}
 }
 
 func TestTable_ZeroGraceEndsImmediately(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(0)
+	tab := New(Config{Grace: 0})
 	var ended atomic.Bool
 	ctx, cancel := context.WithCancel(context.Background())
 	stored := ending(1, &ended)
@@ -821,7 +830,7 @@ func TestTable_ZeroGraceEndsImmediately(t *testing.T) {
 
 func TestTable_ZeroGraceRacingOpenIsPlainBind(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(0)
+	tab := New(Config{Grace: 0})
 	// Hold the first value inside Sleep, so the second Open is guaranteed to arrive in the
 	// window a zero-grace table must not keep. Racing two goroutines instead would let the Open
 	// win and be a plain second bind, which is not the case under test.
@@ -868,15 +877,193 @@ func TestTable_ZeroGraceRacingOpenIsPlainBind(t *testing.T) {
 	if n := countMsg(h.events(), MsgReclaim); n != 0 {
 		t.Fatalf("%d reclaim lines at zero grace, want 0 (sequence %v)", n, keySeq(h.events(), "a"))
 	}
-	want := []string{MsgPut, MsgBind, MsgOrphan, MsgDispose, MsgPut, MsgBind}
-	if seq := keySeq(h.events(), "a"); !reflect.DeepEqual(seq, want) {
-		t.Fatalf("sequence %v, want %v", seq, want)
+	waitKeyMsg(t, h, MsgDispose, "a")
+	// Default unmaps before Close, so dispose need not precede the second put.
+	if n := countMsg(h.events(), MsgPut); n != 2 {
+		t.Fatalf("%d put lines, want 2 (sequence %v)", n, keySeq(h.events(), "a"))
 	}
+}
+
+// TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns fails if a later Open starts create
+// while the previous incarnation's Close is still blocked.
+func TestTable_ZeroGraceCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
+	h := &recHandler{}
+	tab := New(Config{Grace: 0})
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	var createWhileCloseBlocked atomic.Bool
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
+		Close:                  func() { close(closeEntered); <-releaseClose },
+		EnforceCloseBeforeOpen: true,
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	// Hold Close so a racing Open cannot create until this incarnation has ended.
+	<-closeEntered
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	opened := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
+			createWhileCloseBlocked.Store(true)
+			return nextIncarnation, nil
+		}, Hooks{})
+		opened <- err
+	}()
+	// The second Open must stay parked for the whole Close, not create during it.
+	select {
+	case err := <-opened:
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+		t.Fatalf("second Open returned before Close returned: %v", err)
+	case <-time.After(200 * time.Millisecond):
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+	}
+	// Release Close; the parked Open may create only after that returns.
+	close(releaseClose)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("open 2: %v", err)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("second Open did not return after Close returned")
+	}
+	if !createWhileCloseBlocked.Load() {
+		t.Fatal("second Open did not create after Close returned")
+	}
+}
+
+// TestTable_ExpireCreateWaitsUntilPreviousCloseReturns is the same overlap after grace elapsed.
+func TestTable_ExpireCreateWaitsUntilPreviousCloseReturns(t *testing.T) {
+	h := &recHandler{}
+	tab := New(Config{Grace: time.Millisecond})
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	var createWhileCloseBlocked atomic.Bool
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
+		Close:                  func() { close(closeEntered); <-releaseClose },
+		EnforceCloseBeforeOpen: true,
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	// Wait until expire has entered Close (grace elapsed), then hold it.
+	select {
+	case <-closeEntered:
+	case <-time.After(waitBudget):
+		t.Fatal("Close did not run after grace elapsed")
+	}
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	opened := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
+			createWhileCloseBlocked.Store(true)
+			return nextIncarnation, nil
+		}, Hooks{})
+		opened <- err
+	}()
+	// The second Open must stay parked for the whole Close, not create during it.
+	select {
+	case err := <-opened:
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+		t.Fatalf("second Open returned before Close returned: %v", err)
+	case <-time.After(200 * time.Millisecond):
+		if createWhileCloseBlocked.Load() {
+			t.Fatal("create of incarnation 2 ran while Close of 1 was blocked")
+		}
+	}
+	// Release Close; the parked Open may create only after that returns.
+	close(releaseClose)
+	select {
+	case err := <-opened:
+		if err != nil {
+			t.Fatalf("open 2: %v", err)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("second Open did not return after Close returned")
+	}
+	if !createWhileCloseBlocked.Load() {
+		t.Fatal("second Open did not create after Close returned")
+	}
+}
+
+// TestTable_ZeroGraceCreateDoesNotWaitForClose locks the default: with the flag unset, Open
+// returns a fresh value while Close is still blocked. That is dest behaviour, not a race assert.
+func TestTable_ZeroGraceCreateDoesNotWaitForClose(t *testing.T) {
+	h := &recHandler{}
+	tab := New(Config{Grace: 0})
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
+		Close: func() { close(closeEntered); <-releaseClose },
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	<-closeEntered
+
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	defer cancel2()
+	opened := make(chan any, 1)
+	go func() {
+		value, err := tab.Open(ctx2, "k", recLogger(h), func() (any, error) {
+			return nextIncarnation, nil
+		}, Hooks{})
+		if err != nil {
+			t.Errorf("open 2: %v", err)
+			opened <- nil
+			return
+		}
+		opened <- value
+	}()
+	select {
+	case got := <-opened:
+		if got != nextIncarnation {
+			t.Fatalf("Open value %v, want a fresh incarnation while Close is blocked", got)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("Open blocked for Close; default must unmap first")
+	}
+	close(releaseClose)
 }
 
 func TestTable_ResetDuringSleepStillOrphansBeforeDispose(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	sleeping := make(chan struct{})
 	release := make(chan struct{})
 	life := &lifecycle{onSleep: func() { close(sleeping); <-release }}
@@ -916,7 +1103,7 @@ func TestTable_ResetDuringSleepStillOrphansBeforeDispose(t *testing.T) {
 func TestTable_AnOpenThatOnlyWaitsDoesNotTakeTheLogger(t *testing.T) {
 	held := &recHandler{}
 	waiting := &recHandler{}
-	tab := NewTable(0)
+	tab := New(Config{Grace: 0})
 	sleeping := make(chan struct{})
 	release := make(chan struct{})
 	var once sync.Once
@@ -961,7 +1148,7 @@ func TestTable_ResetRacingADropKeepsOrphanBeforeDispose(t *testing.T) {
 	const rounds = 400
 	for round := 0; round < rounds; round++ {
 		h := &recHandler{}
-		tab := NewTable(graceNoRace)
+		tab := New(Config{Grace: graceNoRace})
 		ctx, cancel := context.WithCancel(context.Background())
 		life := &lifecycle{}
 		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
@@ -993,7 +1180,7 @@ func TestTable_ResetRacingADropKeepsOrphanBeforeDispose(t *testing.T) {
 
 func TestTable_OpenWaitsForSleepThenWakes(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	sleeping := make(chan struct{})
 	release := make(chan struct{})
 	// Only the first sleep is held: this value is slept again when the test's own holder goes.
@@ -1043,7 +1230,7 @@ func TestTable_OrphanPrecedesDisposeAtTinyGrace(t *testing.T) {
 	const rounds = 200
 	for round := 0; round < rounds; round++ {
 		h := &recHandler{}
-		tab := NewTable(time.Nanosecond)
+		tab := New(Config{Grace: time.Nanosecond})
 		ctx, cancel := context.WithCancel(context.Background())
 		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 			t.Fatalf("open: %v", err)
@@ -1059,7 +1246,7 @@ func TestTable_OrphanPrecedesDisposeAtTinyGrace(t *testing.T) {
 
 func TestTable_DisposeLogFollowsClose(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(5 * time.Millisecond)
+	tab := New(Config{Grace: 5 * time.Millisecond})
 	var sawDispose atomic.Bool
 	life := &lifecycle{}
 	life.onClose = func() {
@@ -1081,7 +1268,7 @@ func TestTable_DisposeLogFollowsClose(t *testing.T) {
 
 func TestTable_ResetDisposeLogFollowsClose(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	var sawDispose atomic.Bool
 	life := &lifecycle{}
 	life.onClose = func() {
@@ -1110,7 +1297,7 @@ func TestTable_ResetDisposeLogFollowsClose(t *testing.T) {
 
 func TestTable_StdlibImports(t *testing.T) {
 	fset := token.NewFileSet()
-	for _, name := range []string{"table.go", "default.go"} {
+	for _, name := range []string{"table.go"} {
 		file, err := parser.ParseFile(fset, name, nil, parser.ImportsOnly)
 		if err != nil {
 			t.Fatalf("parse %s: %v", name, err)
@@ -1129,7 +1316,7 @@ func TestTable_StdlibImports(t *testing.T) {
 
 func TestTable_HashChangeProof(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(20 * time.Millisecond)
+	tab := New(Config{Grace: 20 * time.Millisecond})
 	var mu sync.Mutex
 	var ended []string
 
@@ -1164,17 +1351,16 @@ func TestTable_HashChangeProof(t *testing.T) {
 	}
 }
 
-func TestDefault_OpenSharesIncarnation(t *testing.T) {
-	Reset()
-	t.Cleanup(Reset)
+func TestTable_OpenSharesIncarnation(t *testing.T) {
+	tab := New(Config{})
 	h := &recHandler{}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	first, err := Open(ctx, "shared", recLogger(h), func() (any, error) { return ending(7, nil), nil }, Hooks{})
+	first, err := tab.Open(ctx, "shared", recLogger(h), func() (any, error) { return ending(7, nil), nil }, Hooks{})
 	if err != nil {
 		t.Fatalf("open 1: %v", err)
 	}
-	second, err := Default().Open(ctx, "shared", recLogger(h), func() (any, error) {
+	second, err := tab.Open(ctx, "shared", recLogger(h), func() (any, error) {
 		t.Error("create ran again")
 		return nil, nil
 	}, Hooks{})
@@ -1186,36 +1372,31 @@ func TestDefault_OpenSharesIncarnation(t *testing.T) {
 	}
 }
 
-func TestDefault_ResetWithAppliesGrace(t *testing.T) {
-	ResetWith(37 * time.Millisecond)
-	t.Cleanup(Reset)
-	if got := Default().grace; got != 37*time.Millisecond {
-		t.Fatalf("grace %v, want 37ms", got)
-	}
-	Reset()
-	if got := Default().grace; got != DefaultGrace {
-		t.Fatalf("grace %v after Reset, want %v", got, DefaultGrace)
+func TestTable_ConfigGraceFixedAfterNew(t *testing.T) {
+	cfg := Config{Grace: 37 * time.Millisecond}
+	tab := New(cfg)
+	cfg.Grace = time.Hour
+	if got := tab.grace; got != 37*time.Millisecond {
+		t.Fatalf("grace %v after Config write, want 37ms", got)
 	}
 }
 
-func TestDefault_ConcurrentFirstUseReturnsOneTable(t *testing.T) {
-	Reset()
-	t.Cleanup(Reset)
-	const callers = 16
-	tables := make([]*Table, callers)
-	var wg sync.WaitGroup
-	for i := 0; i < callers; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			tables[i] = Default()
-		}(i)
+func TestTable_TwoTablesDoNotShare(t *testing.T) {
+	a := New(Config{})
+	b := New(Config{})
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	h := &recHandler{}
+	first, err := a.Open(ctx, "shared", recLogger(h), func() (any, error) { return ending(1, nil), nil }, Hooks{})
+	if err != nil {
+		t.Fatalf("open a: %v", err)
 	}
-	wg.Wait()
-	for i := range tables {
-		if tables[i] != tables[0] {
-			t.Fatalf("caller %d got a different table", i)
-		}
+	second, err := b.Open(ctx, "shared", recLogger(h), func() (any, error) { return ending(2, nil), nil }, Hooks{})
+	if err != nil {
+		t.Fatalf("open b: %v", err)
+	}
+	if first == second {
+		t.Fatal("two tables stored the same value for the same key")
 	}
 }
 
@@ -1225,13 +1406,13 @@ func TestTable_OpenNilContextPanics(t *testing.T) {
 			t.Fatal("no panic")
 		}
 	}()
-	tab := NewTable(time.Millisecond)
+	tab := New(Config{Grace: time.Millisecond})
 	//nolint:staticcheck // the nil context is the case under test
 	_, _ = tab.Open(nil, "a", recLogger(&recHandler{}), func() (any, error) { return ending(1, nil), nil }, Hooks{})
 }
 
 func TestTable_OpenBackgroundDoesNotPanic(t *testing.T) {
-	tab := NewTable(time.Millisecond)
+	tab := New(Config{Grace: time.Millisecond})
 	if _, err := tab.Open(context.Background(), "a", recLogger(&recHandler{}), func() (any, error) {
 		return ending(1, nil), nil
 	}, Hooks{}); err != nil {
@@ -1241,7 +1422,7 @@ func TestTable_OpenBackgroundDoesNotPanic(t *testing.T) {
 
 func TestTable_HolderWithoutDoneChannelIsPolled(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(5 * time.Millisecond)
+	tab := New(Config{Grace: 5 * time.Millisecond})
 	holder := &nilDoneCtx{}
 	life := &lifecycle{}
 	if _, err := tab.Open(holder, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
@@ -1260,7 +1441,7 @@ func TestTable_HolderWithoutDoneChannelIsPolled(t *testing.T) {
 
 func TestTable_ValueWithoutLifecycleMethodsStillDisposes(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(time.Millisecond)
+	tab := New(Config{Grace: time.Millisecond})
 	ctx, cancel := context.WithCancel(context.Background())
 	value, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "a bare string", nil }, Hooks{})
 	if err != nil {
@@ -1278,7 +1459,7 @@ func TestTable_ValueWithoutLifecycleMethodsStillDisposes(t *testing.T) {
 
 func TestTable_ValueWithOnlyCloseIsUnaffected(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(5 * time.Millisecond)
+	tab := New(Config{Grace: 5 * time.Millisecond})
 	value := &onlyCloser{}
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return value, nil }, testCloseHook(value.Close)); err != nil {
@@ -1293,7 +1474,7 @@ func TestTable_ValueWithOnlyCloseIsUnaffected(t *testing.T) {
 
 func TestTable_ResetLogsOrphanThenDisposeAndKeepsNextIncarnation(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	staleCtx, cancelStale := context.WithCancel(context.Background())
 	life := &lifecycle{}
 	if _, err := tab.Open(staleCtx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
@@ -1327,7 +1508,7 @@ func TestTable_ResetLogsOrphanThenDisposeAndKeepsNextIncarnation(t *testing.T) {
 
 func TestTable_ResetStopsGraceWait(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	ctx, cancel := context.WithCancel(context.Background())
 	life := &lifecycle{}
 	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return life, nil }, testLifeHooks(life)); err != nil {
@@ -1352,7 +1533,7 @@ func TestTable_ResetStopsGraceWait(t *testing.T) {
 func TestTable_ConcurrentOpenSameKeySharesOneIncarnation(t *testing.T) {
 	const openers = 8
 	h := &recHandler{}
-	tab := NewTable(time.Millisecond)
+	tab := New(Config{Grace: time.Millisecond})
 	var created atomic.Int32
 	cancels := make([]context.CancelFunc, openers)
 	values := make([]any, openers)
@@ -1400,8 +1581,17 @@ func TestTable_NilTableOpenErrors(t *testing.T) {
 	}
 }
 
+func TestTable_ZeroValueOpenErrors(t *testing.T) {
+	tab := &Table{}
+	if _, err := tab.Open(context.Background(), "a", recLogger(&recHandler{}), func() (any, error) {
+		return ending(1, nil), nil
+	}, Hooks{}); err == nil {
+		t.Fatal("no error from a zero-value table")
+	}
+}
+
 func TestTable_NilOpenLoggerRejected(t *testing.T) {
-	tab := NewTable(time.Millisecond)
+	tab := New(Config{Grace: time.Millisecond})
 	if _, err := tab.Open(context.Background(), "a", nil, func() (any, error) { return ending(1, nil), nil }, Hooks{}); err == nil {
 		t.Fatal("no error from a nil logger")
 	}
@@ -1413,7 +1603,7 @@ func TestTable_NilOpenLoggerRejected(t *testing.T) {
 func TestTable_ConcurrentCancelLastHolders(t *testing.T) {
 	const holders = 8
 	h := &recHandler{}
-	tab := NewTable(5 * time.Millisecond)
+	tab := New(Config{Grace: 5 * time.Millisecond})
 	life := &lifecycle{}
 	cancels := make([]context.CancelFunc, holders)
 	for i := 0; i < holders; i++ {
@@ -1445,7 +1635,7 @@ func TestTable_ConcurrentCancelLastHolders(t *testing.T) {
 
 func TestTable_HolderCountReleased(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	keepCtx, keepCancel := context.WithCancel(context.Background())
 	defer keepCancel()
 	if _, err := tab.Open(keepCtx, "a", recLogger(h), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
@@ -1466,7 +1656,7 @@ func TestTable_HolderCountReleased(t *testing.T) {
 func TestTable_ManyKeysDisposeIndependently(t *testing.T) {
 	const keys = 20
 	h := &recHandler{}
-	tab := NewTable(5 * time.Millisecond)
+	tab := New(Config{Grace: 5 * time.Millisecond})
 	cancels := make([]context.CancelFunc, keys)
 	for i := 0; i < keys; i++ {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -1492,7 +1682,7 @@ func TestTable_ManyKeysDisposeIndependently(t *testing.T) {
 func TestTable_OrphanAndDisposeUseTheLastBindingLogger(t *testing.T) {
 	first := &recHandler{}
 	second := &recHandler{}
-	tab := NewTable(5 * time.Millisecond)
+	tab := New(Config{Grace: 5 * time.Millisecond})
 
 	ctx1, cancel1 := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx1, "a", recLogger(first), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
@@ -1521,7 +1711,7 @@ func TestTable_ReclaimRacesExpiry(t *testing.T) {
 	const rounds = 40
 	for round := 0; round < rounds; round++ {
 		h := &recHandler{}
-		tab := NewTable(3 * time.Millisecond)
+		tab := New(Config{Grace: 3 * time.Millisecond})
 		var created atomic.Int32
 		ctx1, cancel1 := context.WithCancel(context.Background())
 		first, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) {
@@ -1562,7 +1752,7 @@ func TestTable_ReclaimRacesExpiry(t *testing.T) {
 func TestTable_ZeroGraceOpenRacesCancel(t *testing.T) {
 	const rounds = 40
 	for round := 0; round < rounds; round++ {
-		tab := NewTable(0)
+		tab := New(Config{Grace: 0})
 		h := &recHandler{}
 		ctx1, cancel1 := context.WithCancel(context.Background())
 		if _, err := tab.Open(ctx1, "a", recLogger(h), func() (any, error) { return &counterClose{}, nil }, Hooks{}); err != nil {
@@ -1598,7 +1788,7 @@ func TestTable_ZeroGraceOpenRacesCancel(t *testing.T) {
 func TestTable_ResetRacingOpenClosesEveryValue(t *testing.T) {
 	const rounds = 50
 	for round := 0; round < rounds; round++ {
-		tab := NewTable(time.Millisecond)
+		tab := New(Config{Grace: time.Millisecond})
 		h := &recHandler{}
 		var mu sync.Mutex
 		var made []*counterClose
@@ -1649,7 +1839,7 @@ func TestTable_CancellableHoldersDoNotParkWaiters(t *testing.T) {
 	const slack = 2
 	base := settledGoroutines()
 
-	tab := NewTable(2 * time.Millisecond)
+	tab := New(Config{Grace: 2 * time.Millisecond})
 	h := &recHandler{}
 	cancels := make([]context.CancelFunc, keys)
 	for i := 0; i < keys; i++ {
@@ -1673,7 +1863,7 @@ func TestTable_GoroutinesReturnToBaseline(t *testing.T) {
 	const slack = 2
 	base := settledGoroutines()
 
-	tab := NewTable(2 * time.Millisecond)
+	tab := New(Config{Grace: 2 * time.Millisecond})
 	h := &recHandler{}
 	cancels := make([]context.CancelFunc, keys)
 	for i := 0; i < keys; i++ {
@@ -1690,14 +1880,14 @@ func TestTable_GoroutinesReturnToBaseline(t *testing.T) {
 	waitUntil(t, func() bool { return runtime.NumGoroutine() <= base+slack })
 }
 
-func TestTable_ResetNil(t *testing.T) {
+func TestTable_ResetNil(_ *testing.T) {
 	var tab *Table
 	tab.Reset()
 }
 
 func TestTable_OpenLoggerLevelGatesPutDispose(t *testing.T) {
 	quiet := &levelGate{min: slog.LevelInfo}
-	tab := NewTable(time.Millisecond)
+	tab := New(Config{Grace: time.Millisecond})
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "quiet", recLogger(quiet), func() (any, error) { return &lifecycle{}, nil }, Hooks{}); err != nil {
 		t.Fatalf("open quiet: %v", err)
@@ -1725,7 +1915,7 @@ func TestTable_OpenLoggerLevelGatesPutDispose(t *testing.T) {
 
 func TestTable_CreatePanicUnsticksKey(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	func() {
 		defer func() { _ = recover() }()
 		_, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
@@ -1737,7 +1927,7 @@ func TestTable_CreatePanicUnsticksKey(t *testing.T) {
 		}
 	}()
 	created := 0
-	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+	value, err := openReturned(context.Background(), t, tab, "a", recLogger(h), func() (any, error) {
 		created++
 		return unstuckValue, nil
 	}, Hooks{})
@@ -1751,7 +1941,7 @@ func TestTable_CreatePanicUnsticksKey(t *testing.T) {
 
 func TestTable_NilCreateUnsticksKey(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	func() {
 		defer func() { _ = recover() }()
 		_, err := tab.Open(context.Background(), "a", recLogger(h), nil, Hooks{})
@@ -1760,7 +1950,7 @@ func TestTable_NilCreateUnsticksKey(t *testing.T) {
 			t.Fatalf("nil create: err %v, want %s", err, want)
 		}
 	}()
-	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+	value, err := openReturned(context.Background(), t, tab, "a", recLogger(h), func() (any, error) {
 		return unstuckValue, nil
 	}, Hooks{})
 	if err != nil {
@@ -1775,7 +1965,7 @@ func TestTable_SleepPanicAfterFuncDoesNotCrash(t *testing.T) {
 	if os.Getenv("RECLAIM_SLEEP_PANIC_CHILD") == "1" {
 		var closed atomic.Int32
 		h := &recHandler{}
-		tab := NewTable(graceNoRace)
+		tab := New(Config{Grace: graceNoRace})
 		ctx, cancel := context.WithCancel(context.Background())
 		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
 			return "v", nil
@@ -1811,7 +2001,7 @@ func TestTable_SleepPanicAfterFuncDoesNotCrash(t *testing.T) {
 func TestTable_ClosePanicAfterFuncDoesNotCrash(t *testing.T) {
 	if os.Getenv("RECLAIM_CLOSE_PANIC_CHILD") == "1" {
 		h := &recHandler{}
-		tab := NewTable(0)
+		tab := New(Config{Grace: 0})
 		ctx, cancel := context.WithCancel(context.Background())
 		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
 			return "v", nil
@@ -1838,9 +2028,39 @@ func TestTable_ClosePanicAfterFuncDoesNotCrash(t *testing.T) {
 	}
 }
 
+func TestTable_ClosePanicAfterFuncDoesNotCrashEnforce(t *testing.T) {
+	if os.Getenv("RECLAIM_CLOSE_PANIC_ENFORCE_CHILD") == "1" {
+		h := &recHandler{}
+		tab := New(Config{Grace: 0})
+		ctx, cancel := context.WithCancel(context.Background())
+		if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
+			return "v", nil
+		}, Hooks{Close: func() { panic("close boom") }, EnforceCloseBeforeOpen: true}); err != nil {
+			os.Exit(2)
+		}
+		cancel()
+		deadline := time.Now().Add(waitBudget)
+		for time.Now().Before(deadline) && mappedKeys(tab) != 0 {
+			time.Sleep(time.Millisecond)
+		}
+		if _, err := tab.Open(context.Background(), "a", recLogger(h), func() (any, error) {
+			return unstuckValue, nil
+		}, Hooks{}); err != nil {
+			os.Exit(4)
+		}
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestTable_ClosePanicAfterFuncDoesNotCrashEnforce$") //nolint:gosec // G204: re-exec this test binary
+	cmd.Env = append(os.Environ(), "RECLAIM_CLOSE_PANIC_ENFORCE_CHILD=1")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("AfterFunc Close panic crashed the process: %v\n%s", err, out)
+	}
+}
+
 func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	var closed atomic.Int32
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) {
@@ -1864,7 +2084,7 @@ func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 		}
 	}()
 	waitUntil(t, func() bool { return closed.Load() == 1 })
-	value, err := openReturned(t, tab, context.Background(), "a", recLogger(h), func() (any, error) {
+	value, err := openReturned(context.Background(), t, tab, "a", recLogger(h), func() (any, error) {
 		return unstuckValue, nil
 	}, Hooks{})
 	if err != nil {
@@ -1877,7 +2097,7 @@ func TestTable_WakePanicReturnsErrorAndUnsticks(t *testing.T) {
 
 func TestTable_SleepPanicIsReportedAtError(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
 		Sleep: func() { panic("sleep boom") },
@@ -1907,7 +2127,7 @@ func TestTable_SleepPanicIsReportedAtError(t *testing.T) {
 
 func TestTable_ClosePanicIsReportedAtErrorAndStillDisposes(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(0)
+	tab := New(Config{Grace: 0})
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
 		Close: func() { panic("close boom") },
@@ -1931,9 +2151,36 @@ func TestTable_ClosePanicIsReportedAtErrorAndStillDisposes(t *testing.T) {
 	}
 }
 
+func TestTable_ClosePanicIsReportedAtErrorAndStillDisposesEnforce(t *testing.T) {
+	h := &recHandler{}
+	tab := New(Config{Grace: 0})
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
+		Close:                  func() { panic("close boom") },
+		EnforceCloseBeforeOpen: true,
+	}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgHookPanic, "a")
+	waitKeyMsg(t, h, MsgDispose, "a")
+
+	lines := h.hookPanics()
+	if len(lines) != 1 {
+		t.Fatalf("%d hook panic lines, want 1", len(lines))
+	}
+	got := lines[0]
+	if got.level != slog.LevelError {
+		t.Errorf("hook panic logged at %v, want error", got.level)
+	}
+	if got.hook != "close" || got.panic != "close boom" {
+		t.Errorf("hook panic line %+v, want hook close panic close boom", got)
+	}
+}
+
 func TestTable_WakePanicIsReportedAsErrorNotLogged(t *testing.T) {
 	h := &recHandler{}
-	tab := NewTable(graceNoRace)
+	tab := New(Config{Grace: graceNoRace})
 	ctx, cancel := context.WithCancel(context.Background())
 	if _, err := tab.Open(ctx, "a", recLogger(h), func() (any, error) { return "v", nil }, Hooks{
 		Wake:  func() { panic("wake boom") },
@@ -1953,5 +2200,91 @@ func TestTable_WakePanicIsReportedAsErrorNotLogged(t *testing.T) {
 	// Wake had a caller to answer, so the panic travels as that error and is not logged twice.
 	if n := len(h.hookPanics()); n != 0 {
 		t.Errorf("%d hook panic lines for a Wake panic, want 0 (it is the Open error)", n)
+	}
+}
+
+func TestTable_WakePanicWaiterReceivesErrorWithEnforce(t *testing.T) {
+	h := &recHandler{}
+	tab := New(Config{Grace: graceNoRace})
+	closeEntered := make(chan struct{})
+	releaseClose := make(chan struct{})
+	t.Cleanup(func() {
+		select {
+		case <-releaseClose:
+		default:
+			close(releaseClose)
+		}
+	})
+	wakeStarted := make(chan struct{})
+	releaseWake := make(chan struct{})
+	var created atomic.Bool
+
+	ctx, cancel := context.WithCancel(context.Background())
+	if _, err := tab.Open(ctx, "k", recLogger(h), func() (any, error) { return firstIncarnation, nil }, Hooks{
+		Wake: func() {
+			close(wakeStarted)
+			<-releaseWake
+			panic("wake boom")
+		},
+		Close:                  func() { close(closeEntered); <-releaseClose },
+		EnforceCloseBeforeOpen: true,
+	}); err != nil {
+		t.Fatalf("open 1: %v", err)
+	}
+	cancel()
+	waitKeyMsg(t, h, MsgOrphan, "k")
+
+	reclaimErr := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(context.Background(), "k", recLogger(h), func() (any, error) {
+			return "unreachable", nil
+		}, Hooks{})
+		reclaimErr <- err
+	}()
+	select {
+	case <-wakeStarted:
+	case <-time.After(waitBudget):
+		t.Fatal("Wake did not start")
+	}
+
+	waiterErr := make(chan error, 1)
+	go func() {
+		_, err := tab.Open(context.Background(), "k", recLogger(h), func() (any, error) {
+			created.Store(true)
+			return nextIncarnation, nil
+		}, Hooks{})
+		waiterErr <- err
+	}()
+	// Wake still holds slotBusy; this Open must park on that ready before Wake panics.
+	time.Sleep(50 * time.Millisecond)
+
+	close(releaseWake)
+	select {
+	case <-closeEntered:
+	case <-time.After(waitBudget):
+		t.Fatal("Close did not run after the Wake panic")
+	}
+
+	want := fmt.Sprintf("reclaim: wake %q: panic: %v", "k", "wake boom")
+	select {
+	case err := <-waiterErr:
+		if created.Load() {
+			t.Fatal("waiter created while Close of the panicking Wake was blocked")
+		}
+		if err == nil || err.Error() != want {
+			t.Fatalf("waiter: %v, want %s", err, want)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("waiter did not receive the wrapping Wake error")
+	}
+
+	close(releaseClose)
+	select {
+	case err := <-reclaimErr:
+		if err == nil || err.Error() != want {
+			t.Fatalf("reclaiming Open: %v, want %s", err, want)
+		}
+	case <-time.After(waitBudget):
+		t.Fatal("reclaiming Open did not return after Close returned")
 	}
 }

@@ -8,6 +8,7 @@ import (
 // TestYaegiLive_RedisAndDragonfly runs interpreted New plus every public verb against each live engine.
 func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+		t.Helper()
 		client := waitLiveSimpleRedis(t, addr)
 		t.Cleanup(client.Close)
 		goPath := t.TempDir()

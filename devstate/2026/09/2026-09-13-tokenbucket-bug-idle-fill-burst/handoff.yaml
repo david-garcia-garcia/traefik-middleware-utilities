@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-tokenbucket-bug-idle-fill-burst
+jobName: 2026-09-13-tokenbucket-bug-idle-fill-burst
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 1827eb4f5d6001785aaddd5c7a95d39ed840f2a61c77c9769392e25b83ed0840
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: fill-new-key-to-burst
+pr:
+  id: 56
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/56

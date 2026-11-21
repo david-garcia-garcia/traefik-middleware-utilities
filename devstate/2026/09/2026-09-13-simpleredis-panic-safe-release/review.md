@@ -1,0 +1,47 @@
+## prepare (2026-09-13)
+phase: prepare
+findings: none
+fixed: none
+skipped: product fix not in this phase
+
+## explore (2026-09-13)
+phase: explore
+findings: dest leak reproduced turns=0/2 then redis:unreachable; Yaegi pin resolved to v0.16.1
+fixed: none
+skipped: product apply deferred to implement
+
+## propose (2026-09-13)
+phase: propose
+findings: none
+fixed: none
+skipped: product apply deferred to implement
+
+## implement (2026-09-13)
+phase: implement
+findings: none
+fixed: runOnConn deferred release, borrow handedOff, panic_safety_test.go, yaegi_defer_test.go
+skipped: none
+
+## codereview (2026-09-13)
+phase: codereview
+findings: coverage 1 hard skipped (no dest injection for panic inside borrow)
+fixed: none
+skipped: coverage 1
+
+## devdocsimpact (2026-09-13)
+phase: devdocsimpact
+findings: stale-usage Key files
+fixed: Key files panic_safety_test.go and yaegi_defer_test.go
+skipped: none
+
+## archive (2026-09-13)
+phase: archive
+findings: none
+fixed: live tcp-session spec panic requirement; change moved to archive/2026-09-13-simpleredis-panic-safe-release
+skipped: none
+
+## pullrequest (2026-09-13)
+phase: pullrequest
+findings: none
+fixed: merged origin/master (#67 handshakeFailed) into IssueKey; CI 1243 success on b5d241c
+skipped: none

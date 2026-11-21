@@ -26,7 +26,7 @@ type testFakeRedis struct {
 }
 
 // startTestFakeRedis listens on a local TCP port and serves an in-process RESP map.
-func startTestFakeRedis(t *testing.T) (*testFakeRedis, string) {
+func startTestFakeRedis(t *testing.T) (server *testFakeRedis, listenAddr string) {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -81,8 +81,9 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				_, _ = io.WriteString(conn, "-ERR bad argv\r\n")
 				break
 			}
-			tokens := 0.0
-			last := int64(0)
+			// Missing hash is a full bucket like Lua empty HGETALL, then consumeOne.
+			tokens := burst
+			last := nowMicro
 			if hash := f.hashes[key]; hash != nil {
 				parsedLast, lastErr := strconv.ParseInt(hash.last, 10, 64)
 				parsedTokens, tokErr := strconv.ParseFloat(hash.tokens, 64)

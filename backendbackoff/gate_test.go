@@ -32,26 +32,12 @@ func TestNew_RejectsInvalidRatio(t *testing.T) {
 	}
 }
 
-func TestAllow_CanceledContext(t *testing.T) {
-	gate := newTestGate(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	allowed, _, err := gate.Allow(ctx, "k")
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("err = %v", err)
-	}
-	if allowed {
-		t.Fatal("canceled Allow must not admit")
-	}
-}
-
 func TestReport_ConsecutiveFailuresTrip(t *testing.T) {
 	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	ctx := context.Background()
 	for i := 0; i < defaultTripFailures; i++ {
-		allowed, _, err := gate.Allow(ctx, "k")
+		allowed, _, err := gate.Allow("k")
 		if err != nil || !allowed {
 			t.Fatalf("admit %d: allowed=%v err=%v", i, allowed, err)
 		}
@@ -59,7 +45,7 @@ func TestReport_ConsecutiveFailuresTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	allowed, retryAfter, err := gate.Allow(ctx, "k")
+	allowed, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,11 +63,11 @@ func TestAllow_LostProbeLeaseAdmits(t *testing.T) {
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
 	now = now.Add(time.Second)
-	if _, _, err := gate.Allow(context.Background(), "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(time.Second)
-	allowed, _, err := gate.Allow(context.Background(), "k")
+	allowed, _, err := gate.Allow("k")
 	if err != nil || !allowed {
 		t.Fatalf("lost probe lease must admit: allowed=%v err=%v", allowed, err)
 	}
@@ -95,7 +81,7 @@ func TestReport_OpenIgnored(t *testing.T) {
 	if err := gate.Report("k", true); err != nil {
 		t.Fatal(err)
 	}
-	allowed, retryAfter, err := gate.Allow(context.Background(), "k")
+	allowed, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +95,7 @@ func TestReport_OpenIgnored(t *testing.T) {
 
 func TestReport_SuccessCapsAtB(t *testing.T) {
 	gate := newTestGate(t)
-	if _, _, err := gate.Allow(context.Background(), "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	if err := gate.Report("k", true); err != nil {
@@ -127,7 +113,7 @@ func TestReport_AfterTTLStillRecords(t *testing.T) {
 	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	if _, _, err := gate.Allow(context.Background(), "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Minute)
@@ -144,8 +130,7 @@ func TestReport_AfterTTLStillRecords(t *testing.T) {
 
 func TestReport_SuccessCredits(t *testing.T) {
 	gate := newTestGate(t)
-	ctx := context.Background()
-	allowed, _, err := gate.Allow(ctx, "k")
+	allowed, _, err := gate.Allow("k")
 	if err != nil || !allowed {
 		t.Fatal(err)
 	}
@@ -180,7 +165,7 @@ func TestAllow_IdleKeyPresumedHealthy(t *testing.T) {
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
 	now = now.Add(4 * time.Second)
-	allowed, _, err := gate.Allow(context.Background(), "k")
+	allowed, _, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +181,7 @@ func TestAllow_IdleKeyPresumedHealthy(t *testing.T) {
 	if err := gate.Report("k", false); err != nil {
 		t.Fatal(err)
 	}
-	allowed, _, err = gate.Allow(context.Background(), "k")
+	allowed, _, err = gate.Allow("k")
 	if err != nil || !allowed {
 		t.Fatal("one failure after idle drop must not re-OPEN")
 	}
@@ -216,10 +201,9 @@ func TestAllow_DenyRefreshesTTL(t *testing.T) {
 	}
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	ctx := context.Background()
 	trip(t, gate)
 	now = now.Add(2 * time.Second)
-	allowed, _, err := gate.Allow(ctx, "k")
+	allowed, _, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +211,7 @@ func TestAllow_DenyRefreshesTTL(t *testing.T) {
 		t.Fatal("still OPEN at 2s, cooldown 10s")
 	}
 	now = now.Add(2 * time.Second)
-	allowed, _, err = gate.Allow(ctx, "k")
+	allowed, _, err = gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,14 +224,13 @@ func TestAllow_ProbeAfterCooldown(t *testing.T) {
 	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	ctx := context.Background()
 	trip(t, gate)
 	now = now.Add(time.Second)
-	allowed, _, err := gate.Allow(ctx, "k")
+	allowed, _, err := gate.Allow("k")
 	if err != nil || !allowed {
 		t.Fatalf("probe: allowed=%v err=%v", allowed, err)
 	}
-	allowed, retryAfter, err := gate.Allow(ctx, "k")
+	allowed, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,17 +246,16 @@ func TestReport_ProbeSuccessRetainsN(t *testing.T) {
 	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	ctx := context.Background()
 	trip(t, gate)
 	now = now.Add(time.Second)
-	if _, _, err := gate.Allow(ctx, "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	if err := gate.Report("k", false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Second)
-	if _, _, err := gate.Allow(ctx, "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	if err := gate.Report("k", true); err != nil {
@@ -290,7 +272,7 @@ func TestReport_ProbeSuccessRetainsN(t *testing.T) {
 		t.Fatalf("state = %v, want CLOSED", state)
 	}
 	trip(t, gate)
-	allowed, retryAfter, err := gate.Allow(ctx, "k")
+	allowed, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,16 +288,15 @@ func TestReport_ProbeFailureIncrementsN(t *testing.T) {
 	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	ctx := context.Background()
 	trip(t, gate)
 	now = now.Add(time.Second)
-	if _, _, err := gate.Allow(ctx, "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	if err := gate.Report("k", false); err != nil {
 		t.Fatal(err)
 	}
-	allowed, retryAfter, err := gate.Allow(ctx, "k")
+	allowed, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,17 +312,16 @@ func TestAllow_NResetsAfterMaxClosed(t *testing.T) {
 	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	ctx := context.Background()
 	trip(t, gate)
 	now = now.Add(time.Second)
-	if _, _, err := gate.Allow(ctx, "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	if err := gate.Report("k", false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Second)
-	if _, _, err := gate.Allow(ctx, "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	if err := gate.Report("k", true); err != nil {
@@ -349,7 +329,7 @@ func TestAllow_NResetsAfterMaxClosed(t *testing.T) {
 	}
 	now = now.Add(10 * time.Second)
 	trip(t, gate)
-	allowed, retryAfter, err := gate.Allow(ctx, "k")
+	allowed, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,17 +345,16 @@ func TestAllow_EarlyRetripKeepsN(t *testing.T) {
 	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	ctx := context.Background()
 	trip(t, gate)
 	now = now.Add(time.Second)
-	if _, _, err := gate.Allow(ctx, "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	if err := gate.Report("k", false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Second)
-	if _, _, err := gate.Allow(ctx, "k"); err != nil {
+	if _, _, err := gate.Allow("k"); err != nil {
 		t.Fatal(err)
 	}
 	if err := gate.Report("k", true); err != nil {
@@ -383,7 +362,7 @@ func TestAllow_EarlyRetripKeepsN(t *testing.T) {
 	}
 	now = now.Add(time.Second)
 	trip(t, gate)
-	_, retryAfter, err := gate.Allow(ctx, "k")
+	_, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +374,7 @@ func TestAllow_EarlyRetripKeepsN(t *testing.T) {
 func TestClose_AllowErrors(t *testing.T) {
 	gate := newTestGate(t)
 	gate.Close()
-	allowed, _, err := gate.Allow(context.Background(), "k")
+	allowed, _, err := gate.Allow("k")
 	if !errors.Is(err, errClosed) {
 		t.Fatalf("err = %v", err)
 	}
@@ -409,8 +388,8 @@ func TestClose_AllowErrors(t *testing.T) {
 
 func TestReport_CanceledRequestStillRecords(t *testing.T) {
 	gate := newTestGate(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	allowed, _, err := gate.Allow(ctx, "k")
+	_, cancel := context.WithCancel(context.Background())
+	allowed, _, err := gate.Allow("k")
 	if err != nil || !allowed {
 		t.Fatal(err)
 	}
@@ -440,9 +419,8 @@ func newTestGate(t *testing.T) *Gate {
 // trip Reports B consecutive failures so the next Allow is OPEN.
 func trip(t *testing.T, gate *Gate) {
 	t.Helper()
-	ctx := context.Background()
 	for i := 0; i < defaultTripFailures; i++ {
-		if _, _, err := gate.Allow(ctx, "k"); err != nil {
+		if _, _, err := gate.Allow("k"); err != nil {
 			t.Fatal(err)
 		}
 		if err := gate.Report("k", false); err != nil {

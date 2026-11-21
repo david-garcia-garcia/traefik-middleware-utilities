@@ -56,10 +56,10 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 	if err := ctx.Err(); err != nil {
 		return false, 0, err
 	}
-	now := m.now()
-	nowMicro := now.UnixMicro()
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	now := m.now()
+	nowMicro := now.UnixMicro()
 	// Idle longer than ttl is a new bucket (Traefik TTL map). Drop expired keys so the map cannot grow without bound.
 	entry := m.buckets[key]
 	if entry != nil && !now.Before(entry.expireAt) {
@@ -71,15 +71,21 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 		if len(m.buckets) >= maxMemorySources {
 			m.dropOne(now)
 		}
-		entry = &memEntry{}
+		// Missing or TTL-expired key is a full bucket, then consumeOne.
+		entry = &memEntry{tokens: float64(m.clock.burst), last: nowMicro}
 		m.buckets[key] = entry
 	}
 	tokens, last, waitMicro := consumeOne(entry.tokens, entry.last, m.clock.limitPerMicro(), float64(m.clock.burst), nowMicro, m.clock.maxDelay.Microseconds())
 	entry.tokens = tokens
 	entry.last = last
 	entry.expireAt = now.Add(m.clock.ttl)
-	wait := waitDuration(waitMicro)
-	return allowedFromWait(wait, m.clock.maxDelay), wait, nil
+	// Admit uses whole microseconds, same units as consumeOne refund and Lua ARGV.
+	allowed := waitMicro <= float64(m.clock.maxDelay.Microseconds())
+	wait := time.Duration(0)
+	if waitMicro > 0 {
+		wait = time.Duration(waitMicro * float64(time.Microsecond))
+	}
+	return allowed, wait, nil
 }
 
 // dropExpired removes buckets whose ttl has elapsed.

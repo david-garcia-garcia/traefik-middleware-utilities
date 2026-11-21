@@ -5,6 +5,7 @@ package tokenbucket
 // table.maxn replaced with #rl_source == 4 (Dragonfly Lua 5.4).
 
 // allowScript is Traefik AllowTokenBucketRaw. KEYS[1] is the hash.
+// Empty HGETALL seeds tokens=burst last=t (this product; Traefik used last=0).
 const allowScript = `
 local key = KEYS[1]
 local limit, burst, ttl, t, max_delay = tonumber(ARGV[1]), tonumber(ARGV[2]), tonumber(ARGV[3]), tonumber(ARGV[4]),
@@ -22,6 +23,9 @@ local rl_source = redis.call('hgetall', key)
 if #rl_source == 4 then
 	bucket.last = tonumber(rl_source[2])
 	bucket.tokens = tonumber(rl_source[4])
+else
+	bucket.tokens = burst
+	bucket.last = t
 end
 
 local last = bucket.last
@@ -41,10 +45,14 @@ if tokens < 0 then
 	if wait_duration > max_delay then
 		tokens = tokens + 1
 		tokens = math.min(tokens, burst)
-	end
+	end -- wait over max_delay
 end
 
-redis.call('hset', key, 'last', t, 'tokens', tokens)
+local persistLast = bucket.last
+if t > persistLast then
+	persistLast = t
+end
+redis.call('hset', key, 'last', persistLast, 'tokens', tokens)
 redis.call('expire', key, ttl)
 
 return {tostring(true), tostring(wait_duration), tostring(tokens)}

@@ -13,9 +13,13 @@ import (
 )
 
 // newSimpleRedisForTest returns a New client for tests.
-func newSimpleRedisForTest(t testing.TB, host string) *simpleredis.SimpleRedis {
-	t.Helper()
-	return simpleredis.New(simpleredis.Config{Host: host})
+func newSimpleRedisForTest(tb testing.TB, host string) *simpleredis.SimpleRedis {
+	tb.Helper()
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		tb.Fatal(err)
+	}
+	return client
 }
 
 func TestCountFromRedisGet_WrappedMissIsZero(t *testing.T) {
@@ -133,7 +137,7 @@ func TestTake_Unreachable(t *testing.T) {
 }
 
 func TestNew_NegativeSyncRate(t *testing.T) {
-	client := simpleredis.New(simpleredis.Config{})
+	client := newSimpleRedisForTest(t, "")
 	if _, err := New(client, -time.Second); err == nil {
 		t.Fatal("want error")
 	}
@@ -251,7 +255,7 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 	}
 	limiter.Wake()
 	limiter.mu.Lock()
-	running := limiter.stop != nil
+	running := limiter.flushTimer != nil
 	limiter.mu.Unlock()
 	if running {
 		t.Fatal("Wake after Close started a ticker")
@@ -270,14 +274,14 @@ func TestWake_StartsTickerAfterSleep(t *testing.T) {
 	limiter.Sleep()
 	limiter.Sleep()
 	limiter.mu.Lock()
-	stopped := limiter.stop == nil
+	stopped := limiter.flushTimer == nil
 	limiter.mu.Unlock()
 	if !stopped {
 		t.Fatal("Sleep left a ticker running")
 	}
 	limiter.Wake()
 	limiter.mu.Lock()
-	running := limiter.stop != nil
+	running := limiter.flushTimer != nil
 	limiter.mu.Unlock()
 	if !running {
 		t.Fatal("Wake after Sleep did not start a ticker")
