@@ -71,10 +71,10 @@ func TestLookupLiveEngineAddrs(t *testing.T) {
 	})
 }
 
-// runForEachLiveEngine table-drives Redis then Dragonfly after liveEngineAddrs.
-func runForEachLiveEngine(t *testing.T, redisEnv, dragonflyEnv string, run func(t *testing.T, addr string)) {
+// runForEachLiveEngine table-drives Redis then Dragonfly from WINDOWCOUNTER_LIVE_REDIS and WINDOWCOUNTER_LIVE_DRAGONFLY.
+func runForEachLiveEngine(t *testing.T, run func(t *testing.T, addr string)) {
 	t.Helper()
-	for _, backend := range liveEngineAddrs(t, redisEnv, dragonflyEnv) {
+	for _, backend := range liveEngineAddrs(t, "WINDOWCOUNTER_LIVE_REDIS", "WINDOWCOUNTER_LIVE_DRAGONFLY") {
 		backend := backend
 		t.Run(backend.name, func(t *testing.T) {
 			run(t, backend.addr)
@@ -107,7 +107,7 @@ func waitLiveClient(tb testing.TB, addr string) *simpleredis.SimpleRedis {
 
 // TestLive_Limiter proves Take, Peek, buffered share, and first-hit EXPIRE on live Redis and Dragonfly.
 func TestLive_Limiter(t *testing.T) {
-	runForEachLiveEngine(t, "WINDOWCOUNTER_LIVE_REDIS", "WINDOWCOUNTER_LIVE_DRAGONFLY", runLiveLimiterBackend)
+	runForEachLiveEngine(t, runLiveLimiterBackend)
 }
 
 // runLiveLimiterBackend runs exact N-then-deny, buffered share, sliding boundary, Peek, and expire-on-first-hit against one engine.

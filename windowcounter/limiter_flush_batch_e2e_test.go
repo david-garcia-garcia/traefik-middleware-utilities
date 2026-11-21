@@ -10,7 +10,7 @@ import (
 // TestLive_FlushBatchSeveralKeys proves one buffered flush that carries several keys per EVAL (more keys than one batch)
 // applies every key's delta exactly once, against live Redis and Dragonfly.
 func TestLive_FlushBatchSeveralKeys(t *testing.T) {
-	runForEachLiveEngine(t, "WINDOWCOUNTER_LIVE_REDIS", "WINDOWCOUNTER_LIVE_DRAGONFLY", runLiveFlushBatchSeveralKeys)
+	runForEachLiveEngine(t, runLiveFlushBatchSeveralKeys)
 }
 
 // runLiveFlushBatchSeveralKeys flushes two hits on flushBatchKeys+10 keys against one engine and reads every count back.
@@ -63,7 +63,7 @@ func runLiveFlushBatchSeveralKeys(t *testing.T, addr string) {
 // fails keeps its delta and stores the error, the other keys of that EVAL apply once, and the next flush sends only the
 // failed key, on Redis and Dragonfly.
 func TestLive_FlushBatchFailedKeyKeepsDelta(t *testing.T) {
-	runForEachLiveEngine(t, "WINDOWCOUNTER_LIVE_REDIS", "WINDOWCOUNTER_LIVE_DRAGONFLY", runLiveFlushBatchFailedKeyKeepsDelta)
+	runForEachLiveEngine(t, runLiveFlushBatchFailedKeyKeepsDelta)
 }
 
 // runLiveFlushBatchFailedKeyKeepsDelta puts a non-integer value on one window key of a three-key flush against one engine.
