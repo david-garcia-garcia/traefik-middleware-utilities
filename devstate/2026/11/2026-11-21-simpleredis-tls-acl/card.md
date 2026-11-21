@@ -49,17 +49,17 @@ Los certificados se generan en cada ejecución con stdlib y no se versionan. Nin
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: P2 — un usuario de la librería no puede conectar con despliegues de Redis/Dragonfly con TLS o usuarios ACL, y hoy solo tiene un rodeo: red privada en claro o usuario `default`.
-Reviewed head: 8c467f11
+Reviewed head: 63d8d632
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44888513108 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -69,7 +69,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-11-21-simpleredis-tls-acl pushed | `git` |
 | OpenSpec | simpleredis-tls-acl | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/103 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
+| CI | build 44888513108 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44888513108 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44888513108 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -94,7 +94,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-21-simpleredis-tls-acl on branch 2026-11-21-simpleredis-tls-acl targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/103; CI not seen.
+Ticket 2026-11-21-simpleredis-tls-acl on branch 2026-11-21-simpleredis-tls-acl targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/103; CI build 44888513108 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44888513108.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -123,7 +123,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 2 added / 6 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 8c467f116dc53804e25d3dbcc709ffeff4451f37 | Card must match the branch you measured |
+| Reviewed head | 63d8d632ff7d440b13a637fee9b3244ebc1eb2b1 | Card must match the branch you measured |
 
 ### Stored data model
 None.
