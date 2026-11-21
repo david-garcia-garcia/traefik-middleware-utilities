@@ -54,3 +54,8 @@ description: Redis 8.4 MSETEX argv/reply and Redis 7 unknown-command detection f
 priority: normal
 local: ext_redis_proto_max-bulk-len/
 description: What Redis proto-max-bulk-len defaults to and which protocol sizes it caps.
+
+## TLS
+priority: normal
+local: ext_redis_tls/
+description: How Redis 7.4 serves TLS (flags, default client-cert requirement) and the failure modes a Go TLS client sees.

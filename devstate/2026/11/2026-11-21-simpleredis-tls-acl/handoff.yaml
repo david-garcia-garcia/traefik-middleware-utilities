@@ -1,0 +1,16 @@
+issueKey: 2026-11-21-simpleredis-tls-acl
+jobName: 2026-11-21-simpleredis-tls-acl
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: d7d2e1121286f197
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-tls-acl
+pr: { id: 103, url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/103 }

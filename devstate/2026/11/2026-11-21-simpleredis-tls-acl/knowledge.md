@@ -1,0 +1,16 @@
+# Knowledge
+- created knowledge/research/ext_traefik_plugins_yaegi-tls/
+- created knowledge/research/ext_go_crypto-tls_client-dial/
+- created knowledge/research/ext_redis_tls/
+- created knowledge/research/ext_dragonfly_tls/
+- created knowledge/research/ext_go-redis_options_tls-config/
+- created knowledge/research/ext_go-redis_auth_username/
+- updated knowledge/research/ext_redis_auth/
+- updated knowledge/research/ext_dragonfly_auth/
+- updated knowledge/research/index_ext_traefik.md
+- updated knowledge/research/index_ext_go.md
+- updated knowledge/research/index_ext_redis.md
+- updated knowledge/research/index_ext_dragonfly.md
+- updated knowledge/research/index_ext_go-redis.md
+- updated knowledge/devdocs/std_go_simpleredis.md
+- updated knowledge/devdocs/std_go_test-suites.md

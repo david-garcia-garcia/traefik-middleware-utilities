@@ -24,3 +24,13 @@ description: Whether go-redis v9 can run inside Traefik's Yaegi interpreter with
 priority: normal
 local: ext_go-redis_pool_conn-check/
 description: How go-redis isHealthyConn/connCheck peeks the kernel receive queue on Unix and is a no-op on Windows.
+
+## Options.TLSConfig
+priority: normal
+local: ext_go-redis_options_tls-config/
+description: How go-redis exposes TLS as a caller-owned *tls.Config and dials it.
+
+## Username without Password
+priority: normal
+local: ext_go-redis_auth_username/
+description: Which AUTH form go-redis sends for Username and Password, including a username with no password.
