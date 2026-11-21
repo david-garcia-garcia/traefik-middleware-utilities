@@ -23,17 +23,17 @@ La revisión de código dejó `newStatus` de ambos paquetes calculando los campo
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: P2 — dolor real para quien opera el middleware y sus clientes (429 sin `Retry-After` ni cabeceras de cupo), sin daño de datos ni contrato público roto hoy.
-Reviewed head: a9b44be7
+Reviewed head: c63bb519
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44919164954 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -43,7 +43,7 @@ Owner decision: None.
 | Branch | 2026-11-21-ratelimit-status pushed | `git` |
 | OpenSpec | ratelimit-status | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
+| CI | build 44919164954 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44919164954 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44919164954 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -68,7 +68,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-21-ratelimit-status on branch 2026-11-21-ratelimit-status targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106; CI not seen.
+Ticket 2026-11-21-ratelimit-status on branch 2026-11-21-ratelimit-status targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106; CI build 44919164954 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44919164954.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -109,7 +109,9 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 4 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | a9b44be7642521dc428a0063301106ede988bee4 | Card must match the branch you measured |
+| Reviewed head | c63bb519c50c1ef6176d20eeda329370fab00775 | Card must match the branch you measured |
 
 ### Stored data model
 None.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
