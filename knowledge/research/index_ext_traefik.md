@@ -20,6 +20,11 @@ priority: normal
 local: ext_traefik_ratelimiter_token-bucket/
 description: Traefik RateLimit token-bucket math, in-memory vs Redis Lua, and GCRA-not-in-tree vs PR 10211.
 
+## Hub DistributedRateLimit
+priority: normal
+local: ext_traefik_hub_distributed-rate-limit/
+description: What Traefik Hub's commercial DistributedRateLimit middleware documents and leaves undocumented, for comparison with OSS RateLimit.
+
 ## CircuitBreaker middleware
 priority: normal
 local: ext_traefik_circuitbreaker/
@@ -44,3 +49,8 @@ description: Which build-constraint mechanisms Yaegi v0.16.1 honors when assembl
 priority: normal
 local: ext_traefik_plugins_yaegi-select/
 description: How Yaegi v0.16.1 runs a select statement shared by several goroutines, and the no-select pattern plugins use instead.
+
+## Yaegi crypto/tls client
+priority: normal
+local: ext_traefik_plugins_yaegi-tls/
+description: Whether an interpreted crypto/tls client (Dialer, Config.Clone, callbacks, error types) runs under Yaegi v0.16.1 with stdlib symbols only.

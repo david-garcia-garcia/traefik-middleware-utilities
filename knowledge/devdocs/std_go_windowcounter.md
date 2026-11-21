@@ -32,7 +32,8 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounte
 - Call `Peek(ctx, key, limit, window)` to observe occupancy without counting a hit. Do not treat Peek allowed as a reservation for a later Take. Call `Take` when the hit should occupy the window (for example after a backend failure). Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
 - Match Redis miss with `simpleredis.IsMiss` (works through wrapping). Exact mode (`sync_rate == 0`) returns the Redis error on that Take/Peek. Buffered mode during a Redis outage returns a nil error and keeps this instance's `limit` (per-node cap). Combined admits across instances can exceed the global `limit`. Other Redis errors still propagate by `Error()` text until those callers convert.
 - Buffered Peek (`sync_rate > 0`) is a memory read after the first sight of a window key. It does not GET Redis on every call while `local_delta` stays 0. Buffered Take GETs the previous-window key when `local_delta` is 0 the first time it uses that key as previous, then at most once per `sync_rate` (another instance may flush into it after this instance did). Not once per Take. When previous still has `local_delta` greater than 0, Take keeps memory and MUST NOT GET that key. Exact Peek (`sync_rate == 0`) GETs current and previous every call.
-- Prove with `go test -short ./windowcounter/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
+- Prove with `go test -short ./windowcounter/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` / `limiter_flush_batch_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
+- Benchmark with `go test -run '^$' -bench . -benchtime 1s -count 5 ./windowcounter/`: `bench_test.go` (compiled Take at `sync_rate` 0 and 20ms plus `BenchmarkFlush` of 1000 dirty keys, fake Redis with a warm script cache, `redis-cmds/op`), `bench_yaegi_test.go` (interpreted Take, plus `BenchmarkYaegiFlush` of 1000 dirty keys through a test-only `zz_bench_hooks.go` written into the interpreter's GOPATH copy of the package), `bench_e2e_test.go` (`-bench Live`, needs `WINDOWCOUNTER_LIVE_*`, skips under `-short`). CI does not run benchmarks. Results and machine: `README.md` `## Rate limiters compared`.
 
 ## Pattern snippet
 
@@ -56,6 +57,7 @@ _, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 ## Key files
 
 - `windowcounter/` — sliding-window hit counter
+- `windowcounter/bench_test.go`, `bench_yaegi_test.go`, `bench_e2e_test.go` — compiled, interpreted, and live benchmarks
 - `openspec/specs/std_go_windowcounter_sliding-take/spec.md`, `openspec/specs/std_go_windowcounter_sync-flush/spec.md`
 
 ## Gotchas
@@ -66,6 +68,9 @@ _, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 - `Sleep` flushes pending deltas then stops the flush timer. Concurrent `Wake` during Sleep does not start a timer and Sleep still returns. After Sleep returns, `Wake` starts the timer again when `sync_rate` is greater than zero. After `Close`, do not start a new flush timer. The SimpleRedis client is still the caller's.
 - Buffered flush uses `time.AfterFunc` because this package is interpreted under Yaegi. Do not put `go` plus `select` on a ticker and a stop channel in a limiter method; Yaegi v0.16.1 can miss the close and `Sleep`/`Close` hang.
 - EVAL scripts must list keys in `KEYS` (Dragonfly).
+- Buffered flush sends one EVAL per batch of up to 256 window keys (`flushBatchKeys`; the spec ceiling is 1024). Each key runs under `redis.pcall` and gets its own reply slot: an applied key leaves pending, a key whose INCRBY failed keeps its `local_delta` for the next flush, and the first failure is stored. A reply without one slot per key, or a whole-EVAL error, fails every key of that batch. Do not drop `pcall`: Redis does not undo the keys a script already applied, so a mid-script error would make the retry count them twice.
+- A reply lost after the engine applied a batch can re-apply up to 256 keys on retry. It is the same accepted EVAL double-apply as `std_go_simpleredis.md`, now per batch instead of per key.
+- A multi-key flush EVAL needs every key on one node. A Redis Cluster engine or cluster proxy would answer CROSSSLOT; SimpleRedis does not support Redis Cluster (no hash tags, no `MOVED`).
 - Exact Take expires only when the key has no TTL (`PTTL < 0`). It does not refresh TTL on every hit and does not `DEL` on expire failure.
 - Buffered Take/Peek during a Redis outage return a nil error and admit until this instance's `limit`. Exact mode still returns Redis errors. Do not check `err` to fail closed on the buffered path.
 - A stored buffered outage skips Redis for one `sync_rate`, then the next Take/Peek GET retries. Keys seeded at zero during the outage are GET again on that retry, so a Peek-only limiter recovers without a flush.

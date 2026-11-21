@@ -1,6 +1,7 @@
 package simpleredis
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -29,10 +30,19 @@ var ErrMaxIdleConnsAbovePoolSize = errors.New("simpleredis: MaxIdleConns must no
 type Config struct {
 	// Host is the TCP address New stores (host:port). New does not dial.
 	Host string
-	// Pass is AUTH on each new dial when non-empty.
+	// User is the ACL user name for AUTH. When non-empty each new dial sends the two-argument form
+	// AUTH <User> <Pass>, also when Pass is empty (a nopass ACL user). Empty keeps the one-argument form.
+	User string
+	// Pass is AUTH on each new dial when non-empty: AUTH <Pass>, or AUTH <User> <Pass> when User is set.
 	Pass string
 	// Database is SELECT on each new dial when non-empty.
 	Database string
+	// TLS is the client TLS configuration. Nil means plain TCP. Non-nil means every dial runs a TLS client
+	// handshake with it before AUTH, SELECT, or the command. New stores TLS.Clone(), so later writes to this
+	// value's fields do not change the client. The clone is shallow: RootCAs pool contents, Certificates
+	// elements, and callbacks stay shared with the caller. An empty ServerName is taken by crypto/tls from the
+	// host part of Host. Callbacks such as VerifyPeerCertificate are carried as set, not promised by this package.
+	TLS *tls.Config
 
 	// PoolSize is the live-socket cap (idle plus in-use). 0 means 8.
 	PoolSize int
@@ -43,8 +53,8 @@ type Config struct {
 	PoolTimeout time.Duration
 	// IdleTimeout is how long an idle socket may sit before borrow refuses to reuse it. 0 means 30s.
 	IdleTimeout time.Duration
-	// DialTimeout is the per-attempt TCP dial bound. 0 means 200ms. It is not part of CommandTimeout's value:
-	// a dial attempt is capped by the smaller of the two.
+	// DialTimeout bounds one dial attempt: the TCP connect plus the TLS handshake when TLS is set. 0 means 200ms.
+	// It is not part of CommandTimeout's value: a dial attempt is capped by the smaller of the two.
 	DialTimeout time.Duration
 	// CommandTimeout is the bound on the whole command: every attempt, and the dial, AUTH, SELECT and
 	// command I/O inside them. 0 means 900ms. The socket deadline is what is left of it, so a large reply

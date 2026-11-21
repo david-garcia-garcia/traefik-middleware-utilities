@@ -43,15 +43,17 @@ Under Yaegi v0.16.1, concurrent session calls SHALL behave as they do compiled: 
 ## MODIFIED Requirements
 
 ### Requirement: New records settings and does not dial
-`New(Config)` SHALL copy `Config` onto a new client (host, password, database, pool knobs, timeout knobs, retry sentinels, and `Logger`) and SHALL create the in-use-turn semaphore with its cap and its free-turn count both set to `PoolSize` (const default 8 when `PoolSize` is 0). The in-use-turn semaphore is **full** when its free-turn count equals its cap. `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, retry, or logger fields.
+`New(Config)` SHALL copy `Config` onto a new client (host, user, password, database, a clone of the TLS configuration, pool knobs, timeout knobs, retry sentinels, and `Logger`) and SHALL create the in-use-turn semaphore with its cap and its free-turn count both set to `PoolSize` (const default 8 when `PoolSize` is 0). The in-use-turn semaphore is **full** when its free-turn count equals its cap. `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, retry, or logger fields.
 
 Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` 200 milliseconds, `CommandTimeout` 900 milliseconds. Retry fields on `Config`: `0` at `New` means 1 extra retry; `-1` means off (one send). An explicit `MaxRetries` of 3 means 3 extra retries. `MinRetryBackoff` / `MaxRetryBackoff` keep go-redis sentinels: `0` means 8ms / 512ms; `-1` means off.
 
-The session SHALL expose exactly two timeout knobs that bound a command, and each SHALL bound something individually. `DialTimeout` SHALL cap one TCP dial attempt (`net.Dialer.Timeout`); `CommandTimeout` SHALL cap the whole command. `CommandTimeout` MUST NOT be derived from `MaxRetries` or `DialTimeout`, and a knob that bounds no operation MUST NOT be exported.
+The session SHALL expose exactly two timeout knobs that bound a command, and each SHALL bound something individually. `DialTimeout` SHALL cap one dial attempt as a whole: the TCP connect, plus the TLS handshake when a TLS configuration is set (`net.Dialer.Timeout` on the `tls.Dialer`'s `NetDialer`); `CommandTimeout` SHALL cap the whole command. `CommandTimeout` MUST NOT be derived from `MaxRetries` or `DialTimeout`, and a knob that bounds no operation MUST NOT be exported. The session MUST NOT add a separate handshake timeout knob.
 
 `New` SHALL return `ErrMaxIdleConnsAbovePoolSize` and a nil client when an **explicit** `MaxIdleConns` is above `PoolSize`, and MUST NOT rewrite either knob in that case. A zero `MaxIdleConns` is not a request for 8: it SHALL take `min(8, PoolSize)`, so a `Config` that sets only a `PoolSize` below 8 SHALL still create a client whose `MaxIdleConns()` equals that `PoolSize`. `New` MUST NOT rewrite `PoolSize`. A trim below `PoolSize` SHALL still create a client.
 
 A nil `Config.Logger` SHALL be replaced at `New` with a discard logger (`slog.NewTextHandler` writing to `io.Discard`) so later call sites never nil-check the logger. A nil `Logger` MUST NOT be a reason for `New` to return an error. `log/slog` is a Go standard-library package and SHALL be an allowed import of the session source.
+
+A nil `Config.TLS` SHALL mean plain TCP. A non-nil `Config.TLS` SHALL be stored as `(*tls.Config).Clone()` of the caller's value, so later writes to that value's fields MUST NOT change the client. The clone is shallow: values the caller mutates in place behind a shared pointer or slice (`RootCAs` pool contents, `Certificates` elements, callbacks) remain the caller's responsibility. `New` MUST NOT reject, clear, or wrap callbacks on that configuration, and MUST NOT return an error because of `TLS` or `User`. `crypto/tls` is a Go standard-library package and SHALL be an allowed import of the session source.
 
 #### Scenario: Zero Config timeout knobs
 - **WHEN** a client is created with `New` from a `Config` whose only field is `Host`
@@ -92,6 +94,17 @@ A nil `Config.Logger` SHALL be replaced at `New` with a discard logger (`slog.Ne
 - **WHEN** `New` is called with a zero `Config` except `Host`
 - **THEN** `New` returns a client without error
 - **AND** later commands on that client MUST NOT panic for want of a logger
+
+#### Scenario: TLS configuration is frozen at New
+- **WHEN** `New` is called with a `Config.TLS` whose `RootCAs` trusts the TLS fake's CA and whose `ServerName` is `localhost`
+- **AND** after `New` the caller sets that `tls.Config`'s `ServerName` to `wrong.example` and its `RootCAs` to an empty pool
+- **AND** a command is issued against the TLS fake whose certificate names `localhost`
+- **THEN** the command succeeds
+
+#### Scenario: Handshake time counts against DialTimeout
+- **WHEN** `Config.TLS` is set and `DialTimeout` is 200 milliseconds
+- **AND** the peer accepts TCP and never answers the ClientHello
+- **THEN** each dial attempt ends at about 200 milliseconds, not at `CommandTimeout`
 
 #### Scenario: New fills the in-use-turn semaphore
 - **WHEN** `New` is called with `PoolSize` 3

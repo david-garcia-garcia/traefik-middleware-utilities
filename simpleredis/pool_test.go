@@ -175,6 +175,74 @@ func TestAuthAndSelectOncePerDial(t *testing.T) {
 	}
 }
 
+// TestAuthArgumentForms proves the AUTH shape per User/Pass: one argument with only a password, two with an ACL
+// user (also with an empty password), and none when both are empty.
+func TestAuthArgumentForms(t *testing.T) {
+	rows := []struct {
+		name     string
+		user     string
+		pass     string
+		wantAuth []string
+	}{
+		{"passwordOnly", "", "secret", []string{"secret"}},
+		{"aclUser", "app", "secret", []string{"app", "secret"}},
+		{"aclUserEmptyPassword", "app", "", []string{"app", ""}},
+		{"neither", "", "", nil},
+	}
+	for _, row := range rows {
+		row := row
+		t.Run(row.name, func(t *testing.T) {
+			fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+			redis := newTestRedis(t, Config{Host: addr, User: row.user, Pass: row.pass})
+			t.Cleanup(redis.Close)
+			if _, err := redis.Get(context.Background(), "hit"); err != nil {
+				t.Fatalf("Get: %v", err)
+			}
+			auths, _, gets := fake.handshakeCounts()
+			wantAuths := 1
+			if row.wantAuth == nil {
+				wantAuths = 0
+			}
+			if auths != wantAuths || gets != 1 {
+				t.Fatalf("AUTH=%d GET=%d, want %d, 1", auths, gets, wantAuths)
+			}
+			got := fake.lastAuthArgs()
+			if len(got) != len(row.wantAuth) {
+				t.Fatalf("AUTH args = %q, want %q", got, row.wantAuth)
+			}
+			for i := range got {
+				if got[i] != row.wantAuth[i] {
+					t.Fatalf("AUTH args = %q, want %q", got, row.wantAuth)
+				}
+			}
+		})
+	}
+}
+
+// TestHandshakeACLUserWrongPassMapsToNoAuth proves a WRONGPASS to AUTH <user> <pass> is redis:noauth on one connection.
+func TestHandshakeACLUserWrongPassMapsToNoAuth(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.setHandshakeReplies("-WRONGPASS invalid username-password pair or user is disabled.\r\n", statusOKReply)
+	redis := newTestRedis(t, Config{Host: addr, User: "app", Pass: "wrong-password"})
+	t.Cleanup(redis.Close)
+	_, err := redis.Get(context.Background(), "hit")
+	if err == nil || err.Error() != RedisNoAuth {
+		t.Fatalf("Get = %v, want %s", err, RedisNoAuth)
+	}
+	if !errors.Is(err, ErrNoAuth) {
+		t.Fatalf("errors.Is(%v, ErrNoAuth) = false", err)
+	}
+	if got := fake.lastAuthArgs(); len(got) != 2 || got[0] != "app" {
+		t.Fatalf("AUTH args = %q, want two-argument form for app", got)
+	}
+	if fake.connections() != 1 {
+		t.Fatalf("opened %d connections, want 1", fake.connections())
+	}
+	if pooledIdle(redis) != 0 {
+		t.Fatalf("idle = %d, want 0", pooledIdle(redis))
+	}
+}
+
 func TestHandshakeAuthRejectedMapsToNoAuthAndIsNotPooled(t *testing.T) {
 	replies := []string{
 		"-NOAUTH Authentication required.\r\n",

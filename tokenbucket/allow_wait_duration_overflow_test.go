@@ -18,11 +18,11 @@ func TestAllow_WaitDurationOverflowFailOpen(t *testing.T) {
 	}
 	now := time.Unix(1_700_000_000, 0)
 	limiter.SetNowForTest(func() time.Time { return now })
-	limiter.buckets["k"] = &memEntry{
+	storeMemEntryForTest(limiter, "k", &memEntry{
 		tokens:   0,
 		last:     now.UnixMicro(),
 		expireAt: now.Add(testTTL),
-	}
+	})
 
 	allowed, _, allowErr := limiter.Allow(context.Background(), "k")
 	if allowErr != nil {

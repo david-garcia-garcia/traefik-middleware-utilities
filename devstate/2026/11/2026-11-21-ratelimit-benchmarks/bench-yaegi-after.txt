@@ -1,0 +1,51 @@
+# Yaegi AFTER (back-to-back pair, run right after the BEFORE run): commit 3623aafd
+# machine: Intel Core Ultra 7 265K (20 threads), Windows 11, go1.25.6 windows/amd64, Yaegi v0.16.1; started 2026-11-21T10:22:45Z
+# command: go test -run '^$' -bench Yaegi -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
+goos: windows
+goarch: amd64
+pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket
+cpu: Intel(R) Core(TM) Ultra 7 265K
+BenchmarkYaegiMemoryAllow/hot-key-20         	  154357	      9196 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  144486	      7784 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  159985	      7560 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  158236	      7399 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  157114	      7476 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  140264	      8427 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  159108	      7549 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  161432	      7508 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  159454	      7569 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  159763	      7428 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   94512	     12671 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   81804	     12673 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   96775	     13078 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   93150	     12706 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	   94275	     12491 ns/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    8577	    131256 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    9504	    128249 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    8836	    126815 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    8812	    126173 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    9441	    129089 ns/op	         1.000 redis-cmds/op
+PASS
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket	36.560s
+goos: windows
+goarch: amd64
+pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter
+cpu: Intel(R) Core(TM) Ultra 7 265K
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5546	    193752 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5761	    233326 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5202	    197117 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5817	    201641 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    6091	    195302 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   85293	     13644 ns/op	         0.001876 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   87987	     13634 ns/op	         0.001921 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   86290	     13645 ns/op	         0.001935 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   78115	     15050 ns/op	         0.001984 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   85537	     13928 ns/op	         0.001906 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	     100	  11018234 ns/op	         4.000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	     100	  10675662 ns/op	         4.000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	     100	  10685440 ns/op	         4.000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	     100	  10701576 ns/op	         4.000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	     100	  12131731 ns/op	         4.000 redis-cmds/op
+PASS
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter	22.789s
+exit=0
