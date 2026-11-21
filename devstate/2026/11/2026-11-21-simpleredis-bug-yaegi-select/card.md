@@ -25,17 +25,17 @@ Para la regresión hay tres piezas. La primera es una guarda AST determinista, `
 **End users.** None.
 
 ## Merge readiness
-Ready for review. 1 items remain.
+In progress. 1 items remain.
 
 Priority: P1 — la Motivation describe código de producción bajo Traefik (Yaegi v0.16.1) que hoy puede entrar en pánico y perder turnos del pool de forma permanente.
-Reviewed head: 43a0b75e
+Reviewed head: 2b6d8484
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44898146115 |
+| Overall readiness | 1/6 | Not ready |
+| CI proof | 1/6 | not seen |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -45,7 +45,7 @@ Owner decision: None.
 | Branch | 2026-11-21-simpleredis-bug-yaegi-select pushed | `git` |
 | OpenSpec | simpleredis-drop-select-under-yaegi | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/104 | pr-host |
-| CI | build 44898146115 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44898146115 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44898146115 |
+| CI | not seen | caller omitted CI snapshot |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -63,7 +63,7 @@ None.
 
 
 ## How this fits together
-Ticket 2026-11-21-simpleredis-bug-yaegi-select on branch 2026-11-21-simpleredis-bug-yaegi-select targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/104; CI build 44898146115 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44898146115.
+Ticket 2026-11-21-simpleredis-bug-yaegi-select on branch 2026-11-21-simpleredis-bug-yaegi-select targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/104; CI not seen.
 
 ## Explore Decisions
 None.
@@ -89,7 +89,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 43a0b75e9751fc4493d183ad28f6e9ebd9821d80 | Card must match the branch you measured |
+| Reviewed head | 2b6d84846e29897ae8a429c64b1449ff8c0ba542 | Card must match the branch you measured |
 
 ### Stored data model
 None.
