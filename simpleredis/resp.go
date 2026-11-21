@@ -12,27 +12,49 @@ import (
 	"time"
 )
 
-// do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty.
-// Any panic here loses the in-use-turn when this client runs in a Traefik middleware: Traefik recovers the request and release never runs.
-func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) ([][]byte, bool, error) {
+// do writes one RESP command on conn and reads the reply. reusable is false when the socket is dirty,
+// leftover bytes remain after a complete value, or unread bytes were already in the reader before the write.
+// exec calls do from runOnConn, which defers release so a panic still returns the in-use turn and closes the socket.
+func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) (reply [][]byte, reusable bool, err error) {
 	if err := contextStop(ctx); err != nil {
 		return nil, false, err
 	}
-	ioBound := clampTimeout(ctx, sr.IOTimeout())
-	if ioBound <= 0 {
+	// The socket deadline is what is left of the command budget exec bound with CommandTimeout. A reply
+	// that keeps arriving must not be killed for its size, so there is no second per-operation cap:
+	// two bounds on the same socket could only disagree, and the shorter one made a large reply
+	// unreadable while the peer was healthy and still sending.
+	budgetLeft := sr.commandBudgetLeft(ctx)
+	if budgetLeft <= 0 {
 		if err := contextStop(ctx); err != nil {
 			return nil, false, err
 		}
 		return nil, false, errTimeout
 	}
-	if err := conn.netConn.SetDeadline(time.Now().Add(ioBound)); err != nil {
+	if err := conn.netConn.SetDeadline(time.Now().Add(budgetLeft)); err != nil {
+		sr.logger.Debug("do: "+RedisUnreachable, "reason", "set_deadline", "verb", commandVerb(args))
 		return nil, false, errUnreachable
 	}
-	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before SetDeadline.
+	// net.Conn Read/Write ignore ctx; Close on cancel is what unblocks them before the deadline.
 	stopWatch := watchConnClose(ctx, conn.netConn)
 	defer stopWatch()
-	if err := writeCommand(conn.writer, args); err != nil {
-		return nil, false, ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
+	// Unread leftover from a prior command on this socket must not be parsed as this command's reply.
+	// errUnreachable, not errIssue: the socket is unusable but the command is not, so this must stay
+	// retryable — a retry gets a fresh dial whose reader is empty by construction. Same call the spec
+	// makes for a short bulk read, which MUST NOT surface as redis:issue?.
+	// Buffered() covers leftover already in the reader, not a stray that arrives while the socket is idle: it does not see the kernel receive buffer.
+	if conn.reader.Buffered() != 0 {
+		// verb is what makes this handshake leftover when it is AUTH or SELECT: the socket was dialed for
+		// this command, so nothing should have been on it before the first write.
+		sr.logger.Warn("do: "+RedisUnreachable, "reason", "unread_before_write", "verb", commandVerb(args))
+		return nil, false, errUnreachable
+	}
+	if err := writeCommand(conn, args); err != nil {
+		mapped := ioOrContext(ctx, err)
+		if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
+			return nil, false, mapped
+		}
+		sr.logger.Debug("do: "+RedisUnreachable, "reason", "write", "verb", commandVerb(args))
+		return nil, false, mapped
 	}
 	values, clean, err := readReply(conn.reader)
 	if stop := contextStop(ctx); stop != nil {
@@ -40,11 +62,46 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 	}
 	if err != nil && !clean {
 		if isDirtyProtocolError(err) {
+			sr.logger.Warn("do: redis error", "verb", commandVerb(args))
 			return nil, false, err
 		}
-		return nil, false, ioOrContext(ctx, ioBound, sr.IOTimeout(), err)
+		// Timeout is not classified here: ioOrContext hands the deadline up and exec's libraryTimeout owns that call.
+		// A short bulk read is Warn (the peer lied about a length); every other I/O failure is a peer that went away.
+		mapped := ioOrContext(ctx, err)
+		if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
+			return nil, false, mapped
+		}
+		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+			sr.logger.Warn("do: "+RedisUnreachable, "reason", "read", "verb", commandVerb(args))
+		} else {
+			sr.logger.Debug("do: "+RedisUnreachable, "reason", "read", "verb", commandVerb(args))
+		}
+		return nil, false, mapped
+	}
+	// A clean reply that is an error is the peer's own answer. AUTH-class is already the mapped sentinel here.
+	if err != nil {
+		if errors.Is(err, ErrNoAuth) {
+			sr.logger.Error("do: "+RedisNoAuth, "verb", commandVerb(args))
+		} else {
+			sr.logger.Debug("do: redis error", "verb", commandVerb(args))
+		}
+	}
+	// Extra well-formed RESP after this reply means the peer is ahead; return the value and destroy the socket.
+	// Same limit as the pre-write check: leftover already in the reader, not a stray still only in the kernel buffer.
+	// The command succeeded, so there is no error to site-tag; this stays a named event.
+	if conn.reader.Buffered() != 0 {
+		sr.logger.Warn("simpleredis_socket_poisoned")
+		return values, false, err
 	}
 	return values, true, err
+}
+
+// commandVerb is the Redis verb do is running (args[0]). Never a key name or a value: argv[0] is the command.
+func commandVerb(args [][]byte) string {
+	if len(args) == 0 {
+		return ""
+	}
+	return string(args[0])
 }
 
 // watchConnClose closes conn when ctx is done so a blocked read returns. Stop the returned func when I/O finishes.
@@ -69,28 +126,65 @@ func watchConnClose(ctx context.Context, conn net.Conn) func() {
 
 // ioOrContext prefers a fired context over a socket I/O error.
 //
-// Why not ioError alone: SetDeadline is a wall clock. When ioBound was clamped to ctx's remaining
-// time, the OS can return os.ErrDeadlineExceeded a few ms before ctx.Done closes. ioError maps
-// that to redis:timeout, so a caller deadline looked like the library budget. Go E2E Redis failed
-// TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout that way. If the socket timeout is the
-// clamped ctx instant, return DeadlineExceeded and let exec map library vs caller.
-func ioOrContext(ctx context.Context, ioBound, ioTimeout time.Duration, err error) error {
+// Why not ioError alone: SetDeadline is a wall clock. The socket deadline is the command
+// deadline's remainder, so when it fires the OS can return os.ErrDeadlineExceeded a few ms
+// before ctx.Done closes. ioError maps that to redis:timeout, so a caller deadline looked like
+// the library budget. Go E2E Redis failed TestGetCallerDeadlineIsDeadlineExceededNotRedisTimeout
+// that way. Report the deadline and let exec's libraryOwnsDeadline decide library vs caller.
+//
+// A ctx with no deadline is the direct-do path, where the socket deadline came straight from
+// CommandTimeout; that one is the library's own bound and stays redis:timeout.
+func ioOrContext(ctx context.Context, err error) error {
 	if stop := contextStop(ctx); stop != nil {
 		return stop
 	}
-	if ioBound < ioTimeout && errors.Is(err, os.ErrDeadlineExceeded) {
+	if _, ok := ctx.Deadline(); ok && errors.Is(err, os.ErrDeadlineExceeded) {
 		return context.DeadlineExceeded
 	}
 	return ioError(err)
 }
 
+// commandBudgetLeft is the time left on ctx. exec binds CommandTimeout onto ctx, so this is that budget's remainder.
+// A ctx with no deadline never comes from exec; it is a direct do call, where the whole budget is still ahead.
+func (sr *SimpleRedis) commandBudgetLeft(ctx context.Context) time.Duration {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return sr.CommandTimeout()
+	}
+	return time.Until(deadline)
+}
+
 // writeCommand writes one RESP array of bulk strings and flushes.
-func writeCommand(writer *bufio.Writer, args [][]byte) error {
-	if _, err := writer.WriteString("*" + strconv.Itoa(len(args)) + "\r\n"); err != nil {
+//
+// Every length header is strconv.AppendInt into conn.lenBuf, never "$" + strconv.Itoa(n) + CRLF.
+// That concatenation is the whole allocation cost of framing — one string per header, so three on
+// a GET — and removing it is where the allocation win comes from. It is not the number of writes:
+// see pooledConn for why bufio stays.
+//
+// The digit scratch lives on the connection rather than as a local array because a local escapes.
+// It is handed to bufio.Writer.Write, whose argument can reach the underlying io.Writer interface,
+// so the compiler heap-allocates it once per command (measured: 1 alloc, 24 B, versus 0 here).
+func writeCommand(conn *pooledConn, args [][]byte) error {
+	writer := conn.writer
+	// Array header: *<count>\r\n
+	if err := writer.WriteByte('*'); err != nil {
 		return err
 	}
+	if _, err := writer.Write(strconv.AppendInt(conn.lenBuf[:0], int64(len(args)), 10)); err != nil {
+		return err
+	}
+	if _, err := writer.WriteString("\r\n"); err != nil {
+		return err
+	}
+	// Each arg is a bulk string: $<len>\r\n<payload>\r\n
 	for _, arg := range args {
-		if _, err := writer.WriteString("$" + strconv.Itoa(len(arg)) + "\r\n"); err != nil {
+		if err := writer.WriteByte('$'); err != nil {
+			return err
+		}
+		if _, err := writer.Write(strconv.AppendInt(conn.lenBuf[:0], int64(len(arg)), 10)); err != nil {
+			return err
+		}
+		if _, err := writer.WriteString("\r\n"); err != nil {
 			return err
 		}
 		if _, err := writer.Write(arg); err != nil {
@@ -104,7 +198,7 @@ func writeCommand(writer *bufio.Writer, args [][]byte) error {
 }
 
 // readReply parses one RESP value. clean is false when the stream is no longer usable.
-func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
+func readReply(reader *bufio.Reader) (values [][]byte, clean bool, err error) {
 	line, err := readLine(reader)
 	if err != nil {
 		return nil, false, err
@@ -121,7 +215,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		return nil, true, replyError(line[1:])
 	case '$':
 		data, bulkErr := readBulk(reader, line)
-		if bulkErr == errMiss {
+		if bulkErr == errMiss { //nolint:errorlint // readBulk returns errMiss as the exact $-1 sentinel; a wrap is not that decode miss
 			return [][]byte{nil}, true, nil
 		}
 		if bulkErr != nil {
@@ -138,6 +232,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 		if count > maxArrayCount {
 			return nil, false, errIssue
 		}
+		// In-cap count is allocated up front, not appended element by element; see the cap const block.
 		values := make([][]byte, count)
 		for i := 0; i < count; i++ {
 			head, headErr := readLine(reader)
@@ -150,7 +245,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 			switch head[0] {
 			case '$':
 				data, bulkErr := readBulk(reader, head)
-				if bulkErr == errMiss {
+				if bulkErr == errMiss { //nolint:errorlint // readBulk returns errMiss as the exact $-1 sentinel; a wrap is not that decode miss
 					continue
 				}
 				if bulkErr != nil {
@@ -173,7 +268,7 @@ func readReply(reader *bufio.Reader) ([][]byte, bool, error) {
 
 // isDirtyProtocolError is a framing or unsupported-type sentinel. It must not become redis:unreachable.
 func isDirtyProtocolError(err error) bool {
-	return err == errIssue || err == errUnsupportedReply
+	return err == errIssue || err == errUnsupportedReply //nolint:errorlint // dirty-protocol sentinels this decoder returns exactly; a wrap would be a different I/O failure
 }
 
 // readBulk reads a $ payload (or a miss when length is negative) and requires a CRLF trailer.
@@ -192,6 +287,7 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 	if length > maxBulkLength {
 		return nil, errIssue
 	}
+	// In-cap length is allocated up front, not grown from arrived bytes; see the cap const block.
 	data := make([]byte, length+2)
 	if _, err := io.ReadFull(reader, data); err != nil {
 		return nil, err
@@ -208,7 +304,7 @@ func readBulk(reader *bufio.Reader, head []byte) ([]byte, error) {
 func readLine(reader *bufio.Reader) ([]byte, error) {
 	line, err := reader.ReadSlice('\n')
 	if err != nil {
-		if err == bufio.ErrBufferFull {
+		if err == bufio.ErrBufferFull { //nolint:errorlint // ReadSlice returns ErrBufferFull exactly; a wrap would be I/O and must stay unreachable
 			return nil, errIssue
 		}
 		return nil, err
@@ -219,6 +315,18 @@ func readLine(reader *bufio.Reader) ([]byte, error) {
 	return line[:len(line)-2], nil
 }
 
+// Cap-before-allocate is the defense: an over-cap header returns errIssue having allocated nothing.
+// That ordering is what matters, because an allocation the OS cannot satisfy is a fatal Go runtime
+// out of memory, not an error this package could return.
+//
+// An in-cap announced length is allocated up front, on purpose. The header arrives on our own pooled
+// socket to the configured Redis, not on a separate untrusted channel, so a lying in-cap header needs
+// a compromised server, a malfunctioning RESP proxy, or wire injection. go-redis caps nothing at all
+// (knowledge/research/ext_go-redis_proto_reader-limit/), so any cap is already stricter than the
+// reference client. Reading in fixed chunks and growing from arrived bytes was proposed and rejected:
+// it only narrows an already-bounded 64 MiB worst case, and it recopies every genuine large value up
+// the append ladder. Still open: no cumulative per-reply budget
+// (knowledge/debt/2026-09-12-simpleredis-cumulative-array-reply-budget.md).
 const (
 	maxBulkLength = 64 << 20 // largest $ payload this decoder will allocate
 	maxArrayCount = 1 << 20  // largest * count this decoder will allocate

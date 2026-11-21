@@ -30,6 +30,11 @@ priority: normal
 local: std_go_backendbackoff.md
 description: How a Traefik middleware Allows then Reports a per-key in-memory backoff gate for an unhealthy backend.
 
+## CIDR lookup
+priority: normal
+local: std_go_iplookup.md
+description: How a Traefik middleware stores CIDR prefixes by address family and returns the winning match label.
+
 ## Test suites
 priority: normal
 local: std_go_test-suites.md

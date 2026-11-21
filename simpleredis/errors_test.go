@@ -48,10 +48,10 @@ func TestPoolWaitWrapsUnreachableAndIsNotRetried(t *testing.T) {
 	if IsPoolWait(ErrUnreachable) {
 		t.Fatal("IsPoolWait(ErrUnreachable) = true")
 	}
-	if shouldRetry(ErrPoolWait) {
+	if shouldRetry(ErrPoolWait, false) {
 		t.Fatal("shouldRetry(ErrPoolWait) = true, want false so MaxRetries does not multiply PoolTimeout")
 	}
-	if !shouldRetry(ErrUnreachable) {
+	if !shouldRetry(ErrUnreachable, false) {
 		t.Fatal("shouldRetry(ErrUnreachable) = false, want true")
 	}
 }

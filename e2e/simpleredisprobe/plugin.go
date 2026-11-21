@@ -75,11 +75,18 @@ func New(ctx context.Context, next http.Handler, cfg *Config, name string) (http
 		host = defaultHost
 	}
 
-	// Pester may Eval a 500ms TIME wait; zero-Config IOTimeout is 100ms and would abort that command.
-	client := simpleredis.New(simpleredis.Config{Host: host, Pass: cfg.Password, Database: cfg.Database, IOTimeout: time.Second})
+	// Pester may Eval a 500ms TIME wait; the zero-Config 900ms command budget would abort that command.
+	client, err := simpleredis.New(simpleredis.Config{Host: host, Pass: cfg.Password, Database: cfg.Database, CommandTimeout: 3 * time.Second})
+	if err != nil {
+		return nil, err
+	}
 	mw := &middleware{client: client}
 	if cfg.DropHost != "" {
-		mw.dropClient = simpleredis.New(simpleredis.Config{Host: cfg.DropHost, IOTimeout: time.Second})
+		dropClient, err := simpleredis.New(simpleredis.Config{Host: cfg.DropHost, CommandTimeout: 3 * time.Second})
+		if err != nil {
+			return nil, err
+		}
+		mw.dropClient = dropClient
 	}
 	return mw, nil
 }

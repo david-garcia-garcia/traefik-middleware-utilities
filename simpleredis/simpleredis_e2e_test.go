@@ -110,7 +110,7 @@ func assertLiveTTLPositive(t *testing.T, client *SimpleRedis, key string) {
 // waitLiveSimpleRedis builds a one-slot client and waits until Set against addr succeeds.
 func waitLiveSimpleRedis(t *testing.T, addr string) *SimpleRedis {
 	t.Helper()
-	client := New(Config{Host: addr, PoolSize: 1, PoolTimeout: 80 * time.Millisecond})
+	client := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: 80 * time.Millisecond})
 	deadline := time.Now().Add(15 * time.Second)
 	for {
 		if err := client.Set(context.Background(), "simpleredis-live-probe", []byte("1"), 60); err == nil {
@@ -153,12 +153,12 @@ func clientKillFromSidecarForTest(t *testing.T, host, filter, value string) int 
 		t.Fatalf("sidecar dial %s: %v", host, err)
 	}
 	defer netConn.Close()
-	if err := netConn.SetDeadline(time.Now().Add(defaultIOTimeout)); err != nil {
+	if err := netConn.SetDeadline(time.Now().Add(defaultCommandTimeout)); err != nil {
 		t.Fatal(err)
 	}
-	writer := bufio.NewWriter(netConn)
+	killConn := &pooledConn{netConn: netConn, writer: bufio.NewWriter(netConn)}
 	reader := bufio.NewReader(netConn)
-	if err := writeCommand(writer, [][]byte{[]byte("CLIENT"), []byte("KILL"), []byte(filter), []byte(value)}); err != nil {
+	if err := writeCommand(killConn, [][]byte{[]byte("CLIENT"), []byte("KILL"), []byte(filter), []byte(value)}); err != nil {
 		t.Fatalf("CLIENT KILL %s %s: %v", filter, value, err)
 	}
 	values, _, err := readReply(reader)

@@ -5,7 +5,7 @@ Defines the RESP commands a SimpleRedis client speaks after it holds a session: 
 ## Requirements
 
 ### Requirement: Get returns the stored value or a miss
-`Get(name)` SHALL send Redis `GET` for that key. A bulk reply SHALL return those bytes. After a one-slot reply, a nil slot (RESP2 null bulk `$-1`) SHALL return an error whose `Error()` text is `redis:miss`. Empty bulk `$0` SHALL return a non-nil empty slice and MUST NOT return `redis:miss`.
+`Get(name)` SHALL send Redis `GET` for that key. A bulk reply SHALL return those bytes. After a one-slot reply, a nil slot (RESP2 null bulk `$-1`) SHALL return an error whose `Error()` text is `redis:miss`. Empty bulk `$0` SHALL return a non-nil empty slice and MUST NOT return `redis:miss`. After a peer writes an extra well-formed reply that is already in the connection reader at the reply boundary, Get MUST return the value for its own key or an error and MUST NOT return another key’s bytes. That guarantee does not cover an unsolicited reply that arrives only into the kernel receive buffer while the socket is idle.
 
 #### Scenario: Get hit and miss
 - **WHEN** a key has been Set
@@ -23,6 +23,13 @@ Defines the RESP commands a SimpleRedis client speaks after it holds a session: 
 - **WHEN** Get receives empty bulk `$0`
 - **THEN** Get returns a non-nil empty slice
 - **AND** the error is not `redis:miss`
+
+#### Scenario: Get after stray extra is own-key or error
+- **WHEN** `PoolSize` is `1` and `MaxRetries` is `-1`
+- **AND** a peer answers `GET kN` with `vN` and, in the same write, appends one extra well-formed bulk every 5th command
+- **AND** Get is called for `k0` through at least `k11`
+- **THEN** each Get returns the bytes for that key or an error
+- **AND** no Get returns another key’s bytes or the stray bulk as a success
 
 ### Requirement: MGet returns aligned slots and skips empty names
 `MGet(names)` SHALL send Redis `MGET` for those keys. Each null bulk slot SHALL be a nil slice in the result, aligned with the requested names. Empty or nil `names` SHALL return `nil, nil` and MUST NOT dial. A short array reply SHALL return an error whose `Error()` text is `redis:issue?`.
@@ -59,7 +66,7 @@ Defines the RESP commands a SimpleRedis client speaks after it holds a session: 
 - **THEN** Del returns no error
 
 ### Requirement: Exported error strings are stable
-Callers SHALL match errors by `errors.Is` against the exported sentinel values (`ErrUnreachable`, `ErrMiss`, `ErrTimeout`, `ErrNoAuth`, `ErrIssue`, `ErrPoolWait`, `ErrUnsupportedReply`) or the predicates `IsMiss`, `IsUnreachable`, and `IsPoolWait`. The session SHALL still export these exact strings for display and legacy text matching: `redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`, `redis:unsupported-reply`. AUTH-class Redis error prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text. `ErrPoolWait` SHALL wrap `ErrUnreachable` so `errors.Is` on the unreachable sentinel matches pool wait, while `IsPoolWait` still distinguishes pool saturation. A wrapped sentinel SHALL still match `errors.Is` and the corresponding predicate; `err.Error() ==` the token MUST NOT be the only supported match.
+Callers SHALL match errors by `errors.Is` against the exported sentinel values (`ErrUnreachable`, `ErrMiss`, `ErrTimeout`, `ErrNoAuth`, `ErrIssue`, `ErrPoolWait`, `ErrUnsupportedReply`) or the predicates `IsMiss`, `IsUnreachable`, and `IsPoolWait`. The session SHALL still export these exact strings for display and legacy text matching: `redis:unreachable`, `redis:miss`, `redis:timeout`, `redis:noauth`, `redis:issue?`, `redis:unsupported-reply`. AUTH-class Redis error prefixes (`NOAUTH`, `WRONGPASS`, `NOPERM`, `ERR Client sent AUTH`) SHALL map to `redis:noauth`. Other `-` replies SHALL be returned as `errors.New` of that text. `ErrPoolWait` SHALL wrap `ErrUnreachable` so `errors.Is` on the unreachable sentinel matches pool wait, while `IsPoolWait` still distinguishes pool saturation. A wrapped sentinel SHALL still match `errors.Is` and the corresponding predicate; `err.Error() ==` the token MUST NOT be the only supported match. Handshake AUTH or SELECT failures that are those sentinels SHALL match the same way for compiled callers and for Yaegi-interpreted callers. The session MUST NOT return a package-local wrapper whose `Unwrap` compiled `errors.Is` cannot see under Yaegi.
 
 #### Scenario: Rejected auth is redis:noauth
 - **WHEN** Redis replies `-NOAUTH`
@@ -80,8 +87,22 @@ Callers SHALL match errors by `errors.Is` against the exported sentinel values (
 - **THEN** the command returns `redis:unsupported-reply`
 - **AND** the error is not `redis:issue?`
 
+#### Scenario: Handshake AUTH close matches unreachable compiled and interpreted
+- **WHEN** a compiled caller issues a command against a peer that accepts TCP, reads AUTH, and closes with no reply
+- **THEN** `IsUnreachable` is true
+- **WHEN** Yaegi-interpreted code issues that same command against the same kind of peer
+- **THEN** `IsUnreachable` is true
+- **AND** `Error()` is `redis:unreachable`
+
+#### Scenario: Handshake AUTH WRONGPASS matches ErrNoAuth compiled and interpreted
+- **WHEN** a compiled caller issues a command against a fake that replies `-WRONGPASS` to AUTH
+- **THEN** `errors.Is` matches `ErrNoAuth`
+- **WHEN** Yaegi-interpreted code issues that same command against the same kind of fake
+- **THEN** `errors.Is` matches `ErrNoAuth`
+- **AND** `Error()` is `redis:noauth`
+
 ### Requirement: Interpreter tests observe Init Get Set Del
-Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`. Interpreted `clientprobe` SHALL also observe `errors.Is` against an exported sentinel and one of `IsMiss`, `IsUnreachable`, or `IsPoolWait`.
+Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `Set`, `Del`, `Incr`, `Eval`, and `MSetEX` against a compiled fake TCP Redis, including the NOSCRIPT fallback path. Those tests MUST use GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. Yaegi SHALL cover both MSetEX paths: a fake that implements MSETEX (native), and a fake that rejects MSETEX so the first call falls back to EVAL and a second call does not send `MSETEX`. Interpreted `clientprobe` SHALL also observe `errors.Is` against an exported sentinel and one of `IsMiss`, `IsUnreachable`, or `IsPoolWait`. Those tests SHALL also prove interpreted matchers on errors the package returns: handshake AUTH peer-close (`IsUnreachable`) and handshake AUTH-class (`errors.Is` against `ErrNoAuth`). A `%w` wrap of a sentinel alone MUST NOT be the only interpreted matcher coverage.
 
 #### Scenario: Yaegi Init Get Set Del
 - **WHEN** interpreted code Inits a client to a compiled fake Redis listener
@@ -118,6 +139,16 @@ Tests that import Yaegi v0.16.1 SHALL prove interpreted code can `New`, `Get`, `
 #### Scenario: Yaegi matches an exported sentinel
 - **WHEN** interpreted code calls `errors.Is` on an exported SimpleRedis sentinel and one predicate
 - **THEN** both matches succeed
+
+#### Scenario: Yaegi matches handshake AUTH unreachable
+- **WHEN** interpreted code constructs a client with New with a password against a compiled fake that accepts TCP, reads AUTH, and closes with no reply
+- **THEN** `IsUnreachable` is true
+- **AND** a compiled control against the same kind of peer also matches `IsUnreachable`
+
+#### Scenario: Yaegi matches handshake AUTH noauth
+- **WHEN** interpreted code constructs a client with New with a password against a compiled fake that replies `-WRONGPASS` to AUTH
+- **THEN** `errors.Is` matches `ErrNoAuth`
+- **AND** a compiled control against the same kind of fake also matches `ErrNoAuth`
 
 ### Requirement: Traefik probe maps each SimpleRedis verb to an HTTP path
 The nested SimpleRedis Traefik plugin SHALL dispatch on the last path segment after the engine mount. Exact `/redis` and `/dragonfly` SHALL run Set then Get of a unique per-request token (not a shared constant such as `"ok"`) so compose health can wait on those URLs. Each public verb SHALL be one path (`/get`, `/mget`, `/set`, `/del`, `/incr`, `/incrby`, `/expire`, `/expireat`, `/eval`, `/msetex`, `/msetexat`) that runs only that client method. Query `key` (repeatable), `arg` (repeatable), `ex`, `at`, `delta`, and `digest` SHALL be the method arguments. Set, Eval, MSetEX, and MSetEXAt SHALL take the request body as the value or Lua script. Eval SHALL pass query `digest` through as the SimpleRedis digest and MUST NOT hash the body. Query `drop=1` SHALL use `DropHost`. Success SHALL be HTTP 200 with the Redis payload in the body (empty when the method returns no payload). A command error SHALL be HTTP 502 with `err.Error()` in the body. The plugin MUST NOT copy results into `X-SimpleRedis-*` headers and MUST NOT forward a successful verb to whoami.
@@ -300,7 +331,7 @@ The package SHALL export `ScriptSHA1Hex(script string) string`. It SHALL return 
 - **AND** the error is not `redis:miss`
 
 ### Requirement: Eval and MSetEX fallback hops each have a full command budget
-`Eval` SHALL send EVALSHA then, on a `NOSCRIPT` prefix, EVAL as two separate command executions. Each hop SHALL compute its own overall deadline at that hop’s entry equal to `(maxRetries+1)*(DialTimeout+IOTimeout)` unless the caller’s context deadline is sooner. The EVAL hop MUST NOT inherit remaining time from the EVALSHA hop. Sharing remaining time across those hops can starve EVAL after a slow EVALSHA.
+`Eval` SHALL send EVALSHA then, on a `NOSCRIPT` prefix, EVAL as two separate command executions. Each hop SHALL compute its own overall deadline at that hop’s entry equal to `now + CommandTimeout` unless the caller’s context deadline is sooner. The EVAL hop MUST NOT inherit remaining time from the EVALSHA hop. Sharing remaining time across those hops can starve EVAL after a slow EVALSHA.
 
 `MSetEX` and `MSetEXAt` SHALL send native MSETEX as its own command execution. On `ERR unknown command`, the Lua fallback via `Eval` SHALL start with a full command budget (one or two further hops). Comments on `Eval`, `MSetEX`, `MSetEXAt`, and `msetex` SHALL record that each hop binds its own overall deadline on purpose.
 
@@ -317,6 +348,60 @@ Compiled tests SHALL prove Eval NOSCRIPT fallback still succeeds and that MSetEX
 - **THEN** MSetEX runs the Lua fallback via Eval
 - **AND** MSetEX returns no error
 - **AND** the caller error is not unknown-command
+
+### Requirement: Encoded RESP bytes match dest framing on both backends
+The client SHALL encode each command as the same RESP array of bulk strings dest currently produces (`*` count, per-arg `$` length, payload, CRLF), including native `MSETEX` argv from `MSetEX` / `MSetEXAt`. Tests MUST run against both Redis and Dragonfly (both supported backends). After the encoder change, compose plus Pester `/redis` and `/dragonfly` plus `e2e/simpleredisprobe` SHALL prove every existing verb still works live on both engines: Set, Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt. Eval SHALL remain a Lua 5.1-safe script that lists its key in KEYS. The probe Eval body and the Dragonfly compose pin MUST NOT be rewritten unless the encoder change forces it.
+
+#### Scenario: Encoded GET matches dest framing
+- **WHEN** GET is encoded for key `session:9f2c1ab4-user-token`
+- **THEN** the wire bytes equal dest framing `*2\r\n$3\r\nGET\r\n$27\r\nsession:9f2c1ab4-user-token\r\n`
+
+#### Scenario: Encoded MSETEX matches dest framing
+- **WHEN** native MSETEX is encoded for two pairs `a`/`1` and `b`/`2` with EX 60
+- **THEN** the wire bytes equal dest framing `*8\r\n$6\r\nMSETEX\r\n$1\r\n2\r\n$1\r\na\r\n$1\r\n1\r\n$1\r\nb\r\n$1\r\n2\r\n$2\r\nEX\r\n$2\r\n60\r\n`
+
+#### Scenario: Every verb still works live on Redis and Dragonfly
+- **WHEN** a request is made on `/redis` (Redis `redis:7-alpine` at `redis:6379`) and on `/dragonfly` (Dragonfly `docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2` at `dragonfly:6379`) after the encoder change
+- **THEN** each response includes headers for Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEX-TTL that show those commands succeeded
+- **AND** Eval used a Lua 5.1-safe script that lists `KEYS[1]`
+- **AND** neither route’s tests stop `whoami-a` or `whoami-b`
+
+#### Scenario: Newline value still round-trips
+- **WHEN** Set stores a value that contains newline bytes
+- **AND** Get is called for that key
+- **THEN** Get returns those exact bytes
+
+### Requirement: RESP framing does not allocate, measured compiled
+Compiled tests SHALL include `BenchmarkEncodeGet`, `BenchmarkEncodeEval`, `BenchmarkEncodeMSetEX`, and `BenchmarkEncodeSet100KB` that encode on the production encoder. The framing itself SHALL NOT allocate: `BenchmarkEncodeGet`, `BenchmarkEncodeMSetEX`, and `BenchmarkEncodeSet100KB` SHALL each report 0 allocs/op, and any allocation `BenchmarkEncodeEval` reports SHALL come from building that command's argv, not from framing it. Length headers MUST be written with `strconv.AppendInt` into a connection-owned buffer and MUST NOT be built as a concatenated string (`"$" + strconv.Itoa(n) + "\r\n"`). That concatenation is the entire allocation this requirement exists to forbid; it was three allocations on a compiled GET and it is now none.
+
+The encoder SHALL write through a `bufio.Writer` owned by the pooled connection. Framing a whole command into a growable per-connection scratch and issuing a single `net.Conn.Write` is **rejected** and MUST NOT be reintroduced. It was implemented and measured: `bufio` already coalesces a small command into exactly one write, and small commands (counters, TTLs, short Lua) are this session's workload, so the single write bought no syscall there. What it did cost is a full extra copy of every payload and a 64 KiB idle-retention cap that had to be specified and tested so one large SET could not pin a scratch on a parked socket. Measured compiled, a 100 KiB SET frames in 65 ns through `bufio` against 1590 ns through the scratch, because `bufio` hands a large slice straight to the socket instead of copying it.
+
+This requirement is anchored on compiled numbers because the deployment this session is tuned for is compiled into Traefik; an interpreted measurement MUST NOT be the justification for an encoder shape. Interpreter tests SHALL keep `BenchmarkYaegiEncodeBufio` and `BenchmarkYaegiEncodeSingleWrite`, which record that the rejected shape is the cheaper one interpreted (measured on a GET: 6330 ns / 166 allocs through `bufio` against 2599 ns / 69 allocs through the scratch, because every call crossing the Yaegi boundary is expensive and the shipped shape makes five per argument). That is a cost this session knowingly accepts: the package must stay loadable as a Yaegi plugin for operators who install it that way, and the e2e suite uses Yaegi plugins because rebuilding Traefik costs minutes, but neither makes interpreted speed the optimisation target. Those two benches MUST NOT be deleted and that result MUST NOT be presented as anything other than what it is.
+
+#### Scenario: Compiled encode benches exist
+- **WHEN** package `simpleredis` encode benches run
+- **THEN** `BenchmarkEncodeGet`, `BenchmarkEncodeEval`, `BenchmarkEncodeMSetEX`, and `BenchmarkEncodeSet100KB` execute against the production encoder
+
+#### Scenario: Framing a command allocates nothing
+- **WHEN** `BenchmarkEncodeGet` and `BenchmarkEncodeMSetEX` run compiled
+- **THEN** each reports 0 allocs/op
+- **AND** any allocation `BenchmarkEncodeEval` reports comes from building the argv, not from framing it
+
+#### Scenario: Framing a 100 KiB payload allocates nothing either
+- **WHEN** `BenchmarkEncodeSet100KB` runs compiled
+- **THEN** it reports 0 allocs/op
+- **AND** the payload is not copied into an encode scratch first
+
+#### Scenario: Single-write framing stays rejected
+- **WHEN** the production encoder is read
+- **THEN** it writes through the pooled connection's `bufio.Writer`
+- **AND** there is no growable per-connection encode scratch
+- **AND** there is no idle-retention cap for such a scratch
+
+#### Scenario: Interpreted encode cost is recorded, not acted on
+- **WHEN** `BenchmarkYaegiEncodeBufio` and `BenchmarkYaegiEncodeSingleWrite` run
+- **THEN** both execute and the rejected single-write shape is the cheaper interpreted one
+- **AND** that result does not change the compiled encoder shape
 
 ### Requirement: Interpreter tests assert the unsafe conversion matrix
 Tests that import Yaegi SHALL assert which `string`/`[]byte` conversions the interpreter accepts under stdlib-only symbols, stdlib plus unsafe symbols, and unrestricted. Those tests MAY register Yaegi unsafe symbols and MAY import `unsafe` in `_test.go` files. Existing Init/Get/Set/Del/Incr/Eval/MSetEX interpreter tests MUST still use GOPATH with stdlib symbols only and `useunsafe` false. Named copy-versus-unsafe benches SHALL exist so a human can reproduce the measured ns/op; they MUST NOT fail `go test` without `-bench`. Those tests MUST NOT start Traefik.
@@ -471,7 +556,7 @@ A well-framed reply whose type byte is not `+`, `-`, `:`, `$`, or `*` (including
 - **AND** the connection remains in the idle pool
 
 ### Requirement: CI allocation guards fail on over-budget encode and decode
-The compiled `go test` suite for SimpleRedis SHALL fail when client-side encode or decode of GET, EVAL, a bulk reply, a 10-slot array, an integer reply, or a 100 KB bulk exceeds the Go 1.21 `allocs/op` or `B/op` ceiling recorded in that test. Those guards SHALL run as compiled tests that measure `AllocsPerOp` and `AllocedBytesPerOp` without requiring `go test -bench`. They MUST NOT assert wall-clock `ns/op`. They MUST NOT dial live Redis or Dragonfly. Compose Redis (`redis:7-alpine`) and Dragonfly (`docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2`) plus Pester HTTP verb paths under `/redis/` and `/dragonfly/` SHALL keep proving Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt on both engines. Eval SHALL stay a Lua 5.1-safe script that lists its key in KEYS. CI MUST NOT drop or skip either engine’s tests.
+The compiled `go test` suite for SimpleRedis SHALL fail when client-side encode or decode of GET, EVAL, MSETEX, a bulk reply, a 10-slot array, an integer reply, a 100 KB bulk, or a 100 KB SET exceeds the Go 1.21 `allocs/op` or `B/op` ceiling recorded in that test. The framing ceilings SHALL be zero with no slack, because framing allocates nothing and one allocation back means a length header went through a string again. Those guards SHALL run as compiled tests that measure `AllocsPerOp` and `AllocedBytesPerOp` without requiring `go test -bench`. They MUST NOT assert wall-clock `ns/op`. They MUST NOT dial live Redis or Dragonfly. Compose Redis (`redis:7-alpine`) and Dragonfly (`docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2`) plus Pester HTTP verb paths under `/redis/` and `/dragonfly/` SHALL keep proving Get, MGet, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt on both engines. Eval SHALL stay a Lua 5.1-safe script that lists its key in KEYS. CI MUST NOT drop or skip either engine’s tests.
 
 #### Scenario: Over-budget allocs fail without bench flag
 - **WHEN** `go test ./simpleredis/...` runs without `-bench`
@@ -573,3 +658,39 @@ Each public command (`Get`, `MGet`, `Set`, `Del`, `Incr`, `IncrBy`, `Expire`, `E
 #### Scenario: Test binary compiles
 - **WHEN** `go test -c ./simpleredis/` runs
 - **THEN** the compile succeeds
+
+### Requirement: Keys and values with CRLF are data, not commands
+The encoder SHALL write every argument as a length-prefixed RESP bulk string. A key and a value that each contain CRLF and an inline `PING` command payload MUST round-trip as stored data. A peer that parses strict RESP MUST treat those bytes as one argument and MUST NOT execute an injected command.
+
+#### Scenario: CRLF and inline PING round-trip as data
+- **WHEN** Set stores a key and a value that each contain CRLF and an inline PING payload
+- **AND** Get reads that key from a strict-RESP fake
+- **THEN** Get returns the same value bytes
+- **AND** the fake did not treat the payload as a second command
+
+### Requirement: Concurrent MSetEX unknown-command fallback stays balanced
+Compiled unit tests SHALL run many overlapping MSetEX calls against a fake that rejects MSETEX. Those calls MUST succeed. After they finish, the in-use-turn channel SHALL be full and extra turn returns SHALL be zero.
+
+#### Scenario: Sixteen overlapping MSetEX fallbacks
+- **WHEN** many goroutines each call MSetEX repeatedly against a reject-MSETEX fake
+- **THEN** every call returns no error
+- **AND** the in-use-turn channel is full
+- **AND** extra turn returns are zero
+
+### Requirement: Interpreter tests observe error paths
+Tests that import Yaegi v0.16.1 SHALL prove interpreted code can run the dial-failure retry loop (including backoff), map an I/O timeout against a stalling peer, cancel a command in flight, wait on a full pool, and handle a truncated bulk, using GOPATH with stdlib symbols only and `useunsafe` false. Those tests MUST NOT start Traefik. They MUST NOT panic in the interpreter. They MUST NOT assert `IsUnreachable` or `errors.Is` on AUTH or SELECT handshake failures. They MUST live in a test file that is not the existing happy-path Yaegi file.
+
+#### Scenario: Interpreted dial failure retries without panic
+- **WHEN** interpreted code Gets against a host that refuses the first dials
+- **THEN** the interpreter does not panic
+- **AND** the call returns an error the compiled tests already classify for that path
+
+#### Scenario: Interpreted stall maps to timeout
+- **WHEN** interpreted code Gets against a peer that accepts TCP and never replies
+- **THEN** the interpreter does not panic
+- **AND** the error text is `redis:timeout`
+
+#### Scenario: Interpreted cancel, pool wait, and truncated bulk
+- **WHEN** interpreted code cancels a command, waits on a full pool, or reads a truncated bulk
+- **THEN** the interpreter does not panic
+- **AND** each path returns the same classification the compiled suite already asserts

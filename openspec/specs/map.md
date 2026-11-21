@@ -9,6 +9,7 @@ Allowlist of root + domain: `openspec/specs/domains.md`.
 
 - backendbackoff
 - ci
+- iplookup
 - reclaim
 - simpleredis
 - tokenbucket

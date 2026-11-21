@@ -61,16 +61,16 @@ func consumeOne(tokens float64, last int64, limitPerMicro, burst float64, nowMic
 	}
 	// Refill from last, cap at burst, then consume this Allow.
 	elapsed := float64(nowMicro - last)
-	tokens = tokens + limitPerMicro*elapsed
+	tokens += limitPerMicro * elapsed
 	if tokens > burst {
 		tokens = burst
 	}
-	tokens = tokens - 1
+	tokens--
 	// Wait is how long until tokens reach 0. Refund when that wait exceeds maxDelay.
 	if tokens < 0 {
 		waitMicro = -tokens / limitPerMicro
 		if waitMicro > float64(maxDelayMicro) {
-			tokens = tokens + 1
+			tokens++
 			if tokens > burst {
 				tokens = burst
 			}

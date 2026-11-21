@@ -45,7 +45,7 @@ if tokens < 0 then
 	if wait_duration > max_delay then
 		tokens = tokens + 1
 		tokens = math.min(tokens, burst)
-	end
+	end -- wait over max_delay
 end
 
 local persistLast = bucket.last
