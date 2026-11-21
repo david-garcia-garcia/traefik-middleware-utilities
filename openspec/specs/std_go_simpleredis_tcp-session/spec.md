@@ -19,7 +19,7 @@ The session SHALL live in package `simpleredis` under folder `simpleredis/`. The
 - **THEN** the import path ends in `/simpleredis`
 
 ### Requirement: New records settings and does not dial
-`New(Config)` SHALL copy `Config` onto a new client (host, user, password, database, a clone of the TLS configuration, pool knobs, timeout knobs, retry sentinels, and `Logger`) and SHALL create the in-use-turn channel sized to `PoolSize` (const default 8 when `PoolSize` is 0). `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, retry, or logger fields.
+`New(Config)` SHALL copy `Config` onto a new client (host, user, password, database, a clone of the TLS configuration, pool knobs, timeout knobs, retry sentinels, and `Logger`) and SHALL create the in-use-turn semaphore with its cap and its free-turn count both set to `PoolSize` (const default 8 when `PoolSize` is 0). The in-use-turn semaphore is **full** when its free-turn count equals its cap. `New` MUST NOT open a TCP connection. After `New`, writes to the caller's `Config` or to the client MUST NOT change the live cap or the copied knobs. `SimpleRedis` MUST NOT export writable pool, timeout, retry, or logger fields.
 
 Zero `Config` pool and timeout knobs SHALL mean the package defaults: `PoolSize` 8, `MaxIdleConns` 8, `PoolTimeout` 200 milliseconds, `IdleTimeout` 30 seconds, `DialTimeout` 200 milliseconds, `CommandTimeout` 900 milliseconds. Retry fields on `Config`: `0` at `New` means 1 extra retry; `-1` means off (one send). An explicit `MaxRetries` of 3 means 3 extra retries. `MinRetryBackoff` / `MaxRetryBackoff` keep go-redis sentinels: `0` means 8ms / 512ms; `-1` means off.
 
@@ -81,6 +81,11 @@ A nil `Config.TLS` SHALL mean plain TCP. A non-nil `Config.TLS` SHALL be stored 
 - **WHEN** `Config.TLS` is set and `DialTimeout` is 200 milliseconds
 - **AND** the peer accepts TCP and never answers the ClientHello
 - **THEN** each dial attempt ends at about 200 milliseconds, not at `CommandTimeout`
+
+#### Scenario: New fills the in-use-turn semaphore
+- **WHEN** `New` is called with `PoolSize` 3
+- **THEN** the in-use-turn semaphore cap is 3
+- **AND** the in-use-turn semaphore is full
 
 ### Requirement: First command dials TCP
 The first `Get`, `MGet` (with at least one name), `Set`, or `Del` after `New` SHALL dial `tcp` to the host stored by `New`. When the stored TLS configuration is nil the session SHALL speak RESP over that plain TCP connection. When it is non-nil the session SHALL complete a TLS client handshake with that configuration on that TCP connection before AUTH, SELECT, or the command. The session MUST NOT dial a Unix socket. The session MUST NOT build a server name from `Host`: when the stored configuration's `ServerName` is empty, `crypto/tls` takes it from the host part of the dial address. Zero-Config dial timeout SHALL be 200 milliseconds.
@@ -228,7 +233,7 @@ INCR, INCRBY, and EVAL MAY double-apply when a reply is lost and the command is 
 - **AND** the peer observes a second GET on a new connection
 
 ### Requirement: Full pool wait returns redis:unreachable
-When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library (no extra timer goroutine leak: stop the timer when a turn arrives). That timeout MUST NOT be retried. The pool-wait sentinel SHALL wrap the unreachable sentinel so `errors.Is` matches unreachable, and the retry classifier MUST still treat pool wait as not retryable (`shouldRetry` false for pool wait, true for a plain unreachable sentinel). Identity compare, or a pool-wait check before unreachable, is required; rewriting the classifier to `errors.Is` against unreachable alone MUST NOT retry pool wait.
+When every live socket is checked out, a further command SHALL wait for an in-use turn. If no turn frees before the pool wait (200 milliseconds) elapses, that command SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT open another TCP connection. The wait MUST use only the Go standard library and MUST NOT leak its timeout or its cancel wake-up: when a turn arrives, both SHALL be released. A turn returned while a command waits SHALL be handed to a waiting command; a waiter that gives up on timeout or cancel MUST NOT keep a turn and MUST NOT cause a turn to be lost. That timeout MUST NOT be retried. The pool-wait sentinel SHALL wrap the unreachable sentinel so `errors.Is` matches unreachable, and the retry classifier MUST still treat pool wait as not retryable (`shouldRetry` false for pool wait, true for a plain unreachable sentinel). Identity compare, or a pool-wait check before unreachable, is required; rewriting the classifier to `errors.Is` against unreachable alone MUST NOT retry pool wait.
 
 #### Scenario: Pool wait times out
 - **WHEN** all live sockets at the default `poolSize` (8) are busy
@@ -242,6 +247,19 @@ When every live socket is checked out, a further command SHALL wait for an in-us
 - **THEN** command retry does not retry that error
 - **WHEN** the error is the plain unreachable sentinel
 - **THEN** command retry does retry that error
+
+#### Scenario: Returned turn goes to a waiter
+- **WHEN** a client with `PoolSize` 1 has its only turn held
+- **AND** another command is waiting for a turn
+- **AND** the holder returns its turn before `PoolTimeout`
+- **THEN** the waiting command obtains that turn
+- **AND** after it finishes the in-use-turn semaphore is full
+
+#### Scenario: Racing handoff and give-up neither lose nor duplicate turns
+- **WHEN** many commands wait on a saturated client while holders return turns and waiters time out or are cancelled at about the same instant
+- **THEN** every waiter either obtains a turn or returns the pool-wait error or its context error
+- **AND** after all callers return the in-use-turn semaphore is full
+- **AND** `OverFrees()` is 0
 
 ### Requirement: Live cap is proven on Redis and Dragonfly
 The session SHALL keep at most `poolSize` live TCP connections (idle plus in use; const default 8) against a real Redis and a real Dragonfly. Fake-server tests MUST NOT be the only proof. Traefik local-plugin Pester on `/redis` and `/dragonfly` SHALL overlap requests long enough to contend for sockets, observe at most `poolSize` clients on that backend (default 8), and observe `redis:unreachable` when a waiter exceeds the pool wait. Compiled tests gated on live addresses SHALL prove pool-wait `redis:unreachable` on both engines; they MAY set `Config.PoolSize` so a shared CI Redis is not left in Lua BUSY. Those compiled tests MUST skip under `-short` or when both `SIMPLEREDIS_LIVE_REDIS` and `SIMPLEREDIS_LIVE_DRAGONFLY` are unset, MUST run the set engine when exactly one address is set, and MUST run on CI `e2e-redis` and `e2e-dragonfly`. Any Lua used to hold a socket MUST be Lua 5.1-safe (no `table.maxn`) and MUST list touched keys in KEYS (zero keys when none are touched). Compose project `reclaim-e2e`, routes `/a` `/b`, and existing verb headers MUST keep their semantics.
@@ -282,7 +300,7 @@ The session SHALL keep at most `poolSize` live TCP connections (idle plus in use
 - **AND** no new TCP connection is opened
 
 ### Requirement: Client not from New fails immediately
-A command on a `SimpleRedis` that did not come from `New` SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT be retried (MUST NOT sleep retry backoff). `New` remains the only constructor of the in-use-turn channel. `Close` on that client SHALL be idempotent and MUST NOT panic. Empty `MGet` and empty or mismatched `MSetEX` / `MSetEXAt` stay pre-dial validation and MUST NOT panic.
+A command on a `SimpleRedis` that did not come from `New` SHALL return an error whose `Error()` text is `redis:unreachable` and MUST NOT be retried (MUST NOT sleep retry backoff). `New` remains the only constructor of the in-use-turn semaphore. `Close` on that client SHALL be idempotent and MUST NOT panic. Empty `MGet` and empty or mismatched `MSetEX` / `MSetEXAt` stay pre-dial validation and MUST NOT panic.
 
 #### Scenario: Zero-value Get does not retry
 - **WHEN** `Get` is called on `&SimpleRedis{}`
@@ -297,7 +315,7 @@ A command on a `SimpleRedis` that did not come from `New` SHALL return an error 
 
 #### Scenario: New remains the only in-use-turn constructor
 - **WHEN** a client is `&SimpleRedis{}` and `New` has not run
-- **THEN** that client has no in-use-turn channel
+- **THEN** that client's in-use-turn semaphore cap is 0
 
 ### Requirement: I/O deadline is timeout, not a net.Error assert
 When a command hits an I/O deadline, the session SHALL return an error whose `Error()` text is `redis:timeout`. Mapping MUST use `errors.Is` against `os.ErrDeadlineExceeded`. The session MUST NOT type-assert `net.Error` (Yaegi has panicked on that assert across the interpreter boundary). `redis:timeout` MUST NOT be retried (documented deviation from go-redis; that deadline is the remainder of `CommandTimeout`, 900 milliseconds by default, so a retry would have no time left to spend). A timeout on a reused connection MUST NOT open a second connection.
@@ -508,7 +526,7 @@ Compiled tests MUST close the **accepted** socket from the server after the firs
 - **AND** POST `/redis/eval` lists its key in `KEYS` and is Lua 5.1-safe
 
 ### Requirement: Peer-closed idle vintage is recovered sequentially
-When every unused pooled TCP connection is closed by the peer at once (restart, failover, or kill of every accepted socket) while those sockets are still younger than `IdleTimeout`, sequential commands SHALL succeed while the peer is accepting, using the existing `MaxRetries` policy. An I/O failure on a socket taken from idle MUST map to `redis:unreachable`. The next attempt of that command SHALL be a new dial, not another unused pooled socket. A later sequential command MAY still take one leftover dead unused socket and then force-dial on its own retry. A force-dial that itself fails with `redis:unreachable` SHALL consume `MaxRetries` as dest already does. When `MaxRetries` is `-1` (one send), that command SHALL still fail after one unused-socket I/O; a free extra send MUST NOT be added, because a lost reply on a reused socket is indistinguishable from a dead unused socket after a successful write. Timeouts, handshake AUTH or SELECT failures, pool wait, and a closed client MUST NOT skip idle. The in-use-turn channel SHALL stay full at rest with `OverFrees()` equal to 0. Compiled proof MUST warm unused sockets with simultaneous in-flight commands, close every accepted socket from the server, then issue sequential commands; it MUST NOT close the client-side file descriptors.
+When every unused pooled TCP connection is closed by the peer at once (restart, failover, or kill of every accepted socket) while those sockets are still younger than `IdleTimeout`, sequential commands SHALL succeed while the peer is accepting, using the existing `MaxRetries` policy. An I/O failure on a socket taken from idle MUST map to `redis:unreachable`. The next attempt of that command SHALL be a new dial, not another unused pooled socket. A later sequential command MAY still take one leftover dead unused socket and then force-dial on its own retry. A force-dial that itself fails with `redis:unreachable` SHALL consume `MaxRetries` as dest already does. When `MaxRetries` is `-1` (one send), that command SHALL still fail after one unused-socket I/O; a free extra send MUST NOT be added, because a lost reply on a reused socket is indistinguishable from a dead unused socket after a successful write. Timeouts, handshake AUTH or SELECT failures, pool wait, and a closed client MUST NOT skip idle. The in-use-turn semaphore SHALL stay full at rest with `OverFrees()` equal to 0. Compiled proof MUST warm unused sockets with simultaneous in-flight commands, close every accepted socket from the server, then issue sequential commands; it MUST NOT close the client-side file descriptors.
 
 The unused pool exists so that a sequential burst on one client pays one dial plus one AUTH/SELECT instead of one per command, and reacting to a failed borrow is the price of that reuse. A borrow-time liveness probe of the shape go-redis uses (`syscall.Conn` to `RawConn.Read` to a non-blocking `syscall.Read`, where `EAGAIN` means healthy and zero bytes means the peer is gone) MUST NOT be adopted to avoid this vintage. Traefik registers `syscall` symbols only when `useUnsafe` is true on **both** the plugin manifest and the operator's static config, and manifest-true with operator-false makes Traefik refuse to load the plugin at all, which a middleware other operators install cannot require. That probe is also Unix-only, and Yaegi v0.16.1 does not evaluate `//go:build` lines, so a `conn_check.go` / `conn_check_dummy.go` split of the kind go-redis ships loads both files and silently resolves to the no-op. The session SHALL therefore detect a dead unused socket by using it.
 
@@ -526,7 +544,7 @@ The unused pool exists so that a sequential burst on one client pays one dial pl
 
 #### Scenario: Turns stay balanced after vintage recovery
 - **WHEN** sequential Gets have recovered after every idle socket was dropped
-- **THEN** the in-use-turn channel is full
+- **THEN** the in-use-turn semaphore is full
 - **AND** `OverFrees()` is 0
 
 ### Requirement: Lost-reply Incr and Eval are proven on live Redis and Dragonfly
@@ -549,18 +567,19 @@ A request through the nested SimpleRedis Traefik plugin SHALL, with query `drop=
 - **AND** the Dragonfly Pester Describe does not stop `whoami-a` or `whoami-b`
 
 ### Requirement: Extra in-use turn return MUST NOT hang
-When a caller returns an in-use-turn token while the in-use-turn channel is already full (`len` equals `cap` after `New`), that return SHALL complete without waiting. The send that would block MUST be dropped. `OverFrees()` SHALL increment by one for that drop. `OverFrees()` SHALL be readable next to `PoolSize()` and `MaxIdleConns()`. Balanced borrow and release SHALL leave the in-use-turn channel full (`len` equals `cap`) and `OverFrees()` equal to 0. The client MUST NOT panic on an extra return.
+When a caller returns an in-use turn while the in-use-turn semaphore is already full (free turns equal the cap after `New`) and no command is waiting, that return SHALL complete without waiting. The return that would exceed the cap MUST be dropped. `OverFrees()` SHALL increment by one for that drop. `OverFrees()` SHALL be readable next to `PoolSize()` and `MaxIdleConns()`. Balanced borrow and release SHALL leave the in-use-turn semaphore full and `OverFrees()` equal to 0. The client MUST NOT panic on an extra return.
 
 #### Scenario: Extra return on a fresh client returns promptly
-- **WHEN** a client is created with `New` so the in-use-turn channel is full
+- **WHEN** a client is created with `New` so the in-use-turn semaphore is full
 - **AND** one extra in-use turn is returned without a matching take
 - **THEN** that return completes without waiting
 - **AND** `OverFrees()` is 1
+- **AND** the in-use-turn semaphore free count still equals its cap
 
 #### Scenario: Hammered borrow and release stay balanced
 - **WHEN** many goroutines hammer borrow and release through a healthy fake, a dead address, an AUTH-rejecting fake, and a starved pool with a short `PoolTimeout`
 - **THEN** those goroutines all finish
-- **AND** the in-use-turn channel `len` equals `cap`
+- **AND** the in-use-turn semaphore is full
 - **AND** `OverFrees()` is 0
 
 ### Requirement: Whole command has an overall deadline
@@ -630,12 +649,12 @@ The SimpleRedis session source SHALL convert command names, scripts, and decimal
 - **AND** session source has no unsafe pointer or header cast that aliases string and `[]byte`
 
 ### Requirement: Chaos pool stays within live cap and does not mix keys
-Compiled unit tests SHALL drive concurrent Gets against a peer that, per command, randomly replies honestly, delays a few milliseconds, closes with no reply, replies LOADING, or writes a short bulk then closes. After those callers stop, at rest the in-use-turn channel SHALL be full, extra turn returns SHALL be zero, and settled server-side open sockets SHALL be at most PoolSize. A non-error Get MUST return that key’s own value. Tests MUST NOT assert a peak live-socket count. Tests that sample idle length then in-use-turn length as a live-socket metric are invalid. `go test -short` MUST skip this stress.
+Compiled unit tests SHALL drive concurrent Gets against a peer that, per command, randomly replies honestly, delays a few milliseconds, closes with no reply, replies LOADING, or writes a short bulk then closes. After those callers stop, at rest the in-use-turn semaphore SHALL be full, extra turn returns SHALL be zero, and settled server-side open sockets SHALL be at most PoolSize. A non-error Get MUST return that key’s own value. Tests MUST NOT assert a peak live-socket count. Tests that sample idle length then the in-use-turn free count as a live-socket metric are invalid. `go test -short` MUST skip this stress.
 
 #### Scenario: Chaos Get does not return another key
 - **WHEN** many goroutines Get keys k0..k63 against that chaotic peer for a bounded duration
 - **THEN** every Get that returns no error returns that key’s own value
-- **AND** after quiescence the in-use-turn channel is full
+- **AND** after quiescence the in-use-turn semaphore is full
 - **AND** extra turn returns are zero
 - **AND** settled server-side open sockets are at most PoolSize
 
@@ -644,7 +663,7 @@ Compiled unit tests SHALL drive concurrent Gets against a peer that, per command
 - **THEN** the chaos pool stress does not run
 
 ### Requirement: Close cycles do not leak goroutines or sockets
-Compiled unit tests SHALL run many New / use / Close cycles and SHALL prove goroutine count is flat and server-side open sockets are zero. When N Gets are held, Close, then those Gets are released, idle SHALL be empty, server-side open sockets SHALL be zero, and the in-use-turn channel SHALL be full. `go test -short` MUST skip this stress.
+Compiled unit tests SHALL run many New / use / Close cycles and SHALL prove goroutine count is flat and server-side open sockets are zero. When N Gets are held, Close, then those Gets are released, idle SHALL be empty, server-side open sockets SHALL be zero, and the in-use-turn semaphore SHALL be full. `go test -short` MUST skip this stress.
 
 #### Scenario: Repeated New use Close leaves no sockets
 - **WHEN** a test constructs a client, issues commands, and Closes, many times
@@ -655,7 +674,7 @@ Compiled unit tests SHALL run many New / use / Close cycles and SHALL prove goro
 - **WHEN** N Gets are held at the peer, the client is Closed, and the holds are released
 - **THEN** idle is empty
 - **AND** server-side open sockets are zero
-- **AND** the in-use-turn channel is full
+- **AND** the in-use-turn semaphore is full
 
 ### Requirement: Panic between borrow and release returns the turn and closes the socket
 When a command panics after the session has taken an in-use turn and before that turn is returned, the session SHALL still return the turn and SHALL close that socket. The panicked socket MUST NOT return to the idle pool. After `PoolSize` recovered panics on one client, a later command on that client SHALL still obtain a turn against a healthy peer. Extra turn returns SHALL stay 0. Session source MUST NOT grow leak-detection or turn-refill counters.
@@ -668,7 +687,7 @@ Compiled proof MUST panic inside command I/O while the TCP socket remains a heal
 - **WHEN** a client is created with `PoolSize` 2
 - **AND** one idle socket is warmed
 - **AND** two commands panic inside command I/O after taking a turn, and the caller recovers each panic
-- **THEN** after those panics the in-use-turn channel `len` equals `cap`
+- **THEN** after those panics the in-use-turn semaphore is full
 - **AND** idle is empty
 - **AND** extra turn returns are 0
 - **AND** a later Get on that client returns the stored value
@@ -688,7 +707,7 @@ The close decision SHALL stay the idle-only rule already required above: close w
 - **WHEN** a reusable socket is released while idle is under `MaxIdleConns`
 - **THEN** that socket is in the idle list
 - **AND** `lastUsed` was stamped before it was parked
-- **AND** the in-use-turn channel is not short that turn
+- **AND** the in-use-turn semaphore is not short that turn
 - **AND** extra turn returns stay 0
 
 #### Scenario: Full idle closes then the turn is returned
@@ -696,3 +715,43 @@ The close decision SHALL stay the idle-only rule already required above: close w
 - **THEN** that socket is closed, not parked
 - **AND** the in-use-turn is returned after the idle-list mutex is released
 - **AND** extra turn returns stay 0
+
+### Requirement: Session source contains no select statement
+Non-test SimpleRedis session source MUST NOT contain a Go `select` statement. Yaegi v0.16.1 shares one select-case array per `select` statement across every goroutine that runs it, so a `select` on per-call or per-client channels can wait on, or receive from, another goroutine's channels. A unit test SHALL parse every non-test `.go` file of the package and SHALL fail naming the file and line of each `select` it finds.
+
+#### Scenario: Guard passes on select-free session source
+- **WHEN** the unit suite parses every non-test `.go` file in `simpleredis/`
+- **THEN** no `select` statement is found
+- **AND** at least one file was scanned
+
+#### Scenario: Guard names a reintroduced select
+- **WHEN** a non-test session file contains a `select` statement
+- **THEN** the guard test fails
+- **AND** its message names that file and line
+
+### Requirement: Interpreted concurrency does not cross turns or deadlines
+Under Yaegi v0.16.1, concurrent session calls SHALL behave as they do compiled: each pool wait, retry backoff, and in-use-turn take or return SHALL act only on its own call and client. Proof SHALL run the session's own code under Yaegi inside `go test`, each case beside a compiled control that runs the same probe. Interpreted cases MAY skip when the race detector is on; compiled controls MUST NOT.
+
+#### Scenario: Saturated wait under Yaegi returns its own outcome
+- **WHEN** interpreted callers wait for the only in-use turn of a client while it stays held, some with a live context and some with a 1 millisecond context
+- **THEN** no call returns no socket together with no error
+- **AND** each live-context caller returns the pool-wait error no earlier than its own `PoolTimeout`
+- **AND** each short-context caller returns its context error
+- **AND** a caller whose context is cancelled returns that context's error before `PoolTimeout`
+- **AND** no call is still blocked after the last deadline
+
+#### Scenario: Retry backoff under Yaegi wakes on its own delay
+- **WHEN** many interpreted goroutines back off 1 millisecond on a 300 millisecond context while others back off 600 milliseconds on a live context
+- **THEN** every 1 millisecond backoff returns no error and does not sit until its context deadline
+- **AND** no 600 millisecond backoff returns before its own delay
+
+#### Scenario: Two interpreted clients keep their own turns
+- **WHEN** two interpreted clients each serve concurrent Gets without saturating their pools
+- **THEN** after the callers return, each client's in-use-turn semaphore is full
+- **AND** each client's `OverFrees()` is 0
+
+#### Scenario: Interpreted saturated Get does not panic
+- **WHEN** many interpreted goroutines call `Get` on a client with a small `PoolSize`, a short `PoolTimeout`, and contexts of a few milliseconds
+- **THEN** the interpreter does not panic
+- **AND** every error is the pool-wait error, a context error, or another error the compiled suite already classifies for that path
+- **AND** after the callers return the in-use-turn semaphore is full and `OverFrees()` is 0

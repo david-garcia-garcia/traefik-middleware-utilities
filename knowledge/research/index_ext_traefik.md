@@ -45,6 +45,11 @@ priority: normal
 local: ext_traefik_plugins_yaegi-build-constraints/
 description: Which build-constraint mechanisms Yaegi v0.16.1 honors when assembling an interpreted package, and which it ignores silently.
 
+## Yaegi select statement
+priority: normal
+local: ext_traefik_plugins_yaegi-select/
+description: How Yaegi v0.16.1 runs a select statement shared by several goroutines, and the no-select pattern plugins use instead.
+
 ## Yaegi crypto/tls client
 priority: normal
 local: ext_traefik_plugins_yaegi-tls/

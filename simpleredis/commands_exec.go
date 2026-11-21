@@ -134,18 +134,17 @@ func contextStop(ctx context.Context) error {
 }
 
 // waitUntil waits delay or until ctx fires. Library expiry is mapped at exec.
+// A child ctx with the delay as its deadline and a plain receive on its Done replace a select on a
+// timer and ctx.Done: Yaegi v0.16.1 shares one select case list across goroutines, so concurrent
+// backoffs woke on each other's timers (borrowSocket in pool.go has the details).
 func waitUntil(ctx context.Context, delay time.Duration) error {
 	if delay <= 0 {
 		return contextStop(ctx)
 	}
-	timer := time.NewTimer(delay)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return contextStop(ctx)
-	}
+	waitCtx, cancel := context.WithTimeout(ctx, delay)
+	<-waitCtx.Done()
+	cancel()
+	return contextStop(ctx)
 }
 
 // retryLimits maps 0/-1 sentinels to go-redis Options defaults without mutating the exported fields.

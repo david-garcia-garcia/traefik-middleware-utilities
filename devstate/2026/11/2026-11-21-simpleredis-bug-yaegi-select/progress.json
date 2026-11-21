@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-21-simpleredis-bug-yaegi-select",
+  "jobName": "2026-11-21-simpleredis-bug-yaegi-select",
+  "startedAt": "2026-11-21T08:22:04.228Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T08:28:29.616Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T08:39:14.243Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T08:46:54.374Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T10:06:55.381Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T11:17:25.793Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T11:22:03.599Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T11:25:24.822Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T11:30:02.067Z"
+    }
+  }
+}

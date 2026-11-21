@@ -2,6 +2,8 @@ package simpleredis
 
 import (
 	"context"
+	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
@@ -130,6 +132,64 @@ func TestSessionSourceImports(t *testing.T) {
 	if scanned == 0 {
 		t.Fatal("no session source files scanned")
 	}
+}
+
+// selectStatements returns file:line for every select statement in one parsed source.
+func selectStatements(fset *token.FileSet, file *ast.File) []string {
+	var hits []string
+	ast.Inspect(file, func(node ast.Node) bool {
+		if stmt, ok := node.(*ast.SelectStmt); ok {
+			pos := fset.Position(stmt.Pos())
+			hits = append(hits, fmt.Sprintf("%s:%d", pos.Filename, pos.Line))
+		}
+		return true
+	})
+	return hits
+}
+
+// TestSessionSourceHasNoSelect fails if a non-test session file contains a select statement.
+// Yaegi v0.16.1 keeps one shared case list per select statement, so concurrent executions wait on
+// or receive from each other's channels (knowledge/research/ext_traefik_plugins_yaegi-select/).
+// This is the deterministic gate; the TestReproSelect_*_Yaegi pairs are the behavioural evidence.
+func TestSessionSourceHasNoSelect(t *testing.T) {
+	t.Run("walker reports a select", func(t *testing.T) {
+		fset := token.NewFileSet()
+		src := "package p\n\nfunc f(a, b chan int) {\n\tselect {\n\tcase <-a:\n\tcase <-b:\n\t}\n}\n"
+		file, err := parser.ParseFile(fset, "inmemory.go", src, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := selectStatements(fset, file); len(got) != 1 || got[0] != "inmemory.go:4" {
+			t.Fatalf("selectStatements = %v, want [inmemory.go:4]", got)
+		}
+	})
+	t.Run("session source", func(t *testing.T) {
+		fset := token.NewFileSet()
+		entries, err := os.ReadDir(".")
+		if err != nil {
+			t.Fatal(err)
+		}
+		scanned := 0
+		var hits []string
+		for _, entry := range entries {
+			name := entry.Name()
+			if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+				continue
+			}
+			scanned++
+			file, parseErr := parser.ParseFile(fset, name, nil, 0)
+			if parseErr != nil {
+				t.Fatalf("parse %s: %v", name, parseErr)
+			}
+			hits = append(hits, selectStatements(fset, file)...)
+		}
+		if scanned == 0 {
+			t.Fatal("no session source files scanned")
+		}
+		for _, hit := range hits {
+			t.Errorf("%s: select statement in session source (shared across goroutines under Yaegi v0.16.1)", hit)
+		}
+	})
 }
 
 // TestSimpleRedisProbeUseUnsafeOff fails if the probe manifest or compose turns useUnsafe on.
