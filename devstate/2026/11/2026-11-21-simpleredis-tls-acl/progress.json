@@ -39,7 +39,7 @@
       "at": "2026-11-21T09:12:04.284Z"
     },
     "pullrequest": {
-      "work": false,
+      "work": true,
       "card": false,
       "at": null
     }
