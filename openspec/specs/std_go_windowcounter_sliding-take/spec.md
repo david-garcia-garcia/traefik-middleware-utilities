@@ -27,6 +27,13 @@ The current window start SHALL be `floor(unixSeconds / windowSeconds) × windowS
 - **THEN** the estimate still includes the previous window's hits
 - **AND** the new window MUST NOT admit a second full limit the way a fixed window would
 
+#### Scenario: Buffered two-client dump at the window boundary
+- **WHEN** two limiter instances with `sync_rate` greater than zero each record one hit in the same window (limit 2)
+- **AND** the first instance Sleeps then the second instance Sleeps
+- **AND** Take is called on the first instance at the start of the next window (previous-window weight 1)
+- **THEN** that Take returns allowed false
+- **AND** the sliding estimate is 3
+
 #### Scenario: Usage is the sliding estimate
 - **WHEN** Take returns
 - **THEN** the usage value is the sliding estimate after this Take as a float
@@ -50,7 +57,7 @@ The current window start SHALL be `floor(unixSeconds / windowSeconds) × windowS
 - **THEN** the sliding estimate after that Take equals one hit, not N plus one
 
 ### Requirement: Peek agrees with Take before the increment
-For the same clock, key, limit, and window, Peek's estimated SHALL be the already-used sliding occupancy (no hit added). Peek's `allowed` SHALL be true when that occupancy is less than or equal to `limit`. Those values SHALL match what Take would return for that same state before Take increments. Peek MUST NOT compare occupancy plus one.
+For the same clock, key, limit, and window, Peek's estimated SHALL be the already-used sliding occupancy (no hit added). Peek's `allowed` SHALL be true when that occupancy is less than or equal to `limit`. Those values SHALL match what Take would return for that same state before Take increments. Peek MUST NOT compare occupancy plus one. In buffered mode (`sync_rate` greater than zero) Peek MAY report a previous-window count older than Redis (another instance flushed into it after this instance last read it) until Take refreshes previous. Peek MUST NOT GET previous on every call to close that gap.
 
 #### Scenario: Peek then Take when the increment does not cross limit
 - **WHEN** the clock is held fixed
@@ -68,6 +75,14 @@ For the same clock, key, limit, and window, Peek's estimated SHALL be the alread
 - **WHEN** Take is then called once more
 - **THEN** that Take returns allowed false and estimated equal to `limit` plus one
 
+#### Scenario: Buffered Peek may lag previous until Take
+- **WHEN** `sync_rate` is greater than zero
+- **AND** another instance has flushed a higher shared count onto a key that is now previous
+- **AND** Peek is called on this instance at that clock
+- **THEN** Peek MAY still use this instance's last flush return for previous
+- **AND** the next Take SHALL refresh previous under the sync-flush previous-refresh rule
+- **AND** Peek MUST NOT GET previous solely because `local_delta` is 0
+
 ### Requirement: Peek follows the sliding window after Takes stop
 After enough Takes to deny, further Peeks with no Takes SHALL stay denied while the weighted estimate remains above the limit, then SHALL become allowed when the clock advances enough that the formula (`current + previous × (1 − elapsed/window)`) drops to at most the limit. The cooldown MUST be that formula at the caller's clock, not a wait of two window lengths.
 
@@ -80,25 +95,19 @@ After enough Takes to deny, further Peeks with no Takes SHALL stay denied while 
 - **THEN** Peek returns allowed true
 
 ### Requirement: Redis errors propagate
-When Redis is unreachable or times out, Take and Peek SHALL return that error (`redis:unreachable` or `redis:timeout`). The library MUST NOT fail-open, fail-close, or health-gate inside Take or Peek. This includes buffered mode (`sync_rate` greater than zero) while a local delta is still pending: a nil error with a local admit is a silent fallback and MUST NOT occur once a flush has failed or one `sync_rate` has passed without a successful Redis contact.
+When `sync_rate` is zero and Redis is unreachable or times out, Take and Peek SHALL return that error (`redis:unreachable` or `redis:timeout`). Exact-mode Take and Peek MUST NOT fail-open, fail-close, or health-gate inside the call. Buffered mode (`sync_rate` greater than zero) is not this requirement: a nil error with a local admit or deny is the buffered-outage contract.
 
 #### Scenario: Unreachable Redis
-- **WHEN** Take cannot complete the Redis increment or previous-window read because the server is unreachable
+- **WHEN** `sync_rate` is zero
+- **AND** Take cannot complete the Redis increment or previous-window read because the server is unreachable
 - **THEN** Take returns `redis:unreachable`
 - **AND** MUST NOT admit or deny as a silent fallback
 
 #### Scenario: Unreachable Redis on Peek
-- **WHEN** Peek cannot complete the Redis read because the server is unreachable
+- **WHEN** `sync_rate` is zero
+- **AND** Peek cannot complete the Redis read because the server is unreachable
 - **THEN** Peek returns `redis:unreachable`
 - **AND** MUST NOT admit or deny as a silent fallback
-
-#### Scenario: Unreachable Redis with a pending buffered delta
-- **WHEN** `sync_rate` is greater than zero
-- **AND** Take has left a local delta unflushed
-- **AND** Redis becomes unreachable
-- **AND** Take or Peek is called after a failed flush, or after one `sync_rate` without a successful Redis contact
-- **THEN** that call returns `redis:unreachable` or `redis:timeout`
-- **AND** MUST NOT return a nil error
 
 ### Requirement: Buffered Take does not wait on another key's Redis GET
 When `sync_rate` is greater than zero, a Take on one opaque key MUST NOT wait for an in-flight Redis GET that belongs to a different opaque key on the same limiter. Redis GET and EVAL for the local window buffer MUST NOT run while the limiter mutex that serializes that buffer is held. Exact mode (`sync_rate` zero) is unchanged.
@@ -130,9 +139,30 @@ Compiled unit tests SHALL prove encoder and window math against an in-process fa
 - **WHEN** `sync_rate` is long enough that no tick fires
 - **AND** one Take succeeds while Redis is up, leaving a local delta
 - **AND** the fake closes its listener and live sockets
-- **AND** the clock advances one `sync_rate` (or a flush is known to have failed)
 - **AND** Take is called again
-- **THEN** Take returns a non-nil Redis error
+- **THEN** Take returns a nil error
+- **AND** further Takes on that instance are allowed until `limit`, then denied
+
+### Requirement: Buffered outage is a per-node cap with a nil error
+When `sync_rate` is greater than zero and Redis is unreachable or times out, Take and Peek SHALL return the local admit or deny and a nil error. Admit SHALL continue until this instance's sliding estimate exceeds `limit`, then SHALL deny. Peek SHALL use the same estimate without recording a hit. Combined allowed hits across instances MUST NOT be treated as a global cap while Redis is down. Take and Peek MUST NOT return `redis:unreachable` or `redis:timeout` on this path. They MUST NOT GET or INCR on every buffered Take to detect the outage. They MUST NOT return `redis:unreachable` solely because a pending local delta skipped GET. This replaces dest's fail-closed rule that a nil error with a local admit MUST NOT occur.
+
+#### Scenario: Pending buffered delta then kill
+- **WHEN** `sync_rate` is greater than zero
+- **AND** Take has left a local delta unflushed
+- **AND** Redis becomes unreachable
+- **AND** Take is called again
+- **THEN** Take returns a nil error
+- **AND** Take is allowed until this instance's estimate exceeds `limit`
+- **AND** the next Take after that is denied
+- **AND** Peek on that limiter also returns a nil error
+
+#### Scenario: Successful flush then kill
+- **WHEN** `sync_rate` is greater than zero
+- **AND** a Take is followed by a successful flush
+- **AND** Redis is then killed
+- **AND** Take is called
+- **THEN** Take returns a nil error
+- **AND** allowed follows this instance's remaining room to `limit`
 
 #### Scenario: Fast Take while GET on another key is held
 - **WHEN** `sync_rate` is greater than zero
