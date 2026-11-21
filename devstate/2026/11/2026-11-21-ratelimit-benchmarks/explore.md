@@ -6,9 +6,9 @@
 
 | Unidad | Ruta | Papel en este cambio |
 |---|---|---|
-| Token bucket en memoria | `tokenbucket/memory.go` (`Memory.Allow`) | Se mide: mapa en proceso bajo un `sync.Mutex`, tope `maxMemorySources` = 65536 |
+| Token bucket en memoria | `tokenbucket/memory.go` (`Memory.Allow`) | Se mide y se optimiza: mapa en proceso bajo un `sync.Mutex`, tope `maxMemorySources` = 65536; quitar el recorrido O(n) en cada alta (`dropExpired`, `dropOne`) |
 | Token bucket Redis | `tokenbucket/redis.go` (`Redis.Allow`) | Se mide: un `simpleredis.Eval` (EVALSHA y, si responde NOSCRIPT, EVAL) del `allowScript` por llamada |
-| Window counter | `windowcounter/limiter.go` (`Take`: `takeExact` / `takeBuffered`, `flushPendingLocked`) | Se mide: `sync_rate` 0 = EVAL + GET por Take; `sync_rate` > 0 = memoria con GET ocasional y flush en un `time.AfterFunc` |
+| Window counter | `windowcounter/limiter.go` (`Take`: `takeExact` / `takeBuffered`, `flushPendingLocked`) | Se mide y se optimiza: `sync_rate` 0 = EVAL + GET por Take; `sync_rate` > 0 = memoria con GET ocasional y flush en un `time.AfterFunc`; el flush pasa de un EVAL por clave a lotes |
 | Eval de SimpleRedis | `simpleredis/commands_eval.go` (`Eval`) | No cambia. EVALSHA primero; con NOSCRIPT reenvía EVAL. No guarda estado de "script cargado" |
 | Redis falso de tokenbucket | `tokenbucket/fake_redis_test.go` (`testFakeRedis`, `startTestFakeRedis(t *testing.T)`) | Test-only. Responde siempre NOSCRIPT a EVALSHA |
 | Redis falso de windowcounter | `windowcounter/fake_redis_test.go` (ídem) | Test-only. Responde siempre NOSCRIPT a EVALSHA |
@@ -17,7 +17,7 @@
 | Patrón de benchmark Yaegi | `simpleredis/interpretedcost_test.go` `BenchmarkYaegiGet` | Patrón a copiar: GOPATH temporal, paquete probe con `Loop(count)`, un `Eval` de calentamiento y luego un `Eval(b.N)` cronometrado |
 | Selección de motor live | `tokenbucket/limiter_e2e_test.go`, `windowcounter/limiter_e2e_test.go` (`lookupLiveEngineAddrs` es pura; `liveEngineAddrs` / `runForEachLiveEngine` usan `*testing.T`) | Se reutiliza `lookupLiveEngineAddrs` para los benchmarks live |
 | README | `README.md` `## Window counter`, `## Token bucket`, `## Yaegi`, `## Tests` | Nueva sección comparativa con tabla; se corrige la frase de `## Yaegi` |
-| Devdocs | `knowledge/devdocs/std_go_tokenbucket.md`, `std_go_windowcounter.md`, `std_go_test-suites.md` | Uso: cómo reproducir los benchmarks |
+| Devdocs | `knowledge/devdocs/std_go_tokenbucket.md`, `std_go_windowcounter.md`, `std_go_test-suites.md`, `std_go_simpleredis.md` | Uso: cómo reproducir los benchmarks; corregir en `std_go_simpleredis.md` la frase de que Yaegi no es objetivo de velocidad |
 
 ### Cómo se conectan
 
@@ -107,7 +107,64 @@
 - **Live**: benchmarks compilados por motor (`b.Run("redis"|"dragonfly")`) que reutilizan `lookupLiveEngineAddrs`. Se saltan con `-short` o con las dos variables sin definir (las mismas reglas que los tests live). Las claves llevan un prefijo único por ejecución. Existen para `TOKENBUCKET_LIVE_*` y para `WINDOWCOUNTER_LIVE_*`, por simetría. Yaegi live no se hace (ver Rejected).
 - **README**: se añade una sección comparativa nueva (algoritmo, dónde vive el estado, viajes a Redis por petición, ventajas e inconvenientes, escalabilidad con varias instancias, número de claves y caída de Redis) con una tabla de benchmarks generada por los benchmarks anteriores, con el comando, la máquina y la versión de Go. La comparativa con Traefik Proxy `RateLimit` y Traefik Hub `DistributedRateLimit` se apoya solo en los dos folders de research. `tokenbucket/lua.go` se describe como "derivado del Lua de Traefik con dos cambios declarados", nunca como "idéntico". `backendbackoff/` solo se menciona para aclarar que no es un rate limiter.
 - **README `## Yaegi`**: se corrige "interpreted inside Traefik, not compiled into it" para decir que el código corre en las dos modalidades (decisión del solicitante). La restricción Yaegi se mantiene, porque la ruta interpretada sigue existiendo.
-- **Devdocs**: una línea "Benchmark with …" en `std_go_tokenbucket.md` y `std_go_windowcounter.md` (How to use / Key files), y en `std_go_test-suites.md` que los benchmarks no corren en CI y cómo se ejecutan, incluidos los live.
+- **Devdocs**: una línea "Benchmark with …" en `std_go_tokenbucket.md` y `std_go_windowcounter.md` (How to use / Key files), y en `std_go_test-suites.md` que los benchmarks no corren en CI y cómo se ejecutan, incluidos los live. También se corrige la frase de `std_go_simpleredis.md` que dice que "Yaegi is a portability and e2e-cost concern, not the speed target" (respuesta 2 del solicitante).
+- **Tabla del README**: se genera en esta máquina (Intel Core Ultra 7 265K, 20 hilos, Windows 11, `go1.25.6 windows/amd64`) con `-count 5` y la mediana. La tabla indica la máquina, la versión de Go y el comando para reproducirla (respuesta 1 del solicitante).
+
+### Cambio de alcance: optimizar los dos costes que crecen con el número de claves
+
+Respuesta 3 del solicitante (2026-11-21, a través del conductor): las dos optimizaciones entran en este cambio. Restricción: el comportamiento observable no cambia. Eso significa las mismas decisiones allow/deny, los mismos topes, la misma semántica de error y de caída de Redis, compatible con Yaegi y sin dependencias nuevas. Los benchmarks nuevos deben mostrar el antes y el después.
+
+Es un cambio de alcance pedido por el solicitante. No es un reshape hacia una unidad existente, así que no lleva fila en `deviations.md` (`skill:opd-workflow:Deviations`: "a row with no owner is not a reshape, it is a scope change"). Pero `requirement.md` sigue listando "optimizar los limitadores a raíz de los resultados" en Out of scope. Solo prepare puede editar ese fichero, así que el conductor decide si se vuelve a pasar prepare o si esta respuesta registrada basta como mandato.
+
+**Orden de implement (antes/después):** primero se hace commit de los benchmarks sin tocar el código de producción y se mide la base. Luego se optimiza y se mide otra vez con los mismos benchmarks y el mismo comando. Los dos conjuntos de números van en la tarjeta del PR, con los SHAs de los dos commits. El README publica las cifras finales y, para las dos filas optimizadas, una línea con la cifra anterior y el commit base.
+
+#### (a) `tokenbucket.Memory`: alta de una fuente nueva
+
+Hoy (`tokenbucket/memory.go`):
+- Cada alta llama a `dropExpired`, que recorre el mapa entero.
+- Con la tabla llena, `dropOne` recorre el mapa otra vez y borra una fuente viva cualquiera (el orden de iteración del mapa de Go).
+- Todo ocurre bajo `m.mu`.
+- Medido: unos 0.8 ms con 60k fuentes y 1.6 ms con la tabla llena (65536).
+
+Llamadores internos enumerados: `dropExpired` 2 (`Allow`, `dropOne`), `dropOne` 1 (`Allow`). Hay 5 sitios de test que leen o escriben `limiter.buckets[...]` directamente, y uno de ellos inserta un `memEntry` a mano (`allow_wait_duration_overflow_test.go:21`).
+
+| Opción | Qué hace | Peor caso tras el cambio | Riesgos / coste |
+|---|---|---|---|
+| A. Barrer solo al llegar al tope | Se quita el `dropExpired` de cada alta. Por debajo del tope, las entradas caducadas esperan; se siguen borrando de forma perezosa al consultarlas, como hoy. | Tabla llena solo de fuentes vivas: sigue en O(n) por alta (1.6 ms), igual que hoy. | Cambio mínimo, pero no arregla el peor caso medido. La memoria máxima no cambia (el tope ya la acota). |
+| B. Barrido amortizado (como mucho uno por `ttl`, o K entradas por alta) | Reparte el coste del barrido. | Con la tabla llena solo de vivas sigue en O(n), salvo que se combine con C. | Para elegir qué desalojar habría que saber si queda alguna caducada, y eso pide un recorrido completo. |
+| **C. Lista intrusiva ordenada por caducidad (recomendada)** | `memEntry` recibe `prev`/`next` y su clave. Cada `Allow` mueve la entrada al final (O(1)), porque `expireAt = now + ttl` con `ttl` fijo por limitador y `now` leído bajo el mutex. Así, el orden de la lista es el orden de caducidad. En un alta, se sacan por delante las caducadas; con la tabla llena y sin caducadas, se desaloja la de delante. | O(1) por alta. | 2 punteros más y la clave por entrada. Se desaloja la fuente que lleva más tiempo sin usarse en vez de una al azar. Ningún spec fija cuál (`std_go_tokenbucket_allow` solo exige caducidad perezosa) y el tope de 65536 no cambia. Si el reloj retrocede (`SetNowForTest`, salto del reloj de pared sin lectura monotónica), la cabeza puede no ser la que caduca antes; las decisiones no cambian porque la consulta sigue comprobando `expireAt`. Los tests que insertan en `buckets` a mano tienen que pasar por la lista. |
+| D. `container/list` | Igual que C, pero con la lista de la librería estándar. | O(1) | `Element.Value` es `any` y obliga a un type assertion. Bajo Yaegi, los valores que pasan por `any` ya han dado problemas (`knowledge/research/ext_geoblock_pester-integration/.sources/2026-09-08-yaegi-drops-methods-on-any.md`). C lo evita con punteros concretos. |
+
+Recomendación: **C**. Es la única que quita el O(n) del peor caso medido sin cambiar las decisiones, el tope ni la API, y usa solo punteros de Go, así que es segura bajo Yaegi. Implement debe probar que el desalojo con la tabla llena borra primero las caducadas, que una fuente desalojada vuelve con `burst` y que los tests Yaegi siguen pasando. El benchmark "clave nueva con la tabla llena" da el antes y el después.
+
+#### (b) `windowcounter`: flush en serie, un EVAL por clave
+
+Hoy (`windowcounter/limiter.go` `flushPendingLocked` → `flushEvalUnlocked`):
+- Manda un EVAL de `flushScript` por cada clave sucia, una detrás de otra, sin `l.mu`.
+- Un error en una clave deja esa clave con `flushDelta = 0` (se reintenta en el siguiente tick), guarda el primer error y no afecta a las demás.
+- Medido: unos 21 µs por clave en el falso.
+- Durante una caída de Redis cada EVAL agota su propio presupuesto (`CommandTimeout` 900 ms con un reintento), así que un flush con N claves puede tardar N × presupuesto.
+- Llamadores enumerados: `flushPending` 3 en producción (`Sleep`, `Close`, `flushAfterTick`) más 4 en tests; `flushPendingLocked` 1; `flushEvalUnlocked` 1.
+
+Capacidades de SimpleRedis comprobadas:
+- No tiene pipeline ni MULTI/EXEC. Los verbos públicos son `Get`, `MGet`, `Set`, `Del`, `Incr`, `IncrBy`, `Expire`, `ExpireAt`, `Eval`, `MSetEX` y `MSetEXAt`, y cada uno es un `exec` con su propio presupuesto.
+- Ya existe un precedente de EVAL multiclave seguro en Dragonfly: `msetexFallbackScript` en `simpleredis/commands_msetex.go`, con bucle numérico sobre `#KEYS` y sin `unpack`/`table.maxn`, tope de 1024 pares.
+- Dragonfly exige declarar en `KEYS` todas las claves que toca un script (`ext_dragonfly_eval`).
+- `std_go_simpleredis.md`: los motores en cluster necesitan todas las claves en el mismo hash slot, y el cliente no pone hash tags ni divide. El cliente tampoco sigue `MOVED`, así que hoy no hay soporte de Redis Cluster.
+
+| Opción | Qué hace | Riesgos / coste |
+|---|---|---|
+| **A. EVAL por lotes (recomendada)** | Script nuevo: un bucle sobre `KEYS[i]` con `exists`, `incrby` y `expireat`-si-era-nueva, usando `ARGV[2i-1]` y `ARGV[2i]`, con lotes de hasta K claves (por ejemplo 256, siempre ≤ 1024 como `MSetEX`). Devuelve un array plano con un valor por clave. Cada clave va dentro de `redis.pcall`, y un error se devuelve como un marcador en su posición (por ejemplo `"err:<mensaje>"` con `tostring`), así cada clave conserva su resultado y su error como hoy. | Un error a mitad de un script de Redis no deshace las escrituras anteriores. Sin `pcall`, un fallo en una clave haría que Go tratara el lote entero como fallido y lo reenviara: doble conteo. El `pcall` por clave lo evita. Un fallo de red falla el lote entero: el comportamiento es el de hoy (todas las claves se reintentan) y el flush tarda menos durante una caída. Una respuesta perdida tras aplicar el lote puede aplicar K claves dos veces; hoy ese riesgo es de una clave por vez y ya se acepta para EVAL. Un motor en modo cluster o detrás de un proxy de cluster devolvería CROSSSLOT; hoy no está soportado, pero el README y los devdocs deben decirlo. El spec `std_go_windowcounter_sync-flush` dice "one EVAL of INCRBY plus EXPIREAT … with the touched key declared in KEYS": propose tiene que reescribirlo con un MODIFIED. El falso de `windowcounter` empareja `args[1] == flushScript`, así que hay que enseñarle el script nuevo. |
+| B. Pipeline en SimpleRedis | Mandar N EVAL sin esperar cada respuesta. | Capacidad pública nueva de `simpleredis` (pool, reintentos y presupuesto por salto). Es mucho más superficie que este ticket y cambia otro spec (`std_go_simpleredis_resp-commands`). Rechazada. |
+| C. Flush concurrente con N workers | El mismo EVAL por clave, repartido entre goroutines. | Compite con el pool (8 sockets por defecto) que usan los Take/Peek de la ruta de petición, que pueden acabar en `ErrPoolWait`. Añade goroutines al código interpretado. No reduce los comandos. Rechazada. |
+
+Recomendación: **A**. Usa solo `Eval`, que ya existe, sigue el precedente multiclave de `msetexFallbackScript`, mantiene la semántica por clave gracias a `pcall`, y reduce el flush de N viajes a ⌈N/K⌉. Implement debe probar en el falso y en live (Redis y Dragonfly):
+- un error en una clave no afecta a las otras del lote;
+- el `local_delta` añadido mientras el EVAL está en vuelo se conserva;
+- un snapshot nunca se envía dos veces;
+- en una caída, todo el lote vuelve a `flushDelta = 0` y se guarda el error.
+
+`BenchmarkFlush` (1000 claves) da el antes y el después.
 
 ### Alternativas rechazadas
 
@@ -118,12 +175,16 @@
 - Medir el flush de `sync_rate` > 0 dentro del Take cronometrado con un `sync_rate` muy bajo: el flush corre en otra goroutine y su coste no se reparte por Take de forma estable; se mide aparte.
 - Benchmarks Yaegi live y Yaegi en paralelo: el multiplicador de interpretación ya sale contra el falso, y la red live no lo cambia. Solo añadirían tiempo y ruido.
 - Ejecutar `-bench` en CI o añadir umbrales: fuera de alcance según `requirement.md`.
-- Optimizar `Memory.Allow` (recorrido O(n) en altas) o el flush en serie: fuera de alcance ("optimizar los limitadores a raíz de los resultados"). Quedan como follow-up en `issues.md`.
+- (Superada por la respuesta 3 del solicitante) Dejar como follow-up el recorrido O(n) de `Memory.Allow` y el flush en serie. Ahora se optimizan aquí (ver "Cambio de alcance").
+- Para `Memory`: barrer solo al tope (A), barrido amortizado (B) y `container/list` (D). Motivos en la tabla de (a).
+- Para el flush: pipeline en SimpleRedis (B) y flush concurrente (C). Motivos en la tabla de (b).
 - Añadir `traefik` o `go-redis` como dependencia para medir Traefik: exclusión explícita.
 
 ### Live contract
 
-`no live contract`: los benchmarks son `_test.go` y no cambian ningún comportamiento especificado en `openspec/specs/std_go_tokenbucket_*`, `std_go_windowcounter_*` ni `std_go_ci_test-suites` (CI no cambia). El README no tiene spec. Propose confirma con `skill:opd-speclibrarian:Live catalog`.
+- Benchmarks, README y devdocs: ningún contrato vigente cambia. Los benchmarks son `_test.go`, CI no cambia (`std_go_ci_test-suites`) y el README no tiene spec.
+- Flush por lotes (opción b-A): cambia el contrato vigente `openspec/specs/std_go_windowcounter_sync-flush/spec.md` ("one EVAL of INCRBY plus EXPIREAT … with the touched key declared in KEYS"). Propose escribe un MODIFIED. Debe conservar en el texto que el flush no se hace bajo el mutex, que se conserva el `local_delta` añadido durante el envío, que no hay doble envío y que el error queda guardado.
+- Lista de caducidad en `Memory` (opción a-C): `openspec/specs/std_go_tokenbucket_allow/spec.md` no fija ni el tope ni qué fuente se desaloja; solo exige caducidad perezosa. Propose decide si añade un requisito sobre el desalojo con la tabla llena (caducadas primero, después la menos usada), según `skill:opd-speclibrarian:Live catalog`.
 
 ## Open questions
 
@@ -164,17 +225,27 @@
 
 - Q: ¿Con qué máquina, versión de Go y comando se generan los números de la tabla del README?
   Rank: additive asked — tabla nueva; Desired 2 ("indicando comando, máquina y versión de Go")
-  Decision: assumed — esta máquina de desarrollo (Intel Core Ultra 7 265K, 20 hilos, Windows 11, `go1.25.6 windows/amd64`, distinto del suelo `go 1.21` del módulo), con `go test -run '^$' -bench . -benchtime 1s -count 5` y la mediana. La tabla aclara que el loopback TCP de Windows domina las cifras contra el falso: sirven para comparar entre sí, no como latencia absoluta. Si el solicitante prefiere Linux o la versión de CI (1.21), basta con volver a ejecutar.
+  Decision: resolved — el solicitante respondió el 2026-11-21 (respuesta 1, vía el conductor): esta máquina (Intel Core Ultra 7 265K, 20 hilos, Windows 11, `go1.25.6 windows/amd64`), `-count 5` y la mediana. La tabla indica la máquina, la versión de Go y el comando para reproducirla (`go test -run '^$' -bench . -benchtime 1s -count 5`). También aclara que el loopback TCP de Windows domina las cifras contra el falso, así que sirven para comparar entre sí y no como latencia absoluta.
   By: explore
 
 - Q: ¿Qué devdocs actualiza este cambio, y qué se hace con `std_go_simpleredis.md` ("production is compiled into Traefik, and Yaegi is … not the speed target")?
-  Rank: additive incidental — ningún criterio nombra `std_go_simpleredis.md`; las líneas en los packets de los limitadores son añadidos
-  Decision: assumed — se añade una línea de uso de benchmarks en `std_go_tokenbucket.md`, `std_go_windowcounter.md` y `std_go_test-suites.md`. `std_go_simpleredis.md` no se edita en este cambio: esa frase justifica una decisión de encoder de SimpleRedis, no la de los limitadores. Devdocs impact la revisa a la luz de la respuesta 1.
+  Rank: additive asked — edición de una frase de un packet existente y líneas añadidas en otros tres; el mandato es la respuesta 2 del solicitante (2026-11-21, vía el conductor), porque `requirement.md` no lo nombra
+  Decision: resolved — el solicitante respondió que sí. Se corrige la frase de `std_go_simpleredis.md` para que diga que el código corre compilado y bajo Yaegi, y no que Yaegi "is not the speed target". La decisión de encoder que esa frase justifica sigue en el packet, ahora con las dos modalidades. Además se añade una línea de uso de benchmarks en `std_go_tokenbucket.md`, `std_go_windowcounter.md` y `std_go_test-suites.md`.
   By: explore
 
 - Q: ¿Qué hacer con los dos costes que crecen con el número de claves (alta O(n) bajo mutex en `tokenbucket.Memory`; flush en serie en `windowcounter`)?
-  Rank: additive incidental — solo documentación del comportamiento actual; arreglarlo está en Out of scope ("optimizar los limitadores a raíz de los resultados")
-  Decision: assumed — el README los documenta con números de los benchmarks y no se cambia código. Follow-ups en `issues.md` con sus ficheros `knowledge/debt/`.
+  Rank: bounded asked — cambia unidades existentes con llamadores enumerados (`dropExpired` 2, `dropOne` 1, `flushPendingLocked` 1, `flushEvalUnlocked` 1, `flushPending` 3 en producción y 4 en tests; raíces `tokenbucket/`, `windowcounter/`); el mandato es la respuesta 3 del solicitante (2026-11-21, vía el conductor), aunque `requirement.md` todavía lo lista en Out of scope
+  Decision: resolved — el solicitante respondió "optimize here". Las dos optimizaciones entran en este cambio sin cambiar el comportamiento observable, y los benchmarks muestran el antes y el después. Opciones y recomendación en Decisions → "Cambio de alcance". Las filas de `issues.md` pasan a `take`. `requirement.md` sigue diciendo Out of scope: el conductor decide si se vuelve a pasar prepare.
+  By: explore
+
+- Q: ¿Con qué diseño se elimina el recorrido O(n) en las altas de `tokenbucket.Memory`?
+  Rank: bounded asked — cambia `tokenbucket/memory.go` (`Allow`, `dropExpired` 2 llamadores, `dropOne` 1) y 5 sitios de test que tocan `buckets` directamente; respuesta 3 del solicitante
+  Decision: assumed — opción C: lista intrusiva ordenada por caducidad (`prev`/`next` en `memEntry`, mover al final en cada `Allow`, sacar por delante). Es O(1) por alta, mantiene el tope de 65536, saca primero las caducadas y es segura bajo Yaegi (sin `any`). Con la tabla llena y sin caducadas se desaloja la fuente menos usada en vez de una al azar; ningún spec fija cuál. Propose puede elegir A o B si prefiere un cambio menor, pero esas no arreglan el peor caso medido (tabla llena de vivas, 1.6 ms).
+  By: explore
+
+- Q: ¿Con qué diseño se elimina el flush en serie (un EVAL por clave) de `windowcounter`?
+  Rank: bounded asked — cambia `flushPendingLocked` / `flushEvalUnlocked` (1 llamador cada uno; `flushPending` 3 en producción y 4 en tests), el `flushScript` y el contrato vigente `std_go_windowcounter_sync-flush`; respuesta 3 del solicitante
+  Decision: assumed — opción A: un EVAL por lotes de hasta K claves (≤ 1024, como `MSetEX`; propuesta inicial 256), con `redis.pcall` por clave y un resultado o marcador de error por clave, sin `unpack` ni `table.maxn` (Dragonfly) y con todas las claves en `KEYS`. Se rechazan el pipeline (SimpleRedis no lo tiene y añadirlo cambia su API pública y su spec) y el flush concurrente (compite con el pool de la ruta de petición). El valor de K lo fija propose con `BenchmarkFlush`. Restricción a documentar: un motor en modo cluster devolvería CROSSSLOT (hoy el cliente tampoco soporta cluster).
   By: explore
 
 - Q: El README dice "Why this exists: … It does not compile your plugin into Traefik". ¿También se cambia?
