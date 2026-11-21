@@ -33,28 +33,27 @@ type Status struct {
 //
 // It is one body on purpose: it runs on every Allow, and under Yaegi each interpreted call costs about a microsecond
 // (BenchmarkYaegiMemoryAllow), so Period comes precomputed from the clock and the remaining, reset, and wait conversions are
-// written inline with the rule of durationFromNanos.
+// written inline with the rule of durationFromNanos. The fields are computed in locals and returned as one literal: setting
+// fields on a Status after its literal stalled the compiled return copy (BenchmarkMemoryAllow/hot-key, about 41 vs 35 ns).
 func newStatus(clock clockConfig, tokens, waitMicro float64) Status {
 	burst := float64(clock.burst)
 	// Admit uses whole microseconds, same units as consumeOne refund and Lua ARGV.
-	status := Status{
-		Allowed: waitMicro <= float64(clock.maxDelay.Microseconds()),
-		Limit:   clock.burst,
-		Period:  clock.period,
-	}
+	allowed := waitMicro <= float64(clock.maxDelay.Microseconds())
 	// Remaining is floor(tokens) clamped to [0, burst]: the clamp holds when Redis's 14-digit tokens text or float64(burst)
 	// rounds above burst; int64 truncation is floor for tokens >= 1; NaN fails both comparisons and stays 0.
+	remaining := int64(0)
 	if tokens >= burst {
-		status.Remaining = clock.burst
+		remaining = clock.burst
 	} else if tokens >= 1 {
-		status.Remaining = int64(tokens)
+		remaining = int64(tokens)
 	}
 	// Reset is the time to refill burst - tokens, saturating and never negative.
 	resetNanos := (burst - tokens) * float64(time.Second) / clock.rate
+	reset := time.Duration(0)
 	if resetNanos >= maxDurationNanos {
-		status.Reset = math.MaxInt64
+		reset = math.MaxInt64
 	} else if resetNanos > 0 {
-		status.Reset = time.Duration(resetNanos)
+		reset = time.Duration(resetNanos)
 	}
 	// The same wait is a delay on admit and a retry-after on deny, saturating and never negative.
 	waitNanos := waitMicro * float64(time.Microsecond)
@@ -64,12 +63,11 @@ func newStatus(clock clockConfig, tokens, waitMicro float64) Status {
 	} else if waitNanos > 0 {
 		wait = time.Duration(waitNanos)
 	}
-	if status.Allowed {
-		status.Delay = wait
-	} else {
-		status.RetryAfter = wait
+	// One literal per outcome: the wait goes to Delay or RetryAfter.
+	if allowed {
+		return Status{Allowed: true, Limit: clock.burst, Remaining: remaining, Period: clock.period, Reset: reset, Delay: wait}
 	}
-	return status
+	return Status{Limit: clock.burst, Remaining: remaining, Period: clock.period, Reset: reset, RetryAfter: wait}
 }
 
 // refillPeriod is burst / rate as a duration, the time to refill an empty bucket, computed once per limiter. It multiplies

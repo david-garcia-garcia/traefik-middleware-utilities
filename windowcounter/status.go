@@ -31,29 +31,37 @@ type Status struct {
 // estimate and the admit comparison are the expressions Take and Peek have always used.
 //
 // The allowed path is one body on purpose: it runs on every Take and Peek, and under Yaegi each interpreted call costs about a
-// microsecond (BenchmarkYaegiTake), so Remaining is computed inline. The retry-after search runs only on a deny.
+// microsecond (BenchmarkYaegiTake), so Remaining is computed inline. The retry-after search runs only on a deny. The fields
+// are computed in locals and returned as one literal: setting fields on a Status after its literal stalled the compiled return
+// copy (BenchmarkTake/sync-rate-20ms/hot-key).
 func newStatus(sliding slidingWindow, limit, current, previous int64) Status {
+	// The estimate and the window end are fixed by the same clock reading.
 	estimated := float64(current) + float64(previous)*sliding.weight
-	status := Status{
-		Allowed:   estimated <= float64(limit),
-		Limit:     limit,
-		Period:    time.Duration(sliding.windowSec) * time.Second,
-		Reset:     time.Unix(sliding.windowStart+sliding.windowSec, 0).Sub(sliding.now),
-		Estimated: estimated,
-	}
+	reset := time.Unix(sliding.windowStart+sliding.windowSec, 0).Sub(sliding.now)
 	// Remaining is floor(max(limit - estimated, 0)), never above limit; int64 truncation is floor for headroom >= 1, and NaN
 	// fails both comparisons and stays 0.
+	remaining := int64(0)
 	headroom := float64(limit) - estimated
 	if headroom >= 1 && headroom >= float64(limit) {
-		status.Remaining = limit
+		remaining = limit
 	} else if headroom >= 1 {
-		status.Remaining = int64(headroom)
+		remaining = int64(headroom)
 	}
-	if status.Allowed {
-		return status
+	// RetryAfter is zero when allowed; the retry-after search runs only on a deny.
+	retryAfter := time.Duration(0)
+	allowed := estimated <= float64(limit)
+	if !allowed {
+		retryAfter = retryAfterDeny(sliding, limit, current, previous, reset)
 	}
-	status.RetryAfter = retryAfterDeny(sliding, limit, current, previous, status.Reset)
-	return status
+	return Status{
+		Allowed:    allowed,
+		Limit:      limit,
+		Remaining:  remaining,
+		Period:     time.Duration(sliding.windowSec) * time.Second,
+		Reset:      reset,
+		RetryAfter: retryAfter,
+		Estimated:  estimated,
+	}
 }
 
 // retryAfterDeny is the RetryAfter of a denied call: the time from its clock reading to the first whole second at which one

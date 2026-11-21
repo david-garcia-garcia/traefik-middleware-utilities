@@ -4,7 +4,7 @@
 
 ## 2. `tokenbucket.Status`
 
-- [x] 2.1 Add `tokenbucket/status.go`: `Status` (`Allowed`, `Limit`, `Remaining`, `Period`, `Reset`, `RetryAfter`, `Delay`), `newStatus(clock, tokens, waitMicro)`, and the saturating `durationFromMicros` (design D1–D3), each with its doc comment; add `errEvalTokens` next to `errEvalWait` in `clock.go`; verify `go vet ./tokenbucket/` is clean
+- [x] 2.1 Add `tokenbucket/status.go`: `Status` (`Allowed`, `Limit`, `Remaining`, `Period`, `Reset`, `RetryAfter`, `Delay`), `newStatus(clock, tokens, waitMicro)`, and the saturating `durationFromNanos` (design D1–D3), each with its doc comment; add `errEvalTokens` next to `errEvalWait` in `clock.go`; verify `go vet ./tokenbucket/` is clean
 - [x] 2.2 Change `Memory.Allow` and `Redis.Allow` to return `(Status, error)` through `newStatus`, `Status{}` on every error; `Redis.Allow` parses `values[2]` after the wait with the same finite-number rule (design D4); `consumeOne`, the admit expression, and `allowScript` unchanged; verify `git diff ee9f5c11 -- tokenbucket/lua.go` is empty
 - [x] 2.3 Migrate every `tokenbucket` test, live test, and benchmark caller to `Status` (`Delay + RetryAfter` where a test asserted the old wait; keep a sink in benchmarks); verify `go test -short -count=1 ./tokenbucket/` passes with the same test names as the baseline
 - [x] 2.4 Migrate the interpreted probe sources in `limiter_yaegi_test.go`, `memory_yaegi_test.go`, `limiter_yaegi_e2e_test.go`, `bench_yaegi_test.go`; make the probes read `Allowed`, `Remaining`, `RetryAfter`; verify `go test -short -count=1 -run Yaegi ./tokenbucket/` passes with `useunsafe` false
@@ -14,7 +14,7 @@
 
 ## 3. `windowcounter.Status`
 
-- [x] 3.1 Add `windowcounter/status.go`: `Status` (`Allowed`, `Limit`, `Remaining`, `Period`, `Reset`, `RetryAfter`, `Estimated`) and `newStatus(sliding, limit, window, current, previous)` with the retry-after closed form and its predicate check (design D5–D6), each with its doc comment; verify `go vet ./windowcounter/` is clean
+- [x] 3.1 Add `windowcounter/status.go`: `Status` (`Allowed`, `Limit`, `Remaining`, `Period`, `Reset`, `RetryAfter`, `Estimated`) and `newStatus(sliding, limit, current, previous)` with the retry-after closed form and its predicate check (design D5–D6), each with its doc comment; verify `go vet ./windowcounter/` is clean
 - [x] 3.2 In `limiter.go`: add `now`, `windowSec`, `windowStart` to `slidingWindow`; move the weight expression unchanged into `weightAt` used by `slidingAt` and the retry check; pass `sliding` and `limit` to `takeExact`, `takeBuffered`, `peekExact`, `peekBuffered`, which end in `newStatus`; `Take`/`Peek`/`Allow` return `(Status, error)` with `Status{}` on error; verify the `Estimated` expression and operand order are unchanged in the diff and no Redis call was added
 - [x] 3.3 Migrate every `windowcounter` test, live test, and benchmark caller to `Status`; verify `go test -short -count=1 ./windowcounter/` passes with the same test names as the baseline, including `TestBuffered_*`, `repro_*`, and the fake's command assertions
 - [x] 3.4 Migrate the interpreted probe sources in `limiter_yaegi_test.go`, `limiter_yaegi_e2e_test.go`, `bench_yaegi_test.go`; make the deny probe read `Allowed` false, `Remaining` 0, `RetryAfter` > 0; verify `go test -short -count=1 -run Yaegi ./windowcounter/` passes with `useunsafe` false

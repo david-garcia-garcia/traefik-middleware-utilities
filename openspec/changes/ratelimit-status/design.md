@@ -54,7 +54,7 @@ Rejected (explore): a shared type in a common package (new cross-package depende
 - `Allowed = waitMicro <= float64(clock.maxDelay.Microseconds())` — the same expression as today.
 - Admitted: `Delay` = wait, `RetryAfter` = 0. Denied: `RetryAfter` = wait, `Delay` = 0. `Delay + RetryAfter` is today's `wait`.
 - `Remaining = min(floor(max(tokens, 0)), burst)`. The `min` keeps `Remaining ≤ Limit` when `float64(burst)` rounds up for a huge burst.
-- `Period` = `burst / limitPerMicro` µs; `Reset` = `max(burst − tokens, 0) / limitPerMicro` µs.
+- `Period` = `burst × 1s / rate`, computed once per limiter (`refillPeriod`, stored in `clockConfig.period`); multiplying before dividing keeps a whole result exact (5 tokens at 10/s is 500ms, where `burst / limitPerMicro` gives 499.999999ms). `Reset` = `max(burst − tokens, 0) × 1s / rate`.
 
 `RetryAfter = wait`, not `wait − maxDelay`: that is the delay Traefik's own limiter puts in `Retry-After` (`knowledge/research/ext_traefik_ratelimiter_token-bucket/`), and retrying then finds the token without waiting. `wait − maxDelay` is the earliest admitting instant; it is documented, not exposed.
 
@@ -62,7 +62,7 @@ Rejected (explore): a shared type in a common package (new cross-package depende
 
 ### D3. Saturating microseconds-to-duration conversion (`tokenbucket`)
 
-`durationFromMicros(micros float64) time.Duration` in `status.go`: not positive (including NaN) → 0; at or above `math.MaxInt64` nanoseconds → `math.MaxInt64`; otherwise `time.Duration(micros * float64(time.Microsecond))`, the same conversion as today, so in-range values do not move. `Period`, `Reset`, `Delay`, `RetryAfter` all use it. The admit decision keeps comparing the float `waitMicro`, so saturation cannot change `Allowed` (`allow_wait_duration_overflow_test.go`, `allow_maxdelay0_wait_trunc_test.go` stay green).
+`durationFromNanos(nanos float64) time.Duration` in `status.go`: not positive (including NaN) → 0; at or above `math.MaxInt64` nanoseconds → `math.MaxInt64`; otherwise `time.Duration(nanos)`. The wait converts as today (`waitMicro × 1µs`), so in-range values do not move. `refillPeriod` calls it for `Period`; `newStatus` writes the same rule inline for `Reset` and the wait (`Delay` / `RetryAfter`), because each interpreted call costs about a microsecond under Yaegi. The admit decision keeps comparing the float `waitMicro`, so saturation cannot change `Allowed` (`allow_wait_duration_overflow_test.go`, `allow_maxdelay0_wait_trunc_test.go` stay green).
 
 `windowcounter` needs no helper: `Period` is the caller's `window`, and `Reset` / `RetryAfter` come from `time.Time.Sub`, which already saturates.
 
@@ -76,7 +76,7 @@ Memory/Redis parity: `Allowed`, `Limit`, `Period` equal; `Delay`/`RetryAfter` sa
 
 `slidingWindow` gains `now time.Time`, `windowSec int64`, `windowStart int64` (Unix seconds). The weight expression moves into one function, `weightAt(elapsedSec, windowSec int64) float64`, with the exact expression `slidingAt` uses today; `slidingAt` and the retry-after search both call it, so the retry predicate is the admit predicate.
 
-The four paths (`takeExact`, `takeBuffered`, `peekExact`, `peekBuffered`) receive the `slidingWindow` value and `limit` instead of the loose `currentKey`/`previousKey`/`ttlSec`/`expireAt`/`weight` parameters (one cluster of facts that always travel together), keep reading Redis and the buffer exactly as today, and end with `newStatus(sliding, limit, window, current, previous)`. `Estimated` stays `float64(current) + float64(previous)*sliding.weight` — the same expression and operand order, so `Allowed` does not move.
+The four paths (`takeExact`, `takeBuffered`, `peekExact`, `peekBuffered`) receive the `slidingWindow` value and `limit` instead of the loose `currentKey`/`previousKey`/`ttlSec`/`expireAt`/`weight` parameters (one cluster of facts that always travel together), keep reading Redis and the buffer exactly as today, and end with `newStatus(sliding, limit, current, previous)` (`sliding` carries the window length). `Estimated` stays `float64(current) + float64(previous)*sliding.weight` — the same expression and operand order, so `Allowed` does not move.
 
 `newStatus` in `windowcounter/status.go`:
 

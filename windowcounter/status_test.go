@@ -3,6 +3,7 @@ package windowcounter
 import (
 	"context"
 	"errors"
+	"math"
 	"testing"
 	"time"
 )
@@ -104,6 +105,21 @@ func TestStatus_OverTheLimitHasNothingRemaining(t *testing.T) {
 		got := takeTimesForTest(t, limiter, "k", 2, window, 4)
 		if got.Allowed || got.Estimated != 4 || got.Remaining != 0 {
 			t.Fatalf("%s: got %+v want denied, Estimated 4, Remaining 0", mode.name, got)
+		}
+	}
+}
+
+func TestStatus_EmptyWindowHasTheWholeLimitRemaining(t *testing.T) {
+	// With no hits Remaining is the whole limit, also when float64(limit) rounds above the largest int64.
+	window := time.Minute
+	for _, mode := range statusModesForTest {
+		for _, limit := range []int64{10, math.MaxInt64} {
+			clock := &statusClockForTest{now: windowStartForTest(window)}
+			limiter, _ := newStatusLimiterForTest(t, mode, clock)
+			got := peekForTest(t, limiter, "k", limit, window)
+			if !got.Allowed || got.Limit != limit || got.Remaining != limit {
+				t.Fatalf("%s limit %d: got %+v want allowed with Remaining == Limit", mode.name, limit, got)
+			}
 		}
 	}
 }
