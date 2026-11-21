@@ -17,8 +17,8 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: b29526a
-Owner decision: None.
+Reviewed head: 20996cf
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -51,7 +51,10 @@ None.
 Ticket 2026-11-21-simpleredis-tls-acl on branch 2026-11-21-simpleredis-tls-acl targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/103; CI not seen.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| ¿Qué superficie expone TLS: `Config.TLS *tls.Config` o campos propios más estrechos? | additive asked — campo nuevo en `Config`; los 197 literales existentes siguen compilando con valor cero; requirement.md "Alcance acordado / Dentro 2: TLS: poder conectar a Redis/Dragonfly por TLS (verificación de servidor con CA propia o raíces del sistema, nombre de servidor, y certificado de cliente para mTLS)" | assumed — `Config.TLS *tls.Config`, nil = TCP plano. Cubre CA propia (`RootCAs`), raíces del sistema (`RootCAs` nil), `ServerName` y mTLS (`Certificates`) sin abstracción paralela; mismo dueño de forma que go-redis (`ext_go-redis_options_tls-config`). | explore |
+
 
 ## Findings
 None.
@@ -66,7 +69,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | b29526a3de0d2de899ec1dac77a075fe90f80d16 | Card must match the branch you measured |
+| Reviewed head | 20996cf432d68a8382401c18798ca6c3b782002c | Card must match the branch you measured |
 
 ### Stored data model
 None.
