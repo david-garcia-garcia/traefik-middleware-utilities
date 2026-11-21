@@ -669,12 +669,12 @@ The encoder SHALL write every argument as a length-prefixed RESP bulk string. A 
 - **AND** the fake did not treat the payload as a second command
 
 ### Requirement: Concurrent MSetEX unknown-command fallback stays balanced
-Compiled unit tests SHALL run many overlapping MSetEX calls against a fake that rejects MSETEX. Those calls MUST succeed. After they finish, the in-use-turn channel SHALL be full and extra turn returns SHALL be zero.
+Compiled unit tests SHALL run many overlapping MSetEX calls against a fake that rejects MSETEX. Those calls MUST succeed. After they finish, the in-use-turn semaphore SHALL be full (free turns equal its cap) and extra turn returns SHALL be zero.
 
 #### Scenario: Sixteen overlapping MSetEX fallbacks
 - **WHEN** many goroutines each call MSetEX repeatedly against a reject-MSETEX fake
 - **THEN** every call returns no error
-- **AND** the in-use-turn channel is full
+- **AND** the in-use-turn semaphore is full
 - **AND** extra turn returns are zero
 
 ### Requirement: Interpreter tests observe error paths
