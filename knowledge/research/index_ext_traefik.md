@@ -39,3 +39,8 @@ description: Which unsafe package symbols Yaegi v0.16.1 exports when Traefik reg
 priority: normal
 local: ext_traefik_plugins_yaegi-build-constraints/
 description: Which build-constraint mechanisms Yaegi v0.16.1 honors when assembling an interpreted package, and which it ignores silently.
+
+## Yaegi crypto/tls client
+priority: normal
+local: ext_traefik_plugins_yaegi-tls/
+description: Whether an interpreted crypto/tls client (Dialer, Config.Clone, callbacks, error types) runs under Yaegi v0.16.1 with stdlib symbols only.

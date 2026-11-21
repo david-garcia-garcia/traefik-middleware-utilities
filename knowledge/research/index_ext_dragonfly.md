@@ -34,3 +34,8 @@ description: How Dragonfly closes a client TCP socket from the server (idle --ti
 priority: normal
 local: ext_dragonfly_msetex/
 description: Dragonfly v1.40 command matrix has no MSETEX; Lua SET EX/EXAT is the group-write path.
+
+## TLS
+priority: normal
+local: ext_dragonfly_tls/
+description: How Dragonfly v1.40.2 serves TLS (flags, startup auth requirement, CA-driven client certs, key format).

@@ -33,3 +33,20 @@ SimpleRedis prefix `ERR Client sent AUTH` does **not** match this 7.x text. Live
 ## NOPERM is not an AUTH handshake reply
 
 `NOPERM` is an ACL denial of a later command. AUTH itself is allowed without prior auth. Fake handshake tests may still send a `NOPERM` AUTH reply to cover the prefix; live Redis does not emit it from `AUTH`.
+
+## Two-argument AUTH for an ACL user
+
+`AUTH <username> <password>` (Redis 6+) authenticates as that ACL user; a `nopass` user accepts every password. ([redis.io ACL](https://redis.io/docs/latest/operate/oss_and_stack/management/security/acl/), [.sources/acl.md](.sources/acl.md))
+
+Live `redis:7-alpine` 7.4.10 over TLS, users `app on >secret` and `free on nopass`, `--requirepass topsecret`, 2026-11-21 (`ext_redis_tls/.sources/redis-tls-live-probe.md`):
+
+| AUTH argv | Reply |
+|---|---|
+| `AUTH app secret` | `+OK` |
+| `AUTH app wrong` | `WRONGPASS invalid username-password pair or user is disabled.` |
+| `AUTH ghost secret` (no such user) | same `WRONGPASS` |
+| `AUTH app ""` | same `WRONGPASS` |
+| `AUTH free ""` (nopass user) | `+OK` |
+| `AUTH default topsecret` | `+OK` |
+
+An unknown user and a wrong password give the same `WRONGPASS` text, so both map to `redis:noauth`. An empty password is a valid argument: it succeeds only for a `nopass` user.
