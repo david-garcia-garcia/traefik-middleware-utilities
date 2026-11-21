@@ -33,7 +33,7 @@ Documentación: nueva sección `## Rate limiters compared` en el README (tabla p
 In progress. 1 items remain.
 
 Priority: P2 — dolor real de operador y usuario final (paradas bajo el mutex y sincronización que se estira), limitado a conjuntos grandes de claves en `NewMemory` y en modo buffered.
-Reviewed head: 0d849079
+Reviewed head: 6319a592
 Owner decision: None.
 
 ## Review scores
@@ -94,7 +94,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 0d849079d8007a1adcb1dac7e0d3b5427fa01a78 | Card must match the branch you measured |
+| Reviewed head | 6319a5923b4645e3243971975446974cc1424452 | Card must match the branch you measured |
 
 ### Stored data model
 None.
