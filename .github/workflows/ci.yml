@@ -68,6 +68,7 @@ jobs:
       TOKENBUCKET_LIVE_REDIS: 127.0.0.1:6379
       SIMPLEREDIS_LIVE_REDIS: 127.0.0.1:6379
       SIMPLEREDIS_LIVE_REDIS_AUTH: 127.0.0.1:6381
+      SIMPLEREDIS_LIVE_REDIS_TLS: 127.0.0.1:6383
     steps:
     - name: Checkout Repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -90,11 +91,36 @@ jobs:
           echo "passworded Redis on 6381 did not become ready"
           exit 1
         fi
+    - name: Start TLS Redis
+      run: |
+        TLS_DIR="$RUNNER_TEMP/simpleredis-tls"
+        SIMPLEREDIS_TLS_FIXTURE_OUT="$TLS_DIR" go test -count=1 -run '^TestWriteTLSFixtureFiles$' ./simpleredis/
+        echo "SIMPLEREDIS_LIVE_TLS_DIR=$TLS_DIR" >> "$GITHUB_ENV"
+        docker create --name simpleredis-redis-tls -p 6383:6379 redis:7-alpine redis-server --port 0 --tls-port 6379 --tls-cert-file /tls/server.crt --tls-key-file /tls/server.key --tls-ca-cert-file /tls/ca.crt
+        docker cp "$TLS_DIR" simpleredis-redis-tls:/tls
+        docker start simpleredis-redis-tls
+        ok=0
+        for i in $(seq 1 30); do
+          if docker exec simpleredis-redis-tls redis-cli --tls --cacert /tls/ca.crt --cert /tls/client.crt --key /tls/client.key -p 6379 ping | grep -q PONG; then
+            ok=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$ok" != 1 ]; then
+          echo "TLS Redis on 6383 did not become ready"
+          docker logs simpleredis-redis-tls
+          exit 1
+        fi
+        docker exec simpleredis-redis-tls redis-cli --tls --cacert /tls/ca.crt --cert /tls/client.crt --key /tls/client.key -p 6379 ACL SETUSER app on '>apppass' '~*' '+@all'
     - name: Run Tests
       run: go test -timeout 5m -count=1 -v ./...
     - name: Stop passworded Redis
       if: always()
       run: docker rm -f simpleredis-redis-auth
+    - name: Stop TLS Redis
+      if: always()
+      run: docker rm -f simpleredis-redis-tls
 
   e2e-dragonfly:
     name: Go E2E Dragonfly
@@ -117,6 +143,7 @@ jobs:
       TOKENBUCKET_LIVE_DRAGONFLY: 127.0.0.1:6380
       SIMPLEREDIS_LIVE_DRAGONFLY: 127.0.0.1:6380
       SIMPLEREDIS_LIVE_DRAGONFLY_AUTH: 127.0.0.1:6382
+      SIMPLEREDIS_LIVE_DRAGONFLY_TLS: 127.0.0.1:6384
     steps:
     - name: Checkout Repository
       uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
@@ -139,11 +166,36 @@ jobs:
           echo "passworded Dragonfly on 6382 did not become ready"
           exit 1
         fi
+    - name: Start TLS Dragonfly
+      run: |
+        TLS_DIR="$RUNNER_TEMP/simpleredis-tls"
+        SIMPLEREDIS_TLS_FIXTURE_OUT="$TLS_DIR" go test -count=1 -run '^TestWriteTLSFixtureFiles$' ./simpleredis/
+        echo "SIMPLEREDIS_LIVE_TLS_DIR=$TLS_DIR" >> "$GITHUB_ENV"
+        docker create --name simpleredis-dragonfly-tls --ulimit memlock=-1 -p 6384:6379 docker.dragonflydb.io/dragonflydb/dragonfly:v1.40.2 --tls --tls_cert_file=/tls/server.crt --tls_key_file=/tls/server.key --tls_ca_cert_file=/tls/ca.crt
+        docker cp "$TLS_DIR" simpleredis-dragonfly-tls:/tls
+        docker start simpleredis-dragonfly-tls
+        ok=0
+        for i in $(seq 1 30); do
+          if docker exec simpleredis-dragonfly-tls redis-cli --tls --cacert /tls/ca.crt --cert /tls/client.crt --key /tls/client.key -p 6379 ping | grep -q PONG; then
+            ok=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$ok" != 1 ]; then
+          echo "TLS Dragonfly on 6384 did not become ready"
+          docker logs simpleredis-dragonfly-tls
+          exit 1
+        fi
+        docker exec simpleredis-dragonfly-tls redis-cli --tls --cacert /tls/ca.crt --cert /tls/client.crt --key /tls/client.key -p 6379 ACL SETUSER app on '>apppass' '~*' '+@all'
     - name: Run Tests
       run: go test -timeout 5m -count=1 -v ./...
     - name: Stop passworded Dragonfly
       if: always()
       run: docker rm -f simpleredis-dragonfly-auth
+    - name: Stop TLS Dragonfly
+      if: always()
+      run: docker rm -f simpleredis-dragonfly-tls
 
   integration:
     name: Integration Tests

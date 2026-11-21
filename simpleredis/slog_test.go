@@ -3,6 +3,8 @@ package simpleredis
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"log/slog"
 	"strings"
@@ -483,5 +485,112 @@ func TestSecretsNeverAppearInLogs(t *testing.T) {
 	}
 	if strings.Contains(dump, "secret-value-should-not-log") {
 		t.Fatalf("value leaked in logs:\n%s", dump)
+	}
+}
+
+// TestLogTLSHandshakeRejection proves an untrusted server certificate logs dial: redis:tls at Error with the
+// crypto/tls text in tls_error, while the caller's error text stays exactly redis:tls.
+func TestLogTLSHandshakeRejection(t *testing.T) {
+	h := &recHandler{}
+	_, _, addr := startTLSFakeRedis(t, map[string]string{}, tlsFakeOptionsForTest{})
+	sr := newTestRedis(t, Config{Host: addr, TLS: &tls.Config{RootCAs: x509.NewCertPool(), MinVersion: tls.VersionTLS12},
+		Logger: recLogger(h), MaxRetries: -1})
+	t.Cleanup(sr.Close)
+	_, err := sr.Get(context.Background(), "k")
+	if err == nil || err.Error() != RedisTLS {
+		t.Fatalf("Get = %v, want %s", err, RedisTLS)
+	}
+	requireMsg(t, h, "dial: "+RedisTLS, slog.LevelError)
+	if tlsError := msgAttrForTest(h, "dial: "+RedisTLS, "tls_error"); !strings.Contains(tlsError, "certificate") {
+		t.Fatalf("tls_error = %q, want the verification error text\n%s", tlsError, h.dump())
+	}
+	requireNoSiteFallbackForTest(t, h)
+}
+
+// TestLogTLSFirstReadAlert proves the TLS 1.3 client-certificate alert is logged by do with the verb that read it:
+// the first command without AUTH, or AUTH, where dial adds its own Warn line.
+func TestLogTLSFirstReadAlert(t *testing.T) {
+	fixture := testTLSFixture(t)
+	rows := []struct {
+		name     string
+		pass     string
+		wantVerb string
+	}{
+		{"firstCommand", "", "GET"},
+		{"auth", "secret", verbAuth},
+	}
+	for _, row := range rows {
+		row := row
+		t.Run(row.name, func(t *testing.T) {
+			h := &recHandler{}
+			_, _, addr := startTLSFakeRedis(t, map[string]string{"hit": "t"}, tlsFakeOptionsForTest{requireClientCert: true})
+			sr := newTestRedis(t, Config{Host: addr, TLS: fixture.clientTLSConfig(t, false), Pass: row.pass,
+				Logger: recLogger(h), MaxRetries: -1})
+			t.Cleanup(sr.Close)
+			_, err := sr.Get(context.Background(), "hit")
+			if err == nil || err.Error() != RedisTLS {
+				t.Fatalf("Get = %v, want %s", err, RedisTLS)
+			}
+			requireMsg(t, h, "do: "+RedisTLS, slog.LevelError)
+			requireMsgAttr(t, h, "do: "+RedisTLS, "verb", row.wantVerb)
+			if tlsError := msgAttrForTest(h, "do: "+RedisTLS, "tls_error"); !strings.Contains(tlsError, "certificate") {
+				t.Fatalf("tls_error = %q, want the alert text\n%s", tlsError, h.dump())
+			}
+			if row.wantVerb == verbAuth {
+				requireMsg(t, h, "dial: "+RedisTLS, slog.LevelWarn)
+				requireMsgAttr(t, h, "dial: "+RedisTLS, "verb", verbAuth)
+			}
+			requireNoSiteFallbackForTest(t, h)
+		})
+	}
+}
+
+// TestLogTLSFailureNeverShowsUserOrPass proves a TLS failure for a client with a distinctive ACL user and password
+// keeps both strings off every captured line.
+func TestLogTLSFailureNeverShowsUserOrPass(t *testing.T) {
+	const user = "UserN4me-UNIQUE-41bd"
+	const pass = "PassW0rd-UNIQUE-77e0"
+	fixture := testTLSFixture(t)
+	h := &recHandler{}
+	_, _, addr := startTLSFakeRedis(t, map[string]string{"hit": "t"}, tlsFakeOptionsForTest{requireClientCert: true})
+	sr := newTestRedis(t, Config{Host: addr, TLS: fixture.clientTLSConfig(t, false), User: user, Pass: pass,
+		Logger: recLogger(h), MaxRetries: -1})
+	t.Cleanup(sr.Close)
+	if _, err := sr.Get(context.Background(), "hit"); err == nil || err.Error() != RedisTLS {
+		t.Fatalf("Get = %v, want %s", err, RedisTLS)
+	}
+	dump := h.dump()
+	if strings.Contains(dump, user) || strings.Contains(dump, pass) {
+		t.Fatalf("user or password leaked in logs:\n%s", dump)
+	}
+}
+
+// msgAttrForTest returns the value of key on the first record logged as msg, or "" when there is none.
+func msgAttrForTest(h *recHandler, msg, key string) string {
+	for _, r := range h.records() {
+		if r.Message != msg {
+			continue
+		}
+		found := ""
+		r.Attrs(func(a slog.Attr) bool {
+			if a.Key == key {
+				found = a.Value.String()
+				return false
+			}
+			return true
+		})
+		return found
+	}
+	return ""
+}
+
+// requireNoSiteFallbackForTest fails when a TLS failure was also logged as redis error or redis:unreachable at a site.
+func requireNoSiteFallbackForTest(t *testing.T, h *recHandler) {
+	t.Helper()
+	for _, r := range h.records() {
+		switch r.Message {
+		case "dial: redis error", "do: redis error", "dial: " + RedisUnreachable, "do: " + RedisUnreachable:
+			t.Fatalf("TLS failure also logged as %q\n%s", r.Message, h.dump())
+		}
 	}
 }

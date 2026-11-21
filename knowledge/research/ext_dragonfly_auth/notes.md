@@ -21,3 +21,9 @@ Live v1.40.2 `--requirepass=secret`:
 | `AUTH secret` | `OK` |
 
 WRONGPASS maps to SimpleRedis `redis:noauth`. A live wrong-password case **requires** a passworded Dragonfly; the dest compose service today has no `--requirepass`.
+
+## ACL user with the two-argument form
+
+Official: "Users can use `AUTH <username> <password>` to authorize their connection with a given user"; a new user is `OFF` until granted `ON`. ([dragonfly ACL](https://www.dragonflydb.io/docs/managing-dragonfly/acl), [.sources/acl.md](.sources/acl.md))
+
+Live v1.40.2 over TLS, `ACL SETUSER app on >secret ~* +@all`, 2026-11-21 (`ext_dragonfly_tls/.sources/dragonfly-tls-live-probe.md`): `AUTH app secret` → `OK`; `AUTH app wrong` and `AUTH app ""` → `WRONGPASS invalid username-password pair or user is disabled.` Same text as Redis 7.4.

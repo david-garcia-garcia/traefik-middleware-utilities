@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"net"
 	"time"
@@ -247,20 +248,27 @@ func (sr *SimpleRedis) parkIdleConn(conn *pooledConn) bool {
 	return true
 }
 
-// dial opens TCP to host, then AUTH and SELECT when those New fields are set.
-// Dialer.Timeout is the per-attempt cap; DialContext also honors ctx (overall budget or caller).
-// handshakeFailed is true when TCP succeeded and AUTH or SELECT then failed; exec must not retry that error.
+// dial opens TCP to host (plus a TLS client handshake when New stored a TLS configuration), then AUTH and SELECT
+// when those New fields are set.
+// Dialer.Timeout is the per-attempt cap on connect plus handshake; DialContext also honors ctx (overall budget or caller).
+// handshakeFailed is true when the connection succeeded and AUTH or SELECT then failed; exec must not retry that error.
+// A deterministic TLS rejection during the handshake is errTLS with handshakeFailed false: shouldRetry already
+// refuses it because it is neither errUnreachable nor a retryable Redis reply.
 //
 //nolint:revive // error stays before handshakeFailed; reordering would collide with in-flight SimpleRedis PRs.
 func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, handshakeFailed bool) {
 	if err := contextStop(ctx); err != nil {
 		return nil, err, false
 	}
-	dialer := net.Dialer{Timeout: sr.DialTimeout()}
-	netConn, err := dialer.DialContext(ctx, "tcp", sr.host)
+	netConn, err := sr.openNetConn(ctx)
 	if err != nil {
 		if stop := contextStop(ctx); stop != nil {
 			return nil, stop, false
+		}
+		// A TLS rejection is an operator fix, so it is Error with the crypto/tls text, which is not a Redis reply.
+		if isTLSRejection(err) {
+			sr.logger.Error("dial: "+RedisTLS, "tls_error", err.Error())
+			return nil, errTLS, false
 		}
 		// The dialer's own text is not published: the line is the unreachable sentinel, and host is on simpleredis_open.
 		sr.logger.Debug("dial: " + RedisUnreachable)
@@ -275,12 +283,15 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 	// AUTH before SELECT so a passworded server accepts the session.
 	// A handshake failure is Warn here and the verb says which step failed; do already logged what it saw.
 	// Never log the peer's text: Redis 7.4 AUTH replies can quote Config.Pass.
-	if sr.pass != "" {
-		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(verbAuth), []byte(sr.pass)}); err != nil {
+	if sr.user != "" || sr.pass != "" {
+		if _, _, err = sr.do(ctx, conn, sr.authArgs()); err != nil {
 			conn.close()
-			if errors.Is(err, ErrNoAuth) {
+			switch {
+			case errors.Is(err, ErrNoAuth):
 				sr.logger.Warn("dial: "+RedisNoAuth, "verb", verbAuth)
-			} else {
+			case errors.Is(err, ErrTLS):
+				sr.logger.Warn("dial: "+RedisTLS, "verb", verbAuth)
+			default:
 				sr.logger.Warn("dial: redis error", "verb", verbAuth)
 			}
 			return nil, err, true
@@ -289,13 +300,38 @@ func (sr *SimpleRedis) dial(ctx context.Context) (conn *pooledConn, err error, h
 	if sr.database != "" {
 		if _, _, err = sr.do(ctx, conn, [][]byte{[]byte(verbSelect), []byte(sr.database)}); err != nil {
 			conn.close()
-			if errors.Is(err, ErrNoAuth) {
+			switch {
+			case errors.Is(err, ErrNoAuth):
 				sr.logger.Warn("dial: "+RedisNoAuth, "verb", verbSelect)
-			} else {
+			case errors.Is(err, ErrTLS):
+				sr.logger.Warn("dial: "+RedisTLS, "verb", verbSelect)
+			default:
 				sr.logger.Warn("dial: redis error", "verb", verbSelect)
 			}
 			return nil, err, true
 		}
 	}
 	return conn, nil, false
+}
+
+// openNetConn obtains the socket for one dial attempt: plain TCP when New stored no TLS configuration, else TCP
+// plus a TLS client handshake with that configuration. Both are bounded by DialTimeout and ctx.
+// tls.Dialer, not tls.DialWithDialer: only DialContext honours ctx during the handshake. ServerName is not built
+// from host here; crypto/tls takes it from the address when the configuration leaves it empty.
+func (sr *SimpleRedis) openNetConn(ctx context.Context) (net.Conn, error) {
+	if sr.tlsConfig == nil {
+		dialer := net.Dialer{Timeout: sr.DialTimeout()}
+		return dialer.DialContext(ctx, "tcp", sr.host)
+	}
+	dialer := tls.Dialer{NetDialer: &net.Dialer{Timeout: sr.DialTimeout()}, Config: sr.tlsConfig}
+	return dialer.DialContext(ctx, "tcp", sr.host)
+}
+
+// authArgs is the AUTH command for this client: AUTH <user> <pass> when an ACL user is set (also with an empty
+// pass), else AUTH <pass>. Redis reads the one-argument form as the default user.
+func (sr *SimpleRedis) authArgs() [][]byte {
+	if sr.user != "" {
+		return [][]byte{[]byte(verbAuth), []byte(sr.user), []byte(sr.pass)}
+	}
+	return [][]byte{[]byte(verbAuth), []byte(sr.pass)}
 }
