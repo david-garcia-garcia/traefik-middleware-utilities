@@ -14,17 +14,17 @@ Not yet.
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 3292d98
+Reviewed head: c50fbdc1
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44886646789 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -34,8 +34,8 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-11-21-simpleredis-tls-acl pushed | `git` |
 | OpenSpec | simpleredis-tls-acl | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/103 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 44886646789 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44886646789 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44886646789 |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
@@ -45,6 +45,9 @@ Worktree:
 - [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-tls-acl/openspec/changes/simpleredis-tls-acl/proposal.md) — modified
 - [std_go_simpleredis_tls-handshake](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-tls-acl/openspec/changes/simpleredis-tls-acl/proposal.md) — added
 
+Completed:
+- [std_go_simpleredis_live-e2e](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-tls-acl/openspec/specs/std_go_simpleredis_live-e2e/spec.md) — modified
+
 
 ## Deviations from the ask
 None.
@@ -53,7 +56,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-21-simpleredis-tls-acl on branch 2026-11-21-simpleredis-tls-acl targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/103; CI not seen.
+Ticket 2026-11-21-simpleredis-tls-acl on branch 2026-11-21-simpleredis-tls-acl targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/103; CI build 44886646789 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44886646789.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -72,9 +75,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 1 added / 3 modified | Same list as ## Specs |
+| Specs in this PR | 1 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 3292d98a0511eaec4e72cf2c87f85cb33f1c1714 | Card must match the branch you measured |
+| Reviewed head | c50fbdc179ed02d3ab71dc229de906312d29d940 | Card must match the branch you measured |
 
 ### Stored data model
 None.
