@@ -76,7 +76,7 @@ limiter_yaegi_e2e_test.go # interpreted, live
 - Unit CI does not start Redis. A test that needs a live engine belongs in `*_e2e_test.go`, not `{domain}_test.go`.
 - Unit CI on Ubuntu runs `test` without `-race` (`TestAlloc*` run) and `race` with `-race` (`TestAlloc*` skip). A green race job does not prove `inUseTurns` length or idle-cap accounting. SimpleRedis chaos/lifecycle are not in the `-short` jobs; prove them with a default `go test ./simpleredis/`.
 - Pester `scripts/integration-tests.simpleredis.Tests.ps1` drives `/<engine>/<verb>` (status + body) for `INTEGRATION_ENGINE`. Exact `/redis` and `/dragonfly` are health Set+Get. Reclaim is `scripts/integration-tests.reclaim.Tests.ps1` and CI `integration`. Compiled `*_e2e_test.go` is the client/limiter proof.
-- Auth/SELECT handshake failure is Go E2E: SELECT 99 on dest engines (`pool_e2e_test.go`); WRONGPASS on `SIMPLEREDIS_LIVE_*_AUTH`. Malformed RESP and LOADING retry stay on fake TCP.
+- Auth/SELECT handshake failure is Go E2E: SELECT 99 on dest engines (`pool_e2e_test.go`); WRONGPASS on `SIMPLEREDIS_LIVE_*_AUTH`; ACL-user WRONGPASS and `redis:tls` (missing client certificate, untrusted CA) on `SIMPLEREDIS_LIVE_*_TLS` (`tls_e2e_test.go`). Malformed RESP and LOADING retry stay on fake TCP.
 - `testpackage` is off on purpose. Tests live in `package reclaim` / `package simpleredis` / … so they can reach unexported pool state. Do not move them to `foo_test`.
 - `unnamedResult.checkExported: false` is stronger than `true`. `true` means exported functions only. Do not “tighten” it.
 - Identity `==` on SimpleRedis retry/decode sentinels is required (`errUnreachable` so pool wait is not retried). `//nolint:errorlint` at those sites; do not rewrite to `errors.Is`.

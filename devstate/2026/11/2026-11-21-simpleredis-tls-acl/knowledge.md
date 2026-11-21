@@ -12,3 +12,5 @@
 - updated knowledge/research/index_ext_redis.md
 - updated knowledge/research/index_ext_dragonfly.md
 - updated knowledge/research/index_ext_go-redis.md
+- updated knowledge/devdocs/std_go_simpleredis.md
+- updated knowledge/devdocs/std_go_test-suites.md
