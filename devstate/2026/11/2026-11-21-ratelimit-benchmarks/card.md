@@ -17,7 +17,7 @@ Not yet.
 In progress. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: e3625d33
+Reviewed head: 875328c0
 Owner decision: None.
 
 ## Review scores
@@ -45,7 +45,7 @@ None.
 None.
 
 ## Follow-up issues
-- [ ] [Stop scanning every bucket when `tokenbucket.Memory` admits a new source](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/knowledge/debt/2026-11-21-tokenbucket-memory-new-source-scan.md) — `tokenbucket.Memory` walks every bucket under its mutex on each new source (≈0.8–1.6 ms at 60k–65k sources).
+- [ ] `knowledge/debt/2026-11-21-tokenbucket-memory-new-source-scan.md` → `tokenbucket/memory.go` alta O(1) con lista de caducidad — `tokenbucket.Memory` recorre todos los buckets bajo su mutex en cada fuente nueva (≈0.8–1.6 ms con 60k–65k fuentes). El solicitante lo metió en este cambio el 2026-11-21 (respuesta 3). Cuando implement lo resuelva: `[x]`, `Taken:` y borrar el fichero de deuda.
 
 
 ## How this fits together
@@ -67,7 +67,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | e3625d33e3a9841725c3fb3168a9f83cdee3babb | Card must match the branch you measured |
+| Reviewed head | 875328c06da4d3058be9cbf6a29fe8a320135ef4 | Card must match the branch you measured |
 
 ### Stored data model
 None.
