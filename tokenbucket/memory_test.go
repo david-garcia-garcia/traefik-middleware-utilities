@@ -120,3 +120,33 @@ func TestMemory_FullStoreOfLiveStaysAtCap(t *testing.T) {
 		t.Fatalf("stored sources %d after re-admit, want the cap %d", got, maxMemorySources)
 	}
 }
+
+// TestMemory_ReusedSourceMovesBehindExpiring: a stored source that is not the list tail moves behind the sources that expire
+// before it, so at the cap a new source removes those expired sources and keeps the reused live one unchanged.
+func TestMemory_ReusedSourceMovesBehindExpiring(t *testing.T) {
+	start := time.Unix(1_700_000_000, 0)
+	now := start
+	limiter := newCapTestMemory(t, &now)
+	allowNewFullBucket(t, limiter, "hot")
+	// The other sources expire with hot's first Allow and are stored behind it, so hot is the list head.
+	prefillCapTestSources(limiter, "other:", maxMemorySources-1, start, start.Add(testTTL))
+	now = start.Add(testTTL / 2)
+	if _, _, err := limiter.Allow(context.Background(), "hot"); err != nil {
+		t.Fatal(err)
+	}
+	hotEntry := limiter.buckets["hot"]
+	hotTokens := hotEntry.tokens
+	now = start.Add(testTTL)
+
+	allowNewFullBucket(t, limiter, "new")
+
+	if limiter.buckets["hot"] != hotEntry {
+		t.Fatal("reused live source hot was removed while expired sources were stored behind it")
+	}
+	if hotEntry.tokens != hotTokens {
+		t.Fatalf("hot tokens %v, want unchanged %v", hotEntry.tokens, hotTokens)
+	}
+	if got := len(limiter.buckets); got != 2 {
+		t.Fatalf("stored sources %d, want 2 (hot and new)", got)
+	}
+}

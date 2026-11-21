@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Memory store caps sources and removes expired ones first
-The in-memory store SHALL hold at most 65536 sources. Before storing a new source (missing or TTL-expired key), it SHALL remove sources whose `ttl` has elapsed, and SHALL remove a live source only when the store is still at the cap with no elapsed source left. Which live source is removed is not specified. Removing sources MUST NOT change the admit, wait, or deny result of a source that stays stored.
+The in-memory store SHALL hold at most 65536 sources. Before storing a new source (missing or TTL-expired key), it SHALL remove sources whose `ttl` has elapsed, and SHALL remove a live source only when the store is still at the cap with no elapsed source left. That ordering holds while the limiter clock does not move backwards; a test clock that moves backwards MAY leave an elapsed source stored while a live one is removed at the cap. Which live source is removed is not specified. Removing sources MUST NOT change the admit, wait, or deny result of a source that stays stored.
 
 #### Scenario: Full store drops expired sources before live ones
 - **WHEN** the in-memory store holds 65536 sources and some of them have an elapsed `ttl` by the limiter clock

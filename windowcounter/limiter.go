@@ -502,22 +502,8 @@ func (l *Limiter) flushPendingLocked(ctx context.Context) error {
 		if batchEnd > len(pending) {
 			batchEnd = len(pending)
 		}
-		batch := pending[batchStart:batchEnd]
-		values, err := l.flushBatchEvalUnlocked(ctx, batch)
-		// A reply without one slot per key cannot be matched to keys, so every key of this batch fails.
-		if err == nil && len(values) != len(batch) {
-			err = errors.New(simpleredis.RedisIssue)
-		}
-		for i, job := range batch {
-			slotErr := err
-			n := int64(0)
-			if slotErr == nil {
-				n, slotErr = parseFlushSlot(values[i])
-			}
-			if slotErr != nil && firstErr == nil {
-				firstErr = slotErr
-			}
-			l.applyFlushOutcomeLocked(job, n, slotErr)
+		if batchErr := l.flushBatchLocked(ctx, pending[batchStart:batchEnd]); batchErr != nil && firstErr == nil {
+			firstErr = batchErr
 		}
 	}
 	// Drop windows whose TTL has passed and that have no local or in-flight delta.
@@ -533,9 +519,32 @@ func (l *Limiter) flushPendingLocked(ctx context.Context) error {
 	return firstErr
 }
 
-// applyFlushOutcomeLocked applies one key's flush result. Applied: redisKnown = n and localDelta drops by the amount sent,
-// keeping hits added while the EVAL was in flight. Failed: localDelta is kept for the next flush. Caller holds l.mu.
-func (l *Limiter) applyFlushOutcomeLocked(job pendingFlush, n int64, slotErr error) {
+// flushBatchLocked EVALs one batch without l.mu, then applies each key's reply slot. It returns the batch's first failure.
+// Caller holds l.mu.
+func (l *Limiter) flushBatchLocked(ctx context.Context, batch []pendingFlush) error {
+	slots, batchErr := l.flushBatchEvalUnlocked(ctx, batch)
+	// A reply without one slot per key cannot be matched to keys, so every key of this batch fails.
+	if batchErr == nil && len(slots) != len(batch) {
+		batchErr = errors.New(simpleredis.RedisIssue)
+	}
+	var firstErr error
+	for i, job := range batch {
+		slotErr := batchErr
+		redisCount := int64(0)
+		if slotErr == nil {
+			redisCount, slotErr = parseFlushSlot(slots[i])
+		}
+		if slotErr != nil && firstErr == nil {
+			firstErr = slotErr
+		}
+		l.applyFlushOutcomeLocked(job, redisCount, slotErr)
+	}
+	return firstErr
+}
+
+// applyFlushOutcomeLocked applies one key's flush result. Applied: redisKnown = redisCount and localDelta drops by the amount
+// sent, keeping hits added while the EVAL was in flight. Failed: localDelta is kept for the next flush. Caller holds l.mu.
+func (l *Limiter) applyFlushOutcomeLocked(job pendingFlush, redisCount int64, slotErr error) {
 	state := l.windows[job.redisKey]
 	if state == nil {
 		return
@@ -544,22 +553,23 @@ func (l *Limiter) applyFlushOutcomeLocked(job pendingFlush, n int64, slotErr err
 	if slotErr != nil {
 		return
 	}
-	state.redisKnown = n
+	state.redisKnown = redisCount
 	state.unread = false
 	state.localDelta -= job.delta
 	l.lastOutageErr = nil
 }
 
-// flushBatchEvalUnlocked drops l.mu for one batch flush EVAL then re-locks. Caller holds l.mu.
+// flushBatchEvalUnlocked drops l.mu for one batch flush EVAL then re-locks. batch is the caller's copy, so its KEYS and ARGV
+// are built after the unlock. Caller holds l.mu.
 func (l *Limiter) flushBatchEvalUnlocked(ctx context.Context, batch []pendingFlush) ([][]byte, error) {
+	l.mu.Unlock()
+	defer l.mu.Lock()
 	keys := make([]string, len(batch))
 	args := make([]string, 0, 2*len(batch))
 	for i, job := range batch {
 		keys[i] = job.redisKey
 		args = append(args, strconv.FormatInt(job.delta, 10), strconv.FormatInt(job.expireAt, 10))
 	}
-	l.mu.Unlock()
-	defer l.mu.Lock()
 	return l.redis.Eval(ctx, flushBatchScript, flushBatchScriptDigest, keys, args)
 }
 
@@ -570,11 +580,7 @@ func parseFlushSlot(slot []byte) (int64, error) {
 	if strings.HasPrefix(text, flushErrorSlotPrefix) {
 		return 0, errors.New(strings.TrimPrefix(text, flushErrorSlotPrefix))
 	}
-	n, err := strconv.ParseInt(text, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("%s: %w", simpleredis.RedisIssue, err)
-	}
-	return n, nil
+	return parseEvalIntSlot(text)
 }
 
 // skipRedisContactLocked is true for one sync_rate after a failed flush or GET. After that the next
@@ -610,11 +616,17 @@ func parseEvalInt(values [][]byte) (int64, error) {
 	if len(values) != 1 {
 		return 0, errors.New(simpleredis.RedisIssue)
 	}
-	n, err := strconv.ParseInt(string(values[0]), 10, 64)
+	return parseEvalIntSlot(string(values[0]))
+}
+
+// parseEvalIntSlot reads one integer reply slot; a slot that is not an integer wraps the conversion failure under
+// redis:issue? so the cause is kept.
+func parseEvalIntSlot(slot string) (int64, error) {
+	count, err := strconv.ParseInt(slot, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("%s: %w", simpleredis.RedisIssue, err)
 	}
-	return n, nil
+	return count, nil
 }
 
 // redisWindowKey is {opaqueKey}:{windowStartUnix}.

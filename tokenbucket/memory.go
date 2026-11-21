@@ -81,12 +81,10 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 		m.makeRoomLocked(now)
 		// Missing or TTL-expired key is a full bucket, then consumeOne.
 		entry = &memEntry{tokens: float64(m.clock.burst), last: nowMicro, key: key}
-		m.buckets[key] = entry
-		m.pushBackLocked(entry)
-	} else if entry != m.tail {
-		// Its expireAt is about to become the latest, so it moves to the tail. The tail itself stays put (hot key).
-		m.unlinkLocked(entry)
-		m.pushBackLocked(entry)
+		m.storeLocked(entry)
+	} else {
+		// Its expireAt is about to become the latest, so it moves to the tail.
+		m.moveToBackLocked(entry)
 	}
 	tokens, last, waitMicro := consumeOne(entry.tokens, entry.last, m.clock.limitPerMicro(), float64(m.clock.burst), nowMicro, m.clock.maxDelay.Microseconds())
 	entry.tokens = tokens
@@ -112,6 +110,12 @@ func (m *Memory) makeRoomLocked(now time.Time) {
 	}
 }
 
+// storeLocked adds a new source to the map and at the tail of the expiry list. Caller holds m.mu.
+func (m *Memory) storeLocked(entry *memEntry) {
+	m.buckets[entry.key] = entry
+	m.pushBackLocked(entry)
+}
+
 // removeLocked deletes a stored source from the map and the expiry list. Caller holds m.mu.
 func (m *Memory) removeLocked(entry *memEntry) {
 	m.unlinkLocked(entry)
@@ -132,6 +136,16 @@ func (m *Memory) unlinkLocked(entry *memEntry) {
 	}
 	entry.prev = nil
 	entry.next = nil
+}
+
+// moveToBackLocked moves a linked entry to the tail of the expiry list. The tail itself stays put, so a hot key costs no
+// relink. Caller holds m.mu.
+func (m *Memory) moveToBackLocked(entry *memEntry) {
+	if entry == m.tail {
+		return
+	}
+	m.unlinkLocked(entry)
+	m.pushBackLocked(entry)
 }
 
 // pushBackLocked appends an unlinked entry at the tail of the expiry list. Caller holds m.mu.

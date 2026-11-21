@@ -8,3 +8,5 @@
   Taken: implement, commit `ae7f4a9a` — flush por lotes de 256 claves por EVAL con `redis.pcall` y resultado por clave en `windowcounter/limiter.go`; fichero de deuda borrado.
 - [ ] note large  `knowledge/debt/2026-11-21-simpleredis-spec-compiled-only-rationale.md`
   Why: el spec vivo `std_go_simpleredis_resp-commands` sigue diciendo que el despliegue es solo compilado dentro de Traefik; este cambio corrige esa premisa en el README y en `std_go_simpleredis.md`, pero no en el spec.
+- [ ] note large  `knowledge/debt/2026-11-21-backendbackoff-gate-new-key-scan.md`
+  Why: `backendbackoff.Gate` sigue recorriendo todo su mapa bajo el mutex en cada clave nueva con la tabla llena; este cambio solo pasa `tokenbucket.Memory` a la lista de caducidad O(1) y los dos hermanos divergen.

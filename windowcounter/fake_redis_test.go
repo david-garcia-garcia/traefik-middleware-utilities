@@ -43,9 +43,9 @@ type testFakeRedis struct {
 	// commands counts every served command so benchmarks can report Redis round trips per operation.
 	commands int
 
-	// flushEvalKeys is the key count of every flush batch EVAL served, in order; lastFlushKeys is the last batch's KEYS.
-	flushEvalKeys []int
-	lastFlushKeys []string
+	// flushBatchKeyCounts is the key count of every flush batch EVAL served, in order; lastFlushKeys is the last batch's KEYS.
+	flushBatchKeyCounts []int
+	lastFlushKeys       []string
 	// incrbyFailPrefix and incrbyFailRemaining fail the INCRBY of the next N flushed keys with that prefix inside the batch.
 	incrbyFailPrefix    string
 	incrbyFailRemaining int
@@ -208,7 +208,7 @@ func (f *testFakeRedis) flushBatchReplyLocked(args []string) string {
 	}
 	keys := args[3 : 3+numKeys]
 	argv := args[3+numKeys:]
-	f.flushEvalKeys = append(f.flushEvalKeys, numKeys)
+	f.flushBatchKeyCounts = append(f.flushBatchKeyCounts, numKeys)
 	f.lastFlushKeys = append([]string(nil), keys...)
 	if f.flushReply != "" {
 		reply := f.flushReply
@@ -294,7 +294,7 @@ func (f *testFakeRedis) waitFlushHoldLocked() {
 func (f *testFakeRedis) flushEvalKeyCounts() []int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return append([]int(nil), f.flushEvalKeys...)
+	return append([]int(nil), f.flushBatchKeyCounts...)
 }
 
 // lastFlushBatchKeys returns the KEYS of the last flush batch EVAL.

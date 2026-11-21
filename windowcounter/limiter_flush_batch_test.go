@@ -250,10 +250,16 @@ func TestFlush_ManyKeysFewerEvalsThanKeys(t *testing.T) {
 	if len(counts) >= dirtyKeys {
 		t.Fatalf("flush EVALs %d, want fewer than %d keys", len(counts), dirtyKeys)
 	}
+	if wantEvals := (dirtyKeys + flushBatchKeys - 1) / flushBatchKeys; len(counts) != wantEvals {
+		t.Fatalf("flush EVALs %d, want %d batches of at most %d keys", len(counts), wantEvals, flushBatchKeys)
+	}
 	sent := 0
 	for _, keysInEval := range counts {
 		if keysInEval > 1024 {
 			t.Fatalf("flush EVAL with %d keys, want at most 1024", keysInEval)
+		}
+		if keysInEval > flushBatchKeys {
+			t.Fatalf("flush EVAL with %d keys, want at most flushBatchKeys %d", keysInEval, flushBatchKeys)
 		}
 		sent += keysInEval
 	}
