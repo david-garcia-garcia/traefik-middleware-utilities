@@ -1,0 +1,18 @@
+issueKey: 2026-09-24-reclaim-alias
+jobName: 2026-09-24-reclaim-alias
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: d3c3d866d2b8c1bf1c53bf35ff5a29b241e86791436522a3dd31f4ba510c0773
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: reclaim-alias
+pr:
+  id: 100
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/100

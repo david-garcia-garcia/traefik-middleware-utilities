@@ -57,21 +57,30 @@ The current window start SHALL be `floor(unixSeconds / windowSeconds) × windowS
 - **THEN** the sliding estimate after that Take equals one hit, not N plus one
 
 ### Requirement: Peek agrees with Take before the increment
-For the same clock, key, limit, and window, Peek's `allowed` and estimated SHALL match the values Take would return for that same state before Take increments, except when buffered mode (`sync_rate` greater than zero) still holds a previous-window key from this instance's last flush while Redis has a higher shared count: then Peek MAY report the stale previous until Take GETs it. Peek MUST NOT GET previous on every call to close that gap.
+For the same clock, key, limit, and window, Peek's estimated SHALL be the already-used sliding occupancy (no hit added). Peek's `allowed` SHALL be true when that occupancy is less than or equal to `limit`. Those values SHALL match what Take would return for that same state before Take increments. Peek MUST NOT compare occupancy plus one. In buffered mode (`sync_rate` greater than zero) Peek MAY report a previous-window count older than Redis (another instance flushed into it after this instance last read it) until Take refreshes previous. Peek MUST NOT GET previous on every call to close that gap.
 
-#### Scenario: Peek then Take at a frozen clock
+#### Scenario: Peek then Take when the increment does not cross limit
 - **WHEN** the clock is held fixed
+- **AND** occupancy is below `limit`
 - **AND** Peek is called on a key
 - **AND** Take is then called on that same key, limit, and window
 - **THEN** Take's allowed matches Peek's allowed
 - **AND** Take's estimated equals Peek's estimated plus the one new hit's contribution
+
+#### Scenario: Occupancy at exactly limit
+- **WHEN** the clock is held fixed
+- **AND** Take has been called `limit` times for that key in the window
+- **AND** Peek is then called
+- **THEN** Peek returns allowed true and estimated equal to `limit`
+- **WHEN** Take is then called once more
+- **THEN** that Take returns allowed false and estimated equal to `limit` plus one
 
 #### Scenario: Buffered Peek may lag previous until Take
 - **WHEN** `sync_rate` is greater than zero
 - **AND** another instance has flushed a higher shared count onto a key that is now previous
 - **AND** Peek is called on this instance at that clock
 - **THEN** Peek MAY still use this instance's last flush return for previous
-- **AND** the next Take SHALL GET previous when `local_delta` is 0
+- **AND** the next Take SHALL refresh previous under the sync-flush previous-refresh rule
 - **AND** Peek MUST NOT GET previous solely because `local_delta` is 0
 
 ### Requirement: Peek follows the sliding window after Takes stop
@@ -106,8 +115,18 @@ When Redis is unreachable or times out, Take and Peek SHALL return that error (`
 - **THEN** that call returns `redis:unreachable` or `redis:timeout`
 - **AND** MUST NOT return a nil error
 
+### Requirement: Buffered Take does not wait on another key's Redis GET
+When `sync_rate` is greater than zero, a Take on one opaque key MUST NOT wait for an in-flight Redis GET that belongs to a different opaque key on the same limiter. Redis GET and EVAL for the local window buffer MUST NOT run while the limiter mutex that serializes that buffer is held. Exact mode (`sync_rate` zero) is unchanged.
+
+#### Scenario: Fast Take during a delayed GET on another key
+- **WHEN** `sync_rate` is greater than zero
+- **AND** a Take on opaque key `slow` is blocked in Redis GET
+- **AND** a Take on a different opaque key `fast` is issued on the same limiter
+- **THEN** the Take on `fast` returns before that GET on `slow` finishes
+- **AND** the wait is well under the GET delay
+
 ### Requirement: Unit and interpreter tests prove Take without Traefik
-Compiled unit tests SHALL prove encoder and window math against an in-process fake TCP Redis (no Docker), including Peek-does-not-increment, Peek-agrees-with-Take, and sliding cooldown via the formula. That fake SHALL be able to close its listener and every live socket on demand so a pending-delta outage can be proven. Interpreter tests that import Yaegi SHALL run live Take and Peek scenarios against GOPATH copies of non-test `windowcounter` and `simpleredis` sources, stdlib symbols only, `useunsafe` false. Those interpreter tests MUST NOT start Traefik. The compiled test owns process start and skip.
+Compiled unit tests SHALL prove encoder and window math against an in-process fake TCP Redis (no Docker), including Peek-does-not-increment, Peek-agrees-with-Take, sliding cooldown via the formula, and that a buffered Take on one opaque key does not wait for a delayed GET on a different opaque key. That fake SHALL be able to close its listener and every live socket on demand so a pending-delta outage can be proven. That fake SHALL be able to hold a GET whose Redis key matches a prefix until release or a hold duration, without holding the fake's own mutex during that hold. Interpreter tests that import Yaegi SHALL run live Take and Peek scenarios against GOPATH copies of non-test `windowcounter` and `simpleredis` sources, stdlib symbols only, `useunsafe` false. Those interpreter tests MUST NOT start Traefik. The compiled test owns process start and skip.
 
 #### Scenario: Yaegi Take against a fake
 - **WHEN** interpreted code constructs a limiter on a compiled fake Redis
@@ -129,3 +148,11 @@ Compiled unit tests SHALL prove encoder and window math against an in-process fa
 - **AND** the clock advances one `sync_rate` (or a flush is known to have failed)
 - **AND** Take is called again
 - **THEN** Take returns a non-nil Redis error
+
+#### Scenario: Fast Take while GET on another key is held
+- **WHEN** `sync_rate` is greater than zero
+- **AND** the fake holds GET for Redis keys with prefix `slow:`
+- **AND** a Take on opaque key `slow` has entered that hold
+- **AND** a Take on opaque key `fast` is issued on the same limiter
+- **THEN** the Take on `fast` returns well under the GET hold duration
+- **AND** it MUST NOT wait for the held GET to finish

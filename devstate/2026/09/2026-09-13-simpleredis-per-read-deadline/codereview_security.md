@@ -1,0 +1,6 @@
+# Security
+
+1. [judgement] Hostile Redis turn occupancy — `simpleredis/resp.go:26` — at zero `Config`, `do` now stamps one socket deadline from the full `CommandTimeout` remainder (900 ms) instead of `clampTimeout(ctx, IOTimeout)` (100 ms per command I/O) while `bindCommandDeadline` raised the library ceiling from `(MaxRetries+1)*(DialTimeout+IOTimeout)` (600 ms) to `CommandTimeout` (900 ms); a quiet or slowly dripping peer therefore keeps an in-use pool turn longer than before (not unbounded: `watchConnClose` still closes the socket when the command context ends, and tests pin drip/silent behavior to the budget)
+   → Treat as the documented trade-off; operators who fear pool exhaustion under a misbehaving Redis should lower `CommandTimeout` rather than expecting a separate per-read stall cap
+   Status: skipped
+   Argument: judgement, and it is the accepted trade-off the change exists to make. Already recorded as such on the live spec ("The accepted cost SHALL be...", "Operators who need a shorter ceiling SHALL lower CommandTimeout"), in the design Risks table, and in the devdocs gotcha. Bounded by `watchConnClose`, `PoolTimeout`, and the drip/silent tests. Reinstating a separate stall cap is the rejected `stallConn` alternative.

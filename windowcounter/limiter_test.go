@@ -13,9 +13,13 @@ import (
 )
 
 // newSimpleRedisForTest returns a New client for tests.
-func newSimpleRedisForTest(t testing.TB, host string) *simpleredis.SimpleRedis {
-	t.Helper()
-	return simpleredis.New(simpleredis.Config{Host: host})
+func newSimpleRedisForTest(tb testing.TB, host string) *simpleredis.SimpleRedis {
+	tb.Helper()
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		tb.Fatal(err)
+	}
+	return client
 }
 
 func TestCountFromRedisGet_WrappedMissIsZero(t *testing.T) {
@@ -79,6 +83,13 @@ func TestTake_ExpireOnFirstHit(t *testing.T) {
 	if len(got) < 3 || got[0] != redisExpireCommand || got[2] != "20" {
 		t.Fatalf("expire argv %v want EXPIRE … 20", got)
 	}
+	afterFirst := fake.expireCommandCount()
+	if _, _, err := limiter.Take(context.Background(), "k", 5, window); err != nil {
+		t.Fatal(err)
+	}
+	if got := fake.expireCommandCount(); got != afterFirst {
+		t.Fatalf("second Take expire count %d want %d (TTL already set)", got, afterFirst)
+	}
 }
 
 func TestTake_SlidingBoundaryDoesNotDouble(t *testing.T) {
@@ -126,7 +137,7 @@ func TestTake_Unreachable(t *testing.T) {
 }
 
 func TestNew_NegativeSyncRate(t *testing.T) {
-	client := simpleredis.New(simpleredis.Config{})
+	client := newSimpleRedisForTest(t, "")
 	if _, err := New(client, -time.Second); err == nil {
 		t.Fatal("want error")
 	}
@@ -244,10 +255,36 @@ func TestClose_StopsTickerAndKeepsRedis(t *testing.T) {
 	}
 	limiter.Wake()
 	limiter.mu.Lock()
-	running := limiter.stop != nil
+	running := limiter.flushTimer != nil
 	limiter.mu.Unlock()
 	if running {
 		t.Fatal("Wake after Close started a ticker")
+	}
+}
+
+// TestWake_StartsTickerAfterSleep checks that Wake after a completed Sleep starts the flush ticker again, including a second Sleep while already stopped.
+func TestWake_StartsTickerAfterSleep(t *testing.T) {
+	_, addr := startTestFakeRedis(t)
+	client := newSimpleRedisForTest(t, addr)
+	limiter, err := New(client, minSyncRate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer limiter.Close()
+	limiter.Sleep()
+	limiter.Sleep()
+	limiter.mu.Lock()
+	stopped := limiter.flushTimer == nil
+	limiter.mu.Unlock()
+	if !stopped {
+		t.Fatal("Sleep left a ticker running")
+	}
+	limiter.Wake()
+	limiter.mu.Lock()
+	running := limiter.flushTimer != nil
+	limiter.mu.Unlock()
+	if !running {
+		t.Fatal("Wake after Sleep did not start a ticker")
 	}
 }
 

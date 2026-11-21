@@ -11,13 +11,37 @@ The `Table` source file SHALL import only Go standard-library packages. It MUST 
 - **WHEN** `table.go` is listed for imports
 - **THEN** every import path is a Go standard-library package
 
-### Requirement: Process table is a singleton
-`reclaim` SHALL expose one process-wide table (`Default` / package `Open`). Independent keys on that table MUST NOT share an incarnation. Callers in other packages SHALL type-assert the value `Open` returns.
+### Requirement: Caller constructs and owns a table
+`reclaim` SHALL NOT expose a process-wide table. Callers SHALL create a table with `New(Config)`
+and hold that instance for as long as they need shared incarnations. `New` SHALL copy
+`Config.Grace` onto the table. After `New` returns, that table's grace MUST NOT change.
+Independent keys on one table MUST NOT share an incarnation. Callers in other packages SHALL
+type-assert the value `Open` returns. Two distinct tables MUST NOT share an incarnation even when
+they are opened with the same key.
 
-#### Scenario: Default Open shares one incarnation
-- **WHEN** `Open` and `Default().Open` are called for the same key
+#### Scenario: Two Opens on one table share one incarnation
+- **WHEN** two `Open` calls for the same key run on one table
 - **THEN** both return the same stored value
 - **AND** `create` runs once
+
+#### Scenario: Two tables do not share
+- **WHEN** two tables are each opened for the same key
+- **THEN** each table stores its own value
+- **AND** `create` runs once per table
+
+#### Scenario: Constructor config is fixed
+- **WHEN** a table is created with `New(Config)`
+- **AND** the caller later writes a different `Grace` on that `Config` value
+- **THEN** the table's grace is still the value `New` copied
+
+### Requirement: New copies grace from Config
+`New(Config)` SHALL be the only public constructor. A negative `Grace` SHALL become the product
+default of 10 seconds (`DefaultGrace`). A zero `Grace` SHALL stay zero. `NewTable`, `Default`,
+package `Open`, package `Reset`, and package `ResetWith` SHALL NOT exist.
+
+#### Scenario: Package singleton APIs are absent
+- **WHEN** the `reclaim` package is listed for exported constructors and package funcs
+- **THEN** there is no `Default`, package `Open`, `Reset`, `ResetWith`, or `NewTable`
 
 ### Requirement: Open creates once and binds a context
 `Open(ctx, key, logger, create, hooks)` SHALL create the value on the first call for a key, store
@@ -26,13 +50,22 @@ nil. `Open` SHALL return an error if `logger` is nil. The table MUST NOT keep a 
 `logger` is the only logger for that Open. A holder whose `Done` is nil (`context.Background`)
 SHALL be treated as live until `ctx.Err()` is set. `create` SHALL take no arguments (Yaegi cannot
 call `func(context.Context) (any, error)`). The table SHALL register the key before it runs
-`create`, so concurrent first `Open` calls for one key run `create` exactly once and every caller
-receives that one value; no `Open` SHALL create a value that is then discarded. If `create`
-returns an error the key SHALL NOT be stored, every caller waiting on that create SHALL receive
-that error, and a later `Open` SHALL be free to try again. A later `Open` for the same key (live
-or sleeping) SHALL return the stored value, bind the new context, and MUST NOT run `create`. Two
-live contexts on one key SHALL keep the value until both are Done. A stale holder drop from a
-previous incarnation or from `Reset` MUST NOT change a later incarnation of the same key.
+`create`, so concurrent first `Open` calls for one key run `create` exactly once; no `Open` SHALL
+create a value that is then discarded. If `create` returns an error the key SHALL NOT be stored,
+every caller waiting on that create SHALL receive that error, and a later `Open` SHALL be free
+to try again. `(value, nil)` SHALL mean this call bound a holder that was still live at return.
+If `ctx.Err()` is set at bind time, `Open` SHALL return `(nil, ctx.Err())` and MUST NOT give the
+caller the stored pointer. After a successful create, a bind to a live incarnation, or a reclaim of
+a sleeping value, if `ctx.Err()` is set, `Open` SHALL drop that holder on the same call (the value
+MUST NOT leak) and return the context error; Close MAY already have run when this was the last
+holder. Waiters that bound when that create finished SHALL still receive the stored value while
+their own context is live. If `ctx` is still live at bind, `Open` SHALL watch that holder until
+it is done. A later `Open` for the same key (live or sleeping) whose context is still live SHALL
+return the stored value, bind the new context, and MUST NOT run `create`. Two live contexts on
+one key SHALL keep the value until both are Done. A stale holder drop from a previous
+incarnation or from `Reset` MUST NOT change a later incarnation of the same key. An `Open` that
+reclaims a sleeping value SHALL still wait until wake has returned before it returns, including
+when it then returns `ctx.Err()` instead of the pointer.
 
 #### Scenario: Two holders one dispose
 - **WHEN** `Open` creates a value for a key
@@ -41,14 +74,14 @@ previous incarnation or from `Reset` MUST NOT change a later incarnation of the 
 
 #### Scenario: Second create dispose is ignored
 - **WHEN** a key already has an incarnation
-- **AND** `Open` is called again
+- **AND** `Open` is called again with a live context
 - **THEN** `create` does not run
 - **AND** the stored value is the one returned
 
 #### Scenario: Concurrent first Opens run create once
 - **WHEN** two first `Open` calls for the same key race
 - **THEN** `create` runs exactly once
-- **AND** both calls return that one value
+- **AND** both calls whose context is still live at bind return that one value
 - **AND** no value is created and then discarded
 
 #### Scenario: Create error reaches every waiting caller
@@ -72,6 +105,36 @@ previous incarnation or from `Reset` MUST NOT change a later incarnation of the 
 - **THEN** the incarnation stays live
 - **WHEN** that holder then sets `Err` without closing a `Done` channel
 - **THEN** the table drops that holder
+
+#### Scenario: Canceled ctx during create does not receive the pointer
+- **WHEN** `Open` runs `create` for a new key
+- **AND** that call's holder context is Done before bind
+- **AND** `create` returns a value
+- **THEN** `Open` returns that context error
+- **AND** `Open` does not return the stored pointer
+- **AND** Close MAY have run because that holder was already done
+
+#### Scenario: Waiter still receives the live value
+- **WHEN** two first `Open` calls for the same key race
+- **AND** `create` returns a value
+- **AND** the creating call's context is Done at bind
+- **AND** the waiting call's context is still live at bind
+- **THEN** the creating call returns that context error and not the pointer
+- **AND** the waiting call returns the stored value with no error
+
+#### Scenario: Already-done ctx on a live key does not receive the pointer
+- **WHEN** a key already has a live incarnation
+- **AND** `Open` is called with a context whose `Err` is already set
+- **THEN** `Open` returns that context error
+- **AND** `Open` does not return the stored pointer
+- **AND** other live holders keep the incarnation
+
+#### Scenario: Already-done ctx on a sleeping key does not receive the pointer
+- **WHEN** a key holds a sleeping value
+- **AND** `Open` is called with a context whose `Err` is already set
+- **THEN** wake has returned before `Open` returns
+- **AND** `Open` returns that context error
+- **AND** `Open` does not return the stored pointer
 
 ### Requirement: Cancel then open within grace does not dispose
 When every bound context for a key is Done, the table SHALL put the stored value to sleep and
@@ -102,11 +165,10 @@ Canceling the lifetime of one key MUST NOT cancel the lifetime of another key.
 ### Requirement: Grace is configurable
 Grace SHALL be how long a **sleeping** value is kept before it is disposed. Because a sleeping
 value has released what is expensive to hold idle, a long grace is cheap: the reason to keep it
-long is that a sleeping value costs little, not that reloads are fast. The table SHALL use a
-caller-supplied grace duration. A zero grace SHALL dispose of the value as soon as the last
+long is that a sleeping value costs little, not that reloads are fast. The table SHALL use the
+grace `New` copied from `Config`. A zero grace SHALL dispose of the value as soon as the last
 holder is gone, with no sleeping window at all. A negative grace SHALL become the product default
-of 10 seconds. Default grace in this product SHALL be 10 seconds (`DefaultGrace`) when the
-process table is constructed.
+of 10 seconds. Default grace in this product SHALL be 10 seconds (`DefaultGrace`).
 
 #### Scenario: Default grace
 - **WHEN** a table is created with a negative grace
@@ -117,6 +179,7 @@ process table is constructed.
 - **AND** the last holder context is Done
 - **THEN** the value is slept and disposed without waiting
 - **AND** the key is not left stored
+- **AND** there was no window in which an `Open` could wake that value
 
 ### Requirement: Lifecycle events are logged
 The table SHALL emit a structured log line for each of: incarnation created (`Open` create),
@@ -127,18 +190,24 @@ SHALL be stable package constants (`reclaim_put`, `reclaim_bind`, `reclaim_orpha
 reclaim SHALL use the logger passed to the `Open` that caused them. Orphan and dispose SHALL use
 the logger from the last `Open` that bound that key. `Reset` SHALL emit `reclaim_dispose` for
 each disposed key using that slot's last Open logger, preceded by `reclaim_orphan` when that
-incarnation was still awake. Log lines MUST NOT be emitted while the table mutex is held.
+incarnation was still awake and Sleep returned. A Sleep panic during `Reset` SHALL NOT emit
+`reclaim_orphan`. Log lines MUST NOT be emitted while the table mutex is held.
 
 Every line SHALL mean the work it names has already happened: `reclaim_orphan` is emitted after
 `sleep` has returned, `reclaim_reclaim` after `wake` has returned, and `reclaim_dispose` after
 the Close hook has returned (or immediately when that func is nil, or after a recovered Close
 panic was reported). For one incarnation
 `reclaim_orphan` SHALL always precede the `reclaim_dispose` that ends it, at every grace duration
-including zero, with no exception for `Reset`.
+including zero, when Sleep returned. A Sleep panic during `Reset` is the exception: dispose still
+runs, orphan does not.
 
 At zero grace the table keeps no sleeping value, so an `Open` that races the last holder going
 away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), not as
-`reclaim_reclaim`.
+`reclaim_reclaim`. When the previous incarnation stored `Hooks.EnforceCloseBeforeOpen`, that new
+incarnation's `create` SHALL NOT start until Close of the previous incarnation has returned, so
+`reclaim_dispose` for the previous incarnation SHALL precede `reclaim_put` of the next. When that
+field is false (the zero value), `create` MAY start while Close is still in flight, and
+`reclaim_dispose` NEED NOT precede `reclaim_put` of the next.
 
 #### Scenario: Hash change orphan then dispose
 - **WHEN** key A is opened, then all of A's contexts are Done
@@ -159,10 +228,29 @@ away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), n
 - **THEN** that `Open` records `reclaim_put` and `reclaim_bind` for the key
 - **AND** it does not record `reclaim_reclaim`
 
+#### Scenario: Enforced close dispose precedes the next put
+- **WHEN** a table with zero grace has its last holder for a key go Done
+- **AND** that incarnation stored `Hooks.EnforceCloseBeforeOpen`
+- **AND** an `Open` for that key races that drop
+- **THEN** `reclaim_dispose` for the previous incarnation is recorded before that `reclaim_put`
+
+#### Scenario: Recovered hook panic is reported
+- **WHEN** a Sleep or Close hook panics and the table recovers it
+- **THEN** logs include `reclaim_hook_panic` at error level for that key
+- **AND** that line carries which hook panicked and the panic value
+
 #### Scenario: Reset logs orphan then dispose
 - **WHEN** `Reset` is called on a table that still has a live incarnation
+- **AND** Sleep returns
 - **THEN** logs include `reclaim_orphan` then `reclaim_dispose` for that key
 - **AND** a later `Open` of the same key creates a new incarnation that a stale holder drop MUST NOT dispose
+
+#### Scenario: Reset Sleep panic skips orphan
+- **WHEN** `Reset` is called on a table that still has an awake incarnation
+- **AND** Sleep panics
+- **THEN** logs include `reclaim_hook_panic` at error level for that key with hook sleep
+- **AND** logs do not include `reclaim_orphan` for that key
+- **AND** logs include `reclaim_dispose` for that key
 
 #### Scenario: Open logger level gates put and dispose
 - **WHEN** `Open` is called with a logger whose handler level is debug
@@ -172,20 +260,32 @@ away SHALL be logged as a new incarnation (`reclaim_put` then `reclaim_bind`), n
 - **WHEN** `Open` is called with a logger whose handler level is info
 - **THEN** `reclaim_put` and `reclaim_dispose` are not emitted
 
-#### Scenario: Recovered hook panic is reported
-- **WHEN** a Sleep or Close hook panics and the table recovers it
-- **THEN** logs include `reclaim_hook_panic` at error level for that key
-- **AND** that line carries which hook panicked and the panic value
-
 ### Requirement: Incarnation end closes the stored value before it reports the end
-When an incarnation ends (grace elapsed while sleeping, `Reset`, or a zero-grace drop), the table
-SHALL call the Close hook when that func is non-nil and SHALL wait until it has returned, or until
-its panic has been recovered and reported, before it emits `reclaim_dispose`. The table SHALL NOT
-let a Close panic escape, because Close can run on an `AfterFunc` goroutine that would take the
-process down. The Close hook SHALL be called at most once per incarnation. Because
-the table waits, a Close hook that blocks blocks whoever ended the incarnation; Close hooks
-SHALL NOT block. Every goroutine the table starts for a key SHALL exit once that key's holder
-contexts are Done and its incarnation has ended.
+When an incarnation ends (grace elapsed while sleeping, `Reset`, a zero-grace drop, a Sleep
+panic, or a Wake panic), the table SHALL call the Close hook when that func is non-nil and
+SHALL wait until it has returned, or until its panic has been recovered and reported, before it
+emits `reclaim_dispose`. The table SHALL NOT let a Close panic escape, because Close can run on an
+`AfterFunc` goroutine that would take the process down. The Close hook SHALL be called at most
+once per incarnation. Because the table waits, a Close hook that blocks blocks whoever ended the
+incarnation; Close hooks SHALL NOT block. Every goroutine the table starts for a key SHALL exit
+once that key's holder contexts are Done and its incarnation has ended. A watcher started for a
+holder whose `Done` is nil SHALL exit without dropping that holder when the incarnation has ended,
+even if `ctx.Err()` is still unset. That exit rule SHALL hold when the incarnation ends on a
+Sleep panic or a Wake panic, including when that incarnation stored `Hooks.EnforceCloseBeforeOpen`.
+When that holder's `Err()` is set while the incarnation is still live, the table SHALL still
+drop the holder.
+
+When the ending incarnation stored `Hooks.EnforceCloseBeforeOpen`, the table SHALL keep the key
+stored until Close has returned, so a concurrent `Open` for that key waits for Close instead of
+creating while it is in flight. After Close returns the key SHALL NOT be stored. That keep-mapped
+rule SHALL hold on a Sleep-panic ending regardless of grace, and on a Wake-panic ending. When
+that field is false (the zero value), the table SHALL unmap the key before Close, so a concurrent
+`Open` MAY create while Close is still in flight. Close SHALL NOT run while the table mutex is
+held. The Close window SHALL NOT be a sleeping window: an `Open` that arrives during Close MUST
+NOT wake the ending incarnation.
+
+Tests-only `Reset` SHALL unmap first regardless of the field. Callers MUST NOT race `Reset` with
+`Open` on the same key.
 
 #### Scenario: Dispose log implies Close has returned
 - **WHEN** a key is orphaned and grace elapses
@@ -207,14 +307,42 @@ contexts are Done and its incarnation has ended.
 - **WHEN** many keys are opened, then every holder context is Done and every incarnation has ended
 - **THEN** the table owns no more goroutines than it did before those `Open` calls
 
+#### Scenario: Nil-Done watcher exits when the incarnation ends
+- **WHEN** many keys are opened with holder contexts whose `Done` is nil and whose `Err` is never set
+- **AND** `Reset` ends every incarnation
+- **THEN** the table owns no more goroutines than it did before those `Open` calls
+- **AND** a later `Open` of the same key creates a new incarnation that a stale holder drop MUST NOT dispose
+
+#### Scenario: Create does not start while previous Close is in flight
+- **WHEN** Close is in flight for a key (zero grace, after grace elapsed, Sleep panic, or Wake panic)
+- **AND** that incarnation stored `Hooks.EnforceCloseBeforeOpen`
+- **AND** `Open` is called for that key
+- **THEN** `create` does not run until Close has returned
+- **AND** that `Open` does not reclaim the closing value
+
+#### Scenario: Create starts while previous Close is in flight by default
+- **WHEN** Close is in flight for a key (zero grace)
+- **AND** that incarnation did not store `Hooks.EnforceCloseBeforeOpen`
+- **AND** `Open` is called for that key
+- **THEN** `Open` returns a new incarnation while Close is still blocked
+- **AND** that `Open` does not reclaim the closing value
+
+#### Scenario: Reset Open creates while enforced Close is in flight
+- **WHEN** an incarnation stored `Hooks.EnforceCloseBeforeOpen`
+- **AND** `Reset` has unmapped that key and Close is still in flight
+- **AND** `Open` is called for that key
+- **THEN** `Open` returns a new incarnation while Close is still blocked
+- **AND** that `Open` does not wait for Reset's Close
+
 ### Requirement: Library Open loads under Traefik Yaegi
-A Traefik local plugin SHALL import this module's `reclaim` package and call `Open` from `New`
-with `Hooks` that log sleep, wake, and close. Traefik SHALL start. A request through that plugin
-SHALL succeed. Two plugin instances that Open the same key SHALL receive the same stored value.
-Those hooks SHALL run under Yaegi. Inert hooks MUST NOT be accepted as success for this load.
+A Traefik local plugin SHALL import this module's `reclaim` package, hold one table created with
+`New(Config)`, and call that table's `Open` from `New` with `Hooks` that log sleep, wake, and
+close. Traefik SHALL start. A request through that plugin SHALL succeed. Two plugin instances that
+Open the same key on that table SHALL receive the same stored value. Those hooks SHALL run under
+Yaegi. Inert hooks MUST NOT be accepted as success for this load.
 
 #### Scenario: Fake plugin starts and shares one incarnation
-- **WHEN** Traefik v3.7.11 loads a local plugin whose `New` calls `reclaim.Open` for a shared key
+- **WHEN** Traefik v3.7.11 loads a local plugin whose `New` calls `Open` on a caller-owned table for a shared key
 - **AND** two routes each construct that plugin
 - **THEN** Traefik's API is reachable
 - **AND** a request through each route succeeds
@@ -245,3 +373,39 @@ A nil `create` SHALL be rejected alongside the other `Open` argument guards, bef
 - **THEN** `Open` returns an error
 - **AND** the key is not stored
 - **AND** a later `Open` for that key with a valid `create` returns a value
+
+### Requirement: Bind-time finished snapshot is synchronized
+When `Open` starts a watcher for a holder whose `Done` is nil, the table SHALL read that
+incarnation's end-signal channel while holding the table mutex. If that snapshot is nil, the
+incarnation has already ended: the table SHALL NOT start a watcher. A watcher SHALL NOT be
+started with a nil end-signal channel. When the snapshot is non-nil, the watcher SHALL still
+exit without dropping that holder if the incarnation ends first, even if `ctx.Err()` stays unset.
+
+#### Scenario: Nil-Done bind during Reset does not leak a watcher
+- **WHEN** a live incarnation has a keep-alive holder
+- **AND** `Open` is called with a holder whose `Done` is nil and whose first `Err` is delayed
+- **AND** `Reset` ends that incarnation while that `Open` is parked in `Err`
+- **THEN** after every incarnation has ended the table owns no more goroutines than it did before those `Open` calls
+- **AND** that `Open` does not leave a watcher polling for the life of the process
+
+### Requirement: Table mutex is released if a panic unwinds a lock-held region
+Every region that holds the table mutex SHALL release it with `defer`, so a panic raised while
+the mutex is held still unlocks during unwinding. After such a panic is recovered (as the Yaegi
+plugin boundary would), a later `Open` or `Reset` on that same table SHALL be able to acquire the
+mutex. Close, Sleep, Wake, create, and every log line SHALL still run outside the mutex. Channel
+closes that the table already performs outside the mutex SHALL stay outside it.
+
+#### Scenario: Panic under the table mutex does not wedge later callers
+- **WHEN** a panic is raised while the table mutex is held
+- **AND** that panic is recovered
+- **THEN** a later `Open` or `Reset` on that table completes instead of blocking forever on the mutex
+
+### Requirement: Uninitialized table is rejected
+`Open` SHALL return an error when the table has a nil items map (a zero-value `Table{}`), the
+same class of rejection as a nil table pointer or a nil logger. `Open` MUST NOT panic on that
+path. `New(Config)` remains the constructor that allocates the map.
+
+#### Scenario: Zero-value table Open returns an error
+- **WHEN** `Open` is called on a zero-value `Table{}`
+- **THEN** `Open` returns an error
+- **AND** `Open` does not panic

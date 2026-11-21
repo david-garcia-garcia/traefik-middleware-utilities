@@ -1,11 +1,11 @@
 ## Purpose
 
-Exact versus buffered Redis sync for the sliding-window limiter: every Take hits Redis when `sync_rate` is zero; a timer flushes local deltas when `sync_rate` is positive. Sleep, Wake, and Close stop the flush goroutine on Traefik reload.
+Exact versus buffered Redis sync for the sliding-window limiter: every Take hits Redis when `sync_rate` is zero; a timer flushes local deltas when `sync_rate` is positive. Sleep, Wake, and Close stop the flush timer on Traefik reload.
 
 ## Requirements
 
 ### Requirement: Exact mode increments Redis on every Take
-When `sync_rate` is zero, each Take SHALL send Redis `INCR` on the current-window key and SHALL set a TTL of two window lengths when that increment returns 1. Previous-window reads SHALL use `GET` (`redis:miss` counts as zero). Counter updates MUST NOT be a GET-then-SET of the integer.
+When `sync_rate` is zero, each Take SHALL increment the current-window key and SHALL set a TTL of two window lengths when that key has no TTL (`PTTL < 0`), including when the increment is not 1. Exact Take SHALL perform that increment and expire in one EVAL with the current-window key declared in `KEYS`. Exact Take MUST NOT refresh TTL when the key already has a TTL. Exact Take MUST NOT delete the key when expire would fail. Previous-window reads SHALL use `GET` (`redis:miss` counts as zero). Counter updates MUST NOT be a GET-then-SET of the integer.
 
 #### Scenario: Exact mode expires the new window key
 - **WHEN** `sync_rate` is 0
@@ -14,8 +14,15 @@ When `sync_rate` is zero, each Take SHALL send Redis `INCR` on the current-windo
 - **WHEN** that TTL elapses
 - **THEN** a later Take in a new window admits again
 
+#### Scenario: Exact mode expires a leftover no-TTL key
+- **WHEN** `sync_rate` is 0
+- **AND** the current-window key already exists with count at least 1 and no TTL
+- **AND** Take is called for that key
+- **THEN** Redis TTL on that key is two window lengths
+- **AND** the increment is not discarded
+
 ### Requirement: Buffered mode shares one limit without last-write-wins
-When `sync_rate` is greater than zero, Take SHALL admit from `redis_known + local_delta` (plus the sliding previous-window term) and SHALL NOT `INCR` on every Take. A timer SHALL flush pending deltas with one EVAL of INCRBY plus EXPIREAT when the key did not exist, with the touched key declared in `KEYS`. After a successful flush, `redis_known` SHALL become the EVAL return and `local_delta` SHALL clear. `sync_rate` less than zero SHALL fail construction. `sync_rate` greater than zero and less than 20 ms SHALL floor to 20 ms. Construction and the README SHALL state that exact mode returns Redis errors on every Take, and that buffered mode returns a retained flush error (or a probe after one missed `sync_rate`) instead of a silent nil.
+When `sync_rate` is greater than zero, Take SHALL admit from `redis_known + local_delta` (plus the sliding previous-window term) and SHALL NOT `INCR` on every Take. A timer SHALL flush pending deltas with one EVAL of INCRBY plus EXPIREAT when the key did not exist, with the touched key declared in `KEYS`. After a successful flush, `redis_known` SHALL become the EVAL return and `local_delta` SHALL decrease by the amount sent on that EVAL. A hit counted into `local_delta` while that EVAL was in flight MUST remain in `local_delta`. The same snapshot MUST NOT be EVAL'd twice while it is in flight. `sync_rate` less than zero SHALL fail construction. `sync_rate` greater than zero and less than 20 ms SHALL floor to 20 ms. Construction and the README SHALL state that exact mode returns Redis errors on every Take, and that buffered mode returns a retained flush error (or a probe after one missed `sync_rate`) instead of a silent nil.
 
 #### Scenario: Two clients share the limit
 - **WHEN** two limiter instances with two SimpleRedis clients share one opaque key and `sync_rate` greater than zero
@@ -35,8 +42,26 @@ When `sync_rate` is greater than zero, Take SHALL admit from `redis_known + loca
 - **THEN** construction returns an error
 - **AND** no ticker is started
 
-### Requirement: Buffered Take refreshes previous when local_delta is zero
-When `sync_rate` is greater than zero, Take SHALL GET the previous-window key when that key is already in this instance's buffer as a window it has counted (`expire_at` set) and `local_delta` is 0, then set `redis_known` from that GET (`redis:miss` counts as zero). When `local_delta` is greater than 0, Take SHALL keep the memory count and MUST NOT GET that key (Redis does not hold this instance's unflushed delta). Take MUST NOT GET a previous-window key on every call merely because it was GET-seeded (never counted as current). Take MUST NOT INCR the previous-window key. A failed GET SHALL return on Take the same way a current-window GET failure does. This GET MUST NOT be stored as a retained flush error or deferred to the missed-`sync_rate` probe.
+#### Scenario: Take during flush keeps the new local hit
+- **WHEN** `sync_rate` is greater than zero
+- **AND** a window has a pending `local_delta` of N
+- **AND** flush sends N on EVAL
+- **AND** a Take increments `local_delta` while that EVAL is in flight
+- **AND** the EVAL succeeds with integer return M
+- **THEN** `redis_known` is M
+- **AND** `local_delta` is the amount added during the EVAL, not zero
+
+### Requirement: Flush EVAL does not hold the limiter mutex
+When `sync_rate` is greater than zero, the flush EVAL (INCRBY plus EXPIREAT-if-new) MUST NOT run while the limiter mutex that serializes the local window map is held. A Take on an unrelated opaque key MUST be able to finish while that EVAL is in flight.
+
+#### Scenario: Take during an in-flight flush EVAL
+- **WHEN** `sync_rate` is greater than zero
+- **AND** a flush EVAL for one window key is in flight
+- **AND** a Take on a different opaque key is issued on the same limiter
+- **THEN** that Take returns without waiting for the EVAL to finish
+
+### Requirement: Buffered Take refreshes previous at most once per sync_rate
+When `sync_rate` is greater than zero and the previous-window key has `local_delta` 0, Take SHALL GET that key the first time Take uses it as the previous window on this instance, and after that SHALL GET it again only when at least `sync_rate` has passed since the last such GET (by the limiter clock). The GET result SHALL set `redis_known` (`redis:miss` counts as zero). When `local_delta` is greater than 0, Take SHALL keep the memory count and MUST NOT GET that key (Redis does not hold this instance's unflushed delta). Take MUST NOT GET the previous-window key on every call. Take MUST NOT INCR the previous-window key. The GET MUST NOT hold the limiter mutex. A failed GET SHALL return on Take the same way a current-window GET failure does. This GET MUST NOT be stored as a retained flush error or deferred to the missed-`sync_rate` probe.
 
 #### Scenario: Two clients then next-window Take denies at three
 - **WHEN** two limiter instances with two SimpleRedis clients share one opaque key and `sync_rate` greater than zero
@@ -51,6 +76,17 @@ When `sync_rate` is greater than zero, Take SHALL GET the previous-window key wh
 - **AND** the previous-window key has `local_delta` greater than 0 on this instance
 - **THEN** Take MUST NOT GET that previous-window key
 - **AND** the estimate uses `redis_known + local_delta` from memory
+
+#### Scenario: Previous refresh is bounded by sync_rate
+- **WHEN** `sync_rate` is greater than zero
+- **AND** this instance flushed a window that is now previous
+- **AND** Take is called 20 times at one clock in the next window
+- **THEN** Take GETs previous once, not once per Take
+- **WHEN** another instance flushes into that previous key afterwards
+- **AND** less than `sync_rate` has passed since that GET
+- **THEN** Take MUST NOT GET previous
+- **WHEN** `sync_rate` has passed
+- **THEN** the next Take GETs previous once and uses the other instance's flush
 
 ### Requirement: Failed buffered flush is retained
 When `sync_rate` is greater than zero, a failed flush SHALL be stored on the limiter. `Sleep` and `Close` SHALL store that same error instead of discarding it. A later successful flush SHALL clear the stored error. Take and Peek SHALL return the stored error on their existing error result.
@@ -100,14 +136,35 @@ When a buffered flush EVAL reply is not a single integer, the returned error SHA
 - **AND** the error still matches `redis:issue?`
 
 ### Requirement: Sleep Wake Close reclaim the flush ticker
-The limiter SHALL export `Sleep`, `Wake`, and `Close` suitable for `reclaim.Hooks`. Sleep SHALL flush pending deltas then stop the ticker. Wake SHALL start the ticker when `sync_rate` is greater than zero. Close SHALL run after Sleep and MUST NOT close the injected SimpleRedis client. Exact mode (`sync_rate` zero) SHALL not leak a ticker. The implementation MUST NOT use `time.Tick`.
+The limiter SHALL export `Sleep`, `Wake`, and `Close` suitable for `reclaim.Hooks`. Sleep SHALL flush pending deltas then stop the flush timer. Wake SHALL start the timer when `sync_rate` is greater than zero and Sleep or Close is not waiting for an in-flight flush tick. Close SHALL run after Sleep and MUST NOT close the injected SimpleRedis client. Exact mode (`sync_rate` zero) SHALL not leak a timer. The implementation MUST NOT use `time.Tick`. The buffered flush timer MUST be `time.AfterFunc` (or another compiled stdlib waiter). It MUST NOT be an interpreted goroutine that `select`s on a ticker channel and a stop channel. While Sleep or Close is waiting for an in-flight tick, a concurrent Wake MUST NOT start a new timer, and Sleep MUST return. After Sleep returns, a later Wake SHALL start the timer when `sync_rate` is greater than zero. After Close, Wake MUST NOT start a timer.
 
-#### Scenario: Close stops the flush goroutine
+#### Scenario: Close stops the flush timer
 - **WHEN** `sync_rate` is greater than zero and the limiter has been constructed
 - **AND** Close is called (after Sleep)
-- **THEN** the flush goroutine has exited
-- **AND** further Takes MUST NOT start a new ticker
+- **THEN** the flush timer is stopped
+- **AND** further Takes MUST NOT start a new timer
+- **AND** further Wake MUST NOT start a new timer
 - **AND** the SimpleRedis client remains usable by other callers
+
+#### Scenario: Concurrent Wake does not hang Sleep
+- **WHEN** `sync_rate` is greater than zero and the limiter has been constructed
+- **AND** Sleep and Wake run at the same time
+- **THEN** Sleep returns
+- **AND** Wake does not start a flush timer that Sleep waits for
+
+#### Scenario: Wake after Sleep starts the timer
+- **WHEN** `sync_rate` is greater than zero and the limiter has been constructed
+- **AND** Sleep has returned
+- **AND** Close has not been called
+- **AND** Wake is called
+- **THEN** the flush timer is running
+
+#### Scenario: Interpreted buffered Sleep returns
+- **WHEN** `sync_rate` is greater than zero
+- **AND** the limiter runs interpreted under Yaegi v0.16.1
+- **AND** Sleep is called after buffered Takes
+- **THEN** Sleep returns
+- **AND** Close after that Sleep returns
 
 ### Requirement: Exact-mode Peek reads Redis on every call
 When `sync_rate` is zero, each Peek SHALL `GET` the current-window key and the previous-window key (`redis:miss` counts as zero). Peek MUST NOT `INCR`, MUST NOT set TTL, and MUST NOT use a separate consistency mode from Take.

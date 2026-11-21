@@ -1,0 +1,17 @@
+issueKey: 2026-09-14-reclaim-bug-finished-race-lock-defer
+jobName: 2026-09-14-reclaim-bug-finished-race-lock-defer
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: e9e50f0a56ab4c63efa72d326f67154e7ccba54a48b58d5d60294cf5bf095a1b
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: reclaim-finished-race-lock-defer
+pr:
+  id: 91
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/91

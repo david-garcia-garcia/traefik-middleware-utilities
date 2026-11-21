@@ -1,0 +1,17 @@
+issueKey: 2026-09-15-iplookup-cidr
+jobName: 2026-09-15-iplookup-cidr
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: f4bf96d225505e6c87b335cb57a063a570a68623e908efc05acbd5bc42339fee
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: iplookup-cidr-helper
+pr:
+  id: 94
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/94

@@ -125,7 +125,10 @@ import (
 )
 
 func BurstAfterIdle(host, key string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	limiter, err := tokenbucket.NewRedis(client, 1, 3, time.Hour, 2*time.Second)
 	if err != nil {
 		return "new:" + err.Error()
@@ -152,8 +155,14 @@ func BurstAfterIdle(host, key string) string {
 }
 
 func TwoShare(host, key string) string {
-	aClient := simpleredis.New(simpleredis.Config{Host: host})
-	bClient := simpleredis.New(simpleredis.Config{Host: host})
+	aClient, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	bClient, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	a, err := tokenbucket.NewRedis(aClient, 1, 3, time.Microsecond, 2*time.Second)
 	if err != nil {
 		return "new-a:" + err.Error()
@@ -185,7 +194,10 @@ func TwoShare(host, key string) string {
 }
 
 func MemoryAgrees(host, key string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	mem, err := tokenbucket.NewMemory(2, 2, time.Millisecond, 2*time.Second)
 	if err != nil {
 		return "mem:" + err.Error()
@@ -220,7 +232,10 @@ func MemoryAgrees(host, key string) string {
 }
 
 func RefundAfterBurst(host, key string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	limiter, err := tokenbucket.NewRedis(client, 1, 3, time.Microsecond, 2*time.Second)
 	if err != nil {
 		return "new:" + err.Error()

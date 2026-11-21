@@ -109,3 +109,93 @@ func TestTake_BufferedUnflushedPreviousNotGet(t *testing.T) {
 		t.Fatalf("GET count %d after roll, want %d (new current only)", fake.getCallCount(), getsAfterWindow1+1)
 	}
 }
+
+// TestTake_BufferedPreviousRefreshBoundedBySyncRate checks that a flushed previous window is GET
+// once when Take first uses it as previous, then at most once per sync_rate (not once per Take),
+// and that another instance's late flush after the roll becomes visible after that interval.
+func TestTake_BufferedPreviousRefreshBoundedBySyncRate(t *testing.T) {
+	fake, addr := startTestFakeRedis(t)
+	const syncRate = time.Hour
+	a, err := New(newSimpleRedisForTest(t, addr), syncRate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := New(newSimpleRedisForTest(t, addr), syncRate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		a.Close()
+		b.Close()
+	})
+
+	ctx := context.Background()
+	window := 4 * time.Hour
+	windowSec := int64(window / time.Second)
+	firstStart := int64(1_700_000_000) / windowSec * windowSec
+	previousKey := redisWindowKey("k", firstStart)
+	now := time.Unix(firstStart+60, 0)
+	clock := func() time.Time { return now }
+	a.SetNowForTest(clock)
+	b.SetNowForTest(clock)
+	const limit int64 = 1000
+
+	for _, limiter := range []*Limiter{a, b} {
+		if _, _, takeErr := limiter.Take(ctx, "k", limit, window); takeErr != nil {
+			t.Fatal(takeErr)
+		}
+	}
+	if flushErr := a.flushPending(ctx); flushErr != nil {
+		t.Fatal(flushErr)
+	}
+
+	// Next window: B has not flushed yet. A's previous is GET once, not on every Take.
+	now = time.Unix(firstStart+windowSec+60, 0)
+	getsBefore := fake.getCallCount()
+	for i := 0; i < 20; i++ {
+		if _, _, takeErr := a.Take(ctx, "k", limit, window); takeErr != nil {
+			t.Fatal(takeErr)
+		}
+	}
+	if got := fake.getCallCount() - getsBefore; got != 2 {
+		t.Fatalf("GETs for 20 Takes after roll = %d, want 2 (current first sight + one previous refresh)", got)
+	}
+	if got := redisKnownForTest(a, previousKey); got != 1 {
+		t.Fatalf("previous redis_known %d, want 1 before B flushes", got)
+	}
+
+	// B flushes late, after the roll. Within sync_rate A keeps memory and does not GET.
+	if flushErr := b.flushPending(ctx); flushErr != nil {
+		t.Fatal(flushErr)
+	}
+	getsBefore = fake.getCallCount()
+	if _, _, takeErr := a.Take(ctx, "k", limit, window); takeErr != nil {
+		t.Fatal(takeErr)
+	}
+	if got := fake.getCallCount() - getsBefore; got != 0 {
+		t.Fatalf("GETs within sync_rate of the last previous refresh = %d, want 0", got)
+	}
+
+	// One sync_rate later A refreshes previous once and sees B's late flush.
+	now = now.Add(syncRate)
+	if _, _, takeErr := a.Take(ctx, "k", limit, window); takeErr != nil {
+		t.Fatal(takeErr)
+	}
+	if got := fake.getCallCount() - getsBefore; got != 1 {
+		t.Fatalf("GETs after sync_rate = %d, want 1 (previous refresh)", got)
+	}
+	if got := redisKnownForTest(a, previousKey); got != 2 {
+		t.Fatalf("previous redis_known %d after refresh, want 2 (A + B)", got)
+	}
+}
+
+// redisKnownForTest reads redis_known for one buffered window key under the limiter mutex.
+func redisKnownForTest(limiter *Limiter, redisKey string) int64 {
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	state := limiter.windows[redisKey]
+	if state == nil {
+		return -1
+	}
+	return state.redisKnown
+}

@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-tokenbucket-bug-last-not-rewind
+jobName: 2026-09-13-tokenbucket-bug-last-not-rewind
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 5ddd5d75effe9904cc887d7926d582cf07ec002b40d6e40d299536f9c728b8d0
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: tokenbucket-last-not-rewind
+pr:
+  id: 55
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/55

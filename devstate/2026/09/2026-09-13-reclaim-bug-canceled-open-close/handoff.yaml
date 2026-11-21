@@ -1,0 +1,17 @@
+issueKey: 2026-09-13-reclaim-bug-canceled-open-close
+jobName: 2026-09-13-reclaim-bug-canceled-open-close
+issueHost: local
+issueRef: none
+prHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 16d28cabe5f6e97d36941c8560f35a7aef3bcf778bb9f32435a94f46c92696ea
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: reclaim-canceled-bind
+pr:
+  id: 51
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/51

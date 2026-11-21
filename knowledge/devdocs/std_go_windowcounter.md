@@ -7,8 +7,8 @@ A sliding-window hit counter on Redis or Dragonfly. Package `windowcounter`. It 
 _Avoid_: naming the package `ratelimit` or `tokenbucket`; remaining quota; reading HTTP or client address inside the library
 
 **Peek**:
-The same observation as Take without recording a hit. Same arguments, formula, Redis keys, and store. `Allow` is still Take, not Peek.
-_Avoid_: remaining quota; treating Peek as Allow; a second consistency mode
+Already-used occupancy: whether the sliding estimate is at or under limit, without recording a hit. Same arguments, formula, Redis keys, and store as Take. Not whether the next Take would admit. `Allow` is still Take, not Peek.
+_Avoid_: remaining quota; treating Peek as Allow; treating Peek allowed as a reservation for a later Take; a second consistency mode
 
 **Take**:
 One hit against an opaque key, a limit, and a whole-second window. Returns whether the hit is allowed and the sliding estimate after that hit. `Allow` is the same operation.
@@ -19,7 +19,7 @@ _Avoid_: remaining quota; a token or leaky bucket
 _Avoid_: fixed-window counters; counting only the current bucket
 
 **sync_rate**:
-Zero means every Take talks to Redis (`INCR` + `EXPIRE` on first hit) and that call's Redis error is returned. Greater than zero is the flush interval for local deltas (20 ms floor). A failed flush is stored; after one missed interval Take and Peek return it instead of a silent nil. Negative is invalid.
+Zero means every Take talks to Redis (one EVAL: `INCR` then `EXPIRE` if `PTTL < 0`) and that call's Redis error is returned. Greater than zero is the flush interval for local deltas (20 ms floor). A failed flush is stored; after one missed interval Take and Peek return it instead of a silent nil. Negative is invalid.
 _Avoid_: in-memory-only mode; GET-then-SET of the counter
 
 ## Overview
@@ -29,9 +29,9 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounte
 ## How to use
 
 - `New(redis, syncRate)` once. `sync_rate == 0` for exact counts; `> 0` to buffer.
-- Call `Peek(ctx, key, limit, window)` to observe the sliding estimate without counting a hit. Call `Take` when the hit should occupy the window (for example after a backend failure). Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
+- Call `Peek(ctx, key, limit, window)` to observe occupancy without counting a hit. Do not treat Peek allowed as a reservation for a later Take. Call `Take` when the hit should occupy the window (for example after a backend failure). Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
 - Match Redis miss with `simpleredis.IsMiss` (works through wrapping). Exact mode (`sync_rate == 0`) returns the Redis error on that Take/Peek. Buffered mode returns a retained flush error, or probes after one missed `sync_rate`, instead of a silent nil while a local delta is pending. Other Redis errors still propagate by `Error()` text until those callers convert.
-- Buffered Peek (`sync_rate > 0`) is a memory read after the first sight of a window key. It does not GET Redis on every call while `local_delta` stays 0. Buffered Take GETs a previous-window key this instance already counted (`expire_at` set) when `local_delta` is 0 (another instance may have flushed after Sleep). When previous still has `local_delta` greater than 0, Take keeps memory and MUST NOT GET that key. Exact Peek (`sync_rate == 0`) GETs current and previous every call.
+- Buffered Peek (`sync_rate > 0`) is a memory read after the first sight of a window key. It does not GET Redis on every call while `local_delta` stays 0. Buffered Take GETs the previous-window key when `local_delta` is 0 the first time it uses that key as previous, then at most once per `sync_rate` (another instance may flush into it after this instance did). Not once per Take. When previous still has `local_delta` greater than 0, Take keeps memory and MUST NOT GET that key. Exact Peek (`sync_rate == 0`) GETs current and previous every call.
 - Prove with `go test -short ./windowcounter/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
 
 ## Pattern snippet
@@ -62,6 +62,10 @@ _, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 
 - Window length is whole seconds (Redis TTL is integer seconds). Take and Peek reject a window that is shorter than one second or not an integer number of seconds (for example 1500ms); they do not truncate into second buckets.
 - Denied Takes still increment. Peek does not.
-- `Sleep` flushes pending deltas then stops the ticker. After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's.
+- After occupancy equals limit, Peek allows and the next Take denies and still increments.
+- `Sleep` flushes pending deltas then stops the flush timer. Concurrent `Wake` during Sleep does not start a timer and Sleep still returns. After Sleep returns, `Wake` starts the timer again when `sync_rate` is greater than zero. After `Close`, do not start a new flush timer. The SimpleRedis client is still the caller's.
+- Buffered flush uses `time.AfterFunc` because this package is interpreted under Yaegi. Do not put `go` plus `select` on a ticker and a stop channel in a limiter method; Yaegi v0.16.1 can miss the close and `Sleep`/`Close` hang.
 - EVAL scripts must list keys in `KEYS` (Dragonfly).
+- Exact Take expires only when the key has no TTL (`PTTL < 0`). It does not refresh TTL on every hit and does not `DEL` on expire failure.
 - Buffered Take still returns the local admit decision beside a flush error. Check `err` to fail closed; ignoring `err` is fail-open up to this instance's `limit`.
+- Buffered GET and flush EVAL run without the limiter mutex. A slow Redis round trip on one opaque key must not stall Take on another key.

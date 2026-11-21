@@ -129,7 +129,10 @@ import (
 
 // UntilDeny Takes until the limit then expects a deny.
 func UntilDeny(host, key string, limit int) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	limiter, err := windowcounter.New(client, 0)
 	if err != nil {
 		return "new:" + err.Error()
@@ -156,8 +159,14 @@ func UntilDeny(host, key string, limit int) string {
 
 // BufferedShare flushes two clients then expects the shared count to deny the next Take.
 func BufferedShare(host, key string) string {
-	aClient := simpleredis.New(simpleredis.Config{Host: host})
-	bClient := simpleredis.New(simpleredis.Config{Host: host})
+	aClient, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	bClient, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	a, err := windowcounter.New(aClient, time.Hour)
 	if err != nil {
 		return "new-a:" + err.Error()
@@ -200,7 +209,10 @@ func BufferedShare(host, key string) string {
 
 // SlidingBoundary fills a window then Takes at the next start and expects the previous hits to still count.
 func SlidingBoundary(host, key string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	limiter, err := windowcounter.New(client, 0)
 	if err != nil {
 		return "new:" + err.Error()
@@ -233,7 +245,10 @@ func SlidingBoundary(host, key string) string {
 
 // PeekThenTake Peeks without incrementing then Takes once and expects estimate 1.
 func PeekThenTake(host, key string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	limiter, err := windowcounter.New(client, 0)
 	if err != nil {
 		return "new:" + err.Error()
@@ -267,7 +282,10 @@ func PeekThenTake(host, key string) string {
 
 // PeekDeniedThenSlides fills the window, Peeks denied, then Peeks allowed after the formula cools.
 func PeekDeniedThenSlides(host, key string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	limiter, err := windowcounter.New(client, 0)
 	if err != nil {
 		return "new:" + err.Error()
@@ -315,7 +333,10 @@ func PeekDeniedThenSlides(host, key string) string {
 
 // BufferedPeek Peeks without incrementing on a buffered limiter, then Takes once.
 func BufferedPeek(host, key string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	limiter, err := windowcounter.New(client, time.Hour)
 	if err != nil {
 		return "new:" + err.Error()
@@ -352,7 +373,10 @@ func BufferedPeek(host, key string) string {
 
 // ExpireOnFirstHit Takes once then expects a positive TTL on the current window key.
 func ExpireOnFirstHit(host, key string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	limiter, err := windowcounter.New(client, 0)
 	if err != nil {
 		return "new:" + err.Error()
