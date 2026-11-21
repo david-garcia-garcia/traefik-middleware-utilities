@@ -78,7 +78,7 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `simpleredis/resp_injection_test.go` — CRLF and inline PING round-trip as data
 - `simpleredis/BUGS.md` — hunt record: handshake matcher under Yaegi; interpreted defer-on-panic proof (`yaegi_defer_test.go`); desync eviction. Rejected rows name the locking test
 - `simpleredis/slog_test.go` — capturing slog handler, site lines, secrets
-- `simpleredis/tls_test.go`, `simpleredis/tls_fixture_test.go` — TLS dial and `redis:tls` classification on the in-process TLS fake; the one test certificate generator
+- `simpleredis/tls_test.go`, `simpleredis/tls_fake_test.go`, `simpleredis/tls_fixture_test.go` — TLS dial and `redis:tls` classification; the in-process TLS fake; the one test certificate generator
 - `simpleredis/yaegi_tls_test.go`, `simpleredis/tls_e2e_test.go` — interpreted TLS + ACL user; live TLS engines (`SIMPLEREDIS_LIVE_*_TLS`)
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin (`Host`, optional `Password`, `Database`, `DropHost`)
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`, `openspec/specs/std_go_simpleredis_slog-events/spec.md`

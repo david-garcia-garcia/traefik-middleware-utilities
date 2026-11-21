@@ -57,7 +57,7 @@ With a TLS configuration set, the session SHALL return `ErrTLS` (`Error()` text 
 - **AND** the fake accepted one TCP connection
 
 ### Requirement: A slow or silent TLS peer stays redis:unreachable
-A TCP connect failure, a `DialTimeout` or command-context expiry during the TLS handshake, and any dial error not named in `A TLS rejection returns redis:tls` SHALL return `redis:unreachable` and MAY be retried exactly as a plain TCP dial failure is. A caller cancel or deadline during the handshake SHALL surface as that context error, as on plain TCP.
+A TCP connect failure, a `DialTimeout` expiry during the TLS handshake, and any dial error not named in `A TLS rejection returns redis:tls` SHALL return `redis:unreachable` and MAY be retried as a plain TCP dial failure is. During the handshake, `CommandTimeout` expiry SHALL return `redis:timeout` and a caller cancel or deadline SHALL return that context error, as on plain TCP.
 
 #### Scenario: TLS client against a silent plain peer
 - **WHEN** `Config.TLS` is set and the peer accepts TCP and never writes

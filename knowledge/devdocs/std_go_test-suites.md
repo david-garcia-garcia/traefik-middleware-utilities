@@ -66,7 +66,7 @@ limiter_yaegi_e2e_test.go # interpreted, live
 
 - `.github/workflows/ci.yml` — jobs `lint` (golangci-lint **v1.63.4**), `test` (`Unit`, `-short`, no `-race`, no services), `race` (`Unit race`, `-race -short`), `e2e-redis` (`Go E2E Redis`, no `-race`), `e2e-dragonfly` (`Go E2E Dragonfly`, no `-race`), `integration` (Pester reclaim), `integration-redis` (Pester SimpleRedis Redis), `integration-dragonfly` (Pester SimpleRedis Dragonfly)
 - `simpleredis/commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, `simpleredis_e2e_test.go`, `tls_e2e_test.go`, `yaegi_e2e_test.go`
-- `simpleredis/tls_fixture_test.go` — the one test certificate generator (in-process TLS fake and `TestWriteTLSFixtureFiles` for the live engines)
+- `simpleredis/tls_fixture_test.go` — the one test certificate generator (`TestWriteTLSFixtureFiles` writes it for the live engines); `simpleredis/tls_fake_test.go` — the in-process TLS fake
 - `windowcounter/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
 - `tokenbucket/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
 - `Test-Integration.ps1`, `scripts/integration-tests.reclaim.Tests.ps1`, `scripts/integration-tests.simpleredis.Tests.ps1`, `scripts/integration-tests.utils/`

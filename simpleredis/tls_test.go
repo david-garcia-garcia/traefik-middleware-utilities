@@ -1,10 +1,14 @@
 package simpleredis
 
 import (
+	"bufio"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"io"
+	"net"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -99,7 +103,7 @@ func TestTLSConfigFrozenAtNew(t *testing.T) {
 // DialTimeout, not at CommandTimeout, and that it is redis:unreachable.
 func TestTLSHandshakeCountsAgainstDialTimeout(t *testing.T) {
 	fixture := testTLSFixture(t)
-	addr, accepts := startSilentPeerForTest(t)
+	acceptCount, addr := startAcceptFake(t, func(conn net.Conn, _ *bufio.Reader) { drainUntilPeerCloseForTest(conn) })
 	redis := newTestRedis(t, Config{Host: addr, TLS: fixture.clientTLSConfig(t, false),
 		DialTimeout: 200 * time.Millisecond, CommandTimeout: 2 * time.Second, MaxRetries: -1})
 	t.Cleanup(redis.Close)
@@ -113,8 +117,8 @@ func TestTLSHandshakeCountsAgainstDialTimeout(t *testing.T) {
 	if elapsed < 150*time.Millisecond || elapsed > time.Second {
 		t.Fatalf("attempt took %v, want about DialTimeout (200ms)", elapsed)
 	}
-	if accepts() != 1 {
-		t.Fatalf("accepts = %d, want 1", accepts())
+	if got := atomic.LoadInt32(acceptCount); got != 1 {
+		t.Fatalf("accepts = %d, want 1", got)
 	}
 }
 
@@ -165,7 +169,15 @@ func TestTLSRejectionReturnsRedisTLS(t *testing.T) {
 // TestTLSPeerAnswersClientHelloWithPlainText proves a plain peer that writes a RESP error to the ClientHello is redis:tls.
 func TestTLSPeerAnswersClientHelloWithPlainText(t *testing.T) {
 	fixture := testTLSFixture(t)
-	addr := startWritesFirstPlainPeerForTest(t)
+	// A plain peer answers the first bytes it reads (the ClientHello) with a RESP error line, then drains.
+	_, addr := startAcceptFake(t, func(conn net.Conn, reader *bufio.Reader) {
+		clientHello := make([]byte, 512)
+		if _, err := reader.Read(clientHello); err != nil {
+			return
+		}
+		_, _ = io.WriteString(conn, "-ERR unknown command\r\n")
+		drainUntilPeerCloseForTest(conn)
+	})
 	redis := newTestRedis(t, Config{Host: addr, TLS: fixture.clientTLSConfig(t, false), MaxRetries: -1})
 	t.Cleanup(redis.Close)
 	_, err := redis.Get(context.Background(), "k")
@@ -188,7 +200,7 @@ func TestTLSRejectionWithRetriesIsOneConnection(t *testing.T) {
 // and is retried like a plain dial failure.
 func TestTLSSilentPlainPeerStaysUnreachable(t *testing.T) {
 	fixture := testTLSFixture(t)
-	addr, accepts := startSilentPeerForTest(t)
+	acceptCount, addr := startAcceptFake(t, func(conn net.Conn, _ *bufio.Reader) { drainUntilPeerCloseForTest(conn) })
 	redis := newTestRedis(t, Config{Host: addr, TLS: fixture.clientTLSConfig(t, false),
 		MaxRetries: 1, MinRetryBackoff: -1, DialTimeout: 100 * time.Millisecond})
 	t.Cleanup(redis.Close)
@@ -199,8 +211,8 @@ func TestTLSSilentPlainPeerStaysUnreachable(t *testing.T) {
 	if !IsUnreachable(err) {
 		t.Fatalf("IsUnreachable(%v) = false", err)
 	}
-	if accepts() != 2 {
-		t.Fatalf("accepts = %d, want 2", accepts())
+	if got := atomic.LoadInt32(acceptCount); got != 2 {
+		t.Fatalf("accepts = %d, want 2", got)
 	}
 }
 
@@ -218,7 +230,7 @@ func TestTLSHostRefusesTCP(t *testing.T) {
 // TestTLSCallerCancelDuringHandshake proves a caller cancel while the handshake waits surfaces as context.Canceled.
 func TestTLSCallerCancelDuringHandshake(t *testing.T) {
 	fixture := testTLSFixture(t)
-	addr, _ := startSilentPeerForTest(t)
+	addr := startStallRedis(t)
 	redis := newTestRedis(t, Config{Host: addr, TLS: fixture.clientTLSConfig(t, false), DialTimeout: 2 * time.Second, CommandTimeout: 3 * time.Second})
 	t.Cleanup(redis.Close)
 	ctx, cancel := context.WithCancel(context.Background())

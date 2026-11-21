@@ -72,16 +72,19 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 			return nil, false, err
 		}
 		// Timeout is not classified here: ioOrContext hands the deadline up and exec's libraryTimeout owns that call.
-		// A short bulk read is Warn (the peer lied about a length); every other I/O failure is a peer that went away.
+		// A TLS rejection is Error (redis:tls, with tls_error); an EOF or short bulk read is Warn (the peer lied
+		// about a length or hung up); every other I/O failure is Debug, a peer that went away.
 		mapped := ioOrContext(ctx, err)
 		if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
 			return nil, false, mapped
 		}
-		switch {
-		case mapped == errTLS: //nolint:errorlint // ioError returns the sentinel itself
-			// The TLS 1.3 client-certificate alert lands here, on the first read (AUTH reply or first command).
-			// A TLS rejection is an operator fix; tls_error is the crypto/tls text, not a Redis reply.
+		// The TLS 1.3 client-certificate alert lands here, on the first read (AUTH reply or first command).
+		// A TLS rejection is an operator fix; tls_error is the crypto/tls text, not a Redis reply.
+		if mapped == errTLS { //nolint:errorlint // ioError returns the sentinel itself
 			sr.logger.Error("do: "+RedisTLS, "verb", commandVerb(args), "tls_error", err.Error())
+			return nil, false, mapped
+		}
+		switch {
 		case errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF):
 			sr.logger.Warn("do: "+RedisUnreachable, "reason", "read", "verb", commandVerb(args))
 		default:
