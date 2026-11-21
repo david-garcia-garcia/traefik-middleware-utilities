@@ -1,0 +1,51 @@
+# Yaegi BEFORE (first session, superseded by the back-to-back pair in bench-yaegi-before.txt): production code at d940bf43 + bench_yaegi_test.go from 2c504a9b (storeBenchEntryLocked adapted to the map-only store)
+# machine: Intel Core Ultra 7 265K (20 threads), Windows 11, go1.25.6 windows/amd64, Yaegi v0.16.1; started 2026-11-21T10:14:39Z
+# command: go test -run '^$' -bench Yaegi -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
+goos: windows
+goarch: amd64
+pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket
+cpu: Intel(R) Core(TM) Ultra 7 265K
+BenchmarkYaegiMemoryAllow/hot-key-20         	  183906	      7182 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  165380	      6838 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  176569	      8170 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  142172	      8137 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  138985	     10560 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  136558	      8500 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  135250	      8151 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  137510	      8442 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  136568	      8236 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  159098	      8187 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      28	  39986993 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      27	  39295793 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      27	  42608167 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      26	  42551977 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      25	  40918392 ns/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    6330	    181290 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    6229	    184281 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    6105	    186076 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    6654	    193658 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    5540	    185460 ns/op	         1.000 redis-cmds/op
+PASS
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket	31.603s
+goos: windows
+goarch: amd64
+pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter
+cpu: Intel(R) Core(TM) Ultra 7 265K
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5558	    218060 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    4746	    295054 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5391	    308079 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    3644	    301531 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    4360	    271956 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   65997	     17743 ns/op	         0.002227 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   64942	     17459 ns/op	         0.002248 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   69626	     18167 ns/op	         0.002341 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   65084	     18103 ns/op	         0.002305 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   63376	     18619 ns/op	         0.002461 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 155029362 ns/op	      1000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 135285900 ns/op	      1000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 126134150 ns/op	      1000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 144453975 ns/op	      1000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 134881775 ns/op	      1000 redis-cmds/op
+PASS
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter	28.368s
+exit=0

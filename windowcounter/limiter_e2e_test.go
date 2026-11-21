@@ -31,14 +31,14 @@ func lookupLiveEngineAddrs(redisAddr, dragonflyAddr string) (engines []liveEngin
 }
 
 // liveEngineAddrs skips under -short or both env unset, else returns the engines whose addrs are set.
-func liveEngineAddrs(t *testing.T, redisEnv, dragonflyEnv string) []liveEngineForTest {
-	t.Helper()
+func liveEngineAddrs(tb testing.TB, redisEnv, dragonflyEnv string) []liveEngineForTest {
+	tb.Helper()
 	if testing.Short() {
-		t.Skip("live engines skipped under -short")
+		tb.Skip("live engines skipped under -short")
 	}
 	engines, bothUnset := lookupLiveEngineAddrs(os.Getenv(redisEnv), os.Getenv(dragonflyEnv))
 	if bothUnset {
-		t.Skip(redisEnv + " and " + dragonflyEnv + " unset")
+		tb.Skip(redisEnv + " and " + dragonflyEnv + " unset")
 	}
 	return engines
 }
@@ -71,10 +71,10 @@ func TestLookupLiveEngineAddrs(t *testing.T) {
 	})
 }
 
-// runForEachLiveEngine table-drives Redis then Dragonfly after liveEngineAddrs.
-func runForEachLiveEngine(t *testing.T, redisEnv, dragonflyEnv string, run func(t *testing.T, addr string)) {
+// runForEachLiveEngine table-drives Redis then Dragonfly from WINDOWCOUNTER_LIVE_REDIS and WINDOWCOUNTER_LIVE_DRAGONFLY.
+func runForEachLiveEngine(t *testing.T, run func(t *testing.T, addr string)) {
 	t.Helper()
-	for _, backend := range liveEngineAddrs(t, redisEnv, dragonflyEnv) {
+	for _, backend := range liveEngineAddrs(t, "WINDOWCOUNTER_LIVE_REDIS", "WINDOWCOUNTER_LIVE_DRAGONFLY") {
 		backend := backend
 		t.Run(backend.name, func(t *testing.T) {
 			run(t, backend.addr)
@@ -86,11 +86,11 @@ func runForEachLiveEngine(t *testing.T, redisEnv, dragonflyEnv string, run func(
 const liveTTLScript = `return redis.call('TTL', KEYS[1])`
 
 // waitLiveClient retries Incr until the engine accepts connections or the wait expires.
-func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
-	t.Helper()
+func waitLiveClient(tb testing.TB, addr string) *simpleredis.SimpleRedis {
+	tb.Helper()
 	client, err := simpleredis.New(simpleredis.Config{Host: addr})
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	deadline := time.Now().Add(15 * time.Second)
 	for {
@@ -99,7 +99,7 @@ func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 			return client
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("live %s: %v", addr, err)
+			tb.Fatalf("live %s: %v", addr, err)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -107,7 +107,7 @@ func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 
 // TestLive_Limiter proves Take, Peek, buffered share, and first-hit EXPIRE on live Redis and Dragonfly.
 func TestLive_Limiter(t *testing.T) {
-	runForEachLiveEngine(t, "WINDOWCOUNTER_LIVE_REDIS", "WINDOWCOUNTER_LIVE_DRAGONFLY", runLiveLimiterBackend)
+	runForEachLiveEngine(t, runLiveLimiterBackend)
 }
 
 // runLiveLimiterBackend runs exact N-then-deny, buffered share, sliding boundary, Peek, and expire-on-first-hit against one engine.

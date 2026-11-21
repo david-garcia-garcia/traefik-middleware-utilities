@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-21-ratelimit-benchmarks",
+  "jobName": "2026-11-21-ratelimit-benchmarks",
+  "startedAt": "2026-11-21T08:45:02.924Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T08:48:56.051Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T08:59:57.333Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T09:20:06.666Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T09:48:28.575Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T10:10:10.143Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T10:41:54.037Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T10:45:20.328Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-21T10:51:15.615Z"
+    }
+  }
+}

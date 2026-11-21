@@ -13,7 +13,7 @@ Traefik loads local and catalog plugins through [Yaegi](https://github.com/traef
 
 That is why this repo exists. The official Go Redis client (and other compiled-only libraries) will not run under Yaegi. A middleware that imports them cannot be loaded the way Traefik actually loads plugins, and cannot be tested that way either.
 
-These packages are the pieces those middlewares otherwise rewrite: a Redis client, a reclaim table, two rate-limit clocks, an in-memory backend backoff gate, and a CIDR lookup helper. They stay in the subset of Go that Yaegi can interpret, and they are tested under Yaegi, not only as compiled Go.
+These packages are the pieces those middlewares otherwise rewrite: a Redis client, a reclaim table, two rate-limit clocks, an in-memory backend backoff gate, and a CIDR lookup helper. They stay in the subset of Go that Yaegi can interpret, and they are tested under Yaegi, not only as compiled Go. The same packages are also compiled when a middleware is built into a custom Traefik binary, so they run both ways.
 
 They look like unrelated libraries. They share one module on purpose: the window counter and the token bucket are built on SimpleRedis, reclaim is how a middleware keeps a client or gate across a Traefik reload, and not every package talks to Redis. Splitting them would hide that they are one middleware stack under the same Yaegi constraint.
 
@@ -109,6 +109,81 @@ _ = wait
 
 Compute `rate` from Traefik `average/period`. Prefix keys in the caller. Two limiter instances on one Redis key share burst. Do not mix this clock with `windowcounter/`.
 
+## Rate limiters compared
+
+Two packages limit request rates: `tokenbucket/` (two stores) and `windowcounter/` (two modes). They are different clocks, not two speeds of one clock. `backendbackoff/` is not a rate limiter: it gates calls into an unhealthy backend.
+
+| | `tokenbucket.NewMemory` | `tokenbucket.NewRedis` | `windowcounter`, `sync_rate` 0 | `windowcounter`, `sync_rate` > 0 |
+|---|---|---|---|---|
+| Algorithm | Token bucket: refill at `rate`/s, cap at `burst`, one token per `Allow`; Traefik's Lua formulas computed in Go | Same token bucket, in a Lua script derived from Traefik's `AllowTokenBucketRaw` | Sliding window: `current + previous × (1 − elapsed/window)`, whole-second windows | Same sliding window |
+| Where state lives | One map per limiter instance in the process, at most 65536 sources, each expiring `ttl` after its last use | One Redis hash per key (`tokens`, `last`), `EXPIRE ttl` | One Redis integer per key and window, TTL two windows | Redis integers as in exact mode, plus a local delta per window key in the process |
+| Redis round trips per request | 0 | 1 (`EVALSHA`; one extra `EVAL` when the engine does not have the script yet) | 2 per Take (one `EVAL` of INCR plus EXPIRE-if-no-TTL, one `GET` of the previous window); 2 `GET`s per Peek | Usually 0. A `GET` when a key is first seen, after a flush leaves its local delta at 0, and at most once per `sync_rate` for the previous window. A timer flushes dirty keys every `sync_rate` in ⌈keys/256⌉ `EVAL`s |
+| Several Traefik instances | Not shared: each instance has its own buckets, so N instances admit up to N times the rate | Shared: one bucket per key for all instances | Shared and exact: every hit is counted in Redis before the decision | Shared after each flush. Between flushes each instance decides from its own view, so instances together can admit more than `limit` within one `sync_rate` |
+| Many keys | `Allow` on a stored key and on a new key is O(1). At 65536 sources a new key first drops expired sources, then one live source, which comes back as a full bucket | Nothing per key in the process; Redis holds one hash per active key | Nothing per key in the process; Redis holds two counters per active key | Memory per active window key. Flush cost grows with dirty keys, 256 keys per `EVAL` |
+| Redis outage | Not affected | `Allow` returns the Redis error; the middleware decides what to do | Take and Peek return the Redis error | Take and Peek return a nil error and keep this instance's `limit` (per-node cap). Redis is retried one `sync_rate` after the last failure; unsent deltas stay pending |
+
+Pros and cons:
+
+- `tokenbucket.NewMemory`: no network and the lowest cost per request. The limit is per Traefik instance, and the 65536-source cap evicts a live source under a large key set.
+- `tokenbucket.NewRedis`: one shared bucket across instances with one round trip per request. Every request depends on Redis, and an outage is an error the caller has to handle.
+- `windowcounter`, `sync_rate` 0: exact shared count. Two round trips per Take, and Redis errors reach the caller. Denied Takes still count.
+- `windowcounter`, `sync_rate` > 0: close to in-memory cost per request and keeps working through a Redis outage. The shared limit is approximate between flushes, and outage admits are per node.
+
+The buffered flush sends several keys in one `EVAL`, so all of them have to live on one Redis node. A Redis Cluster engine or cluster proxy would answer `CROSSSLOT`; SimpleRedis does not support Redis Cluster either.
+
+### Compared with Traefik's rate limiters
+
+Traefik Proxy `RateLimit` (open source, read at commit `903e8a9`): a token bucket configured with `average`, `period`, and `burst`. Without Redis it keeps a `golang.org/x/time/rate` limiter per source in an in-memory map capped at 65536 sources. With Redis it runs the Lua script `AllowTokenBucketRaw` (`EVALSHA`, then `EVAL` when the engine does not have the script). The maximum wait is computed from the rate, not configured. The middleware waits up to that delay, answers 429 with `Retry-After` above it, and answers 500 when Redis returns an error; its documentation says nothing about a Redis outage.
+
+`tokenbucket/` follows that clock. `NewRedis` runs a script derived from Traefik's with two declared changes: `#rl_source == 4` replaces `table.maxn` (Dragonfly runs Lua 5.4), and a missing hash starts as a full bucket with `last` at the request time instead of `last` 0. `NewMemory` computes the same formulas in Go instead of using `x/time/rate`. The library does not sleep and does not write HTTP: the middleware passes `maxDelay` and `ttl`, and decides how to answer a denied request or a Redis error.
+
+Traefik Hub `DistributedRateLimit` (commercial; only its documentation was read, on 2026-11-21): documented as a token bucket with `limit`, `period`, and `burst`, kept in Redis so the limit applies across the cluster. Redis is required and can be a single instance, Redis Cluster, or Sentinel. `denyOnError` (default `true`) answers 429 when the limit cannot be read from Redis, and `responseHeaders` adds `X-RateLimit-*` headers. Its internals are unknown: the documentation does not say whether it caches locally, how instances synchronize, or how many Redis round trips a request costs, so no performance comparison is made here. This repo does not reproduce Hub's options (`denyOnError`, `limit` 0, response headers, `sourceCriterion`).
+
+### Benchmarks
+
+Measured on 2026-11-21 on an Intel Core Ultra 7 265K (20 threads), Windows 11, `go1.25.6 windows/amd64`, with Yaegi v0.16.1 (the version Traefik v3.7.11 pins). Each value is the median of five runs. The compiled columns come from one run at commit `3623aafd`:
+
+```text
+go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
+```
+
+The Yaegi columns come from a second pair of runs, one right after the other: the code before the optimizations, then commit `3623aafd`:
+
+```text
+go test -run '^$' -bench Yaegi -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
+```
+
+`go.mod` declares `go 1.21`; these numbers are from go1.25.6 only. CI compiles the benchmarks but does not run them.
+
+How to read the numbers:
+
+- The Redis rows talk over TCP loopback to an in-process fake Redis (`fake_redis_test.go` in each package) with a warm script cache, so each `Eval` is one `EVALSHA`. Against an engine that does not have the script yet, the first call per script costs one extra `EVAL`. Loopback on Windows dominates these rows: compare them with each other, not with the latency of a real Redis.
+- `redis-cmds/op` is the commands the fake served per operation, including the background flush. Allocations count everything the process allocates in the timed loop, the in-process fake included.
+- The fake serves one command at a time, so the `-parallel` rows against it measure the client plus a serialized server, not how Redis scales. `BenchmarkLiveRedisAllow` and `BenchmarkLiveTake` (`-bench Live` with `TOKENBUCKET_LIVE_*` / `WINDOWCOUNTER_LIVE_*` set) run against a real engine; they are not in this table.
+- Yaegi rows run the same code interpreted inside one `Eval` per timed loop, through a probe package. `BenchmarkYaegiFlush` calls the interpreted flush from Go once per iteration and re-dirties the keys with the timer stopped, like `BenchmarkFlush`. Yaegi rows have no allocation column.
+- `sync_rate` 20 ms is the floor, the buffered setting with the most Redis traffic. The flush rows time one flush of 1000 dirty keys.
+- The "before" columns are the same benchmarks on the code at commit `d940bf43`, before the two optimizations: a new source in `tokenbucket.NewMemory` used to walk every stored source under the mutex, and the buffered flush sent one `EVAL` per key. The 10k rotating keys row of `tokenbucket.NewMemory` has a "before" too, because every `Allow` on a stored source now also moves it in the expiry list.
+- Compiled "before" values are from an earlier run than the compiled column. Between those two runs, rows whose code did not change moved by up to about 30% on this machine (for example `windowcounter` at `sync_rate` 0, hot key: 57,049 then 40,840 ns/op), so only differences well beyond that mean something. The two Yaegi columns were measured one right after the other; there, the hot-key row, whose code barely changed, moved by about 11%.
+- To reproduce a "before" value, check out `d940bf43`. The Yaegi benchmarks for the new-key, rotating-keys, and flush rows were added later: copy `tokenbucket/bench_yaegi_test.go` and `windowcounter/bench_yaegi_test.go` from `3623aafd`, and in the tokenbucket one make `storeBenchEntryLocked` only do `m.buckets[key] = entry`, because that commit has no expiry list.
+- One row without a "before" value also changed for a reason: `windowcounter` at `sync_rate` 20 ms with 10k rotating keys went from 3.01 to 2.0 `redis-cmds/op`. The background flush used to send one `EVAL` per dirty key; it now sends one per batch of up to 256. The two commands left per Take are `GET`s of the current and previous window, because each key comes back more than one `sync_rate` after its last flush.
+
+| Benchmark | Compiled ns/op | Compiled before | Yaegi ns/op | Yaegi before | redis-cmds/op | Compiled allocs/op |
+|---|---:|---:|---:|---:|---:|---:|
+| `tokenbucket.NewMemory`, hot key (`BenchmarkMemoryAllow/hot-key` / `BenchmarkYaegiMemoryAllow/hot-key`) | 21.6 |  | 7,560 |  | — | 0 |
+| `tokenbucket.NewMemory`, 10k rotating keys (`BenchmarkMemoryAllow/rotating-10k` / `BenchmarkYaegiMemoryAllow/rotating-10k`) | 34.4 | 36.8 | 7,549 | 6,733 | — | 0 |
+| `tokenbucket.NewMemory`, new key, 65536 live sources (`BenchmarkMemoryAllow/new-key-full-table` / `BenchmarkYaegiMemoryAllow/new-key-full-table`) | 160 | 1,516,150 | 12,673 | 37,716,769 | — | 2 |
+| `tokenbucket.NewMemory`, hot key, parallel (`BenchmarkMemoryAllow/hot-key-parallel`) | 62.8 |  | — |  | — | 0 |
+| `tokenbucket.NewRedis`, hot key (`BenchmarkRedisAllow/hot-key` / `BenchmarkYaegiRedisAllow/hot-key`) | 32,237 |  | 128,249 |  | 1 | 74 |
+| `tokenbucket.NewRedis`, 10k rotating keys (`BenchmarkRedisAllow/rotating-10k`) | 31,843 |  | — |  | 1 | 72 |
+| `tokenbucket.NewRedis`, hot key, parallel (`BenchmarkRedisAllow/hot-key-parallel`) | 18,381 |  | — |  | 1 | 77 |
+| `windowcounter`, `sync_rate` 0, hot key (`BenchmarkTake/sync-rate-0/hot-key` / `BenchmarkYaegiTake/sync-rate-0/hot-key`) | 40,840 |  | 197,117 |  | 2 | 68 |
+| `windowcounter`, `sync_rate` 0, 10k rotating keys (`BenchmarkTake/sync-rate-0/rotating-10k`) | 38,894 |  | — |  | 2 | 67 |
+| `windowcounter`, `sync_rate` 0, hot key, parallel (`BenchmarkTake/sync-rate-0/hot-key-parallel`) | 21,246 |  | — |  | 2 | 75 |
+| `windowcounter`, `sync_rate` 20 ms, hot key (`BenchmarkTake/sync-rate-20ms/hot-key` / `BenchmarkYaegiTake/sync-rate-20ms/hot-key`) | 187 |  | 13,645 |  | 2.4e-05 | 4 |
+| `windowcounter`, `sync_rate` 20 ms, 10k rotating keys (`BenchmarkTake/sync-rate-20ms/rotating-10k`) | 39,948 |  | — |  | 2 | 67 |
+| `windowcounter`, `sync_rate` 20 ms, hot key, parallel (`BenchmarkTake/sync-rate-20ms/hot-key-parallel`) | 222 |  | — |  | 0.00027 | 4 |
+| `windowcounter` flush, 1000 dirty keys (`BenchmarkFlush/dirty-keys-1000` / `BenchmarkYaegiFlush/dirty-keys-1000`) | 659,105 | 31,947,335 | 10,701,576 | 105,819,980 | 4 | 16019 |
+
 ## Backend backoff
 
 Package `backendbackoff/`. An in-memory per-key admission gate: stop forwarding into an unhealthy backend, then back off exponentially while it recovers. It is not Traefik's CircuitBreaker middleware and not a token bucket.
@@ -185,7 +260,7 @@ Constructor errors omit that route and leave siblings on the same generation con
 
 ## Yaegi
 
-This code is interpreted inside Traefik, not compiled into it. Treat that as a hard constraint, not a later port.
+This code runs interpreted inside Traefik when a middleware is loaded as a plugin, and compiled when the middleware is built into a custom Traefik binary. The interpreted path is the constraint: treat it as a hard rule, not a later port.
 
 - Prefer the Go standard library. Every import is also interpreted.
 - No cgo, no `unsafe`, no assembly, no `//go:embed` unless Yaegi in the target Traefik version is known to support it.
@@ -227,6 +302,8 @@ go test ./...                # also Go E2E for each *_LIVE_REDIS / *_LIVE_DRAGON
 `Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. `-Suite reclaim` is reclaim only; `-Suite simpleredis -Engine redis|dragonfly` runs the SimpleRedis file once against that backend.
 
 Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`). `backendbackoff/` and `iplookup/` have no store and no `*_LIVE_*` var.
+
+The rate limiter benchmarks (`bench_test.go`, `bench_yaegi_test.go`, `bench_e2e_test.go` in `tokenbucket/` and `windowcounter/`) compile in CI but do not run there; the command and the results are in `## Rate limiters compared`.
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines, 2m timeout, `TestAlloc*` run), unit `go test -race -short` (no engines, 10m timeout), Go E2E Redis (`go test` with Redis 7, no `-race`), Go E2E Dragonfly (`go test` with Dragonfly, no `-race`), Pester reclaim (`Integration Tests`), Pester SimpleRedis Redis, and Pester SimpleRedis Dragonfly on every pull request and on pushes to `master`.
 

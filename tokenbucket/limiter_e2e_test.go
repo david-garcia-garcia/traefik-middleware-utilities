@@ -30,14 +30,14 @@ func lookupLiveEngineAddrs(redisAddr, dragonflyAddr string) (engines []liveEngin
 }
 
 // liveEngineAddrs skips under -short or both env unset, else returns the engines whose addrs are set.
-func liveEngineAddrs(t *testing.T, redisEnv, dragonflyEnv string) []liveEngineForTest {
-	t.Helper()
+func liveEngineAddrs(tb testing.TB, redisEnv, dragonflyEnv string) []liveEngineForTest {
+	tb.Helper()
 	if testing.Short() {
-		t.Skip("live engines skipped under -short")
+		tb.Skip("live engines skipped under -short")
 	}
 	engines, bothUnset := lookupLiveEngineAddrs(os.Getenv(redisEnv), os.Getenv(dragonflyEnv))
 	if bothUnset {
-		t.Skip(redisEnv + " and " + dragonflyEnv + " unset")
+		tb.Skip(redisEnv + " and " + dragonflyEnv + " unset")
 	}
 	return engines
 }
@@ -212,11 +212,11 @@ func runLiveBackend(t *testing.T, addr string) {
 }
 
 // waitLiveClient retries Eval until the engine accepts connections or the wait expires.
-func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
-	t.Helper()
+func waitLiveClient(tb testing.TB, addr string) *simpleredis.SimpleRedis {
+	tb.Helper()
 	client, err := simpleredis.New(simpleredis.Config{Host: addr})
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	deadline := time.Now().Add(15 * time.Second)
 	for {
@@ -225,7 +225,7 @@ func waitLiveClient(t *testing.T, addr string) *simpleredis.SimpleRedis {
 			return client
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("live %s: %v", addr, err)
+			tb.Fatalf("live %s: %v", addr, err)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

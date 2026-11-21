@@ -7,7 +7,7 @@ import (
 
 // TestYaegiLive_RedisAndDragonfly runs the same live limiter scenarios interpreted against each engine.
 func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
-	runForEachLiveEngine(t, "WINDOWCOUNTER_LIVE_REDIS", "WINDOWCOUNTER_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, func(t *testing.T, addr string) {
 		t.Helper()
 		goPath := t.TempDir()
 		writeGopathWindowcounter(t, goPath)

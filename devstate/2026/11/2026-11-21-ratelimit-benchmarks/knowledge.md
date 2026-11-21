@@ -1,0 +1,15 @@
+# Knowledge
+- created knowledge/research/ext_traefik_hub_distributed-rate-limit/
+- updated knowledge/research/index_ext_traefik.md
+- updated knowledge/research/ext_traefik_ratelimiter_token-bucket/
+- created knowledge/debt/2026-11-21-tokenbucket-memory-new-source-scan.md
+- created knowledge/debt/2026-11-21-windowcounter-serial-flush.md
+- created knowledge/debt/2026-11-21-simpleredis-spec-compiled-only-rationale.md
+- updated knowledge/devdocs/std_go_simpleredis.md
+- updated knowledge/devdocs/std_go_tokenbucket.md
+- updated knowledge/devdocs/std_go_windowcounter.md
+- updated knowledge/devdocs/std_go_test-suites.md
+- deleted knowledge/debt/2026-11-21-tokenbucket-memory-new-source-scan.md
+- deleted knowledge/debt/2026-11-21-windowcounter-serial-flush.md
+- updated knowledge/debt/2026-11-21-simpleredis-spec-compiled-only-rationale.md
+- created knowledge/debt/2026-11-21-backendbackoff-gate-new-key-scan.md

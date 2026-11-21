@@ -1,0 +1,16 @@
+issueKey: 2026-11-21-ratelimit-benchmarks
+jobName: 2026-11-21-ratelimit-benchmarks
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: b7253c9e5ff28b3e
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: ratelimit-benchmarks-key-scaling
+pr: { id: 105, url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/105 }

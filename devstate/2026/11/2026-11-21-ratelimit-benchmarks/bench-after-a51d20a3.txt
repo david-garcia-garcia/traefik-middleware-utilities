@@ -1,0 +1,106 @@
+# final optimization commit (after): a51d20a3 (ae7f4a9a + hot-key tail fix)
+# machine: Intel Core Ultra 7 265K (20 threads), Windows 11, go1.25.6 windows/amd64; started 2026-11-21T09:39:37Z
+# command: go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
+goos: windows
+goarch: amd64
+pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket
+cpu: Intel(R) Core(TM) Ultra 7 265K
+BenchmarkMemoryAllow/hot-key-20 	59749648	        19.91 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/hot-key-20 	57780088	        19.96 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/hot-key-20 	59115630	        21.85 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/hot-key-20 	49191213	        24.58 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/hot-key-20 	51221416	        23.63 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/rotating-10k-20         	35090078	        41.49 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/rotating-10k-20         	31095574	        53.78 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/rotating-10k-20         	28459149	        38.01 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/rotating-10k-20         	30775543	        36.84 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/rotating-10k-20         	32040926	        37.76 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/new-key-full-table-20   	 7006783	       197.3 ns/op	     102 B/op	       2 allocs/op
+BenchmarkMemoryAllow/new-key-full-table-20   	 6127515	       183.3 ns/op	     102 B/op	       2 allocs/op
+BenchmarkMemoryAllow/new-key-full-table-20   	 6860462	       182.9 ns/op	     102 B/op	       2 allocs/op
+BenchmarkMemoryAllow/new-key-full-table-20   	 7051924	       191.1 ns/op	     102 B/op	       2 allocs/op
+BenchmarkMemoryAllow/new-key-full-table-20   	 6236714	       189.4 ns/op	     102 B/op	       2 allocs/op
+BenchmarkMemoryAllow/hot-key-parallel-20     	20984926	        55.71 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/hot-key-parallel-20     	21212881	        58.90 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/hot-key-parallel-20     	20911132	        61.18 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/hot-key-parallel-20     	17414826	        62.80 ns/op	       0 B/op	       0 allocs/op
+BenchmarkMemoryAllow/hot-key-parallel-20     	20656320	        59.24 ns/op	       0 B/op	       0 allocs/op
+BenchmarkRedisAllow/hot-key-20               	   35088	     34103 ns/op	         1.000 redis-cmds/op	    3752 B/op	      74 allocs/op
+BenchmarkRedisAllow/hot-key-20               	   34629	     34748 ns/op	         1.000 redis-cmds/op	    3757 B/op	      74 allocs/op
+BenchmarkRedisAllow/hot-key-20               	   35034	     33842 ns/op	         1.000 redis-cmds/op	    3754 B/op	      74 allocs/op
+BenchmarkRedisAllow/hot-key-20               	   34734	     34353 ns/op	         1.000 redis-cmds/op	    3756 B/op	      74 allocs/op
+BenchmarkRedisAllow/hot-key-20               	   35391	     37431 ns/op	         1.000 redis-cmds/op	    3756 B/op	      74 allocs/op
+BenchmarkRedisAllow/rotating-10k-20          	   32865	     34136 ns/op	         1.000 redis-cmds/op	    3478 B/op	      72 allocs/op
+BenchmarkRedisAllow/rotating-10k-20          	   35959	     35268 ns/op	         1.000 redis-cmds/op	    3478 B/op	      72 allocs/op
+BenchmarkRedisAllow/rotating-10k-20          	   34339	     35997 ns/op	         1.000 redis-cmds/op	    3478 B/op	      72 allocs/op
+BenchmarkRedisAllow/rotating-10k-20          	   38043	     32211 ns/op	         1.000 redis-cmds/op	    3478 B/op	      72 allocs/op
+BenchmarkRedisAllow/rotating-10k-20          	   38698	     32320 ns/op	         1.000 redis-cmds/op	    3478 B/op	      72 allocs/op
+BenchmarkRedisAllow/hot-key-parallel-20      	   56400	     21971 ns/op	         1.000 redis-cmds/op	    4026 B/op	      77 allocs/op
+BenchmarkRedisAllow/hot-key-parallel-20      	   53451	     21486 ns/op	         1.000 redis-cmds/op	    4027 B/op	      77 allocs/op
+BenchmarkRedisAllow/hot-key-parallel-20      	   54360	     23456 ns/op	         1.000 redis-cmds/op	    4028 B/op	      77 allocs/op
+BenchmarkRedisAllow/hot-key-parallel-20      	   45076	     23624 ns/op	         1.000 redis-cmds/op	    4021 B/op	      77 allocs/op
+BenchmarkRedisAllow/hot-key-parallel-20      	   51470	     22783 ns/op	         1.000 redis-cmds/op	    4025 B/op	      77 allocs/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  142284	      8450 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  139766	      8567 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  136814	      8497 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  138812	      9345 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  120778	      8739 ns/op
+BenchmarkYaegiRedisAllow/hot-key-20          	    5851	    182262 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20          	    6583	    224809 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20          	    5481	    186350 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20          	    5983	    167289 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20          	    6964	    182373 ns/op	         1.000 redis-cmds/op
+PASS
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket	73.116s
+goos: windows
+goarch: amd64
+pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter
+cpu: Intel(R) Core(TM) Ultra 7 265K
+BenchmarkTake/sync-rate-0/hot-key-20         	   31747	     41876 ns/op	         2.000 redis-cmds/op	    2787 B/op	      68 allocs/op
+BenchmarkTake/sync-rate-0/hot-key-20         	   31879	     43848 ns/op	         2.000 redis-cmds/op	    2786 B/op	      68 allocs/op
+BenchmarkTake/sync-rate-0/hot-key-20         	   21171	     57683 ns/op	         2.000 redis-cmds/op	    2786 B/op	      68 allocs/op
+BenchmarkTake/sync-rate-0/hot-key-20         	   20577	     58661 ns/op	         2.000 redis-cmds/op	    2785 B/op	      68 allocs/op
+BenchmarkTake/sync-rate-0/hot-key-20         	   20534	     57928 ns/op	         2.000 redis-cmds/op	    2794 B/op	      69 allocs/op
+BenchmarkTake/sync-rate-0/rotating-10k-20    	   21229	     58824 ns/op	         2.000 redis-cmds/op	    2769 B/op	      67 allocs/op
+BenchmarkTake/sync-rate-0/rotating-10k-20    	   20574	     58085 ns/op	         2.000 redis-cmds/op	    2768 B/op	      67 allocs/op
+BenchmarkTake/sync-rate-0/rotating-10k-20    	   21156	     58477 ns/op	         2.000 redis-cmds/op	    2768 B/op	      67 allocs/op
+BenchmarkTake/sync-rate-0/rotating-10k-20    	   20714	     56900 ns/op	         2.000 redis-cmds/op	    2768 B/op	      67 allocs/op
+BenchmarkTake/sync-rate-0/rotating-10k-20    	   18019	     58008 ns/op	         2.000 redis-cmds/op	    2768 B/op	      67 allocs/op
+BenchmarkTake/sync-rate-0/hot-key-parallel-20         	   47164	     26310 ns/op	         2.000 redis-cmds/op	    3286 B/op	      75 allocs/op
+BenchmarkTake/sync-rate-0/hot-key-parallel-20         	   44538	     27159 ns/op	         2.000 redis-cmds/op	    3290 B/op	      75 allocs/op
+BenchmarkTake/sync-rate-0/hot-key-parallel-20         	   48396	     24947 ns/op	         2.000 redis-cmds/op	    3290 B/op	      75 allocs/op
+BenchmarkTake/sync-rate-0/hot-key-parallel-20         	   47770	     24723 ns/op	         2.000 redis-cmds/op	    3290 B/op	      75 allocs/op
+BenchmarkTake/sync-rate-0/hot-key-parallel-20         	   47611	     26238 ns/op	         2.000 redis-cmds/op	    3289 B/op	      75 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-20               	 5112043	       263.8 ns/op	         0.0000331 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-20               	 4996083	       240.3 ns/op	         0.0000300 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-20               	 5000799	       230.8 ns/op	         0.0000296 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-20               	 5040193	       237.7 ns/op	         0.0000313 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-20               	 4855888	       277.5 ns/op	         0.0000311 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkTake/sync-rate-20ms/rotating-10k-20          	   19413	     60808 ns/op	         2.006 redis-cmds/op	    2753 B/op	      68 allocs/op
+BenchmarkTake/sync-rate-20ms/rotating-10k-20          	   21942	     65961 ns/op	         2.005 redis-cmds/op	    2705 B/op	      67 allocs/op
+BenchmarkTake/sync-rate-20ms/rotating-10k-20          	   19945	     63171 ns/op	         2.005 redis-cmds/op	    2702 B/op	      66 allocs/op
+BenchmarkTake/sync-rate-20ms/rotating-10k-20          	   19128	     61941 ns/op	         2.005 redis-cmds/op	    2711 B/op	      67 allocs/op
+BenchmarkTake/sync-rate-20ms/rotating-10k-20          	   19278	     62485 ns/op	         2.005 redis-cmds/op	    2863 B/op	      68 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-parallel-20      	 5925032	       197.2 ns/op	         0.0002307 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-parallel-20      	 5365593	       199.7 ns/op	         0.0002345 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-parallel-20      	 6277959	       212.4 ns/op	         0.0002555 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-parallel-20      	 6113976	       204.4 ns/op	         0.0002458 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkTake/sync-rate-20ms/hot-key-parallel-20      	 6129510	       208.2 ns/op	         0.0002628 redis-cmds/op	      80 B/op	       4 allocs/op
+BenchmarkFlush/dirty-keys-1000-20                     	    1393	    943830 ns/op	         4.000 redis-cmds/op	  584577 B/op	   15943 allocs/op
+BenchmarkFlush/dirty-keys-1000-20                     	    1358	    875671 ns/op	         4.000 redis-cmds/op	  584299 B/op	   15936 allocs/op
+BenchmarkFlush/dirty-keys-1000-20                     	    1405	   1102988 ns/op	         4.000 redis-cmds/op	  584492 B/op	   15945 allocs/op
+BenchmarkFlush/dirty-keys-1000-20                     	    1362	    907582 ns/op	         4.000 redis-cmds/op	  584279 B/op	   15937 allocs/op
+BenchmarkFlush/dirty-keys-1000-20                     	    1381	    906574 ns/op	         4.000 redis-cmds/op	  584381 B/op	   15941 allocs/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20             	    3770	    275523 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20             	    3867	    281662 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20             	    3700	    284752 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20             	    3859	    288759 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20             	    3669	    334364 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20          	   61971	     18317 ns/op	         0.002340 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20          	   65616	     17801 ns/op	         0.002256 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20          	   63146	     18521 ns/op	         0.002455 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20          	   64341	     18087 ns/op	         0.002362 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20          	   65679	     18108 ns/op	         0.002406 redis-cmds/op
+PASS
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter	99.313s
+exit=0

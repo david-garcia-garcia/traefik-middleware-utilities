@@ -6,11 +6,16 @@ import (
 	"time"
 )
 
-// memEntry is one in-memory source bucket plus its lazy expire time.
+// memEntry is one in-memory source bucket, its lazy expire time, and its place in Memory's expiry list.
 type memEntry struct {
 	tokens   float64
 	last     int64
 	expireAt time.Time
+
+	// key, prev, and next link the entry into the expiry list; key is the buckets map key, so the list head can be deleted from the map.
+	key  string
+	prev *memEntry
+	next *memEntry
 }
 
 // Memory is an in-process Traefik token bucket (Lua formulas, not x/time/rate).
@@ -20,6 +25,11 @@ type Memory struct {
 
 	mu      sync.Mutex
 	buckets map[string]*memEntry
+	// head and tail are the expiry list over buckets. Every Allow sets expireAt = now + ttl (ttl is fixed) and moves its
+	// entry to the tail, so the head expires first while the clock does not move backwards. Concrete pointers, not
+	// container/list: its any-typed Value is a Yaegi risk.
+	head *memEntry
+	tail *memEntry
 }
 
 // maxMemorySources is Traefik's in-memory source cap (ttlmap maxSources).
@@ -60,20 +70,21 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 	defer m.mu.Unlock()
 	now := m.now()
 	nowMicro := now.UnixMicro()
-	// Idle longer than ttl is a new bucket (Traefik TTL map). Drop expired keys so the map cannot grow without bound.
+	// Idle longer than ttl is a new bucket (Traefik TTL map).
 	entry := m.buckets[key]
 	if entry != nil && !now.Before(entry.expireAt) {
-		delete(m.buckets, key)
+		m.removeLocked(entry)
 		entry = nil
 	}
 	if entry == nil {
-		m.dropExpired(now)
-		if len(m.buckets) >= maxMemorySources {
-			m.dropOne(now)
-		}
+		// Drop expired sources (and one live source at the cap) so the map cannot grow without bound.
+		m.makeRoomLocked(now)
 		// Missing or TTL-expired key is a full bucket, then consumeOne.
-		entry = &memEntry{tokens: float64(m.clock.burst), last: nowMicro}
-		m.buckets[key] = entry
+		entry = &memEntry{tokens: float64(m.clock.burst), last: nowMicro, key: key}
+		m.storeLocked(entry)
+	} else {
+		// Its expireAt is about to become the latest, so it moves to the tail.
+		m.moveToBackLocked(entry)
 	}
 	tokens, last, waitMicro := consumeOne(entry.tokens, entry.last, m.clock.limitPerMicro(), float64(m.clock.burst), nowMicro, m.clock.maxDelay.Microseconds())
 	entry.tokens = tokens
@@ -88,23 +99,76 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 	return allowed, wait, nil
 }
 
-// dropExpired removes buckets whose ttl has elapsed.
-func (m *Memory) dropExpired(now time.Time) {
-	for source, entry := range m.buckets {
-		if !now.Before(entry.expireAt) {
-			delete(m.buckets, source)
-		}
+// makeRoomLocked removes expired sources from the head of the expiry list, then the head itself when the store is
+// still at maxMemorySources, so a new source can be stored. Caller holds m.mu.
+func (m *Memory) makeRoomLocked(now time.Time) {
+	for m.head != nil && !now.Before(m.head.expireAt) {
+		m.removeLocked(m.head)
+	}
+	if len(m.buckets) >= maxMemorySources && m.head != nil {
+		m.removeLocked(m.head)
 	}
 }
 
-// dropOne removes one map slot when at cap so a new source can be stored.
-func (m *Memory) dropOne(now time.Time) {
-	m.dropExpired(now)
-	if len(m.buckets) < maxMemorySources {
+// storeLocked adds a new source to the map and at the tail of the expiry list. Caller holds m.mu.
+func (m *Memory) storeLocked(entry *memEntry) {
+	m.buckets[entry.key] = entry
+	m.pushBackLocked(entry)
+}
+
+// removeLocked deletes a stored source from the map and the expiry list. Caller holds m.mu.
+func (m *Memory) removeLocked(entry *memEntry) {
+	m.unlinkLocked(entry)
+	delete(m.buckets, entry.key)
+}
+
+// unlinkLocked takes a linked entry out of the expiry list. Caller holds m.mu.
+func (m *Memory) unlinkLocked(entry *memEntry) {
+	if entry.prev != nil {
+		entry.prev.next = entry.next
+	} else {
+		m.head = entry.next
+	}
+	if entry.next != nil {
+		entry.next.prev = entry.prev
+	} else {
+		m.tail = entry.prev
+	}
+	entry.prev = nil
+	entry.next = nil
+}
+
+// moveToBackLocked moves a linked entry to the tail of the expiry list. The tail itself stays put, so a hot key costs no
+// relink. Caller holds m.mu.
+//
+// It relinks in place instead of calling unlinkLocked then pushBackLocked: this runs on every Allow of a stored source that
+// is not the tail, and under Yaegi each method call costs microseconds (BenchmarkYaegiMemoryAllow/rotating-10k).
+func (m *Memory) moveToBackLocked(entry *memEntry) {
+	if entry == m.tail {
 		return
 	}
-	for source := range m.buckets {
-		delete(m.buckets, source)
-		return
+	// Unlink. entry is not the tail, so entry.next is set.
+	if entry.prev != nil {
+		entry.prev.next = entry.next
+	} else {
+		m.head = entry.next
 	}
+	entry.next.prev = entry.prev
+	// Append after the current tail.
+	entry.prev = m.tail
+	entry.next = nil
+	m.tail.next = entry
+	m.tail = entry
+}
+
+// pushBackLocked appends an unlinked entry at the tail of the expiry list. Caller holds m.mu.
+func (m *Memory) pushBackLocked(entry *memEntry) {
+	entry.prev = m.tail
+	entry.next = nil
+	if m.tail != nil {
+		m.tail.next = entry
+	} else {
+		m.head = entry
+	}
+	m.tail = entry
 }
