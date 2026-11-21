@@ -42,7 +42,7 @@ Recorded so these are not re-hunted. Measurements are from the hunt. **Lock** is
 
 | Candidate | Result | Lock |
 |---|---|---|
-| In-use-turn leak under a cancel/deadline storm | No leak. 24 goroutines × 3s against a peer that randomly delays, closes mid-reply, replies `LOADING`, or truncates a bulk; ~12k connections churned. `inUseTurns` ended **4/4** on every run, `OverFrees() == 0`. | `TestChaosPoolInvariants` |
+| In-use-turn leak under a cancel/deadline storm | No leak. 24 goroutines × 3s against a peer that randomly delays, closes mid-reply, replies `LOADING`, or truncates a bulk; ~12k connections churned. Free in-use turns ended **4/4** on every run, `OverFrees() == 0`. | `TestChaosPoolInvariants` |
 | Cross-key wrong values under that same chaos | Zero. Every non-error `Get` returned its own key's value. | `TestChaosPoolInvariants` |
 | Socket leak under chaos | None. Settled server-side open sockets `<= PoolSize` after quiescence on every run. | `TestChaosPoolInvariants` |
 | RESP decoder panic (would be a permanent turn leak via bug 2) | None found. `readReply` fuzzed **7.04M execs / 91s**, 51 corpus entries, no panic and no case returning values on a dirty stream. `parseLen` fuzzed for `length+2` overflow: none (capped by `maxBulkLength` before the allocation). | `FuzzReadReply`, `FuzzParseLen` |

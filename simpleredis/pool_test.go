@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -475,8 +476,8 @@ func TestPoolWaitTimesOutWithoutExtraDial(t *testing.T) {
 	waitStarted := time.Now()
 	_, err := redis.Get(context.Background(), "hit")
 	waited := time.Since(waitStarted)
-	if err == nil || err.Error() != RedisUnreachable {
-		t.Fatalf("waiter Get = %v, want %s", err, RedisUnreachable)
+	if err == nil || err.Error() != RedisUnreachable || !IsPoolWait(err) {
+		t.Fatalf("waiter Get = %v, want %s (ErrPoolWait)", err, RedisUnreachable)
 	}
 	if waited >= 2*redis.PoolTimeout() {
 		t.Fatalf("waiter Get took %v, want one PoolTimeout (not MaxRetries * PoolTimeout)", waited)
@@ -658,6 +659,210 @@ func TestOverFreeOnFullSemaphoreReturns(t *testing.T) {
 	if got := sr.OverFrees(); got != 1 {
 		t.Fatalf("OverFrees = %d, want 1", got)
 	}
+	if free, capacity := inUseTurnsForTest(sr); free != capacity {
+		t.Fatalf("in-use turns free=%d cap=%d after an over-free, want full (the extra return is dropped)", free, capacity)
+	}
+}
+
+// TestNewFreezesTurnCapFull proves New sets the in-use-turn cap from PoolSize with every turn free.
+func TestNewFreezesTurnCapFull(t *testing.T) {
+	sr := newTestRedis(t, Config{Host: "127.0.0.1:1", PoolSize: 3, MaxIdleConns: 3})
+	if free, capacity := inUseTurnsForTest(sr); capacity != 3 || free != 3 {
+		t.Fatalf("in-use turns free=%d cap=%d, want 3/3", free, capacity)
+	}
+	if got := sr.PoolSize(); got != 3 {
+		t.Fatalf("PoolSize = %d, want 3", got)
+	}
+}
+
+// queuedTurnWaiters is len(turnWaiters) under inUseMu.
+func queuedTurnWaiters(sr *SimpleRedis) int {
+	sr.inUseMu.Lock()
+	defer sr.inUseMu.Unlock()
+	return len(sr.turnWaiters)
+}
+
+// waitQueuedTurnWaiters polls until want borrows are queued for a turn.
+func waitQueuedTurnWaiters(t *testing.T, sr *SimpleRedis, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for queuedTurnWaiters(sr) != want {
+		if time.Now().After(deadline) {
+			t.Fatalf("turnWaiters = %d, want %d", queuedTurnWaiters(sr), want)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// waitTurnsFull polls until every in-use turn is free again.
+func waitTurnsFull(t *testing.T, sr *SimpleRedis) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		free, capacity := inUseTurnsForTest(sr)
+		if free == capacity {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("in-use turns free=%d cap=%d, want full", free, capacity)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// TestTurnHandoffIsFIFO proves a give-back hands the turn to the oldest queued borrow, in queue
+// order, and that a borrow arriving after the hand-off finds no free turn to overtake with.
+func TestTurnHandoffIsFIFO(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: 5 * time.Second})
+	if !holdTurnForTest(sr) {
+		t.Fatal("no free turn on a new client")
+	}
+
+	const waiters = 3
+	order := make(chan int, waiters)
+	errs := make(chan error, waiters)
+	for i := 0; i < waiters; i++ {
+		go func(id int) {
+			conn, err, _, _ := sr.borrowSocket(context.Background(), false)
+			if err != nil {
+				errs <- err
+				return
+			}
+			order <- id
+			sr.release(conn, true)
+		}(i)
+		waitQueuedTurnWaiters(t, sr, i+1)
+	}
+
+	// The hand-off happens inside freeInUseTurn, so nothing is free for a later borrow to take.
+	sr.freeInUseTurn()
+	if holdTurnForTest(sr) {
+		t.Fatal("a turn was free after a give-back with waiters queued; a later borrow could overtake them")
+	}
+	for want := 0; want < waiters; want++ {
+		select {
+		case got := <-order:
+			if got != want {
+				t.Fatalf("turn %d went to waiter %d, want %d (FIFO)", want, got, want)
+			}
+		case err := <-errs:
+			t.Fatalf("waiter borrow = %v, want a socket", err)
+		case <-time.After(2 * time.Second):
+			t.Fatalf("waiter %d never got the turn", want)
+		}
+	}
+	waitTurnsFull(t, sr)
+	assertTurnsFullAndNoOverFrees(t, sr)
+}
+
+// TestTurnWaitCancelWakesBeforePoolTimeout proves a cancel wakes a queued borrow long before
+// PoolTimeout with context.Canceled and removes it from the queue.
+func TestTurnWaitCancelWakesBeforePoolTimeout(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: 5 * time.Second})
+	if !holdTurnForTest(sr) {
+		t.Fatal("no free turn on a new client")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	time.AfterFunc(20*time.Millisecond, cancel)
+
+	start := time.Now()
+	conn, err, _, _ := sr.borrowSocket(ctx, false)
+	waited := time.Since(start)
+	if conn != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("borrowSocket = (%v, %v), want (nil, context.Canceled)", conn, err)
+	}
+	if waited > time.Second {
+		t.Fatalf("cancelled borrow waited %v, want well under PoolTimeout %v", waited, sr.PoolTimeout())
+	}
+	if n := queuedTurnWaiters(sr); n != 0 {
+		t.Fatalf("turnWaiters = %d after cancel, want 0", n)
+	}
+	if got := fake.connections(); got != 0 {
+		t.Fatalf("cancelled waiter opened %d connections, want 0", got)
+	}
+	sr.freeInUseTurn()
+	assertTurnsFullAndNoOverFrees(t, sr)
+}
+
+// TestTurnWaitPoolTimeoutIsPoolWait proves a queued borrow with a live ctx gets ErrPoolWait after
+// PoolTimeout, does not dial, and leaves the queue empty.
+func TestTurnWaitPoolTimeoutIsPoolWait(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: 1, MaxIdleConns: 1, PoolTimeout: 30 * time.Millisecond})
+	if !holdTurnForTest(sr) {
+		t.Fatal("no free turn on a new client")
+	}
+	start := time.Now()
+	conn, err, _, _ := sr.borrowSocket(context.Background(), false)
+	waited := time.Since(start)
+	if conn != nil || !IsPoolWait(err) {
+		t.Fatalf("borrowSocket = (%v, %v), want (nil, ErrPoolWait)", conn, err)
+	}
+	if waited < sr.PoolTimeout() {
+		t.Fatalf("borrow gave up after %v, want at least PoolTimeout %v", waited, sr.PoolTimeout())
+	}
+	if n := queuedTurnWaiters(sr); n != 0 {
+		t.Fatalf("turnWaiters = %d after PoolTimeout, want 0", n)
+	}
+	if got := fake.connections(); got != 0 {
+		t.Fatalf("timed-out waiter opened %d connections, want 0", got)
+	}
+	sr.freeInUseTurn()
+	assertTurnsFullAndNoOverFrees(t, sr)
+}
+
+// TestTurnGrantAbandonRaceKeepsSemaphoreBalanced races give-backs against waiters that abandon on
+// PoolTimeout, on a cancel, and on a ctx deadline. Whatever wins each race, no turn may be lost or
+// handed out twice: at rest every turn is free, no borrow is queued, and nothing was over-freed.
+func TestTurnGrantAbandonRaceKeepsSemaphoreBalanced(t *testing.T) {
+	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	sr := newTestRedis(t, Config{Host: addr, PoolSize: 2, MaxIdleConns: 2, PoolTimeout: 3 * time.Millisecond, CommandTimeout: time.Second})
+
+	var granted, abandoned atomic.Int64
+	stop := time.Now().Add(300 * time.Millisecond)
+	var wg sync.WaitGroup
+	for i := 0; i < 32; i++ {
+		wg.Add(1)
+		go func(worker int) {
+			defer wg.Done()
+			for n := 0; time.Now().Before(stop); n++ {
+				var ctx context.Context
+				var cancel context.CancelFunc
+				switch (worker + n) % 3 {
+				case 0:
+					ctx, cancel = context.WithCancel(context.Background())
+				case 1:
+					ctx, cancel = context.WithCancel(context.Background())
+					time.AfterFunc(time.Duration(n%3)*time.Millisecond, cancel)
+				default:
+					ctx, cancel = context.WithTimeout(context.Background(), time.Duration(1+n%3)*time.Millisecond)
+				}
+				conn, err, _, _ := sr.borrowSocket(ctx, false)
+				cancel()
+				if err != nil {
+					if conn != nil {
+						t.Errorf("borrowSocket returned a socket with error %v", err)
+					}
+					abandoned.Add(1)
+					continue
+				}
+				if conn == nil {
+					t.Error("borrowSocket returned (nil, nil)")
+					continue
+				}
+				granted.Add(1)
+				sr.release(conn, true)
+			}
+		}(i)
+	}
+	wg.Wait()
+	if granted.Load() == 0 || abandoned.Load() == 0 {
+		t.Fatalf("granted=%d abandoned=%d, want both paths exercised", granted.Load(), abandoned.Load())
+	}
+	assertTurnsFullAndNoOverFrees(t, sr)
 }
 
 // TestOverFreeAccountingStaysBalanced hammers borrow/release exits and asserts a full semaphore with no over-frees.
@@ -708,14 +913,22 @@ func hammerGets(t *testing.T, sr *SimpleRedis) {
 	wg.Wait()
 }
 
-// assertTurnsFullAndNoOverFrees fails unless the in-use-turn channel is full and OverFrees is 0.
+// assertTurnsFullAndNoOverFrees fails unless the in-use-turn semaphore is full, no borrow is still
+// queued, and OverFrees is 0.
 func assertTurnsFullAndNoOverFrees(t *testing.T, sr *SimpleRedis) {
 	t.Helper()
-	if sr.inUseTurns == nil {
-		t.Fatal("inUseTurns is nil")
+	free, capacity := inUseTurnsForTest(sr)
+	if capacity == 0 {
+		t.Fatal("in-use-turn cap is 0 (client not from New)")
 	}
-	if got, want := len(sr.inUseTurns), cap(sr.inUseTurns); got != want {
-		t.Fatalf("inUseTurns len=%d cap=%d, want full", got, want)
+	if free != capacity {
+		t.Fatalf("in-use turns free=%d cap=%d, want full", free, capacity)
+	}
+	sr.inUseMu.Lock()
+	queued := len(sr.turnWaiters)
+	sr.inUseMu.Unlock()
+	if queued != 0 {
+		t.Fatalf("turnWaiters = %d, want 0 at rest", queued)
 	}
 	if got := sr.OverFrees(); got != 0 {
 		t.Fatalf("OverFrees = %d, want 0", got)

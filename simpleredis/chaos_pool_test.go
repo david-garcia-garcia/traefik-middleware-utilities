@@ -156,7 +156,7 @@ func (f *chaosFake) waitOpenSocketsAtMost(t *testing.T, want int) {
 // TestChaosPoolInvariants locks the healthy chaos-pool probe: no cross-key Get,
 // no leaked turns, no over-frees, settled open sockets at most PoolSize.
 //
-// A sampler that reads len(idleConns) and then len(inUseTurns) is NOT a valid
+// A sampler that reads len(idleConns) and then the free in-use turns is NOT a valid
 // live-socket metric and will report up to 2x PoolSize. Two independent reasons:
 // the two reads are not atomic, AND release publishes the socket into idleConns
 // BEFORE calling freeInUseTurn, so a releasing socket is legitimately counted

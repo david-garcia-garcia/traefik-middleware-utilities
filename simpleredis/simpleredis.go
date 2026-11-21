@@ -42,7 +42,7 @@ var (
 	errNoAuth           = ErrNoAuth
 	errIssue            = ErrIssue
 	errUnsupportedReply = ErrUnsupportedReply
-	// errNotFromNew is a client that did not come from New (nil in-use-turn channel). Error() is redis:unreachable. Distinct from errUnreachable so MaxRetries does not sleep a programming error. Wraps ErrUnreachable so IsUnreachable stays true.
+	// errNotFromNew is a client that did not come from New (zero in-use-turn cap). Error() is redis:unreachable. Distinct from errUnreachable so MaxRetries does not sleep a programming error. Wraps ErrUnreachable so IsUnreachable stays true.
 	errNotFromNew = fmt.Errorf("%w", ErrUnreachable)
 )
 
@@ -78,8 +78,18 @@ type SimpleRedis struct {
 	idleConnsMu sync.Mutex
 	idleConns   []*pooledConn
 	closed      atomic.Bool
-	// inUseTurns is a PoolSize-buffered semaphore of concurrent in-use sockets. Idle sockets do not hold a turn.
-	inUseTurns chan struct{}
+	// inUseMu guards the in-use-turn semaphore (freeTurns and turnWaiters; turnCap is frozen in New).
+	// It is a mutex and not a channel because session source has no select (pool.go borrowSocket says why).
+	// Idle sockets do not hold a turn.
+	inUseMu sync.Mutex
+	// freeTurns is how many in-use turns are free. It is above zero only while turnWaiters is empty:
+	// a give-back with a waiter queued hands the turn to that waiter instead.
+	freeTurns int
+	// turnCap is the in-use-turn cap New froze from PoolSize; it is read without inUseMu because it never
+	// changes after New. Zero means the client did not come from New.
+	turnCap int
+	// turnWaiters is the FIFO of borrows waiting for a turn past PoolSize.
+	turnWaiters []*turnWaiter
 	// overFrees counts in-use-turn returns that were dropped because the semaphore was already full.
 	overFrees atomic.Int64
 
@@ -88,7 +98,7 @@ type SimpleRedis struct {
 	groupWrite   groupWritePath
 }
 
-// New copies cfg onto a client and builds the in-use-turn channel. Does not dial. Call before concurrent use.
+// New copies cfg onto a client and builds the in-use-turn semaphore. Does not dial. Call before concurrent use.
 // An explicit MaxIdleConns above PoolSize returns ErrMaxIdleConnsAbovePoolSize and a nil client; a defaulted one follows PoolSize.
 func New(cfg Config) (*SimpleRedis, error) {
 	cfg, err := cfg.applyDefaults()

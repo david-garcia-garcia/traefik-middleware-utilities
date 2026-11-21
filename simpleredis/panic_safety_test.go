@@ -41,9 +41,9 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 			t.Fatalf("after panic %d: panic did not reach the caller", i)
 		}
 
-		if got := len(sr.inUseTurns); got != cap(sr.inUseTurns) {
+		if free, capacity := inUseTurnsForTest(sr); free != capacity {
 			t.Fatalf("after panic %d: in-use turns = %d/%d, want full (the deferred release must return the turn)",
-				i, got, cap(sr.inUseTurns))
+				i, free, capacity)
 		}
 	}
 
@@ -64,6 +64,7 @@ func TestPanicInDoReturnsTurnAndClosesSocket(t *testing.T) {
 	if string(value) != "t" {
 		t.Fatalf("Get = %q, want %q", value, "t")
 	}
+	free, capacity := inUseTurnsForTest(sr)
 	t.Logf("turns=%d/%d idle=%d accepts=%d OverFrees=%d",
-		len(sr.inUseTurns), cap(sr.inUseTurns), idle, fake.connections(), sr.OverFrees())
+		free, capacity, idle, fake.connections(), sr.OverFrees())
 }

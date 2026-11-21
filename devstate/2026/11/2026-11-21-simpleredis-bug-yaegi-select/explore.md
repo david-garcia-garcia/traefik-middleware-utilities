@@ -136,8 +136,8 @@ Contrato vivo: `std_go_simpleredis_tcp-session` — MODIFIED en los requisitos q
 
 - Q: ¿Qué sustituye al canal `inUseTurns` y a sus dos `select` (fast take, espera saturada, free) sin perder ni duplicar turnos y sin regresión en el camino caliente bajo Yaegi?
   Rank: bounded asked — cambia la unidad existente `inUseTurns` con call sites enumerados (2 archivos de producción, 5 de test + 1 sonda, 12+2 líneas de spec; raíces: todo el worktree salvo devstate) y los migra aquí; requirement.md «Deseado» 1 y 2 y Unknowns «Diseño concreto del sustituto de cada select»
-  Decision: assumed — mutex + contador + `turnCap` + cola FIFO de waiters; fast take y free inline sin método nuevo ni `defer`; espera saturada con `context.WithTimeout` + un `context.AfterFunc` y recepción simple. Si en implement el par `WithTimeout`+`AfterFunc` mide peor que `AfterFunc`×2 sin `sync.Once`, se usa este último.
-  By: explore
+  Decision: resolved — mutex + contador + `turnCap` + cola FIFO de waiters; fast take y free inline sin método nuevo ni `defer`; la espera saturada usa un único cierre de abandono armado con `time.AfterFunc(PoolTimeout)` + `context.AfterFunc(ctx)`, sin `sync.Once`, y recepción simple. Implement midió que `WithTimeout`+`AfterFunc` es peor (compilado 609–684 frente a 331–373 ns por espera; Yaegi 4 523–4 742 frente a 4 131–4 633 ns) y aplicó la alternativa prevista. Pruebas: `TestTurn*` en `pool_test.go`, y `TestReproSelect_*_Yaegi` con `-count=20` 80/80.
+  By: implement
 - Q: ¿Cómo espera `waitUntil` el backoff sin `select` respetando el ctx?
   Rank: bounded asked — cambia el cuerpo de `waitUntil` con 1 llamador enumerado (`commands_exec.go:48`, raíz `./`); requirement.md «Deseado» 1 (backoff de reintentos respeta el ctx)
   Decision: assumed — `context.WithTimeout(ctx, delay)` + `<-child.Done()`; `ctx.Err()` → `ctx.Err()`, si no `contextStop(ctx)`.
@@ -168,8 +168,8 @@ Contrato vivo: `std_go_simpleredis_tcp-session` — MODIFIED en los requisitos q
   By: explore
 - Q: ¿Qué umbral de rendimiento acepta el cambio, si el ruido de `BenchmarkYaegiGet` (±20 %) es mayor que el efecto esperado (+0,3 %)?
   Rank: additive asked — criterio de aceptación; requirement.md «Deseado» 2 («Medir antes/después»)
-  Decision: assumed — compilado: medianas de `BenchmarkGet`/`BenchmarkGetParallel` dentro de ±5 % de la línea base y 26 allocs/op sin cambio en `Get` sin contención; interpretado: mediana de `BenchmarkYaegiGet` dentro del rango de la línea base (92 523–142 421 ns/op). El sobrecoste aislado esperado (+331 ns Yaegi por turno) es el aceptado por el requirement.
-  By: explore
+  Decision: assumed — compilado: medianas de `BenchmarkGet`/`BenchmarkGetParallel` dentro de ±5 % de la línea base y 26 allocs/op sin cambio en `Get` sin contención; interpretado: mediana de `BenchmarkYaegiGet` dentro del rango de la línea base (92 523–142 421 ns/op). El sobrecoste aislado esperado (+331 ns Yaegi por turno) es el aceptado por el requirement. Implement: la carga de esta máquina variaba entre ejecuciones, así que el par compilado se comparó ejecutando antes y después uno tras otro. Resultado: `Get` +0,6 % (26 allocs/op), `GetParallel` +0,4 %. `BenchmarkYaegiGet` da 124 287 ns/op, dentro del rango. Frente a la línea base de explore, la mediana aislada de `GetParallel` (18 768) queda un 13 % por encima. Las cifras están en `tasks.md` § Verification notes.
+  By: implement
 - Q: ¿Se quita el salto con `-race` de `TestYaegiErrorpath_PoolWait` cuando ya no haya `select`?
   Rank: additive incidental — ningún criterio lo nombra
   Decision: assumed — no se toca: la pila de carrera documentada también incluye `itype.refType` dentro de `interp`, y `-race` no se puede medir en esta máquina (sin gcc).

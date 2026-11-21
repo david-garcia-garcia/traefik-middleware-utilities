@@ -39,10 +39,19 @@ func (c *pooledConn) close() {
 	_ = c.netConn.Close()
 }
 
-// liveCap is the frozen live-socket bound. After New it is cap(inUseTurns).
+// turnWaiter is one borrow queued on turnWaiters for an in-use turn past PoolSize.
+type turnWaiter struct {
+	// ready is closed exactly once, under inUseMu, by the give-back that grants the turn or by the
+	// wait's own abandon; whichever runs first also removes the waiter from turnWaiters.
+	ready chan struct{}
+	// granted is written under inUseMu before close(ready), so reading it after <-ready is safe.
+	granted bool
+}
+
+// liveCap is the frozen live-socket bound. After New it is turnCap.
 func (sr *SimpleRedis) liveCap() int {
-	if sr.inUseTurns != nil {
-		return cap(sr.inUseTurns)
+	if sr.turnCap != 0 {
+		return sr.turnCap
 	}
 	if sr.poolSize > 0 {
 		return sr.poolSize
@@ -58,27 +67,41 @@ func (sr *SimpleRedis) inUseTurnWait() time.Duration {
 	return defaultPoolTimeout
 }
 
-// ensureInUseTurns creates the in-use-turn channel once from liveCap(). New calls this.
+// ensureInUseTurns freezes the in-use-turn cap once from liveCap(), with every turn free. New calls this.
 func (sr *SimpleRedis) ensureInUseTurns() {
-	if sr.inUseTurns != nil {
+	if sr.turnCap != 0 {
 		return
 	}
 	liveCap := sr.liveCap()
-	sr.inUseTurns = make(chan struct{}, liveCap)
-	for i := 0; i < liveCap; i++ {
-		sr.inUseTurns <- struct{}{}
-	}
+	sr.turnCap = liveCap
+	sr.freeTurns = liveCap
 }
 
-// freeInUseTurn returns one in-use-socket token to the pool. No-op before the pool is created.
+// freeInUseTurn returns one in-use turn to the pool. No-op before the pool is created.
+// With a borrow queued, the turn goes to the oldest waiter in place, so a later borrow never overtakes it.
 // An extra return when the semaphore is already full is dropped and counted on OverFrees so the caller does not hang.
+// Lock and Unlock are explicit, without defer or a helper: under Yaegi each interpreted call or defer
+// costs about a microsecond on every command, and nothing between them can panic.
 func (sr *SimpleRedis) freeInUseTurn() {
-	if sr.inUseTurns == nil {
+	if sr.turnCap == 0 {
 		return
 	}
-	select {
-	case sr.inUseTurns <- struct{}{}:
-	default:
+	overFree := false
+	sr.inUseMu.Lock()
+	if n := len(sr.turnWaiters); n > 0 {
+		oldest := sr.turnWaiters[0]
+		copy(sr.turnWaiters, sr.turnWaiters[1:])
+		sr.turnWaiters[n-1] = nil
+		sr.turnWaiters = sr.turnWaiters[:n-1]
+		oldest.granted = true
+		close(oldest.ready)
+	} else if sr.freeTurns < sr.turnCap {
+		sr.freeTurns++
+	} else {
+		overFree = true
+	}
+	sr.inUseMu.Unlock()
+	if overFree {
 		// Over-free: some path returned a turn it did not take. Drop so the request does not hang.
 		// No error exists on this path and none is invented for the log, so this stays a named event.
 		sr.overFrees.Add(1)
@@ -110,42 +133,71 @@ func (sr *SimpleRedis) freeInUseTurn() {
 //
 //nolint:revive,stylecheck // error stays before handshakeFailed; reordering would collide with in-flight SimpleRedis PRs.
 func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *pooledConn, err error, handshakeFailed bool, fromIdle bool) {
-	// closed is atomic; inUseTurns is written once in New before concurrent use.
+	// closed is atomic; turnCap is written once in New before concurrent use.
 	if sr.closed.Load() {
 		sr.logger.Debug("borrowSocket: "+RedisUnreachable, "reason", "closed")
 		return nil, errUnreachable, false, false
 	}
-	if sr.inUseTurns == nil {
+	if sr.turnCap == 0 {
 		return nil, errNotFromNew, false, false
 	}
 	if err := contextStop(ctx); err != nil {
 		return nil, err, false, false
 	}
 
-	// Uncontended borrow must not allocate a timer; the wait exists only for a waiter past poolSize.
-	select {
-	case <-sr.inUseTurns:
-	default:
-		// Waiter past poolSize: PoolTimeout timer, or ctx.Done when the command deadline is sooner.
-		timer := time.NewTimer(sr.inUseTurnWait())
-		select {
-		case <-sr.inUseTurns:
-			if !timer.Stop() {
-				<-timer.C
+	// No select here, or anywhere in session source (TestSessionSourceHasNoSelect): Yaegi v0.16.1 shares one
+	// case list per select statement across goroutines, so concurrent borrows woke on each other's channels,
+	// returned (nil, nil) and moved turns between clients (knowledge/research/ext_traefik_plugins_yaegi-select/).
+	// One Lock either takes a free turn or queues this borrow, so a give-back never lets a later borrow
+	// overtake a waiter. The uncontended take allocates nothing; it is inline for the reason freeInUseTurn gives.
+	var waiter *turnWaiter
+	sr.inUseMu.Lock()
+	if sr.freeTurns > 0 {
+		sr.freeTurns--
+	} else {
+		waiter = &turnWaiter{ready: make(chan struct{})}
+		sr.turnWaiters = append(sr.turnWaiters, waiter)
+	}
+	sr.inUseMu.Unlock()
+	if waiter != nil {
+		// Waiter past poolSize: PoolTimeout, or ctx when the command deadline or a cancel comes sooner.
+		// The abandon removes the waiter under the same lock a give-back grants under; whichever runs first
+		// closes ready and the others find the waiter gone, so a turn is never lost or handed out twice,
+		// and the timer and the ctx share it without a sync.Once. A time.AfterFunc plus a context.AfterFunc
+		// measured cheaper than one context.AfterFunc on a context.WithTimeout child (compiled about
+		// 350 vs 650 ns per wait, Yaegi about 4.1 vs 4.5 µs).
+		abandon := func() {
+			sr.inUseMu.Lock()
+			for i, queued := range sr.turnWaiters {
+				if queued == waiter {
+					last := len(sr.turnWaiters) - 1
+					copy(sr.turnWaiters[i:], sr.turnWaiters[i+1:])
+					sr.turnWaiters[last] = nil
+					sr.turnWaiters = sr.turnWaiters[:last]
+					close(waiter.ready)
+					break
+				}
 			}
-		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
-			}
-			// A fired context is not logged here: exec is the single owner of caller-cancel versus library-budget.
-			return nil, ctx.Err(), false, false
-		case <-timer.C:
-			if err := contextStop(ctx); err != nil {
-				return nil, err, false, false
-			}
-			sr.logger.Warn("borrowSocket: "+RedisUnreachable, "reason", "pool_wait")
-			return nil, errPoolWait, false, false
+			sr.inUseMu.Unlock()
 		}
+		poolTimer := time.AfterFunc(sr.inUseTurnWait(), abandon)
+		stopCtxAbandon := context.AfterFunc(ctx, abandon)
+		<-waiter.ready
+		poolTimer.Stop()
+		stopCtxAbandon()
+	}
+	// A granted waiter continues even if ctx fired meanwhile: the turn is held like any other borrow's,
+	// and the command path's own ctx checks end the command and release it.
+	if waiter != nil && !waiter.granted {
+		// A fired context is not logged here: exec is the single owner of caller-cancel versus library-budget.
+		if err := ctx.Err(); err != nil {
+			return nil, err, false, false
+		}
+		if err := contextStop(ctx); err != nil {
+			return nil, err, false, false
+		}
+		sr.logger.Warn("borrowSocket: "+RedisUnreachable, "reason", "pool_wait")
+		return nil, errPoolWait, false, false
 	}
 
 	// The turn is held from here. Return it on every path that does not hand a socket to the

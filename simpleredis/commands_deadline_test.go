@@ -176,8 +176,8 @@ func TestGetCancelWhileWaitingForTurn(t *testing.T) {
 	if fake.connections() != 1 {
 		t.Fatalf("connections = %d, want 1 (waiter must not dial)", fake.connections())
 	}
-	if n := len(client.inUseTurns); n != 0 {
-		t.Fatalf("inUseTurns = %d, want 0 (holder still holds the only turn)", n)
+	if free, _ := inUseTurnsForTest(client); free != 0 {
+		t.Fatalf("free in-use turns = %d, want 0 (holder still holds the only turn)", free)
 	}
 }
 

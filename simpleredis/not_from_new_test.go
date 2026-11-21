@@ -9,8 +9,8 @@ import (
 // TestZeroValueGetDoesNotRetry is a Get on a client that did not come from New: redis:unreachable without the retry ladder.
 func TestZeroValueGetDoesNotRetry(t *testing.T) {
 	sr := &SimpleRedis{}
-	if cap(sr.inUseTurns) != 0 {
-		t.Fatalf("cap(inUseTurns) = %d, want 0 so New remains the only semaphore constructor", cap(sr.inUseTurns))
+	if _, capacity := inUseTurnsForTest(sr); capacity != 0 {
+		t.Fatalf("in-use-turn cap = %d, want 0 so New remains the only semaphore constructor", capacity)
 	}
 	start := time.Now()
 	_, err := sr.Get(context.Background(), "k")
