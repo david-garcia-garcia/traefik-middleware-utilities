@@ -17,7 +17,7 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 20996cf
+Reviewed head: 3292d98
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -32,14 +32,19 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-11-21-simpleredis-tls-acl pushed | `git` |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | simpleredis-tls-acl | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/103 | pr-host |
 | CI | not seen | caller omitted CI snapshot |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
-None.
+Worktree:
+- [std_go_simpleredis_live-e2e](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-tls-acl/openspec/changes/simpleredis-tls-acl/proposal.md) — modified
+- [std_go_simpleredis_slog-events](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-tls-acl/openspec/changes/simpleredis-tls-acl/proposal.md) — modified
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-tls-acl/openspec/changes/simpleredis-tls-acl/proposal.md) — modified
+- [std_go_simpleredis_tls-handshake](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-tls-acl/openspec/changes/simpleredis-tls-acl/proposal.md) — added
+
 
 ## Deviations from the ask
 None.
@@ -67,9 +72,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 1 added / 3 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 20996cf432d68a8382401c18798ca6c3b782002c | Card must match the branch you measured |
+| Reviewed head | 3292d98a0511eaec4e72cf2c87f85cb33f1c1714 | Card must match the branch you measured |
 
 ### Stored data model
 None.
