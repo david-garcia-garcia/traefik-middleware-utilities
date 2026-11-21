@@ -29,7 +29,7 @@
 
 ## 5. Integration
 
-- [ ] 5.1 `go test -short -count=1 ./...`, `go vet ./...`, and `golangci-lint run` green; `grep -rnE 'allowed, (wait|estimated)|_, _, err = counter' README.md knowledge/devdocs/` returns nothing; CI `test`, `e2e-redis`, and `e2e-dragonfly` green
+- [x] 5.1 `go test -short -count=1 ./...`, `go vet ./...`, and `golangci-lint run` green; `grep -rnE 'allowed, (wait|estimated)|_, _, err = counter' README.md knowledge/devdocs/` returns nothing; CI `test`, `e2e-redis`, and `e2e-dragonfly` green
 
 ## Workflow follow-up
 
