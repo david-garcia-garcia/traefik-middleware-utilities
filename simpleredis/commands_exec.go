@@ -144,9 +144,6 @@ func waitUntil(ctx context.Context, delay time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, delay)
 	<-waitCtx.Done()
 	cancel()
-	if err := ctx.Err(); err != nil {
-		return err
-	}
 	return contextStop(ctx)
 }
 

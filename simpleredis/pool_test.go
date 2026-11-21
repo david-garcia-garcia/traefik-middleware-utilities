@@ -924,10 +924,7 @@ func assertTurnsFullAndNoOverFrees(t *testing.T, sr *SimpleRedis) {
 	if free != capacity {
 		t.Fatalf("in-use turns free=%d cap=%d, want full", free, capacity)
 	}
-	sr.inUseMu.Lock()
-	queued := len(sr.turnWaiters)
-	sr.inUseMu.Unlock()
-	if queued != 0 {
+	if queued := queuedTurnWaiters(sr); queued != 0 {
 		t.Fatalf("turnWaiters = %d, want 0 at rest", queued)
 	}
 	if got := sr.OverFrees(); got != 0 {

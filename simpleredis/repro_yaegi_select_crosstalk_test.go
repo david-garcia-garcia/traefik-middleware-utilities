@@ -47,6 +47,7 @@ func selectProbeInterp(t *testing.T) *interp.Interpreter {
 	return interpreter
 }
 
+// evalSelectProbe evaluates one SelectProbe* call in the interpreter and returns its counter map.
 func evalSelectProbe(t *testing.T, interpreter *interp.Interpreter, expr string) map[string]int64 {
 	t.Helper()
 	value, err := interpreter.Eval(expr)
@@ -60,31 +61,38 @@ func evalSelectProbe(t *testing.T, interpreter *interp.Interpreter, expr string)
 	return report
 }
 
-func waitUntilAnomalies(r map[string]int64) string {
-	if r["longEarly"] != 0 || r["shortErr"] != 0 || r["shortSlow"] != 0 {
-		return fmt.Sprintf("waitUntil crossed: %v", r)
+// waitUntilAnomalies names the SelectProbeWaitUntil counters that must be zero; empty means clean.
+func waitUntilAnomalies(report map[string]int64) string {
+	if report["longEarly"] != 0 || report["shortErr"] != 0 || report["shortSlow"] != 0 ||
+		report["cancelNotCanceled"] != 0 || report["deadlineNotExceeded"] != 0 {
+		return fmt.Sprintf("waitUntil crossed: %v", report)
 	}
 	return ""
 }
 
-func borrowWaitAnomalies(r map[string]int64) string {
-	if r["newErr"] != 0 || r["nilNil"] != 0 || r["patientEarly"] != 0 || r["patientNotPoolWait"] != 0 || r["cancelLate"] != 0 || r["hung"] != 0 {
-		return fmt.Sprintf("borrowSocket wait crossed: %v", r)
+// borrowWaitAnomalies names the SelectProbeBorrowWait counters that must be zero; empty means clean.
+func borrowWaitAnomalies(report map[string]int64) string {
+	if report["newErr"] != 0 || report["nilNil"] != 0 || report["patientEarly"] != 0 || report["patientNotPoolWait"] != 0 ||
+		report["cancelLate"] != 0 || report["impatientNotCtxErr"] != 0 || report["hung"] != 0 {
+		return fmt.Sprintf("borrowSocket wait crossed: %v", report)
 	}
 	return ""
 }
 
-func twoPoolsAnomalies(r map[string]int64) string {
-	if r["newErr"] != 0 || r["freeA"] != r["capA"] || r["freeB"] != r["capB"] || r["overFreesA"] != 0 || r["overFreesB"] != 0 {
-		return fmt.Sprintf("in-use turns crossed between clients: %v", r)
+// twoPoolsAnomalies reports a SelectProbeTwoPools run whose semaphores are not both full with no over-free; empty means clean.
+func twoPoolsAnomalies(report map[string]int64) string {
+	if report["newErr"] != 0 || report["freeA"] != report["capA"] || report["freeB"] != report["capB"] ||
+		report["overFreesA"] != 0 || report["overFreesB"] != 0 {
+		return fmt.Sprintf("in-use turns crossed between clients: %v", report)
 	}
 	return ""
 }
 
-func saturatedGetAnomalies(r map[string]int64) string {
-	if r["newErr"] != 0 || r["calls"] == 0 || r["panics"] != 0 || r["wrongValue"] != 0 || r["unexpectedErr"] != 0 ||
-		r["free"] != r["cap"] || r["overFrees"] != 0 || r["hung"] != 0 {
-		return fmt.Sprintf("saturated Get crossed: %v", r)
+// saturatedGetAnomalies reports a SelectProbeSaturatedGet run that panicked, misclassified, hung or left the semaphore unbalanced; empty means clean.
+func saturatedGetAnomalies(report map[string]int64) string {
+	if report["newErr"] != 0 || report["calls"] == 0 || report["panics"] != 0 || report["wrongValue"] != 0 || report["unexpectedErr"] != 0 ||
+		report["free"] != report["cap"] || report["overFrees"] != 0 || report["hung"] != 0 {
+		return fmt.Sprintf("saturated Get crossed: %v", report)
 	}
 	return ""
 }
@@ -112,9 +120,9 @@ func TestReproSelect_WaitUntil_Yaegi(t *testing.T) {
 	skipYaegiUnderRace(t)
 	interpreter := selectProbeInterp(t)
 	for round := 0; round < selectProbeRounds; round++ {
-		r := evalSelectProbe(t, interpreter, `simpleredis.SelectProbeWaitUntil()`)
-		t.Logf("round %d: %v", round, r)
-		if msg := waitUntilAnomalies(r); msg != "" {
+		report := evalSelectProbe(t, interpreter, `simpleredis.SelectProbeWaitUntil()`)
+		t.Logf("round %d: %v", round, report)
+		if msg := waitUntilAnomalies(report); msg != "" {
 			t.Fatalf("round %d: %s", round, msg)
 		}
 	}
@@ -136,9 +144,9 @@ func TestReproSelect_BorrowWait_Yaegi(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	interpreter := selectProbeInterp(t)
 	for round := 0; round < selectProbeRounds; round++ {
-		r := evalSelectProbe(t, interpreter, fmt.Sprintf(`simpleredis.SelectProbeBorrowWait(%q)`, addr))
-		t.Logf("round %d: %v", round, r)
-		if msg := borrowWaitAnomalies(r); msg != "" {
+		report := evalSelectProbe(t, interpreter, fmt.Sprintf(`simpleredis.SelectProbeBorrowWait(%q)`, addr))
+		t.Logf("round %d: %v", round, report)
+		if msg := borrowWaitAnomalies(report); msg != "" {
 			t.Fatalf("round %d: %s", round, msg)
 		}
 	}
@@ -160,9 +168,9 @@ func TestReproSelect_TwoPools_Yaegi(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	interpreter := selectProbeInterp(t)
 	for round := 0; round < selectProbeRounds; round++ {
-		r := evalSelectProbe(t, interpreter, fmt.Sprintf(`simpleredis.SelectProbeTwoPools(%q)`, addr))
-		t.Logf("round %d: %v", round, r)
-		if msg := twoPoolsAnomalies(r); msg != "" {
+		report := evalSelectProbe(t, interpreter, fmt.Sprintf(`simpleredis.SelectProbeTwoPools(%q)`, addr))
+		t.Logf("round %d: %v", round, report)
+		if msg := twoPoolsAnomalies(report); msg != "" {
 			t.Fatalf("round %d: %s", round, msg)
 		}
 	}
@@ -185,9 +193,9 @@ func TestReproSelect_SaturatedGet_Yaegi(t *testing.T) {
 	_, addr := startFakeRedis(t, map[string]string{"hit": "t"})
 	interpreter := selectProbeInterp(t)
 	for round := 0; round < selectProbeRounds; round++ {
-		r := evalSelectProbe(t, interpreter, fmt.Sprintf(`simpleredis.SelectProbeSaturatedGet(%q)`, addr))
-		t.Logf("round %d: %v", round, r)
-		if msg := saturatedGetAnomalies(r); msg != "" {
+		report := evalSelectProbe(t, interpreter, fmt.Sprintf(`simpleredis.SelectProbeSaturatedGet(%q)`, addr))
+		t.Logf("round %d: %v", round, report)
+		if msg := saturatedGetAnomalies(report); msg != "" {
 			t.Fatalf("round %d: %s", round, msg)
 		}
 	}

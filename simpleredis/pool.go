@@ -88,11 +88,11 @@ func (sr *SimpleRedis) freeInUseTurn() {
 	}
 	overFree := false
 	sr.inUseMu.Lock()
-	if n := len(sr.turnWaiters); n > 0 {
+	if last := len(sr.turnWaiters) - 1; last >= 0 {
 		oldest := sr.turnWaiters[0]
 		copy(sr.turnWaiters, sr.turnWaiters[1:])
-		sr.turnWaiters[n-1] = nil
-		sr.turnWaiters = sr.turnWaiters[:n-1]
+		sr.turnWaiters[last] = nil
+		sr.turnWaiters = sr.turnWaiters[:last]
 		oldest.granted = true
 		close(oldest.ready)
 	} else if sr.freeTurns < sr.turnCap {
@@ -185,19 +185,16 @@ func (sr *SimpleRedis) borrowSocket(ctx context.Context, skipIdle bool) (conn *p
 		<-waiter.ready
 		poolTimer.Stop()
 		stopCtxAbandon()
-	}
-	// A granted waiter continues even if ctx fired meanwhile: the turn is held like any other borrow's,
-	// and the command path's own ctx checks end the command and release it.
-	if waiter != nil && !waiter.granted {
-		// A fired context is not logged here: exec is the single owner of caller-cancel versus library-budget.
-		if err := ctx.Err(); err != nil {
-			return nil, err, false, false
+		// A granted waiter continues even if ctx fired meanwhile: the turn is held like any other borrow's,
+		// and the command path's own ctx checks end the command and release it.
+		if !waiter.granted {
+			// A fired context is not logged here: exec is the single owner of caller-cancel versus library-budget.
+			if err := contextStop(ctx); err != nil {
+				return nil, err, false, false
+			}
+			sr.logger.Warn("borrowSocket: "+RedisUnreachable, "reason", "pool_wait")
+			return nil, errPoolWait, false, false
 		}
-		if err := contextStop(ctx); err != nil {
-			return nil, err, false, false
-		}
-		sr.logger.Warn("borrowSocket: "+RedisUnreachable, "reason", "pool_wait")
-		return nil, errPoolWait, false, false
 	}
 
 	// The turn is held from here. Return it on every path that does not hand a socket to the

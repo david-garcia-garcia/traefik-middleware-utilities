@@ -62,12 +62,44 @@ func waitAllOrWatchdog(wg *sync.WaitGroup) {
 // SelectProbeWaitUntil runs waitUntil (commands_exec.go) from many goroutines at once.
 // Long waiters ask for 600ms on a ctx that stays live; each must sleep at least that long.
 // Short waiters ask for 1ms on a 300ms ctx in a loop; each must return nil, quickly.
+// Cancelled and deadline waiters ask for 2s on a ctx that fires 20ms / 30ms in; each must return
+// that ctx's error well before the delay.
 // longEarly: a long waiter woke on another goroutine's timer or canceled ctx.
 // shortErr / shortSlow: a short waiter lost its own tick and sat until its ctx deadline.
+// cancelNotCanceled / deadlineNotExceeded: a waiter whose ctx fired first did not return
+// context.Canceled / context.DeadlineExceeded within 400ms.
 func SelectProbeWaitUntil() map[string]int64 {
 	var longCalls, longEarly, shortCalls, shortErr, shortSlow atomic.Int64
+	var cancelCalls, cancelNotCanceled, deadlineCalls, deadlineNotExceeded atomic.Int64
 	stop := time.Now().Add(400 * time.Millisecond)
 	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			canceler := time.AfterFunc(20*time.Millisecond, cancel)
+			defer canceler.Stop()
+			start := time.Now()
+			err := waitUntil(ctx, 2*time.Second)
+			cancelCalls.Add(1)
+			if !errors.Is(err, context.Canceled) || time.Since(start) > 400*time.Millisecond {
+				cancelNotCanceled.Add(1)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+			defer cancel()
+			start := time.Now()
+			err := waitUntil(ctx, 2*time.Second)
+			deadlineCalls.Add(1)
+			if !errors.Is(err, context.DeadlineExceeded) || time.Since(start) > 400*time.Millisecond {
+				deadlineNotExceeded.Add(1)
+			}
+		}()
+	}
 	for i := 0; i < 4; i++ {
 		wg.Add(1)
 		go func() {
@@ -103,11 +135,15 @@ func SelectProbeWaitUntil() map[string]int64 {
 	}
 	wg.Wait()
 	return map[string]int64{
-		"longCalls":  longCalls.Load(),
-		"longEarly":  longEarly.Load(),
-		"shortCalls": shortCalls.Load(),
-		"shortErr":   shortErr.Load(),
-		"shortSlow":  shortSlow.Load(),
+		"longCalls":           longCalls.Load(),
+		"longEarly":           longEarly.Load(),
+		"shortCalls":          shortCalls.Load(),
+		"shortErr":            shortErr.Load(),
+		"shortSlow":           shortSlow.Load(),
+		"cancelCalls":         cancelCalls.Load(),
+		"cancelNotCanceled":   cancelNotCanceled.Load(),
+		"deadlineCalls":       deadlineCalls.Load(),
+		"deadlineNotExceeded": deadlineNotExceeded.Load(),
 	}
 }
 
@@ -131,7 +167,7 @@ func SelectProbeBorrowWait(host string) map[string]int64 {
 	}
 
 	var started, finished, nilNil, patientCalls, patientEarly, patientNotPoolWait, impatientCalls atomic.Int64
-	var cancelCalls, cancelLate atomic.Int64
+	var cancelCalls, cancelLate, impatientNotCtxErr atomic.Int64
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {
 		wg.Add(1)
@@ -197,6 +233,9 @@ func SelectProbeBorrowWait(host string) map[string]int64 {
 				if conn == nil && err == nil {
 					nilNil.Add(1)
 				}
+				if conn != nil || !errors.Is(err, context.DeadlineExceeded) {
+					impatientNotCtxErr.Add(1)
+				}
 				if conn != nil {
 					sr.release(conn, false)
 				}
@@ -216,6 +255,7 @@ func SelectProbeBorrowWait(host string) map[string]int64 {
 		"patientEarly":       patientEarly.Load(),
 		"patientNotPoolWait": patientNotPoolWait.Load(),
 		"impatientCalls":     impatientCalls.Load(),
+		"impatientNotCtxErr": impatientNotCtxErr.Load(),
 		"cancelCalls":        cancelCalls.Load(),
 		"cancelLate":         cancelLate.Load(),
 		"hung":               hung,
