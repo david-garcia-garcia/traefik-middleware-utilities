@@ -25,17 +25,17 @@ Para la regresión hay tres piezas. La primera es una guarda AST determinista, `
 **End users.** None.
 
 ## Merge readiness
-In progress. 1 items remain.
+Ready for review. 1 items remain.
 
 Priority: P1 — la Motivation describe código de producción bajo Traefik (Yaegi v0.16.1) que hoy puede entrar en pánico y perder turnos del pool de forma permanente.
-Reviewed head: d57c4499
+Reviewed head: 91082caa
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44899141330 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -45,7 +45,7 @@ Owner decision: None.
 | Branch | 2026-11-21-simpleredis-bug-yaegi-select pushed | `git` |
 | OpenSpec | simpleredis-drop-select-under-yaegi | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/104 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
+| CI | build 44899141330 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44899141330 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44899141330 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -67,7 +67,7 @@ None.
 
 
 ## How this fits together
-Ticket 2026-11-21-simpleredis-bug-yaegi-select on branch 2026-11-21-simpleredis-bug-yaegi-select targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/104; CI not seen.
+Ticket 2026-11-21-simpleredis-bug-yaegi-select on branch 2026-11-21-simpleredis-bug-yaegi-select targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/104; CI build 44899141330 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44899141330.
 
 ## Explore Decisions
 None.
@@ -93,7 +93,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | d57c4499559d19f3924dc99f2b7ef8c5f64d271e | Card must match the branch you measured |
+| Reviewed head | 91082caa6b22823b25864467648d445f2d2f2344 | Card must match the branch you measured |
 
 ### Stored data model
 None.
