@@ -1,51 +1,51 @@
-# Yaegi rows BEFORE: production code at d940bf43 (temporary worktree) + bench_yaegi_test.go from 2c504a9b (storeBenchEntryLocked adapted to the map-only store)
-# machine: Intel Core Ultra 7 265K (20 threads), Windows 11, go1.25.6 windows/amd64, Yaegi v0.16.1; started 2026-11-21T10:14:39Z
+# Yaegi BEFORE (back-to-back pair, run first): production code at d940bf43 in a temporary worktree + bench_yaegi_test.go of both packages from 3623aafd (tokenbucket storeBenchEntryLocked adapted to the map-only store; no other change)
+# machine: Intel Core Ultra 7 265K (20 threads), Windows 11, go1.25.6 windows/amd64, Yaegi v0.16.1; started 2026-11-21T10:21:51Z
 # command: go test -run '^$' -bench Yaegi -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
 goos: windows
 goarch: amd64
 pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket
 cpu: Intel(R) Core(TM) Ultra 7 265K
-BenchmarkYaegiMemoryAllow/hot-key-20         	  183906	      7182 ns/op
-BenchmarkYaegiMemoryAllow/hot-key-20         	  165380	      6838 ns/op
-BenchmarkYaegiMemoryAllow/hot-key-20         	  176569	      8170 ns/op
-BenchmarkYaegiMemoryAllow/hot-key-20         	  142172	      8137 ns/op
-BenchmarkYaegiMemoryAllow/hot-key-20         	  138985	     10560 ns/op
-BenchmarkYaegiMemoryAllow/rotating-10k-20    	  136558	      8500 ns/op
-BenchmarkYaegiMemoryAllow/rotating-10k-20    	  135250	      8151 ns/op
-BenchmarkYaegiMemoryAllow/rotating-10k-20    	  137510	      8442 ns/op
-BenchmarkYaegiMemoryAllow/rotating-10k-20    	  136568	      8236 ns/op
-BenchmarkYaegiMemoryAllow/rotating-10k-20    	  159098	      8187 ns/op
-BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      28	  39986993 ns/op
-BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      27	  39295793 ns/op
-BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      27	  42608167 ns/op
-BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      26	  42551977 ns/op
-BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      25	  40918392 ns/op
-BenchmarkYaegiRedisAllow/hot-key-20                     	    6330	    181290 ns/op	         1.000 redis-cmds/op
-BenchmarkYaegiRedisAllow/hot-key-20                     	    6229	    184281 ns/op	         1.000 redis-cmds/op
-BenchmarkYaegiRedisAllow/hot-key-20                     	    6105	    186076 ns/op	         1.000 redis-cmds/op
-BenchmarkYaegiRedisAllow/hot-key-20                     	    6654	    193658 ns/op	         1.000 redis-cmds/op
-BenchmarkYaegiRedisAllow/hot-key-20                     	    5540	    185460 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  178365	      6894 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  176400	      8065 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  181922	      6796 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  178780	      6681 ns/op
+BenchmarkYaegiMemoryAllow/hot-key-20         	  182253	      6668 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  175700	      6694 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  177712	      6733 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  178687	      6650 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  182902	      7568 ns/op
+BenchmarkYaegiMemoryAllow/rotating-10k-20    	  175303	      6754 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      30	  38204560 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      30	  37417500 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      30	  38209870 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      31	  37080839 ns/op
+BenchmarkYaegiMemoryAllow/new-key-full-table-20         	      32	  37716769 ns/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    7154	    168494 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    7194	    140632 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    7796	    138897 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    8794	    140572 ns/op	         1.000 redis-cmds/op
+BenchmarkYaegiRedisAllow/hot-key-20                     	    7744	    142918 ns/op	         1.000 redis-cmds/op
 PASS
-ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket	31.603s
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket	29.396s
 goos: windows
 goarch: amd64
 pkg: github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter
 cpu: Intel(R) Core(TM) Ultra 7 265K
-BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5558	    218060 ns/op	         2.000 redis-cmds/op
-BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    4746	    295054 ns/op	         2.000 redis-cmds/op
-BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5391	    308079 ns/op	         2.000 redis-cmds/op
-BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    3644	    301531 ns/op	         2.000 redis-cmds/op
-BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    4360	    271956 ns/op	         2.000 redis-cmds/op
-BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   65997	     17743 ns/op	         0.002227 redis-cmds/op
-BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   64942	     17459 ns/op	         0.002248 redis-cmds/op
-BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   69626	     18167 ns/op	         0.002341 redis-cmds/op
-BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   65084	     18103 ns/op	         0.002305 redis-cmds/op
-BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   63376	     18619 ns/op	         0.002461 redis-cmds/op
-BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 155029362 ns/op	      1000 redis-cmds/op
-BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 135285900 ns/op	      1000 redis-cmds/op
-BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 126134150 ns/op	      1000 redis-cmds/op
-BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 144453975 ns/op	      1000 redis-cmds/op
-BenchmarkYaegiFlush/dirty-keys-1000-20            	       8	 134881775 ns/op	      1000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5341	    215411 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5029	    210695 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    4923	    261997 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5394	    215525 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-0/hot-key-20         	    5142	    210635 ns/op	         2.000 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   80346	     14234 ns/op	         0.001817 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   83318	     14281 ns/op	         0.001860 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   84829	     14275 ns/op	         0.001804 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   84015	     14154 ns/op	         0.001821 redis-cmds/op
+BenchmarkYaegiTake/sync-rate-20ms/hot-key-20      	   84109	     16214 ns/op	         0.002093 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      10	 105819980 ns/op	      1000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      10	 101416200 ns/op	      1000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      12	 104546458 ns/op	      1000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      10	 116645350 ns/op	      1000 redis-cmds/op
+BenchmarkYaegiFlush/dirty-keys-1000-20            	      10	 121073370 ns/op	      1000 redis-cmds/op
 PASS
-ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter	28.368s
+ok  	github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter	23.545s
 exit=0
