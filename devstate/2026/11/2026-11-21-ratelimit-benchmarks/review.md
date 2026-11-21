@@ -69,3 +69,8 @@ head: 6319a5923b4645e3243971975446974cc1424452
 phase: archive
 verdict: in progress
 head: 6a964674ced1be442ba66e270888f69ab3086ba9
+
+## pullrequest (2026-11-21)
+phase: pullrequest
+verdict: ready for review
+head: e7b2b534475b08885cdfb2450110a2e3fdda2d08

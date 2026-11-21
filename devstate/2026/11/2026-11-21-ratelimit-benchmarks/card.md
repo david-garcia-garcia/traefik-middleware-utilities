@@ -30,17 +30,17 @@ Documentación: nueva sección `## Rate limiters compared` en el README (tabla p
 **End users.** None.
 
 ## Merge readiness
-In progress. 1 items remain.
+Ready for review. 1 items remain.
 
 Priority: P2 — dolor real de operador y usuario final (paradas bajo el mutex y sincronización que se estira), limitado a conjuntos grandes de claves en `NewMemory` y en modo buffered.
-Reviewed head: 6a964674
+Reviewed head: e7b2b534
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44895974546 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -50,7 +50,7 @@ Owner decision: None.
 | Branch | 2026-11-21-ratelimit-benchmarks pushed | `git` |
 | OpenSpec | ratelimit-benchmarks-key-scaling | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/105 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
+| CI | build 44895974546 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44895974546 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44895974546 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -72,7 +72,7 @@ None.
 
 
 ## How this fits together
-Ticket 2026-11-21-ratelimit-benchmarks on branch 2026-11-21-ratelimit-benchmarks targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/105; CI not seen.
+Ticket 2026-11-21-ratelimit-benchmarks on branch 2026-11-21-ratelimit-benchmarks targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/105; CI build 44895974546 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44895974546.
 
 ## Explore Decisions
 None.
@@ -98,7 +98,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 6a964674ced1be442ba66e270888f69ab3086ba9 | Card must match the branch you measured |
+| Reviewed head | e7b2b534475b08885cdfb2450110a2e3fdda2d08 | Card must match the branch you measured |
 
 ### Stored data model
 None.
