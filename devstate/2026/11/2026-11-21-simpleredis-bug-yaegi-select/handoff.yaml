@@ -1,0 +1,14 @@
+issueKey: 2026-11-21-simpleredis-bug-yaegi-select
+jobName: 2026-11-21-simpleredis-bug-yaegi-select
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+localTests: none
+requirement: requirement.md
+comments: none
+explore: none
+change: none
+pr: none
