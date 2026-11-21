@@ -77,9 +77,8 @@ func (sr *SimpleRedis) msetexEval(ctx context.Context, names []string, values []
 // cachedGroupWrite returns the capability cache. Callers must not hold groupWriteMu.
 func (sr *SimpleRedis) cachedGroupWrite() groupWritePath {
 	sr.groupWriteMu.Lock()
-	path := sr.groupWrite
-	sr.groupWriteMu.Unlock()
-	return path
+	defer sr.groupWriteMu.Unlock()
+	return sr.groupWrite
 }
 
 // storeGroupWrite records native or lua for this client. Callers must not hold groupWriteMu.
@@ -87,6 +86,8 @@ func (sr *SimpleRedis) storeGroupWrite(path groupWritePath) {
 	sr.groupWriteMu.Lock()
 	sr.groupWrite = path
 	sr.groupWriteMu.Unlock()
+	// Resolving native MSETEX versus the Lua fallback is a state transition, not a failure, so it stays a named event.
+	sr.logger.Debug("simpleredis_capability")
 }
 
 // msetexArgs is native MSETEX: numkeys, pairs in order, then EX or EXAT, then the decimal TTL.

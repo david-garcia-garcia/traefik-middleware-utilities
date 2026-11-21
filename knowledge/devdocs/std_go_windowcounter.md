@@ -19,7 +19,7 @@ _Avoid_: remaining quota; a token or leaky bucket
 _Avoid_: fixed-window counters; counting only the current bucket
 
 **sync_rate**:
-Zero means every Take talks to Redis (`INCR` + `EXPIRE` on first hit) and that call's Redis error is returned. Greater than zero is the flush interval for local deltas (20 ms floor). During a Redis outage, buffered Take and Peek keep this instance's `limit` with a nil error. Negative is invalid.
+Zero means every Take talks to Redis (one EVAL: `INCR` then `EXPIRE` if `PTTL < 0`) and that call's Redis error is returned. Greater than zero is the flush interval for local deltas (20 ms floor). During a Redis outage, buffered Take and Peek keep this instance's `limit` with a nil error; Redis is retried one `sync_rate` after the last failure. Negative is invalid.
 _Avoid_: in-memory-only mode; GET-then-SET of the counter
 
 ## Overview
@@ -29,9 +29,9 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounte
 ## How to use
 
 - `New(redis, syncRate)` once. `sync_rate == 0` for exact counts; `> 0` to buffer.
-- Call `Peek(ctx, key, limit, window)` to observe the sliding estimate without counting a hit. Do not treat Peek allowed as a reservation for a later Take. Call `Take` when the hit should occupy the window (for example after a backend failure). Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
+- Call `Peek(ctx, key, limit, window)` to observe occupancy without counting a hit. Do not treat Peek allowed as a reservation for a later Take. Call `Take` when the hit should occupy the window (for example after a backend failure). Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
 - Match Redis miss with `simpleredis.IsMiss` (works through wrapping). Exact mode (`sync_rate == 0`) returns the Redis error on that Take/Peek. Buffered mode during a Redis outage returns a nil error and keeps this instance's `limit` (per-node cap). Combined admits across instances can exceed the global `limit`. Other Redis errors still propagate by `Error()` text until those callers convert.
-- Buffered Peek (`sync_rate > 0`) is a memory read after the first sight of a window key. It does not GET Redis on every call while `local_delta` stays 0. Exact Peek (`sync_rate == 0`) GETs current and previous every call.
+- Buffered Peek (`sync_rate > 0`) is a memory read after the first sight of a window key. It does not GET Redis on every call while `local_delta` stays 0. Buffered Take GETs the previous-window key when `local_delta` is 0 the first time it uses that key as previous, then at most once per `sync_rate` (another instance may flush into it after this instance did). Not once per Take. When previous still has `local_delta` greater than 0, Take keeps memory and MUST NOT GET that key. Exact Peek (`sync_rate == 0`) GETs current and previous every call.
 - Prove with `go test -short ./windowcounter/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
 
 ## Pattern snippet
@@ -63,8 +63,10 @@ _, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 - Window length is whole seconds (Redis TTL is integer seconds). Take and Peek reject a window that is shorter than one second or not an integer number of seconds (for example 1500ms); they do not truncate into second buckets.
 - Denied Takes still increment. Peek does not.
 - After occupancy equals limit, Peek allows and the next Take denies and still increments.
-- `Sleep` flushes pending deltas then stops the ticker. Concurrent `Wake` during Sleep does not start a ticker and Sleep still returns. After Sleep returns, `Wake` starts the ticker again when `sync_rate` is greater than zero. After `Close`, do not start a new flush ticker. The SimpleRedis client is still the caller's.
+- `Sleep` flushes pending deltas then stops the flush timer. Concurrent `Wake` during Sleep does not start a timer and Sleep still returns. After Sleep returns, `Wake` starts the timer again when `sync_rate` is greater than zero. After `Close`, do not start a new flush timer. The SimpleRedis client is still the caller's.
+- Buffered flush uses `time.AfterFunc` because this package is interpreted under Yaegi. Do not put `go` plus `select` on a ticker and a stop channel in a limiter method; Yaegi v0.16.1 can miss the close and `Sleep`/`Close` hang.
 - EVAL scripts must list keys in `KEYS` (Dragonfly).
-- EVAL scripts must list keys in `KEYS` (Dragonfly).
+- Exact Take expires only when the key has no TTL (`PTTL < 0`). It does not refresh TTL on every hit and does not `DEL` on expire failure.
 - Buffered Take/Peek during a Redis outage return a nil error and admit until this instance's `limit`. Exact mode still returns Redis errors. Do not check `err` to fail closed on the buffered path.
+- A stored buffered outage skips Redis for one `sync_rate`, then the next Take/Peek GET retries. Keys seeded at zero during the outage are GET again on that retry, so a Peek-only limiter recovers without a flush.
 - Buffered GET and flush EVAL run without the limiter mutex. A slow Redis round trip on one opaque key must not stall Take on another key.

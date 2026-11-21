@@ -1,7 +1,11 @@
 package simpleredis
 
 import (
+	"bufio"
+	"context"
+	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,6 +15,19 @@ import (
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
 )
+
+// TestYaegi_StrayExtraReplyOwnKey proves interpreted Get against a compiled stray-extra fake. Traefik is not started.
+func TestYaegi_StrayExtraReplyOwnKey(t *testing.T) {
+	_, addr := startStrayExtraReplyFake(t, 5)
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.GetOwnKeys(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("yaegi stray extra: %q, want ok", got)
+	}
+}
 
 // TestYaegi_NewGetSetDel proves interpreted code can New, Set, Get, and Del
 // against a compiled fake TCP Redis. Traefik is not started.
@@ -77,6 +94,66 @@ func TestYaegi_MatchSentinels(t *testing.T) {
 	}
 }
 
+// TestYaegi_HandshakeAuthEOFMatchesUnreachable ports TestBugInterpretedHandshakeFailureDefeatsUnreachableMatching: interpreted IsUnreachable must match AUTH peer-close, same as compiled.
+func TestYaegi_HandshakeAuthEOFMatchesUnreachable(t *testing.T) {
+	_, addr := startAcceptFake(t, func(_ net.Conn, reader *bufio.Reader) {
+		_, _ = readCommand(reader)
+	})
+
+	compiled := newTestRedis(t, Config{Host: addr, Pass: "secret", MaxRetries: -1})
+	_, compiledErr := compiled.Get(context.Background(), "hit")
+	if !IsUnreachable(compiledErr) {
+		t.Fatalf("compiled control broke: IsUnreachable(%v) = false", compiledErr)
+	}
+
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.HandshakeAuthEOFUnreachable(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("interpreted IsUnreachable(handshake AUTH EOF) = %s, want ok", got)
+	}
+}
+
+// TestYaegi_HandshakeAuthWrongPassMatchesNoAuth ports TestBugInterpretedHandshakeFailureDefeatsNoAuthMatching: interpreted errors.Is must match AUTH WRONGPASS, same as compiled.
+func TestYaegi_HandshakeAuthWrongPassMatchesNoAuth(t *testing.T) {
+	fake, addr := startFakeRedis(t, map[string]string{"hit": "t"})
+	fake.setHandshakeReplies("-WRONGPASS invalid password\r\n", statusOKReply)
+
+	compiled := newTestRedis(t, Config{Host: addr, Pass: "wrong", MaxRetries: -1})
+	_, compiledErr := compiled.Get(context.Background(), "hit")
+	if !errors.Is(compiledErr, ErrNoAuth) {
+		t.Fatalf("compiled control broke: errors.Is(%v, ErrNoAuth) = false", compiledErr)
+	}
+
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.HandshakeAuthRejectNoAuth(%q)`, addr))
+	if got != "ok" {
+		t.Fatalf("interpreted errors.Is(handshake WRONGPASS, ErrNoAuth) = %s, want ok", got)
+	}
+}
+
+// TestYaegi_MatchPackageUnreachableAndMiss proves interpreted matchers on errors the package returns (dead port and miss), not only a %w wrap.
+func TestYaegi_MatchPackageUnreachableAndMiss(t *testing.T) {
+	_, missAddr := startFakeRedis(t, map[string]string{})
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathClientprobe(t, goPath)
+
+	got := evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.DeadPortIsUnreachable(%q)`, "127.0.0.1:1"))
+	if got != "ok" {
+		t.Fatalf("interpreted IsUnreachable(dead port) = %s, want ok", got)
+	}
+	got = evalClientprobe(t, goPath, fmt.Sprintf(`clientprobe.MissingKeyIsMiss(%q)`, missAddr))
+	if got != "ok" {
+		t.Fatalf("interpreted IsMiss(missing key) = %s, want ok", got)
+	}
+}
+
 // TestYaegi_MSetEXLua proves interpreted MSetEX falls back to EVAL and a second call skips MSETEX.
 func TestYaegi_MSetEXLua(t *testing.T) {
 	fake, addr := startFakeRedis(t, map[string]string{})
@@ -93,6 +170,70 @@ func TestYaegi_MSetEXLua(t *testing.T) {
 		t.Fatalf("MSETEX sends = %d, want 1", fake.msetexSendCount())
 	}
 }
+
+// TestYaegi_StructuredLogging proves interpreted New with a slog logger emits simpleredis_open and that a
+// composed site line (dial: redis:unreachable) reaches the same logger through Debug, the same slog surface
+// the named events use. Yaegi resolves stdlib symbols one method at a time.
+func TestYaegi_StructuredLogging(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathSimpleredis(t, goPath)
+	writeGopathFile(t, goPath, "logprobe", "probe.go", logprobeSrc)
+
+	interpreter := interp.New(interp.Options{GoPath: goPath})
+	if err := interpreter.Use(stdlib.Symbols); err != nil {
+		t.Fatalf("use stdlib: %v", err)
+	}
+	if _, err := interpreter.Eval(`import "logprobe"`); err != nil {
+		t.Fatalf("import logprobe: %v", err)
+	}
+	evaluated, err := interpreter.Eval(`logprobe.OpenEvent()`)
+	if err != nil {
+		t.Fatalf("eval OpenEvent: %v", err)
+	}
+	got := evaluated.Interface().(string)
+	if got != "ok" {
+		t.Fatalf("yaegi structured logging: %q, want ok", got)
+	}
+}
+
+const logprobeSrc = `package logprobe
+
+import (
+	"bytes"
+	"context"
+	"log/slog"
+	"strings"
+	"time"
+
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
+)
+
+// OpenEvent constructs a client with a capturing text logger, checks simpleredis_open, then fails one command
+// against a closed port so the interpreter also runs a composed site line (Logger.Debug).
+func OpenEvent() string {
+	var buf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	client, err := simpleredis.New(simpleredis.Config{Host: "127.0.0.1:1", Logger: logger,
+		MaxRetries: -1, DialTimeout: 50 * time.Millisecond, Pass: "PassW0rd-UNIQUE-9f3a"})
+	if err != nil {
+		return "new: " + err.Error()
+	}
+	if !strings.Contains(buf.String(), "simpleredis_open") {
+		return "missing open: " + buf.String()
+	}
+	if _, err := client.Get(context.Background(), "k"); err == nil {
+		return "get-unexpected-ok"
+	}
+	if !strings.Contains(buf.String(), "dial: "+simpleredis.RedisUnreachable) {
+		return "missing dial site: " + buf.String()
+	}
+	// The configured password starts with "Pass", so this one check covers both the credential and an attr key named Pass.
+	if strings.Contains(buf.String(), "Pass") {
+		return "pass leaked: " + buf.String()
+	}
+	return "ok"
+}
+`
 
 // evalClientprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalClientprobe(t *testing.T, goPath, expr string) string {
@@ -112,20 +253,20 @@ func evalClientprobe(t *testing.T, goPath, expr string) string {
 }
 
 // writeGopathSimpleredis copies non-test simpleredis sources into a GOPATH module tree.
-func writeGopathSimpleredis(t testing.TB, goPath string) {
-	t.Helper()
+func writeGopathSimpleredis(tb testing.TB, goPath string) {
+	tb.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatal("no caller path")
+		tb.Fatal("no caller path")
 	}
 	srcDir := filepath.Dir(thisFile)
 	destDir := filepath.Join(goPath, "src", "github.com", "david-garcia-garcia", "traefik-middleware-utilities", "simpleredis")
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	copied := 0
 	for _, entry := range entries {
@@ -135,34 +276,34 @@ func writeGopathSimpleredis(t testing.TB, goPath string) {
 		}
 		body, err := os.ReadFile(filepath.Join(srcDir, name))
 		if err != nil {
-			t.Fatal(err)
+			tb.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(destDir, name), body, 0o600); err != nil {
-			t.Fatal(err)
+			tb.Fatal(err)
 		}
 		copied++
 	}
 	if copied == 0 {
-		t.Fatal("no simpleredis sources copied into GOPATH")
+		tb.Fatal("no simpleredis sources copied into GOPATH")
 	}
 }
 
 // writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
-func writeGopathFile(t testing.TB, goPath, pkg, name, src string) {
-	t.Helper()
+func writeGopathFile(tb testing.TB, goPath, pkg, name, src string) {
+	tb.Helper()
 	dir := filepath.Join(goPath, "src", pkg)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 }
 
 // writeGopathClientprobe writes the interpreted probe package under GOPATH/src/clientprobe.
-func writeGopathClientprobe(t testing.TB, goPath string) {
-	t.Helper()
-	writeGopathFile(t, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
+func writeGopathClientprobe(tb testing.TB, goPath string) {
+	tb.Helper()
+	writeGopathFile(tb, goPath, "clientprobe", "roundtrip.go", clientprobeSrc)
 }
 
 const clientprobeSrc = `package clientprobe
@@ -179,7 +320,10 @@ import (
 
 // RoundTrip builds a client, Sets a key, Gets it, and Dels it.
 func RoundTrip(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	if err := client.Set(context.Background(), "k", []byte("ok"), 60); err != nil {
 		return "set:" + err.Error()
 	}
@@ -193,6 +337,26 @@ func RoundTrip(host string) string {
 	return string(got)
 }
 
+// GetOwnKeys Gets k0..k11. A stray extra bulk must not surface as another key's value.
+func GetOwnKeys(host string) string {
+	client, err := simpleredis.New(simpleredis.Config{Host: host, PoolSize: 1, MaxIdleConns: 1, MaxRetries: -1})
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	for i := 0; i < 12; i++ {
+		key := "k" + strconv.Itoa(i)
+		want := "v" + strconv.Itoa(i)
+		got, err := client.Get(context.Background(), key)
+		if err != nil {
+			continue
+		}
+		if string(got) != want {
+			return "Get(" + key + ")=" + string(got)
+		}
+	}
+	return "ok"
+}
+
 const kongIncrbyExpireatScript = ` + "`" + `local exists = redis.call("exists", KEYS[1])
 local value = redis.call("incrby", KEYS[1], ARGV[1])
 if exists == 0 then
@@ -202,7 +366,10 @@ return value` + "`" + `
 
 // IncrAndEval Incs a missing key then Evals the Kong incrby+expireat snippet.
 func IncrAndEval(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	afterIncr, err := client.Incr(context.Background(), "yaegi-incr")
 	if err != nil {
 		return "incr:" + err.Error()
@@ -222,7 +389,10 @@ func IncrAndEval(host string) string {
 
 // EvalNoScript Evals once so the compiled fake's first EVALSHA miss must fall back.
 func EvalNoScript(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	values, err := client.Eval(context.Background(), kongIncrbyExpireatScript, simpleredis.ScriptSHA1Hex(kongIncrbyExpireatScript), []string{"yaegi-noscript"}, []string{"3", "1700000000"})
 	if err != nil {
 		return "eval:" + err.Error()
@@ -235,7 +405,10 @@ func EvalNoScript(host string) string {
 
 // MSetEXNative writes one pair via MSetEX against a native MSETEX fake.
 func MSetEXNative(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	if err := client.MSetEX(context.Background(), []string{"yaegi-msetex"}, [][]byte{[]byte("ok")}, 60); err != nil {
 		return "msetex:" + err.Error()
 	}
@@ -251,7 +424,10 @@ func MSetEXNative(host string) string {
 
 // LiveVerbs runs New plus Get, MGet, Set, Del, Incr, IncrBy, Expire, ExpireAt, Eval, MSetEX, and MSetEXAt against a live engine.
 func LiveVerbs(host, key string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	if err := client.Set(context.Background(), key, []byte("ok"), 60); err != nil {
 		return "set:" + err.Error()
 	}
@@ -364,7 +540,10 @@ func LiveVerbs(host, key string) string {
 
 // MSetEXLua calls MSetEX twice so a reject-MSETEX fake can prove the cache.
 func MSetEXLua(host string) string {
-	client := simpleredis.New(simpleredis.Config{Host: host})
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "new:" + err.Error()
+	}
 	if err := client.MSetEX(context.Background(), []string{"yaegi-msetex-lua"}, [][]byte{[]byte("ok")}, 60); err != nil {
 		return "first:" + err.Error()
 	}
@@ -388,6 +567,76 @@ func MatchSentinels() string {
 		return "errors.Is"
 	}
 	if !simpleredis.IsMiss(wrapped) {
+		return "IsMiss"
+	}
+	return "ok"
+}
+
+// HandshakeAuthEOFUnreachable reports IsUnreachable for an AUTH peer-close handshake failure.
+func HandshakeAuthEOFUnreachable(host string) string {
+	client, err := simpleredis.New(simpleredis.Config{Host: host, Pass: "secret", MaxRetries: -1})
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	_, err = client.Get(context.Background(), "hit")
+	if err == nil {
+		return "no-error"
+	}
+	if err.Error() != simpleredis.RedisUnreachable {
+		return "text:" + err.Error()
+	}
+	if !simpleredis.IsUnreachable(err) {
+		return "IsUnreachable"
+	}
+	return "ok"
+}
+
+// HandshakeAuthRejectNoAuth reports errors.Is(err, ErrNoAuth) for a WRONGPASS handshake failure.
+func HandshakeAuthRejectNoAuth(host string) string {
+	client, err := simpleredis.New(simpleredis.Config{Host: host, Pass: "wrong", MaxRetries: -1})
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	_, err = client.Get(context.Background(), "hit")
+	if err == nil {
+		return "no-error"
+	}
+	if err.Error() != simpleredis.RedisNoAuth {
+		return "text:" + err.Error()
+	}
+	if !errors.Is(err, simpleredis.ErrNoAuth) {
+		return "errors.Is"
+	}
+	return "ok"
+}
+
+// DeadPortIsUnreachable reports IsUnreachable for a TCP refuse before handshake.
+func DeadPortIsUnreachable(host string) string {
+	client, err := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1})
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	_, err = client.Get(context.Background(), "hit")
+	if err == nil {
+		return "no-error"
+	}
+	if !simpleredis.IsUnreachable(err) {
+		return "IsUnreachable"
+	}
+	return "ok"
+}
+
+// MissingKeyIsMiss reports IsMiss for a GET of a missing key.
+func MissingKeyIsMiss(host string) string {
+	client, err := simpleredis.New(simpleredis.Config{Host: host, MaxRetries: -1})
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	_, err = client.Get(context.Background(), "missing-key-yaegi")
+	if err == nil {
+		return "no-error"
+	}
+	if !simpleredis.IsMiss(err) {
 		return "IsMiss"
 	}
 	return "ok"

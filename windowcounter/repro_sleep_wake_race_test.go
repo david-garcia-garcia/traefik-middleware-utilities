@@ -8,8 +8,8 @@ import (
 )
 
 // TestRepro_SleepWakeRaceHangs checks whether Wake can startFlushLocked after
-// Sleep's stopFlushAndWait has set stop=nil and unlocked, but before wg.Wait.
-// That Add(1) of a new flushLoop makes Sleep Wait for a loop nobody will stop.
+// Sleep's stopFlushAndWait has detached the timer and unlocked, but before flushBusy.Wait.
+// That Add(1) of a new timer makes Sleep Wait for a tick nobody will stop.
 func TestRepro_SleepWakeRaceHangs(t *testing.T) {
 	_, addr := startTestFakeRedis(t)
 	client := newSimpleRedisForTest(t, addr)

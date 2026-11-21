@@ -13,7 +13,7 @@ Traefik loads local and catalog plugins through [Yaegi](https://github.com/traef
 
 That is why this repo exists. The official Go Redis client (and other compiled-only libraries) will not run under Yaegi. A middleware that imports them cannot be loaded the way Traefik actually loads plugins, and cannot be tested that way either.
 
-These packages are the pieces those middlewares otherwise rewrite: a Redis client, a reclaim table, two rate-limit clocks, and an in-memory backend backoff gate. They stay in the subset of Go that Yaegi can interpret, and they are tested under Yaegi, not only as compiled Go.
+These packages are the pieces those middlewares otherwise rewrite: a Redis client, a reclaim table, two rate-limit clocks, an in-memory backend backoff gate, and a CIDR lookup helper. They stay in the subset of Go that Yaegi can interpret, and they are tested under Yaegi, not only as compiled Go.
 
 They look like unrelated libraries. They share one module on purpose: the window counter and the token bucket are built on SimpleRedis, reclaim is how a middleware keeps a client or gate across a Traefik reload, and not every package talks to Redis. Splitting them would hide that they are one middleware stack under the same Yaegi constraint.
 
@@ -21,13 +21,15 @@ They look like unrelated libraries. They share one module on purpose: the window
 
 Package `reclaim/`. Keep one Go value per key for the life of a Traefik plugin instance — a Redis client, a counter, a limiter.
 
-Call `reclaim.Open` from the plugin constructor (`New`). Pass Traefik's constructor context, not `req.Context()`. The first `Open` for a key runs `create` once. Later `Open`s on the same key return that same value. When Traefik reloads config it cancels the old context; the table sleeps the value, and if a new `New` opens the same key before grace ends, it wakes the stored value instead of creating another.
+Call `table.Open` from the plugin constructor (`New`), on a `*Table` the plugin package holds (`reclaim.New`). Pass Traefik's constructor context, not `req.Context()`. The first `Open` for a key runs `create` once. Later `Open`s on the same key return that same value. When Traefik reloads config it cancels the old context; the table sleeps the value, and if a new `New` opens the same key before grace ends, it wakes the stored value instead of creating another.
 
-Pass `Sleep` / `Wake` / `Close` as `reclaim.Hooks` when the stored value has those methods. Production uses the process table (`reclaim.Open`). Prefix keys when more than one type shares it.
+Pass `Sleep` / `Wake` / `Close` as `reclaim.Hooks` when the stored value has those methods. Prefix keys when more than one type shares a table.
 
 ```go
+var table = reclaim.New(reclaim.Config{Grace: reclaim.DefaultGrace})
+
 var limiter *windowcounter.Limiter
-stored, err := reclaim.Open(ctx, "window:"+hash, logger, func() (any, error) {
+stored, err := table.Open(ctx, "window:"+hash, logger, func() (any, error) {
 	var createErr error
 	limiter, createErr = windowcounter.New(client, 0)
 	return limiter, createErr
@@ -82,7 +84,7 @@ if !allowed {
 _, _, err = counter.Take(req.Context(), "ip:"+ip, 100, time.Minute)
 ```
 
-`sync_rate` `0` talks to Redis on every Take or Peek and returns that call's Redis error. A positive duration batches locally and flushes on that interval; while Redis is down, buffered Take/Peek keep this instance's `limit` with a nil error (per-node cap), not a retained flush error. Pass `Sleep` / `Wake` / `Close` into reclaim when the counter is the stored value. Do not close the Redis client from the counter.
+`sync_rate` `0` talks to Redis on every Take or Peek and returns that call's Redis error. A positive duration batches locally and flushes on that interval; while Redis is down, buffered Take/Peek keep this instance's `limit` with a nil error (per-node cap), not a retained flush error, and retry Redis one `sync_rate` after the last failure. Pass `Sleep` / `Wake` / `Close` into reclaim when the counter is the stored value. Do not close the Redis client from the counter.
 
 ## Token bucket
 
@@ -130,7 +132,56 @@ ok := callBackend()
 gate.Report("backend:"+host, ok)
 ```
 
-Prefix keys in the caller. Store the Gate in `reclaim.Open` so a Traefik reload keeps the map (`Close` as the reclaim hook; no Sleep/Wake). Two Gate instances do not share state. Do not import `tokenbucket`.
+Prefix keys in the caller. Store the Gate in a reclaim table the caller owns so a Traefik reload keeps the map (`Close` as the reclaim hook; no Sleep/Wake). Two Gate instances do not share state. Do not import `tokenbucket`.
+
+## CIDR lookup
+
+Package `iplookup/`. An in-process CIDR store: IPv4 and IPv6 prefixes live on separate trees so a prefix cannot match the other family. Callers pass `net.IP` they already selected. The library does not read HTTP.
+
+```go
+h := iplookup.New()
+if err := h.AddCIDR("10.0.0.0/8", "office"); err != nil {
+	return err
+}
+found, prefixLen, label, err := h.Contains(net.ParseIP(ip))
+if err != nil {
+	return err
+}
+_ = prefixLen
+if found && label == "office" {
+	return nil
+}
+```
+
+The same canonical prefix stored again replaces the label. `RemoveCIDR` drops one prefix. `Reset` clears both families.
+
+For config lists that mix CIDRs and single addresses, use `AddEntry`. A bare address is stored as its host prefix (`HostCIDR`): `10.0.0.1/32`, `2001:db8::1/128`, and an IPv4-mapped `::ffff:10.0.0.1` as the IPv4 host `10.0.0.1/32`.
+
+```go
+for _, entry := range cfg.TrustedProxies { // "10.0.0.0/8", "192.0.2.10", "2001:db8::1"
+	if err := h.AddEntry(entry, "proxy"); err != nil {
+		return err
+	}
+}
+```
+
+## Traefik emulator
+
+Package `traefikemulator/`. A stdlib test helper that stands in for Traefik `RouterFactory.CreateRouters`. One configuration generation at a time: `Apply` cancels the previous context, constructs each route with your plugin `New`, and `Serve` / `Handler` hit the current generation by route name. No live Traefik, Redis, or Yaegi — compiled `go test` only.
+
+```go
+emu := traefikemulator.New(myPluginNew)
+t.Cleanup(emu.Stop)
+if failed := emu.Apply([]traefikemulator.Route{{Name: "mw", Next: next, Config: cfg}}); failed != nil {
+	t.Fatal(failed)
+}
+rec := httptest.NewRecorder()
+if !emu.Serve("mw", rec, httptest.NewRequest(http.MethodGet, "/", nil)) {
+	t.Fatal("route missing")
+}
+```
+
+Constructor errors omit that route and leave siblings on the same generation context. Duplicate route names in one `Apply` fail without replacing an earlier success.
 
 ## Yaegi
 
@@ -152,6 +203,8 @@ simpleredis/     stdlib Redis client (Apache-2.0)
 windowcounter/   sliding-window hit counter
 tokenbucket/     Traefik token bucket (in-process and Redis)
 backendbackoff/  in-memory backend backoff gate
+iplookup/         CIDR lookup helper (family-isolated)
+traefikemulator/  Traefik router factory test helper (stdlib)
 e2e/             fake Traefik plugins + Pester harness (Yaegi)
 ```
 
@@ -173,7 +226,7 @@ go test ./...                # also Go E2E for each *_LIVE_REDIS / *_LIVE_DRAGON
 
 `Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. `-Suite reclaim` is reclaim only; `-Suite simpleredis -Engine redis|dragonfly` runs the SimpleRedis file once against that backend.
 
-Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`). `backendbackoff/` has no store and no `*_LIVE_*` var.
+Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`). `backendbackoff/` and `iplookup/` have no store and no `*_LIVE_*` var.
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines, 2m timeout, `TestAlloc*` run), unit `go test -race -short` (no engines, 10m timeout), Go E2E Redis (`go test` with Redis 7, no `-race`), Go E2E Dragonfly (`go test` with Dragonfly, no `-race`), Pester reclaim (`Integration Tests`), Pester SimpleRedis Redis, and Pester SimpleRedis Dragonfly on every pull request and on pushes to `master`.
 

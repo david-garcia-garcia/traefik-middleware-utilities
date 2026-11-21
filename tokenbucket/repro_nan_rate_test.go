@@ -26,7 +26,10 @@ func TestRepro_NaNRateRejected(t *testing.T) {
 		}
 	})
 	t.Run("NewRedis", func(t *testing.T) {
-		client := simpleredis.New(simpleredis.Config{Host: "127.0.0.1:1"})
+		client, err := simpleredis.New(simpleredis.Config{Host: "127.0.0.1:1"})
+		if err != nil {
+			t.Fatal(err)
+		}
 		limiter, err := NewRedis(client, math.NaN(), 1, 0, 2*time.Second)
 		if err == nil {
 			t.Errorf("NewRedis(NaN) returned limiter %v, want error", limiter)

@@ -1,0 +1,6 @@
+host: local
+ref: none
+title: "bug-03 — MaxIdleConns is silently not enforced"
+url: none
+number: none
+source: d:/repositories/traefik-middleware-utilities/simpleredisfixes2/bug-03-maxidleconns-not-enforced.md
