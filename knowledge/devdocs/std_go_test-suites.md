@@ -19,11 +19,11 @@ Compiled and Yaegi tests that talk to live Redis 7 and/or Dragonfly. CI splits t
 _Avoid_: calling this Pester; proving malformed RESP here; treating one green engine job as the other engine
 
 **Go E2E Redis**:
-The CI job `e2e-redis` (`Go E2E Redis`) that starts Redis 7 `:6379` and passworded Redis `:6381` and sets Redis LIVE env only.
+The CI job `e2e-redis` (`Go E2E Redis`) that starts Redis 7 `:6379`, passworded Redis `:6381`, and TLS Redis `:6383` (container `simpleredis-redis-tls`, client certificate required, ACL user `app`) and sets Redis LIVE env only.
 _Avoid_: starting Dragonfly in this job; treating a green Redis check as Dragonfly proof
 
 **Go E2E Dragonfly**:
-The CI job `e2e-dragonfly` (`Go E2E Dragonfly`) that starts Dragonfly `:6380` and passworded Dragonfly `:6382` and sets Dragonfly LIVE env only.
+The CI job `e2e-dragonfly` (`Go E2E Dragonfly`) that starts Dragonfly `:6380`, passworded Dragonfly `:6382`, and TLS Dragonfly `:6384` (container `simpleredis-dragonfly-tls`, client certificate required, ACL user `app`) and sets Dragonfly LIVE env only.
 _Avoid_: starting Redis in this job; treating a green Dragonfly check as Redis proof
 
 **Pester**:
@@ -47,7 +47,7 @@ Four suites, eight jobs (`test` and `race` are both unit; Go E2E is Redis and Dr
 - Lint: `.github/workflows/ci.yml` job `lint` (`.golangci.yml`). CI pins golangci-lint **v1.63.4** (`version: v1.63.4`, not `latest`; not v2). `gofmt` is on; `goimports`/`gofumpt` are omitted because they need a `diff` binary Windows contributors lack. `testpackage` stays off: tests are in-package white-box (`sr.borrow`, `sr.inUseTurns`). `gocritic` `unnamedResult.checkExported: false` is the stronger setting (`true` checks exported functions only).
 - Unit: `go test -short ./...`. CI job `test` (`Unit`): `go test -short -timeout 2m -count=1 -v ./...`. Files `{domain}_test.go` (and `{domain}_yaegi_test.go` against a compiled fake). SimpleRedis chaos pool and lifecycle stress skip under `-short`; they run on a default `go test ./simpleredis/` and on Go E2E (no `-short`).
 - Unit race: CI job `race`: `go test -race -short -timeout 10m -count=1 -v ./...`. Same files as unit. `TestAlloc*` skip. Concurrent MSetEX fallback stays on (4×8). Skip only `TestYaegiErrorpath_PoolWait`: race stacks are in `github.com/traefik/yaegi/interp` (`_select` / `itype.refType`), not this client. Other interpreted error paths stay on.
-- Go E2E: `go test ./...` with the LIVE addrs for the engines to hit. Files `{domain}_e2e_test.go` and `{domain}_yaegi_e2e_test.go` sit next to that domain’s `.go` and `{domain}_test.go`. Shared skip/wait helpers that are not one domain live in `{package}_e2e_test.go` (same job as `fake_redis_test.go` for the fake peer). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` with the same one-or-both rule. CI job `e2e-redis` sets Redis addrs only; `e2e-dragonfly` sets Dragonfly addrs only.
+- Go E2E: `go test ./...` with the LIVE addrs for the engines to hit. Files `{domain}_e2e_test.go` and `{domain}_yaegi_e2e_test.go` sit next to that domain’s `.go` and `{domain}_test.go`. Shared skip/wait helpers that are not one domain live in `{package}_e2e_test.go` (same job as `fake_redis_test.go` for the fake peer). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` with the same one-or-both rule. TLS plus ACL-user proof uses `SIMPLEREDIS_LIVE_REDIS_TLS` / `SIMPLEREDIS_LIVE_DRAGONFLY_TLS` (same rule) and reads `ca.crt`, `client.crt`, `client.key` from `SIMPLEREDIS_LIVE_TLS_DIR`; ACL user `app` has password `apppass` (`simpleredis/tls_e2e_test.go`). The certificates are not committed: each job writes them with `SIMPLEREDIS_TLS_FIXTURE_OUT=$RUNNER_TEMP/simpleredis-tls go test -run '^TestWriteTLSFixtureFiles$' ./simpleredis/`, `docker cp`s that directory to `/tls` in the TLS container before `docker start`, waits with `docker exec … redis-cli --tls … ping`, then runs `ACL SETUSER app on >apppass ~* +@all`. Locally, run the same lines from `.github/workflows/ci.yml` (`docker cp` also avoids bind mounts from paths a Docker host cannot share). CI job `e2e-redis` sets Redis addrs only; `e2e-dragonfly` sets Dragonfly addrs only.
 - Pester: `./Test-Integration.ps1`. Docker required. Domain files are `scripts/integration-tests.<domain>.Tests.ps1` (reclaim, simpleredis). Helpers are `scripts/integration-tests.utils/*.ps1` (not `*Tests.ps1`). `-Suite reclaim` is reclaim only. `-Suite simpleredis -Engine redis|dragonfly` sets `INTEGRATION_ENGINE` and runs the SimpleRedis file once. Default (`-Suite all`) runs reclaim then both engines. CI jobs `integration`, `integration-redis`, and `integration-dragonfly` match those three slices.
 - Do not dump every live case into one `live_test.go`. Name the file for the domain it proves (`commands_e2e_test.go` beside `commands.go` / `commands_test.go`).
 - Skip under `-short` or both live addrs unset. One addr set runs that engine only.
@@ -65,7 +65,8 @@ limiter_yaegi_e2e_test.go # interpreted, live
 ## Key files
 
 - `.github/workflows/ci.yml` — jobs `lint` (golangci-lint **v1.63.4**), `test` (`Unit`, `-short`, no `-race`, no services), `race` (`Unit race`, `-race -short`), `e2e-redis` (`Go E2E Redis`, no `-race`), `e2e-dragonfly` (`Go E2E Dragonfly`, no `-race`), `integration` (Pester reclaim), `integration-redis` (Pester SimpleRedis Redis), `integration-dragonfly` (Pester SimpleRedis Dragonfly)
-- `simpleredis/commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, `simpleredis_e2e_test.go`, `yaegi_e2e_test.go`
+- `simpleredis/commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, `simpleredis_e2e_test.go`, `tls_e2e_test.go`, `yaegi_e2e_test.go`
+- `simpleredis/tls_fixture_test.go` — the one test certificate generator (in-process TLS fake and `TestWriteTLSFixtureFiles` for the live engines)
 - `windowcounter/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
 - `tokenbucket/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
 - `Test-Integration.ps1`, `scripts/integration-tests.reclaim.Tests.ps1`, `scripts/integration-tests.simpleredis.Tests.ps1`, `scripts/integration-tests.utils/`

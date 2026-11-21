@@ -3,6 +3,7 @@ package simpleredis
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"errors"
 	"io"
 	"net"
@@ -53,6 +54,11 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
 			return nil, false, mapped
 		}
+		// A TLS rejection is an operator fix; tls_error is the crypto/tls text, not a Redis reply.
+		if mapped == errTLS { //nolint:errorlint // ioError returns the sentinel itself
+			sr.logger.Error("do: "+RedisTLS, "verb", commandVerb(args), "tls_error", err.Error())
+			return nil, false, mapped
+		}
 		sr.logger.Debug("do: "+RedisUnreachable, "reason", "write", "verb", commandVerb(args))
 		return nil, false, mapped
 	}
@@ -71,9 +77,14 @@ func (sr *SimpleRedis) do(ctx context.Context, conn *pooledConn, args [][]byte) 
 		if errors.Is(mapped, context.Canceled) || errors.Is(mapped, context.DeadlineExceeded) {
 			return nil, false, mapped
 		}
-		if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		switch {
+		case mapped == errTLS: //nolint:errorlint // ioError returns the sentinel itself
+			// The TLS 1.3 client-certificate alert lands here, on the first read (AUTH reply or first command).
+			// A TLS rejection is an operator fix; tls_error is the crypto/tls text, not a Redis reply.
+			sr.logger.Error("do: "+RedisTLS, "verb", commandVerb(args), "tls_error", err.Error())
+		case errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF):
 			sr.logger.Warn("do: "+RedisUnreachable, "reason", "read", "verb", commandVerb(args))
-		} else {
+		default:
 			sr.logger.Debug("do: "+RedisUnreachable, "reason", "read", "verb", commandVerb(args))
 		}
 		return nil, false, mapped
@@ -377,11 +388,34 @@ func replyError(message []byte) error {
 	return errors.New(text)
 }
 
-// ioError maps deadline exceeded to redis:timeout and other IO failures to redis:unreachable.
+// ioError maps deadline exceeded to redis:timeout, a TLS rejection on a read or write (the TLS 1.3 client-certificate
+// alert arrives on the first read, not in the handshake) to redis:tls, and other IO failures to redis:unreachable.
 func ioError(err error) error {
 	// errors.Is, not a net.Error assert: Yaegi has panicked on that interface across the interpreter boundary.
 	if errors.Is(err, os.ErrDeadlineExceeded) {
 		return errTimeout
 	}
+	if isTLSRejection(err) {
+		return errTLS
+	}
 	return errUnreachable
+}
+
+// isTLSRejection reports a deterministic TLS failure the operator must fix: the client rejected the server
+// certificate, the server sent a TLS alert (handshake or a later read), or the peer answered with bytes that are
+// not a TLS record. A timeout, a reset, or any other dial error is not one, so it stays redis:unreachable.
+//
+// errors.As to concrete types only. Not a net.Error assert (Yaegi), not tls.AlertError (a server alert does not
+// match it under Yaegi v0.16.1; crypto/tls reports it as *net.OpError with Op "remote error"), and no text parsing.
+func isTLSRejection(err error) bool {
+	var verifyErr *tls.CertificateVerificationError
+	if errors.As(err, &verifyErr) {
+		return true
+	}
+	var headerErr tls.RecordHeaderError
+	if errors.As(err, &headerErr) {
+		return true
+	}
+	var opErr *net.OpError
+	return errors.As(err, &opErr) && opErr.Op == "remote error"
 }

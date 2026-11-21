@@ -13,17 +13,21 @@ import (
 
 // fakeRedis is an in-process RESP server backed by a string map.
 type fakeRedis struct {
-	mu                   sync.Mutex
-	store                map[string]string
-	loadedScripts        map[string]string
-	conns                int
-	auths                int
-	selects              int
-	gets                 int
-	hangups              int
-	authReply            string
-	selectReply          string
-	handshake            []string
+	mu            sync.Mutex
+	store         map[string]string
+	loadedScripts map[string]string
+	conns         int
+	auths         int
+	selects       int
+	gets          int
+	hangups       int
+	authReply     string
+	selectReply   string
+	handshake     []string
+	lastAuth      []string
+	// admitConn, when set, runs on each accepted socket before RESP is served; false drops that socket.
+	// The TLS fake uses it to finish the server handshake (tls_fixture_test.go).
+	admitConn            func(conn net.Conn) bool
 	incrs                int
 	incrBys              int
 	evalShaCount         int
@@ -46,27 +50,41 @@ type fakeRedis struct {
 // startFakeRedis listens on a local TCP port and serves an in-process RESP map.
 func startFakeRedis(tb testing.TB, store map[string]string) (server *fakeRedis, listenAddr string) {
 	tb.Helper()
+	listener := listenLocalTCPForTest(tb)
+	fake := newFakeRedisForTest(store)
+	go fake.acceptLoop(listener)
+	return fake, listener.Addr().String()
+}
+
+// listenLocalTCPForTest opens a loopback TCP listener closed at test cleanup.
+func listenLocalTCPForTest(tb testing.TB) net.Listener {
+	tb.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		tb.Fatal(err)
 	}
 	tb.Cleanup(func() { _ = listener.Close() })
+	return listener
+}
 
-	fake := &fakeRedis{store: store, loadedScripts: make(map[string]string), authReply: statusOKReply, selectReply: statusOKReply}
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				return
-			}
-			fake.mu.Lock()
-			fake.conns++
-			fake.open++
-			fake.mu.Unlock()
-			go fake.serve(conn)
+// newFakeRedisForTest builds a fake over store with OK handshake replies; acceptLoop starts serving.
+func newFakeRedisForTest(store map[string]string) *fakeRedis {
+	return &fakeRedis{store: store, loadedScripts: make(map[string]string), authReply: statusOKReply, selectReply: statusOKReply}
+}
+
+// acceptLoop counts and serves every socket listener accepts until the listener closes.
+func (f *fakeRedis) acceptLoop(listener net.Listener) {
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			return
 		}
-	}()
-	return fake, listener.Addr().String()
+		f.mu.Lock()
+		f.conns++
+		f.open++
+		f.mu.Unlock()
+		go f.serve(conn)
+	}
 }
 
 // serve answers AUTH/SELECT/GET/MGET/SET/INCR/MSETEX/EVALSHA/EVAL on one accepted socket.
@@ -77,6 +95,10 @@ func (f *fakeRedis) serve(conn net.Conn) {
 		f.open--
 		f.mu.Unlock()
 	}()
+	// A socket the admit hook refused is not served (for example a failed TLS handshake).
+	if f.admitConn != nil && !f.admitConn(conn) {
+		return
+	}
 	reader := bufio.NewReader(conn)
 	for {
 		args, err := readCommand(reader)
@@ -128,6 +150,7 @@ func (f *fakeRedis) commandReply(args []string) string {
 	case "AUTH":
 		f.auths++
 		f.handshake = append(f.handshake, "AUTH")
+		f.lastAuth = append([]string(nil), args[1:]...)
 		return f.authReply
 	case "SELECT":
 		f.selects++
@@ -411,6 +434,13 @@ func (f *fakeRedis) handshakeCounts() (auths, selects, gets int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.auths, f.selects, f.gets
+}
+
+// lastAuthArgs returns the arguments of the last AUTH (without the verb), or nil when none was seen.
+func (f *fakeRedis) lastAuthArgs() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.lastAuth...)
 }
 
 // setHandshakeReplies sets AUTH and SELECT RESP replies (full wire including CRLF).
