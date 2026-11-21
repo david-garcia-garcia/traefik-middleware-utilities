@@ -14,11 +14,11 @@ Not yet.
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+In progress. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: ac29484
-Owner decision: None.
+Reviewed head: 5d212f47
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -45,13 +45,17 @@ None.
 None.
 
 ## Follow-up issues
-None.
+- [ ] [Replace the `select` in reclaim `waitCtx` and guard every production package against `select`](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-simpleredis-bug-yaegi-select/knowledge/debt/2026-11-21-reclaim-waitctx-select.md) — reclaim `waitCtx` is the last production `select` after this change, and the AST guard covers only simpleredis.
+
 
 ## How this fits together
 Ticket 2026-11-21-simpleredis-bug-yaegi-select on branch 2026-11-21-simpleredis-bug-yaegi-select targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/104; CI not seen.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| ¿Qué sustituye al canal `inUseTurns` y a sus dos `select` (fast take, espera saturada, free) sin perder ni duplicar turnos y sin regresión en el camino caliente bajo Yaegi? | bounded asked — cambia la unidad existente `inUseTurns` con call sites enumerados (2 archivos de producción, 5 de test + 1 sonda, 12+2 líneas de spec; raíces: todo el worktree salvo devstate) y los migra aquí; requirement.md «Deseado» 1 y 2 y Unknowns «Diseño concreto del sustituto de cada select» | assumed — mutex + contador + `turnCap` + cola FIFO de waiters; fast take y free inline sin método nuevo ni `defer`; espera saturada con `context.WithTimeout` + un `context.AfterFunc` y recepción simple. Si en implement el par `WithTimeout`+`AfterFunc` mide peor que `AfterFunc`×2 sin `sync.Once`, se usa este último. | explore |
+
 
 ## Findings
 None.
@@ -66,7 +70,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | ac29484e5c77bdb706b9c2f8b95ad81c40e5d1f5 | Card must match the branch you measured |
+| Reviewed head | 5d212f47484b6b7ab6dd010444d32453e1a51bc9 | Card must match the branch you measured |
 
 ### Stored data model
 None.
