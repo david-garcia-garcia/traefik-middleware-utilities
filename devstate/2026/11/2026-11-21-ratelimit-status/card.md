@@ -17,7 +17,7 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 3219046f
+Reviewed head: 50db4252
 Owner decision: None.
 
 ## Review scores
@@ -32,14 +32,19 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-11-21-ratelimit-status pushed | `git` |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | ratelimit-status | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106 | pr-host |
 | CI | not seen | caller omitted CI snapshot |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
-None.
+Worktree:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/ratelimit-status/proposal.md) — modified
+- [std_go_tokenbucket_status](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/ratelimit-status/proposal.md) — added
+- [std_go_windowcounter_sliding-take](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/ratelimit-status/proposal.md) — modified
+- [std_go_windowcounter_status](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/openspec/changes/ratelimit-status/proposal.md) — added
+
 
 ## Deviations from the ask
 None.
@@ -66,7 +71,7 @@ Ticket 2026-11-21-ratelimit-status on branch 2026-11-21-ratelimit-status targeti
 | En modo buffered (`sync_rate > 0`), ¿son aceptables valores locales (`redisKnown + localDelta`) y, en caída de Redis, del cupo de esta instancia? | additive asked — campos nuevos con la misma fuente que `estimated`; Desired 3. | assumed — sí. Todos los campos salen de la misma vista que ya decide `Allowed` en esa ruta; documentarlo junto al contrato buffered existente (per-node cap con `err == nil`). No se añade lectura a Redis para mejorar las cabeceras. | explore |
 | ¿Cómo se evita que una duración derivada de float desborde a negativo (`burst/rate` grande, `rate` minúsculo)? | additive incidental — conversión en campos nuevos; ningún criterio la nombra. | assumed — un helper por paquete convierte float a `time.Duration` saturando al máximo (y 0 para valores ≤ 0); lo usan `Period`, `Reset`, `RetryAfter` y `Delay`. Medido: hoy `time.Duration(1e21)` da `-2562047h…` en amd64. No cambia la admisión (`waitMicro <= maxDelay` sigue en float). | explore |
 | ¿Qué pasa con `_Avoid_: remaining quota` en `## Language` de `std_go_tokenbucket.md` y `std_go_windowcounter.md` (Take, Peek, Window counter, Token bucket)? | bounded asked — cambia términos existentes de dos packets enumerados; Affected nombra `knowledge/devdocs/std_go_tokenbucket.md` y `std_go_windowcounter.md`. | assumed — explore no escribe Language. Devdocs impact define `Status` y `Remaining` ("hits/tokens que aún caben ahora, tras este Take/Allow; Peek: sin hit") y retira `remaining quota` de `_Avoid_` donde contradiga el campo nuevo, manteniendo `_Avoid_` de "Peek como reserva" y de "Peek como Allow". | explore |
-| ¿Qué contratos vivos cambian? | bounded asked — dos specs vivas enumeradas (de cuatro revisadas: `std_go_tokenbucket_allow`, `std_go_tokenbucket_lua-eval`, `std_go_windowcounter_sliding-take`, `std_go_windowcounter_sync-flush`), migradas en este cambio; Affected nombra `std_go_tokenbucket_allow` y `std_go_windowcounter_sliding-take`. | assumed — MODIFIED en `std_go_tokenbucket_allow` (incluye la lectura del campo `tokens`, el error `errEvalTokens` y la paridad de campos nuevos) y `std_go_windowcounter_sliding-take`. `std_go_tokenbucket_lua-eval` y `std_go_windowcounter_sync-flush` sin delta salvo que propose encuentre una frase sobre el tipo de retorno; si la hay, se registra como desviación. | explore |
+| ¿Qué contratos vivos cambian? | bounded asked — dos specs vivas enumeradas (de cuatro revisadas: `std_go_tokenbucket_allow`, `std_go_tokenbucket_lua-eval`, `std_go_windowcounter_sliding-take`, `std_go_windowcounter_sync-flush`), migradas en este cambio; Affected nombra `std_go_tokenbucket_allow` y `std_go_windowcounter_sliding-take`. | assumed — propose cambia el reparto (FindSpecHost: la semántica de los campos supera el umbral de un fold de 1–3 requisitos y la regla de ≤500 caracteres obliga a partirla). Fold en `std_go_tokenbucket_allow` (MODIFIED "Allow maps admit, wait, and deny" → devuelve `Status`; ADDED lectura del campo `tokens` y `errEvalTokens`) y en `std_go_windowcounter_sliding-take` (MODIFIED Take, sliding estimate, Peek → devuelven `Status`; `Estimated` no es `Remaining`). Hojas nuevas `std_go_tokenbucket_status` y `std_go_windowcounter_status` para el significado de cada campo, saturación, paridad memoria/Redis, retry-after y modo buffered. `std_go_tokenbucket_lua-eval` y `std_go_windowcounter_sync-flush` sin delta: no tienen frase sobre el tipo de retorno (lua-eval habla de "allowed" y "clase de wait", que siguen siendo ciertos con `Delay + RetryAfter` = wait). Sin desviación. | propose |
 
 ## Findings
 None.
@@ -79,9 +84,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 2 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 3219046f830657cbf068e4e1da561426fd9995a3 | Card must match the branch you measured |
+| Reviewed head | 50db425266c776012e63dcfc92ac189165d77c86 | Card must match the branch you measured |
 
 ### Stored data model
 None.
