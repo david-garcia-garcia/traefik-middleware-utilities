@@ -19,7 +19,7 @@ _Avoid_: remaining quota; a token or leaky bucket
 _Avoid_: fixed-window counters; counting only the current bucket
 
 **sync_rate**:
-Zero means every Take talks to Redis (`INCR` + `EXPIRE` on first hit) and that call's Redis error is returned. Greater than zero is the flush interval for local deltas (20 ms floor). A failed flush is stored; after one missed interval Take and Peek return it instead of a silent nil. Negative is invalid.
+Zero means every Take talks to Redis (one EVAL: `INCR` then `EXPIRE` if `PTTL < 0`) and that call's Redis error is returned. Greater than zero is the flush interval for local deltas (20 ms floor). A failed flush is stored; after one missed interval Take and Peek return it instead of a silent nil. Negative is invalid.
 _Avoid_: in-memory-only mode; GET-then-SET of the counter
 
 ## Overview
@@ -66,5 +66,6 @@ _, _, err = counter.Take(ctx, "ip:"+ip, 100, time.Minute)
 - `Sleep` flushes pending deltas then stops the flush timer. Concurrent `Wake` during Sleep does not start a timer and Sleep still returns. After Sleep returns, `Wake` starts the timer again when `sync_rate` is greater than zero. After `Close`, do not start a new flush timer. The SimpleRedis client is still the caller's.
 - Buffered flush uses `time.AfterFunc` because this package is interpreted under Yaegi. Do not put `go` plus `select` on a ticker and a stop channel in a limiter method; Yaegi v0.16.1 can miss the close and `Sleep`/`Close` hang.
 - EVAL scripts must list keys in `KEYS` (Dragonfly).
+- Exact Take expires only when the key has no TTL (`PTTL < 0`). It does not refresh TTL on every hit and does not `DEL` on expire failure.
 - Buffered Take still returns the local admit decision beside a flush error. Check `err` to fail closed; ignoring `err` is fail-open up to this instance's `limit`.
 - Buffered GET and flush EVAL run without the limiter mutex. A slow Redis round trip on one opaque key must not stall Take on another key.
