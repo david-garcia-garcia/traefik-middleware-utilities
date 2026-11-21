@@ -20,6 +20,11 @@ priority: normal
 local: ext_traefik_ratelimiter_token-bucket/
 description: Traefik RateLimit token-bucket math, in-memory vs Redis Lua, and GCRA-not-in-tree vs PR 10211.
 
+## Hub DistributedRateLimit
+priority: normal
+local: ext_traefik_hub_distributed-rate-limit/
+description: What Traefik Hub's commercial DistributedRateLimit middleware documents and leaves undocumented, for comparison with OSS RateLimit.
+
 ## CircuitBreaker middleware
 priority: normal
 local: ext_traefik_circuitbreaker/
