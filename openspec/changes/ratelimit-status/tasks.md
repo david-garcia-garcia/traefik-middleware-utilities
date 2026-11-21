@@ -24,8 +24,8 @@
 
 ## 4. Numbers
 
-- [ ] 4.1 Re-run the 1.1 command on this branch on the same machine and session; compare medians (ns/op, allocs/op) and confirm `redis-cmds/op` is unchanged for every fake-backed benchmark
-- [ ] 4.2 If any median in `README.md` `## Rate limiters compared` moved, update the table from the 4.1 output with the commit it came from; verify every number in the table appears in the recorded output
+- [x] 4.1 Re-run the 1.1 command on this branch on the same machine and session; compare medians (ns/op, allocs/op) and confirm `redis-cmds/op` is unchanged for every fake-backed benchmark
+- [x] 4.2 If any median in `README.md` `## Rate limiters compared` moved, update the table from the 4.1 output with the commit it came from; verify every number in the table appears in the recorded output
 
 ## 5. Integration
 

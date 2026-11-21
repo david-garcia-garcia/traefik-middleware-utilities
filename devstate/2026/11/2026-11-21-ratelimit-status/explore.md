@@ -178,8 +178,8 @@ Raíces buscadas: todo el worktree, `*.go` con `\.(Allow|Take|Peek)\(` y con imp
 
 - Q: ¿Cuánto cuesta el struct de retorno compilado y bajo Yaegi?
   Rank: additive incidental — solo medida; ningún criterio de Desired la nombra (sale de Unknowns y de la memoria del proyecto).
-  Decision: resolved — decisión humana: medir compilado y Yaegi. Implement corre `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/` (incluye `BenchmarkYaegi*`) en dest `ee9f5c11` y en la rama, en la misma máquina y sesión; reporta ns/op, allocs/op y `redis-cmds/op` (debe quedar igual) y actualiza `README.md` `## Rate limiters compared` si cambian. Los campos se calculan en cada llamada (aritmética O(1)); `RetryAfter` de `windowcounter` solo se calcula al denegar.
-  By: explore
+  Decision: resolved — decisión humana: medir compilado y Yaegi. Implement corre `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/` (incluye `BenchmarkYaegi*`) en dest `ee9f5c11` y en la rama, en la misma máquina y sesión; reporta ns/op, allocs/op y `redis-cmds/op` (debe quedar igual) y actualiza `README.md` `## Rate limiters compared` si cambian. Los campos se calculan en cada llamada (aritmética O(1)); `RetryAfter` de `windowcounter` solo se calcula al denegar. Implement (medido, misma máquina y sesión, `ee9f5c11` → `21fc591e`, mediana de 5): `redis-cmds/op` y allocs/op sin cambio; filas con ida y vuelta a Redis dentro del ruido (≤ 8 %); en proceso, `NewMemory` hot key 19.7 → 42.0 ns compilado y 9,438 → 11,228 ns Yaegi, `Take` buffered 229 → 258 ns compilado y 17,457 → 19,731 ns Yaegi. Una primera versión con helpers por campo costaba 16,249 ns en Yaegi (+72 %); `newStatus` se escribió en un solo cuerpo y `Period` se precalcula por limitador. README actualizado.
+  By: implement
 
 - Q: ¿Qué pasa con `_Avoid_: remaining quota` en `## Language` de `std_go_tokenbucket.md` y `std_go_windowcounter.md` (Take, Peek, Window counter, Token bucket)?
   Rank: bounded asked — cambia términos existentes de dos packets enumerados; Affected nombra `knowledge/devdocs/std_go_tokenbucket.md` y `std_go_windowcounter.md`.
