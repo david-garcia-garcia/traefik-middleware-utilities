@@ -10,6 +10,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
 // redisExpireCommand is the Redis EXPIRE verb the fake records for TTL assertions.
@@ -33,17 +35,23 @@ type testFakeRedis struct {
 	getEnteredOnce sync.Once
 	getRelease     chan struct{}
 	getReleaseOnce sync.Once
+
+	// scriptCache makes EVAL store the script digest and EVALSHA of a stored digest run it (warm engine cache). Off: EVALSHA is always NOSCRIPT.
+	scriptCache   bool
+	loadedScripts map[string]string
+	// commands counts every served command so benchmarks can report Redis round trips per operation.
+	commands int
 }
 
 // startTestFakeRedis listens on a local TCP port and serves an in-process RESP map.
-func startTestFakeRedis(t *testing.T) (server *testFakeRedis, listenAddr string) {
-	t.Helper()
+func startTestFakeRedis(tb testing.TB) (server *testFakeRedis, listenAddr string) {
+	tb.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
-	t.Cleanup(func() { _ = listener.Close() })
-	fake := &testFakeRedis{store: map[string]string{}, expireSec: map[string]int64{}, listener: listener}
+	tb.Cleanup(func() { _ = listener.Close() })
+	fake := &testFakeRedis{store: map[string]string{}, expireSec: map[string]int64{}, listener: listener, loadedScripts: map[string]string{}}
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -69,6 +77,13 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 			return
 		}
 		f.mu.Lock()
+		f.commands++
+		// A cached EVALSHA runs the stored body as if it were EVAL; without the cache it is NOSCRIPT.
+		if args[0] == "EVALSHA" && f.scriptCache && len(args) > 1 {
+			if script, loaded := f.loadedScripts[args[1]]; loaded {
+				args = append([]string{"EVAL", script}, args[2:]...)
+			}
+		}
 		switch args[0] {
 		case "AUTH", "SELECT":
 			_, _ = io.WriteString(conn, "+OK\r\n")
@@ -116,6 +131,9 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 			// No script cache: NOSCRIPT so SimpleRedis Eval falls back to EVAL.
 			_, _ = io.WriteString(conn, "-NOSCRIPT No matching script. Please use EVAL.\r\n")
 		case "EVAL":
+			if f.scriptCache && len(args) > 1 {
+				f.loadedScripts[simpleredis.ScriptSHA1Hex(args[1])] = args[1]
+			}
 			// break in an inner case leaves only this switch; nothing follows it in case "EVAL".
 			switch {
 			case args[1] == flushScript && len(args) >= 6:
@@ -166,6 +184,20 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 		}
 		f.mu.Unlock()
 	}
+}
+
+// enableScriptCache makes the fake keep EVAL digests so EVALSHA hits, like an engine with a warm script cache.
+func (f *testFakeRedis) enableScriptCache() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.scriptCache = true
+}
+
+// commandCount returns how many commands the fake has served.
+func (f *testFakeRedis) commandCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.commands
 }
 
 // failNextExpireCommands replies -ERR to the next n EXPIRE commands, then succeeds.

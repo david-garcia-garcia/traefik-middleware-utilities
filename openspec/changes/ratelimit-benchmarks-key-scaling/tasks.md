@@ -1,23 +1,23 @@
 ## 1. Benchmark harness (test-only, commit 1)
 
-- [ ] 1.1 Widen `startTestFakeRedis`, `writeGopathTokenbucket`, `writeGopathWindowcounter`, `copyNonTestGo`, `callerDir`, `writeGopathFile` to `testing.TB` in both packages; verify `go vet ./tokenbucket/ ./windowcounter/` is clean with no caller edits
-- [ ] 1.2 Add the opt-in script-digest cache (`scriptCache`, `loadedScripts`) and a served-command counter to `tokenbucket/fake_redis_test.go` and `windowcounter/fake_redis_test.go` (design D2), off by default; verify `go test -short -count=1 ./tokenbucket/ ./windowcounter/` passes unchanged, including every `lastEvalCommand()` assertion
+- [x] 1.1 Widen `startTestFakeRedis`, `writeGopathTokenbucket`, `writeGopathWindowcounter`, `copyNonTestGo`, `callerDir`, `writeGopathFile` to `testing.TB` in both packages; verify `go vet ./tokenbucket/ ./windowcounter/` is clean with no caller edits
+- [x] 1.2 Add the opt-in script-digest cache (`scriptCache`, `loadedScripts`) and a served-command counter to `tokenbucket/fake_redis_test.go` and `windowcounter/fake_redis_test.go` (design D2), off by default; verify `go test -short -count=1 ./tokenbucket/ ./windowcounter/` passes unchanged, including every `lastEvalCommand()` assertion
 
 ## 2. Token bucket benchmarks (commit 1)
 
-- [ ] 2.1 Add `tokenbucket/bench_test.go`: `Memory` `hot-key`, `rotating-10k`, `new-key-full-table`, `hot-key-parallel`; `Redis` `hot-key`, `rotating-10k`, `hot-key-parallel` against the fake with the cache on; `ReportAllocs` and `redis-cmds/op` (design D1); verify `go test -run '^$' -bench . -benchtime 100x ./tokenbucket/` runs every sub-benchmark
-- [ ] 2.2 Add `tokenbucket/bench_yaegi_test.go`: interpreted `Memory` hot key and `Redis` hot key (probe `Loop(count)`, warm-up `Eval`, timed `Eval(b.N)`, no unsafe); verify it runs with `-bench Yaegi -benchtime 100x`
-- [ ] 2.3 Add `tokenbucket/bench_e2e_test.go`: compiled live `tokenbucket.Redis` benchmarks (`hot-key`, `rotating-10k`) per engine via `lookupLiveEngineAddrs`, unique key prefix per run, skip under `-short` or both `TOKENBUCKET_LIVE_*` unset; verify `go test -short -run '^$' -bench Live ./tokenbucket/` skips
+- [x] 2.1 Add `tokenbucket/bench_test.go`: `Memory` `hot-key`, `rotating-10k`, `new-key-full-table`, `hot-key-parallel`; `Redis` `hot-key`, `rotating-10k`, `hot-key-parallel` against the fake with the cache on; `ReportAllocs` and `redis-cmds/op` (design D1); verify `go test -run '^$' -bench . -benchtime 100x ./tokenbucket/` runs every sub-benchmark
+- [x] 2.2 Add `tokenbucket/bench_yaegi_test.go`: interpreted `Memory` hot key and `Redis` hot key (probe `Loop(count)`, warm-up `Eval`, timed `Eval(b.N)`, no unsafe); verify it runs with `-bench Yaegi -benchtime 100x`
+- [x] 2.3 Add `tokenbucket/bench_e2e_test.go`: compiled live `tokenbucket.Redis` benchmarks (`hot-key`, `rotating-10k`) per engine via `lookupLiveEngineAddrs`, unique key prefix per run, skip under `-short` or both `TOKENBUCKET_LIVE_*` unset; verify `go test -short -run '^$' -bench Live ./tokenbucket/` skips
 
 ## 3. Window counter benchmarks (commit 1)
 
-- [ ] 3.1 Add `windowcounter/bench_test.go`: `sync_rate` 0 and 20 ms, each `hot-key`, `rotating-10k`, `hot-key-parallel`, plus `BenchmarkFlush` (1000 dirty keys, timer off, re-dirty outside the timed section); `ReportAllocs` and `redis-cmds/op`; `Close` every limiter; verify `go test -run '^$' -bench . -benchtime 100x ./windowcounter/` runs every sub-benchmark and returns
-- [ ] 3.2 Add `windowcounter/bench_yaegi_test.go`: interpreted `sync_rate` 0 and 20 ms hot key against the fake with the cache on; verify it runs with `-bench Yaegi -benchtime 100x` and does not hang on `Close`
-- [ ] 3.3 Add `windowcounter/bench_e2e_test.go`: compiled live benchmarks per engine (`sync_rate` 0 and 20 ms), unique key prefix, skip under `-short` or both `WINDOWCOUNTER_LIVE_*` unset; verify `go test -short -run '^$' -bench Live ./windowcounter/` skips
+- [x] 3.1 Add `windowcounter/bench_test.go`: `sync_rate` 0 and 20 ms, each `hot-key`, `rotating-10k`, `hot-key-parallel`, plus `BenchmarkFlush` (1000 dirty keys, timer off, re-dirty outside the timed section); `ReportAllocs` and `redis-cmds/op`; `Close` every limiter; verify `go test -run '^$' -bench . -benchtime 100x ./windowcounter/` runs every sub-benchmark and returns
+- [x] 3.2 Add `windowcounter/bench_yaegi_test.go`: interpreted `sync_rate` 0 and 20 ms hot key against the fake with the cache on; verify it runs with `-bench Yaegi -benchtime 100x` and does not hang on `Close`
+- [x] 3.3 Add `windowcounter/bench_e2e_test.go`: compiled live benchmarks per engine (`sync_rate` 0 and 20 ms), unique key prefix, skip under `-short` or both `WINDOWCOUNTER_LIVE_*` unset; verify `go test -short -run '^$' -bench Live ./windowcounter/` skips
 
 ## 4. Baseline (commit 1)
 
-- [ ] 4.1 Run `go test -short -count=1 ./...` and `golangci-lint run` (v1.63.4); both green
+- [x] 4.1 Run `go test -short -count=1 ./...` and `golangci-lint run` (v1.63.4); both green
 - [ ] 4.2 Run `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/` on the reference machine (Core Ultra 7 265K, Windows 11, go1.25.6), keep the raw output, compute medians; checkpoint commit 1 with benchmarks only and record its SHA for the README "before" column
 
 ## 5. `tokenbucket.Memory` O(1) admission (commit 2)
