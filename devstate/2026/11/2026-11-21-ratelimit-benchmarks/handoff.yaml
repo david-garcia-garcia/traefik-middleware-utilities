@@ -6,8 +6,8 @@ prHost: github
 ciHost: github
 repoSlug: traefik-middleware-utilities
 destBranch: master
-qualify: qualified
-src: 5629b4f9db446464
+qualify: qualified-with-gaps
+src: b7253c9e5ff28b3e
 localTests: none
 requirement: requirement.md
 comments: none
