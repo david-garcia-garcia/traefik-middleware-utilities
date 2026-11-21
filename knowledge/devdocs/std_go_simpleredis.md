@@ -11,6 +11,10 @@ _Avoid_: `go-redis`, miniredis, Unix sockets, renaming the package to `redis`
 The point after one complete RESP value where the connection reader has no leftover bytes. A socket that is not on a reply boundary is destroyed, not returned to idle.
 _Avoid_: draining leftover bytes to resynchronise; treating a clean parse as reusable without an empty reader
 
+**In-use turn**:
+One of the `PoolSize` permits that bound live sockets: a command holds one from borrow until its socket is released, and an idle socket holds none. The in-use-turn semaphore that hands them out is a mutex, a free count, a cap frozen at `New`, and a FIFO of waiting borrows.
+_Avoid_: token, slot, in-use-turn channel
+
 **TLS rejection**:
 A deterministic TLS failure an operator must fix: the client refused the server certificate, the server sent a TLS alert (in the handshake or on the first read), or the peer answered the ClientHello with bytes that are not a TLS record. It is `redis:tls` (`ErrTLS`). A TLS dial that times out or is reset is not a TLS rejection; it stays `redis:unreachable`.
 _Avoid_: TLS error, TLS timeout, handshake failure (in this package a handshake failure is AUTH or SELECT after connect, `handshakeFailed`)
@@ -76,6 +80,8 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `simpleredis/yaegi_defer_test.go` — interpreted defer runs on panic (evidence that overturns PR #29)
 - `simpleredis/panic_safety_test.go` — recovered panic inside `do` returns the turn and closes the socket
 - `simpleredis/yaegi_errorpath_test.go` — interpreted dial-retry, stall timeout, cancel-mid-command, pool wait, truncated bulk
+- `simpleredis/pool_test.go` — in-use-turn semaphore: FIFO hand-off, wait woken by cancel, `PoolTimeout` as pool wait, grant/abandon race keeps the semaphore balanced, over-free
+- `simpleredis/repro_yaegi_select_crosstalk_test.go`, `simpleredis/repro_yaegi_select_probe_test.go` — Yaegi shared-`select` probes (`TestReproSelect_*`): compiled control and interpreted regression for `waitUntil`, the borrow wait, two pools, and a saturated Get
 - `simpleredis/chaos_pool_test.go` — chaos mix: no cross-key Get, at-rest turns, `OverFrees() == 0`, settled open sockets
 - `simpleredis/lifecycle_test.go` — New/use/Close cycles and Close during held Gets
 - `simpleredis/commands_msetex_concurrent_test.go` — concurrent unknown-command MSetEX fallback
@@ -94,7 +100,7 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `New` does not dial. A refusing host is fine until the first command.
 - After `Close`, later commands return `redis:unreachable` and do not redial. Closed-client unreachable is not retried. Call `Close` while a command is in flight: that command may finish; its socket is closed on release, not returned to idle.
 - Live cap is `Config.PoolSize` (`PoolSize()`, const default 8; unused plus in-flight). `New` builds the in-use-turn semaphore (mutex, free count, cap frozen from `PoolSize`, FIFO of waiting borrows). After `New` a `PoolSize` write does not resize. A waiter past `PoolSize` waits `PoolTimeout` (default 200ms), then `redis:unreachable`. Idle trim is `MaxIdleConns` (default 8). Pool wait is not retried. An extra return of an in-use turn when the semaphore is already full does not hang: it is dropped and `OverFrees()` increments. Dest used to park that goroutine forever. Correct accounting stays at `OverFrees() == 0`.
-- Do not treat `len(idleConns)` plus the free in-use turns as a live-socket count. The two reads are not atomic, and `release` publishes into `idleConns` before `freeInUseTurn`, so a releasing socket is counted in both (up to 2× PoolSize). Server-side peak open also over-counts because the serve goroutine exits after the client's `Close`. Assert only at-rest turns (free turns == cap and no queued waiter; the turn helpers in `simpleredis/repro_yaegi_select_probe_test.go`) and settled server open ≤ PoolSize. Do not assert peak live sockets.
+- Do not treat `len(idleConns)` plus the free in-use turns as a live-socket count. The two reads are not atomic, and `release` publishes into `idleConns` before `freeInUseTurn`, so a releasing socket is counted in both (up to 2× PoolSize). Server-side peak open also over-counts because the serve goroutine exits after the client's `Close`. Assert only at-rest turns (free turns == cap via `inUseTurnsForTest` in `simpleredis/repro_yaegi_select_probe_test.go`, and no queued waiter via `queuedTurnWaiters` in `simpleredis/pool_test.go`) and settled server open ≤ PoolSize. Do not assert peak live sockets.
 - Borrow sweeps idle sockets older than `IdleTimeout` (default 30s) and closes them, including a stale head behind a younger tail that is reused. `New` starts no reaper; a fully quiet client keeps those sockets until `Close`.
 - A client that did not come from `New` (`&SimpleRedis{}`) fails the first command immediately with `redis:unreachable` and is not retried.
 - Yaegi tests copy non-test sources into GOPATH with stdlib only (`useunsafe` false).
