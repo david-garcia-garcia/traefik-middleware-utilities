@@ -1,30 +1,39 @@
 ## Motivation
-Not yet.
+El middleware que limita peticiones con `tokenbucket` (reloj de Traefik RateLimit, en memoria o en Redis) y con `windowcounter` (ventana deslizante de Redis) responde 429 cuando el limitador deniega, pero no puede decirle al cliente cuándo reintentar ni cuánto cupo le queda. `tokenbucket.Memory.Allow` / `Redis.Allow` solo devolvían `(allowed, wait)` y `windowcounter.Take` / `Peek` / `Allow` solo `(allowed, estimated)`.
+
+Los datos existían dentro de cada llamada y se tiraban: los tokens que quedan en el cubo (`consumeOne` los guarda en memoria; el script Lua los devuelve como tercer campo y Go no lo leía), los recuentos `current` y `previous` por separado y el inicio de la ventana fija. Sin ellos el middleware no puede rellenar `Retry-After` ni `X-RateLimit-Limit` / `-Remaining` / `-Period` / `-Reset`, y además el `wait` de `tokenbucket` se desbordaba a una duración negativa con esperas enormes (`-2562047h47m16.854775808s`), así que tampoco servía tal cual como `Retry-After`.
+
+Sin el cambio, los clientes reciben 429 sin indicación de cuándo reintentar, y el middleware no puede ofrecer las cabeceras `X-RateLimit-*` que Traefik Hub documenta para su limitador distribuido.
+
+Priority: P2 — dolor real para quien opera el middleware y sus clientes (429 sin `Retry-After` ni cabeceras de cupo), sin daño de datos ni contrato público roto hoy.
 
 ## Implementation
-Not yet.
+Cambio rompedor pedido por el solicitante: las firmas existentes devuelven `(Status, error)` y no hay métodos paralelos. Cada paquete tiene su `Status` en `status.go` con los mismos nombres para los campos comunes (`Allowed`, `Limit`, `Remaining`, `Period`, `Reset`, `RetryAfter`), y un único `newStatus` que construye todos los campos a partir de lo que la llamada ya tenía; los errores devuelven `Status{}`.
+
+En `tokenbucket`, `Memory` y `Redis` pasan por el mismo `newStatus(clock, tokens, waitMicro)`: `Limit = burst`, `Remaining = floor(tokens)` acotado a `[0, burst]`, `Period = burst / rate` precalculado al construir, `Reset` = tiempo hasta cubo lleno, y la espera se reparte en `Delay` (admitido con espera, Traefik duerme) o `RetryAfter` (denegado). Todas las duraciones saturan en el máximo en vez de desbordar. `Redis.Allow` lee ahora el tercer campo del `EVAL` con la misma regla de número finito y devuelve `tokenbucket: eval tokens is not a number` si no lo es; el script Lua no cambia.
+
+En `windowcounter`, `slidingWindow` lleva la lectura de reloj, la longitud y el inicio de la ventana, y el peso pasa a `weightAt`, compartido por la admisión y la búsqueda de reintento. `Reset` es el tiempo hasta el fin de la ventana fija alineada al epoch (decisión del solicitante). `RetryAfter`, solo al denegar, es el primer segundo entero en el que un Take más sin otro tráfico sería admitido: forma cerrada en la ventana actual o en la siguiente, corregida paso a paso con el mismo predicado de admisión; con `limit < 1` es `Reset`. En modo buffered todos los campos salen de la vista de esta instancia y no se añade ningún comando Redis.
+
+La revisión de código dejó `newStatus` de ambos paquetes calculando los campos en variables locales y devolviendo un único literal, lo que recorta el coste compilado del `Status` en la ruta caliente sin cambiar ningún valor.
 
 ## What this changes
 **Operators.** None.
-
 **Admin users.** None.
-
-**Developers.** None.
-
+**Developers.** `tokenbucket.Memory.Allow` / `Redis.Allow` y `windowcounter.Limiter.Take` / `Peek` / `Allow` devuelven `(Status, error)` en lugar de `(bool, time.Duration, error)` / `(bool, float64, error)`; la antigua espera es `Delay + RetryAfter`, el antiguo estimado es `Estimated`, y `Redis.Allow` puede devolver el nuevo error `tokenbucket: eval tokens is not a number`.
 **End users.** None.
 
 ## Merge readiness
-Ready for review. 0 items remain.
+In progress. 0 items remain.
 
-Priority: unknown — motivation not written
-Reviewed head: efd1cd69
+Priority: P2 — dolor real para quien opera el middleware y sus clientes (429 sin `Retry-After` ni cabeceras de cupo), sin daño de datos ni contrato público roto hoy.
+Reviewed head: 3538ce6c
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44903536059 |
+| Overall readiness | 1/6 | Not ready |
+| CI proof | 1/6 | not seen |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -34,7 +43,7 @@ Owner decision: None.
 | Branch | 2026-11-21-ratelimit-status pushed | `git` |
 | OpenSpec | ratelimit-status | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106 | pr-host |
-| CI | build 44903536059 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44903536059 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44903536059 |
+| CI | not seen | caller omitted CI snapshot |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -53,7 +62,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-21-ratelimit-status on branch 2026-11-21-ratelimit-status targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106; CI build 44903536059 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44903536059.
+Ticket 2026-11-21-ratelimit-status on branch 2026-11-21-ratelimit-status targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106; CI not seen.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -77,7 +86,15 @@ Ticket 2026-11-21-ratelimit-status on branch 2026-11-21-ratelimit-status targeti
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/devstate/2026/11/2026-11-21-ratelimit-status/codereview_standards.md) — 1 total, 0 pending, 0 completed, 1 skipped
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/devstate/2026/11/2026-11-21-ratelimit-status/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/devstate/2026/11/2026-11-21-ratelimit-status/codereview_spec.md) — 1 total, 0 pending, 1 completed
+[Scope](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/devstate/2026/11/2026-11-21-ratelimit-status/codereview_scope.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/devstate/2026/11/2026-11-21-ratelimit-status/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/devstate/2026/11/2026-11-21-ratelimit-status/codereview_performance.md) — 2 total, 0 pending, 2 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/devstate/2026/11/2026-11-21-ratelimit-status/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-status/devstate/2026/11/2026-11-21-ratelimit-status/codereview_coverage.md) — 1 total, 0 pending, 1 completed
+
 
 ## Agent review details
 
@@ -86,7 +103,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 2 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | efd1cd6938fe2021e4781d57db0312b60df484aa | Card must match the branch you measured |
+| Reviewed head | 3538ce6ce873dea6b5acacd2ea4d4b099be74348 | Card must match the branch you measured |
 
 ### Stored data model
 None.
