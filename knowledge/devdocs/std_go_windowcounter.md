@@ -3,16 +3,24 @@
 ## Language
 
 **Window counter**:
-A sliding-window hit counter on Redis or Dragonfly. Package `windowcounter`. It counts hits in a whole-second window and returns allow/deny plus the sliding estimate. It is not a token bucket and not Traefik RateLimit.
-_Avoid_: naming the package `ratelimit` or `tokenbucket`; remaining quota; reading HTTP or client address inside the library
+A sliding-window hit counter on Redis or Dragonfly. Package `windowcounter`. It counts hits in a whole-second window and returns a `Status` (allow/deny, the sliding estimate, and rate-limit values). It is not a token bucket and not Traefik RateLimit.
+_Avoid_: naming the package `ratelimit` or `tokenbucket`; reading HTTP or client address inside the library
 
 **Peek**:
 Already-used occupancy: whether the sliding estimate is at or under limit, without recording a hit. Same arguments, formula, Redis keys, and store as Take. Not whether the next Take would admit. `Allow` is still Take, not Peek.
-_Avoid_: remaining quota; treating Peek as Allow; treating Peek allowed as a reservation for a later Take; a second consistency mode
+_Avoid_: treating Peek as Allow; treating Peek allowed as a reservation for a later Take; a second consistency mode
 
 **Take**:
-One hit against an opaque key, a limit, and a whole-second window. Returns whether the hit is allowed and the sliding estimate after that hit. `Allow` is the same operation.
-_Avoid_: remaining quota; a token or leaky bucket
+One hit against an opaque key, a limit, and a whole-second window. Returns a `Status` whose `Estimated` is the sliding estimate after that hit. `Allow` is the same operation.
+_Avoid_: a token or leaky bucket
+
+**Status**:
+The outcome of one Take, Peek, or Allow: `Allowed`, `Estimated`, and `Limit`, `Remaining`, `Period` (the window), `Reset`, `RetryAfter` for rate-limit headers. A value; the library writes no header.
+_Avoid_: rate-limit headers inside the library; reading `Reset` as the time until the full limit is back
+
+**Remaining**:
+How many more Takes fit now: `floor(max(limit - Estimated, 0))`.
+_Avoid_: `Estimated`; a reservation for later Takes
 
 **Sliding estimate**:
 `current + previous × (1 − elapsed/window)` using Redis integers for this window and the previous window.

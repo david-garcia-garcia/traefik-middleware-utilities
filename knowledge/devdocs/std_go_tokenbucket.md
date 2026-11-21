@@ -4,11 +4,19 @@
 
 **Token bucket**:
 A Traefik RateLimit clock. Package `tokenbucket`. Refill at `rate` tokens per second, cap at `burst`, consume 1 per Allow. It is not a sliding-window hit counter and not Kong `sync_rate`.
-_Avoid_: naming the package `ratelimit` or `bucket`; mixing this clock with `windowcounter`; remaining quota
+_Avoid_: naming the package `ratelimit` or `bucket`; mixing this clock with `windowcounter`
 
 **Allow**:
-One consume against an opaque key. Returns whether the consume is allowed and how long to wait. The caller 429s or waits. The library does not sleep.
+One consume against an opaque key. Returns a `Status`. The caller 429s or waits. The library does not sleep.
 _Avoid_: HTTP 429 inside the library; sourceCriterion; prefixing `rate:` inside the package
+
+**Status**:
+The outcome of one Allow: `Allowed`, the wait split into `Delay` (allowed) and `RetryAfter` (denied), and `Limit` (burst), `Remaining`, `Period`, `Reset` for rate-limit headers. A value; the library writes no header.
+_Avoid_: rate-limit headers inside the library; a single wait return; reading `Period` as Traefik's configured `period`
+
+**Remaining**:
+The whole tokens the bucket keeps after this Allow (after the refund when denied), never above `Limit`, and 0 while the bucket is in debt.
+_Avoid_: tokens before the consume; a negative count
 
 ## Overview
 
