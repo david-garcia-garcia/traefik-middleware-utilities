@@ -33,6 +33,6 @@
 
 ## Workflow follow-up
 
-- Devdocs impact: define `Status` and `Remaining` in `## Language` of `std_go_tokenbucket.md` and `std_go_windowcounter.md`, and drop `remaining quota` from `_Avoid_` where it contradicts the new field (keep the Peek-as-reservation and Peek-as-Allow avoids).
-- Archive: fold the deltas into `std_go_tokenbucket_allow` and `std_go_windowcounter_sliding-take`; create `std_go_tokenbucket_status` and `std_go_windowcounter_status`.
-- Release: pick the tag for a breaking change (design Open Questions).
+- Done (devdocs impact): define `Status` and `Remaining` in `## Language` of `std_go_tokenbucket.md` and `std_go_windowcounter.md`, and drop `remaining quota` from `_Avoid_` where it contradicts the new field (keep the Peek-as-reservation and Peek-as-Allow avoids).
+- Done (archive): fold the deltas into `std_go_tokenbucket_allow` and `std_go_windowcounter_sliding-take`; create `std_go_tokenbucket_status` and `std_go_windowcounter_status`.
+- Release: pick the tag for a breaking change (design Open Questions). Decided by the conductor: `v1.0.10`, following the repo convention of shipping breaking changes as `v1.0.x` patch tags without a `/v2` module path (as #101 `backendbackoff`). The conductor creates the tag after merge.

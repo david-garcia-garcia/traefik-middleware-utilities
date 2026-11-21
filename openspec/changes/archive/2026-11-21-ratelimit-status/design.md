@@ -125,4 +125,4 @@ Single breaking change; no data or Redis key format changes, so rollback is reve
 
 ## Open Questions
 
-- Release tag. The module is at `v1` (latest tag `v1.0.9`) and this change breaks exported signatures; under Go module semver a breaking change normally needs a `/v2` module path. The requester accepted the break but did not choose a version. The release step decides the tag; it does not change the specs or the tasks.
+- Release tag. The module is at `v1` (latest tag `v1.0.9`) and this change breaks exported signatures; under Go module semver a breaking change normally needs a `/v2` module path. The requester accepted the break but did not choose a version. The release step decides the tag; it does not change the specs or the tasks. Resolved at archive: `v1.0.10`, the repo convention for breaking changes (patch tag, no `/v2` path, as #101); the conductor tags after merge.
