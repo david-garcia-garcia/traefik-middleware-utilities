@@ -82,15 +82,16 @@ func (m *Memory) Allow(ctx context.Context, key string) (bool, time.Duration, er
 		// Missing or TTL-expired key is a full bucket, then consumeOne.
 		entry = &memEntry{tokens: float64(m.clock.burst), last: nowMicro, key: key}
 		m.buckets[key] = entry
-	} else {
+		m.pushBackLocked(entry)
+	} else if entry != m.tail {
+		// Its expireAt is about to become the latest, so it moves to the tail. The tail itself stays put (hot key).
 		m.unlinkLocked(entry)
+		m.pushBackLocked(entry)
 	}
 	tokens, last, waitMicro := consumeOne(entry.tokens, entry.last, m.clock.limitPerMicro(), float64(m.clock.burst), nowMicro, m.clock.maxDelay.Microseconds())
 	entry.tokens = tokens
 	entry.last = last
 	entry.expireAt = now.Add(m.clock.ttl)
-	// The entry now expires last, so it goes to the tail of the expiry list.
-	m.pushBackLocked(entry)
 	// Admit uses whole microseconds, same units as consumeOne refund and Lua ARGV.
 	allowed := waitMicro <= float64(m.clock.maxDelay.Microseconds())
 	wait := time.Duration(0)
