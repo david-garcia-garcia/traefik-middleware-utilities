@@ -12,5 +12,5 @@ localTests: none
 requirement: requirement.md
 comments: none
 explore: explore.md
-change: none
+change: ratelimit-status
 pr: { id: 106, url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/106 }
