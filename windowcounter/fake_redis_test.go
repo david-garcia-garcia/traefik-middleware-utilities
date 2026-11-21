@@ -116,7 +116,9 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 			// No script cache: NOSCRIPT so SimpleRedis Eval falls back to EVAL.
 			_, _ = io.WriteString(conn, "-NOSCRIPT No matching script. Please use EVAL.\r\n")
 		case "EVAL":
-			if args[1] == flushScript && len(args) >= 6 {
+			// break in an inner case leaves only this switch; nothing follows it in case "EVAL".
+			switch {
+			case args[1] == flushScript && len(args) >= 6:
 				key := args[3]
 				delta, convErr := strconv.ParseInt(args[4], 10, 64)
 				if convErr != nil {
@@ -133,7 +135,7 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 					f.lastExpire = []string{"EXPIREAT", key, args[5]}
 				}
 				_, _ = fmt.Fprintf(conn, ":%d\r\n", n)
-			} else if args[1] == takeExactScript && len(args) >= 5 {
+			case args[1] == takeExactScript && len(args) >= 5:
 				key := args[3]
 				ttl, convErr := strconv.ParseInt(args[4], 10, 64)
 				if convErr != nil {
@@ -156,7 +158,7 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 					f.expireSec[key] = ttl
 				}
 				_, _ = fmt.Fprintf(conn, ":%d\r\n", n)
-			} else {
+			default:
 				_, _ = io.WriteString(conn, ":0\r\n")
 			}
 		default:
