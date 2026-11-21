@@ -27,6 +27,13 @@ The current window start SHALL be `floor(unixSeconds / windowSeconds) × windowS
 - **THEN** the estimate still includes the previous window's hits
 - **AND** the new window MUST NOT admit a second full limit the way a fixed window would
 
+#### Scenario: Buffered two-client dump at the window boundary
+- **WHEN** two limiter instances with `sync_rate` greater than zero each record one hit in the same window (limit 2)
+- **AND** the first instance Sleeps then the second instance Sleeps
+- **AND** Take is called on the first instance at the start of the next window (previous-window weight 1)
+- **THEN** that Take returns allowed false
+- **AND** the sliding estimate is 3
+
 #### Scenario: Usage is the sliding estimate
 - **WHEN** Take returns
 - **THEN** the usage value is the sliding estimate after this Take as a float
@@ -50,7 +57,7 @@ The current window start SHALL be `floor(unixSeconds / windowSeconds) × windowS
 - **THEN** the sliding estimate after that Take equals one hit, not N plus one
 
 ### Requirement: Peek agrees with Take before the increment
-For the same clock, key, limit, and window, Peek's estimated SHALL be the already-used sliding occupancy (no hit added). Peek's `allowed` SHALL be true when that occupancy is less than or equal to `limit`. Those values SHALL match what Take would return for that same state before Take increments. Peek MUST NOT compare occupancy plus one.
+For the same clock, key, limit, and window, Peek's estimated SHALL be the already-used sliding occupancy (no hit added). Peek's `allowed` SHALL be true when that occupancy is less than or equal to `limit`. Those values SHALL match what Take would return for that same state before Take increments. Peek MUST NOT compare occupancy plus one. In buffered mode (`sync_rate` greater than zero) Peek MAY report a previous-window count older than Redis (another instance flushed into it after this instance last read it) until Take refreshes previous. Peek MUST NOT GET previous on every call to close that gap.
 
 #### Scenario: Peek then Take when the increment does not cross limit
 - **WHEN** the clock is held fixed
@@ -67,6 +74,14 @@ For the same clock, key, limit, and window, Peek's estimated SHALL be the alread
 - **THEN** Peek returns allowed true and estimated equal to `limit`
 - **WHEN** Take is then called once more
 - **THEN** that Take returns allowed false and estimated equal to `limit` plus one
+
+#### Scenario: Buffered Peek may lag previous until Take
+- **WHEN** `sync_rate` is greater than zero
+- **AND** another instance has flushed a higher shared count onto a key that is now previous
+- **AND** Peek is called on this instance at that clock
+- **THEN** Peek MAY still use this instance's last flush return for previous
+- **AND** the next Take SHALL refresh previous under the sync-flush previous-refresh rule
+- **AND** Peek MUST NOT GET previous solely because `local_delta` is 0
 
 ### Requirement: Peek follows the sliding window after Takes stop
 After enough Takes to deny, further Peeks with no Takes SHALL stay denied while the weighted estimate remains above the limit, then SHALL become allowed when the clock advances enough that the formula (`current + previous × (1 − elapsed/window)`) drops to at most the limit. The cooldown MUST be that formula at the caller's clock, not a wait of two window lengths.

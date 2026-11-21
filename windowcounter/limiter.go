@@ -60,6 +60,8 @@ type windowState struct {
 	localDelta int64
 	expireAt   int64
 	flushDelta int64 // amount copied for an in-flight EVAL; 0 means none
+	// previousGetAt is when buffered Take last GET this key as the previous window; zero means never.
+	previousGetAt time.Time
 }
 
 // New builds a limiter on a SimpleRedis from simpleredis.New. Negative syncRate fails. Positive values below 20ms floor to 20ms. Zero is exact (EVAL INCR plus EXPIRE-if-no-TTL every Take, Redis errors on that call). Positive syncRate buffers locally and returns a retained flush error (or a probe after one missed sync_rate) instead of a silent nil.
@@ -197,7 +199,7 @@ func (l *Limiter) takeBuffered(ctx context.Context, currentKey, previousKey stri
 	if err != nil {
 		return false, 0, err
 	}
-	previous, err := l.bufferedCountLocked(ctx, previousKey)
+	previous, err := l.takeBufferedPreviousLocked(ctx, previousKey)
 	if err != nil {
 		return false, 0, err
 	}
@@ -275,6 +277,31 @@ func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt in
 	}
 	l.lastRedisOK = l.now()
 	return l.applyGetLocked(redisKey, known, expireAt), nil
+}
+
+// takeBufferedPreviousLocked is redis_known + local_delta for previous on Take.
+// Other instances may flush into this key after this instance's last flush (Sleep order, or
+// their sync_rate tick after the window roll). Take GETs it the first time it is used as previous,
+// then at most once per sync_rate, so the refresh cadence matches the current window (one GET per
+// flush cycle) instead of one GET per Take. While localDelta is greater than 0 the memory count
+// wins: Redis does not hold this instance's unflushed delta. The GET drops l.mu like windowLocked.
+func (l *Limiter) takeBufferedPreviousLocked(ctx context.Context, redisKey string) (int64, error) {
+	now := l.now()
+	state := l.windows[redisKey]
+	if state != nil {
+		refreshed := !state.previousGetAt.IsZero() && now.Sub(state.previousGetAt) < l.syncRate
+		if state.localDelta != 0 || refreshed {
+			return state.redisKnown + state.localDelta, nil
+		}
+	}
+	known, err := l.getCountUnlocked(ctx, redisKey)
+	if err != nil {
+		return 0, err
+	}
+	l.lastRedisOK = l.now()
+	state = l.applyGetLocked(redisKey, known, 0)
+	state.previousGetAt = now
+	return state.redisKnown + state.localDelta, nil
 }
 
 // bufferedCountLocked is redis_known + local_delta, GET-seeding a key the limiter has not seen.
