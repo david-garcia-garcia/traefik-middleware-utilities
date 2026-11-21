@@ -14,3 +14,8 @@ head: e3625d33e3a9841725c3fb3168a9f83cdee3babb
 phase: explore
 verdict: in progress
 head: 875328c06da4d3058be9cbf6a29fe8a320135ef4
+
+## prepare (2026-11-21)
+phase: prepare
+verdict: in progress
+head: 4baaa5970d38bf9d259e385ffb708ae7d80a3831
