@@ -33,7 +33,7 @@ Documentación: nueva sección `## Rate limiters compared` en el README (tabla p
 In progress. 1 items remain.
 
 Priority: P2 — dolor real de operador y usuario final (paradas bajo el mutex y sincronización que se estira), limitado a conjuntos grandes de claves en `NewMemory` y en modo buffered.
-Reviewed head: 6319a592
+Reviewed head: 6a964674
 Owner decision: None.
 
 ## Review scores
@@ -56,8 +56,12 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/openspec/changes/ratelimit-benchmarks-key-scaling/proposal.md) — modified
-- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/openspec/changes/ratelimit-benchmarks-key-scaling/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/openspec/changes/archive/2026-11-21-ratelimit-benchmarks-key-scaling/proposal.md) — modified
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/openspec/changes/archive/2026-11-21-ratelimit-benchmarks-key-scaling/proposal.md) — modified
+
+Completed:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/openspec/specs/std_go_tokenbucket_allow/spec.md) — modified
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-21-ratelimit-benchmarks/openspec/specs/std_go_windowcounter_sync-flush/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -92,9 +96,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 6319a5923b4645e3243971975446974cc1424452 | Card must match the branch you measured |
+| Reviewed head | 6a964674ced1be442ba66e270888f69ab3086ba9 | Card must match the branch you measured |
 
 ### Stored data model
 None.
