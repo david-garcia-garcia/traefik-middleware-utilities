@@ -326,8 +326,8 @@ Recomendación: **A**. Usa solo `Eval`, que ya existe, sigue el precedente multi
 
 - Q: ¿Cómo presenta la tabla del README el "antes" de las dos optimizaciones?
   Rank: additive asked — tabla nueva; Desired 1 ("mostrar el antes y el después") y Desired 2
-  Decision: assumed — implement hace primero un commit solo con los benchmarks, mide la base y luego optimiza y mide otra vez con el mismo comando. La tarjeta del PR lleva las dos series con los SHAs de los dos commits. El README publica la serie final y, en las filas de "clave nueva con la tabla llena" y `BenchmarkFlush`, una columna "antes (commit `<sha>`)", para que se pueda reproducir con `git checkout`.
-  By: explore
+  Decision: assumed — implement hace primero un commit solo con los benchmarks, mide la base y luego optimiza y mide otra vez con el mismo comando. La tarjeta del PR lleva las dos series con los SHAs de los dos commits. El README publica la serie final y, en las filas de "clave nueva con la tabla llena" y `BenchmarkFlush`, una columna "antes (commit `<sha>`)", para que se pueda reproducir con `git checkout`. Implement: base en `d940bf43` (`bench-before.txt`); la primera serie "después" en `ae7f4a9a` mostró que la ruta Yaegi de `Memory` con clave caliente subía de ≈8,2 µs a ≈12,3 µs por mover siempre la entrada en la lista, así que `a51d20a3` deja en su sitio la entrada que ya es la cola; la serie "después" publicada es la de `a51d20a3` (`bench-after.txt`; la de `ae7f4a9a` queda en `bench-after-ae7f4a9a.txt`).
+  By: implement
 
 - Q: ¿Qué hacer con la diferencia entre go1.25.6 (máquina de la tabla) y `go 1.21` (`go.mod`)?
   Rank: additive asked — texto de la tabla; Desired 2 ("máquina de referencia … go1.25.6") y la Tension "Máquina de referencia vs módulo"

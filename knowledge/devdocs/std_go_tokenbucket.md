@@ -19,6 +19,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket`
 - `NewMemory(rate, burst, maxDelay, ttl)` or `NewRedis(client, rate, burst, maxDelay, ttl)` once.
 - Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline. Match Redis errors by `Error()` text.
 - Prove with `go test -short ./tokenbucket/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
+- Benchmark with `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/`: `bench_test.go` (compiled, fake Redis with a warm script cache, `redis-cmds/op`), `bench_yaegi_test.go` (interpreted), `bench_e2e_test.go` (`-bench Live`, needs `TOKENBUCKET_LIVE_*`, skips under `-short`). CI does not run benchmarks. Results and machine: `README.md` `## Rate limiters compared`.
 
 ## Pattern snippet
 
@@ -41,6 +42,7 @@ _ = wait
 ## Key files
 
 - `tokenbucket/` — Traefik token bucket
+- `tokenbucket/bench_test.go`, `bench_yaegi_test.go`, `bench_e2e_test.go` — compiled, interpreted, and live benchmarks
 - `openspec/specs/std_go_tokenbucket_allow/spec.md`, `openspec/specs/std_go_tokenbucket_lua-eval/spec.md`
 
 ## Gotchas
@@ -51,4 +53,5 @@ _ = wait
 - A 3-field Eval wait that is not a finite number (`nan`, `+Inf`, `-Inf`, `inf`) is `errEvalWait` (`tokenbucket: eval wait is not a number`), same as a garbage string. Do not treat it as admit or deny.
 - EVAL scripts must list keys in `KEYS` (Dragonfly). Do not use `table.maxn`.
 - Two limiter instances on one Redis key share burst. Do not expect a second full burst.
+- `NewMemory` holds at most 65536 sources (Traefik `maxSources`). A new source first removes sources whose `ttl` elapsed, then one live source only if the store is still at the cap. Which live source goes is not specified (the code removes the least recently used). A removed source comes back as a full bucket. Sources sit in an expiry-ordered list, so a new source costs O(1), not a map walk; a test clock that moves backwards can leave an expired source behind the head until it is looked up, without changing any decision.
 - Persisted `last` is never earlier than the previous `last`. Elapsed still clamps when now is behind `last` (no negative refill). Memory reads now after the mutex so lock order is clock order.
