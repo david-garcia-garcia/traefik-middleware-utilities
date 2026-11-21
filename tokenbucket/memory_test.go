@@ -150,3 +150,56 @@ func TestMemory_ReusedSourceMovesBehindExpiring(t *testing.T) {
 		t.Fatalf("stored sources %d, want 2 (hot and new)", got)
 	}
 }
+
+// expiryListKeysForTest walks the expiry list head to tail, checks every back link and that the list holds exactly the
+// stored sources, and returns the keys in list order.
+func expiryListKeysForTest(t *testing.T, limiter *Memory) []string {
+	t.Helper()
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	var keys []string
+	var previous *memEntry
+	for entry := limiter.head; entry != nil; entry = entry.next {
+		if entry.prev != previous {
+			t.Fatalf("source %q back link does not point at the source before it", entry.key)
+		}
+		if limiter.buckets[entry.key] != entry {
+			t.Fatalf("listed source %q is not the stored entry", entry.key)
+		}
+		keys = append(keys, entry.key)
+		previous = entry
+	}
+	if limiter.tail != previous {
+		t.Fatal("tail is not the last listed source")
+	}
+	if len(keys) != len(limiter.buckets) {
+		t.Fatalf("list holds %d sources, map holds %d", len(keys), len(limiter.buckets))
+	}
+	return keys
+}
+
+// TestMemory_AllowRelinksExpiryList: Allow on the head, a middle source, and the tail moves that source to the tail and keeps
+// every link, so no stored source drops out of the list.
+func TestMemory_AllowRelinksExpiryList(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	limiter := newCapTestMemory(t, &now)
+	for _, key := range []string{"a", "b", "c", "d"} {
+		allowNewFullBucket(t, limiter, key)
+	}
+	for _, step := range []struct {
+		key  string
+		want string
+	}{
+		{key: "b", want: "a,c,d,b"}, // middle
+		{key: "a", want: "c,d,b,a"}, // head
+		{key: "a", want: "c,d,b,a"}, // tail stays
+		{key: "d", want: "c,b,a,d"}, // middle next to the head
+	} {
+		if _, _, err := limiter.Allow(context.Background(), step.key); err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Join(expiryListKeysForTest(t, limiter), ","); got != step.want {
+			t.Fatalf("after Allow(%q) list %s, want %s", step.key, got, step.want)
+		}
+	}
+}

@@ -45,8 +45,8 @@
    bench-before.txt          BenchmarkYaegiMemoryAllow/hot-key   7541  7739  8181  8393  9313 ns/op
    ```
    Fix: Añadir una sub-benchmark Yaegi con claves rotativas (`BenchmarkYaegiMemoryAllow/rotating`) y publicar su fila, o decir en `README.md:157` que la fila hot-key no ejecuta el movimiento en la lista
-   Status: skipped
-   Argument: judgement: la fila Yaegi hot-key no mide el movimiento en lista de una fuente que no es la cola (~3.8 µs interpretado según `bench-after-ae7f4a9a.txt`); publicar una fila Yaegi con varias fuentes requiere nueva medición en la máquina de referencia. Queda para el solicitante.
+   Status: done
+   Argument: Taken: implement (re-entrada) añadió `BenchmarkYaegiMemoryAllow/rotating-10k` (`2c504a9b`) y en `3623aafd` hace el relink en una sola llamada; el README publica 7,549 ns/op frente a 6,733 antes (par consecutivo, dentro del ±11 % que el propio README declara).
 5. [judgement] allocs/op atribuidos al limitador incluyen el arnés — `README.md:155` — la columna "Compiled allocs/op" se lee como coste del limitador, pero `b.ReportAllocs` cuenta todas las asignaciones del proceso: en las filas con fake se incluyen las del `testFakeRedis` en proceso (parseo de RESP, `flushBatchReplyLocked` con `fmt.Fprintf` por clave), y en `new-key-full-table` la clave `"new:"+strconv.Itoa(i)` construida dentro del bucle cronometrado. Las cifras (74 allocs/op en `NewRedis`, 15,941 en `BenchmarkFlush`) no miden solo el cliente; la comparación antes/después sigue siendo válida porque el arnés es el mismo
    Fix: Añadir en "How to read the numbers" que allocs/op incluye el fake en proceso y la construcción de claves del bucle, o precomputar las claves de `new-key-full-table` antes de `b.ResetTimer()`
    Status: skipped
