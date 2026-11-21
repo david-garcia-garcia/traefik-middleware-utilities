@@ -26,7 +26,7 @@ La revisión de código dejó `newStatus` de ambos paquetes calculando los campo
 In progress. 0 items remain.
 
 Priority: P2 — dolor real para quien opera el middleware y sus clientes (429 sin `Retry-After` ni cabeceras de cupo), sin daño de datos ni contrato público roto hoy.
-Reviewed head: 3538ce6c
+Reviewed head: b8caa6bd
 Owner decision: None.
 
 ## Review scores
@@ -103,7 +103,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 2 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 3538ce6ce873dea6b5acacd2ea4d4b099be74348 | Card must match the branch you measured |
+| Reviewed head | b8caa6bd1fdfeb579e36d7a46b7d8382ea8d0870 | Card must match the branch you measured |
 
 ### Stored data model
 None.
