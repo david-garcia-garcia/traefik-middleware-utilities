@@ -19,6 +19,8 @@ type memEntry struct {
 }
 
 // Memory is an in-process Traefik token bucket (Lua formulas, not x/time/rate).
+// Each value is its own key space: Allow on one *Memory does not consume tokens stored on another.
+// To share a budget across routers or reloads, share one *Memory (for example a reclaim table keyed by middleware name).
 type Memory struct {
 	clock clockConfig
 	now   func() time.Time
@@ -36,10 +38,13 @@ type Memory struct {
 const maxMemorySources = 65536
 
 // NewMemory builds an in-process limiter. rate is requests per second.
+// ttl is a minimum idle lifetime. The library raises it to the whole seconds needed to refill burst at rate, including maxDelay, so an expired bucket is already full and recreating it grants nothing (traefik/traefik#13957).
+// The returned value has its own bucket map. To share a budget across routers or reloads, reuse this *Memory (for example via reclaim keyed by middleware name).
 func NewMemory(rate float64, burst int64, maxDelay, ttl time.Duration) (*Memory, error) {
 	if err := validateClock(rate, burst, maxDelay, ttl); err != nil {
 		return nil, err
 	}
+	ttl = effectiveTTL(rate, burst, maxDelay, ttl)
 	return &Memory{
 		clock: clockConfig{
 			rate:     rate,
@@ -63,7 +68,9 @@ func (m *Memory) SetNowForTest(now func() time.Time) {
 }
 
 // Allow consumes one token for key and returns its Status: whether it is allowed, the wait as Delay or RetryAfter, and the
-// bucket after this consume. The Status is the zero value when the error is non-nil.
+// bucket after this consume. The Status is the zero value when the error is non-nil. A ctx already done returns its error
+// and charges nothing. HTTP mapping (499 on Canceled, no wait when wait==0) belongs to the middleware (see
+// traefik/traefik#14173).
 func (m *Memory) Allow(ctx context.Context, key string) (Status, error) {
 	if err := ctx.Err(); err != nil {
 		return Status{}, err

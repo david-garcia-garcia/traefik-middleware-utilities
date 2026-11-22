@@ -37,7 +37,7 @@ Token-bucket Allow: admit or delay one consume on an opaque key against refill r
 - **AND** its `Allowed` is false
 
 ### Requirement: Memory store uses Lua formulas
-The in-memory store SHALL refill at `rate` tokens per second, cap at `burst`, consume 1, and compute wait in the same units Traefik's Redis script uses (tokens per microsecond, Unix microseconds, maxDelay microseconds). It MUST NOT import `golang.org/x/time/rate`. A missing key or a key whose `ttl` has elapsed SHALL start as a full bucket (`tokens = burst`, last equal to now) before consuming 1. Idle keys MUST NOT refill from elapsed since Unix epoch via `last = 0`. Entries SHALL expire after the caller `ttl` on later Allow (lazy). Construction SHALL fail when `rate <= 0`, rate is NaN, rate is infinite, `burst < 1`, `maxDelay < 0`, or `ttl` is not a whole number of seconds of at least 1s. `NewMemory` and `NewRedis` SHALL share that construction gate.
+The in-memory store SHALL refill at `rate` tokens per second, cap at `burst`, consume 1, and compute wait in the same units Traefik's Redis script uses (tokens per microsecond, Unix microseconds, maxDelay microseconds). It MUST NOT import `golang.org/x/time/rate`. A missing key or a key whose effective ttl has elapsed SHALL start as a full bucket (`tokens = burst`, last equal to now) before consuming 1. Idle keys MUST NOT refill from elapsed since Unix epoch via `last = 0`. Entries SHALL expire after the effective ttl on later Allow (lazy). The effective ttl MUST NOT be shorter than the caller ttl. Construction SHALL fail when `rate <= 0`, rate is NaN, rate is infinite, `burst < 1`, `maxDelay < 0`, or the caller `ttl` is not a whole number of seconds of at least 1s. `NewMemory` and `NewRedis` SHALL share that construction gate.
 
 #### Scenario: New rejects invalid clock
 - **WHEN** NewMemory is called with rate 0 or a negative rate
@@ -147,6 +147,12 @@ The in-memory store SHALL hold at most 65536 sources. Before storing a new sourc
 - **THEN** the store treats it as a full bucket (`tokens = burst`, last equal to now) before consuming 1
 - **AND** that Allow returns allowed true
 
+#### Scenario: Idle expired sources leave one stored source
+- **WHEN** the in-memory store holds ten sources whose `ttl` has elapsed by the limiter clock
+- **AND** Allow is called on a key that is not stored
+- **THEN** the store holds exactly one source
+- **AND** that source is the new key
+
 ### Requirement: Eval tokens that is not a finite number is not a consume
 When the Redis store is used and Eval returns three fields, Allow SHALL read the third field as the tokens left after this Allow. A tokens field that is not a finite number, including `nan`, `+Inf`, `-Inf`, `inf`, or text that does not parse, SHALL return `tokenbucket: eval tokens is not a number`. Allow MUST NOT return a `Status` with a nil error in that case. The Eval script MUST NOT change to produce this field.
 
@@ -159,3 +165,63 @@ When the Redis store is used and Eval returns three fields, Allow SHALL read the
 - **WHEN** Eval returns a tokens field written as `4`, `4.0`, `-1.0`, `0.3`, or `1e+15`
 - **THEN** Allow returns a nil error
 - **AND** the `Status` is built from that tokens value
+
+### Requirement: Concurrent first requests share one in-process bucket
+The in-process store SHALL hold the mutex that guards the bucket map across lookup, create, and consume of one Allow, so concurrent first Allows on a new opaque key share one bucket.
+
+#### Scenario: Concurrent first requests admit at most burst
+- **WHEN** 16 goroutines call Allow at the same instant on a new opaque key
+- **AND** rate is 1 per minute, burst is 5, and maxDelay is 500 ms
+- **THEN** at most 5 of those Allows return `Allowed` true
+- **AND** the store MUST NOT create a second full bucket for that key
+- **AND** a non-nil Allow error fails the check
+
+### Requirement: Idle TTL is at least the refill time
+Constructors SHALL store one effective ttl for both stores: the caller ttl raised, in whole seconds, to ceil(burst divided by rate, plus maxDelay in seconds). The floor MUST be clamped to the largest whole-second duration that does not overflow. The effective ttl MUST NOT be shorter than the caller ttl. A caller ttl below 1s or with a fractional second SHALL still be rejected before that floor.
+
+#### Scenario: Short ttl does not grant a fresh burst
+- **WHEN** rate is 0.5 tokens per second, burst is 30, maxDelay is 0, and the caller ttl is 3s
+- **AND** a key has consumed the burst
+- **AND** 5 seconds pass on the limiter clock
+- **THEN** the following admits are 2
+- **AND** they are not 30
+
+#### Scenario: Control ttl that already covers refill
+- **WHEN** rate is 0.5 tokens per second, burst is 30, maxDelay is 0, and the caller ttl is 60s
+- **AND** a key has consumed the burst
+- **AND** 5 seconds pass on the limiter clock
+- **THEN** the following admits are 2
+
+#### Scenario: Caller ttl above the floor is kept
+- **WHEN** rate is 0.5 tokens per second, burst is 30, maxDelay is 0, and the caller ttl is 120s
+- **THEN** the idle lifetime is 120s
+- **AND** it is not 60s
+
+#### Scenario: maxDelay is inside the floor
+- **WHEN** rate is 1, burst is 2, maxDelay is 1 hour, and the caller ttl is 2s
+- **THEN** the idle lifetime is 3602s
+
+#### Scenario: Enormous refill time is clamped
+- **WHEN** burst divided by rate is larger than the largest whole-second duration
+- **THEN** construction succeeds
+- **AND** the idle lifetime is that largest whole-second duration
+
+### Requirement: Memory key space is the instance
+Each `*Memory` SHALL be its own key space. `Allow` on one value MUST NOT consume tokens stored on a different `*Memory`. Two values that receive the same opaque `key` SHALL each admit up to `burst`. The library MUST NOT keep a process-wide Memory map or key Memory by middleware name.
+
+#### Scenario: Shared Memory admits burst in total
+- **WHEN** two callers share one `*Memory`
+- **AND** they `Allow` the same opaque `key` with `maxDelay` 0 until that store denies
+- **THEN** the number of `Allowed` true results across both callers is `burst`
+
+#### Scenario: Separate Memory instances admit twice burst
+- **WHEN** two `*Memory` values are constructed separately
+- **AND** each `Allow`s the same opaque `key` with `maxDelay` 0 until that value denies
+- **THEN** the number of `Allowed` true results across both values is `2 * burst`
+
+### Requirement: Redis instances share one key
+When the Redis store is used, bucket state lives on the server. Any `*Redis` that `Allow`s the same opaque `key` SHALL share that budget and admit `burst` in total across those instances.
+
+#### Scenario: Two Redis limiters on one key admit burst in total
+- **WHEN** two `*Redis` values `Allow` the same opaque `key` on a live engine with `maxDelay` 0 until that key denies
+- **THEN** the number of `Allowed` true results across both values is `burst`

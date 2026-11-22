@@ -1,0 +1,16 @@
+issueKey: 2026-11-22-tokenbucket-expired-bucket-reclaim
+jobName: 2026-11-22-tokenbucket-expired-bucket-reclaim
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 97e2becccc9b90be323873629e85cc3a33d285ef54614508b5b785bb3f32719c
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: tokenbucket-expired-bucket-reclaim
+pr: { id: 111, url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/111 }

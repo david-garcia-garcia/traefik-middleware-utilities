@@ -12,22 +12,61 @@ import (
 	"time"
 )
 
-// tokenBucketScript is a realistic hot-path Lua payload (size matters for Eval encoding).
+// tokenBucketScript is the token-bucket Lua payload tokenbucket sends (a copy of tokenbucket.allowScript;
+// simpleredis cannot import tokenbucket). TestSimpleredisBenchUsesAllowScript in tokenbucket keeps them identical.
 //
 //nolint:gosec // G101: Redis hash field name "tokens", not a credential
-const tokenBucketScript = `local rl_source = redis.call("hgetall", KEYS[1])
-local tokens = tonumber(ARGV[1])
-local burst = tonumber(ARGV[2])
-local rate = tonumber(ARGV[3])
-local now = tonumber(ARGV[4])
-if #rl_source == 4 then
-  tokens = tonumber(rl_source[2]) + (now - tonumber(rl_source[4])) * rate
+const tokenBucketScript = `
+local key = KEYS[1]
+local limit, burst, ttl, t, max_delay = tonumber(ARGV[1]), tonumber(ARGV[2]), tonumber(ARGV[3]), tonumber(ARGV[4]),
+	tonumber(ARGV[5])
+
+local bucket = {
+	limit = limit,
+	burst = burst,
+	tokens = 0,
+	last = 0
+}
+
+local rl_source = redis.call('hmget', key, 'last', 'tokens')
+
+if rl_source[1] and rl_source[2] then
+	bucket.last = tonumber(rl_source[1])
+	bucket.tokens = tonumber(rl_source[2])
+else
+	bucket.tokens = burst
+	bucket.last = t
 end
-if tokens > burst then tokens = burst end
+
+local last = bucket.last
+if t < last then
+	last = t
+end
+
+local elapsed = t - last
+local delta = bucket.limit * elapsed
+local tokens = bucket.tokens + delta
+tokens = math.min(tokens, bucket.burst)
 tokens = tokens - 1
-redis.call("hset", KEYS[1], "tokens", tokens, "last", now)
-redis.call("expire", KEYS[1], 60)
-return tostring(tokens)`
+
+local wait_duration = 0
+if tokens < 0 then
+	wait_duration = (tokens * -1) / bucket.limit
+	if wait_duration > max_delay then
+		tokens = tokens + 1
+		tokens = math.min(tokens, burst)
+	end -- wait over max_delay
+end
+
+local persistLast = bucket.last
+if t > persistLast then
+	persistLast = t
+end
+redis.call('hset', key, 'last', persistLast, 'tokens', tokens)
+redis.call('expire', key, ttl)
+
+return {tostring(true), tostring(wait_duration), tostring(tokens)}
+`
 
 const largeBulkBytes = 100 * 1024
 
@@ -87,7 +126,7 @@ func BenchmarkEval(b *testing.B) {
 	_, addr := startFakeRedis(b, map[string]string{})
 	redis := newTestRedis(b, Config{Host: addr})
 	keys := []string{"bucket:1.2.3.4"}
-	args := []string{"10", "10", "1", "1700000000"}
+	args := []string{"0.00001", "10", "60", "1700000000000000", "0"}
 
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -130,7 +169,7 @@ func encodeGet(b *testing.B) {
 func encodeEval(b *testing.B) {
 	b.Helper()
 	keys := []string{"bucket:1.2.3.4"}
-	args := []string{"10", "10", "1", "1700000000"}
+	args := []string{"0.00001", "10", "60", "1700000000000000", "0"}
 	conn := discardConn()
 
 	b.ReportAllocs()
@@ -379,8 +418,8 @@ const (
 	encodeGetBytes       int64 = 0      // framing allocates nothing
 	encodeMSetEXAllocs   int64 = 0      // framing allocates nothing
 	encodeMSetEXBytes    int64 = 0      // framing allocates nothing
-	encodeEvalAllocs     int64 = 10     // measured 9, all of them the argv build
-	encodeEvalBytes      int64 = 808    // measured 744 + 64
+	encodeEvalAllocs     int64 = 10     // measured 10, all of them the argv build
+	encodeEvalBytes      int64 = 1520   // measured 1456 + 64 (tokenbucket allowScript, 5 ARGV)
 	decodeBulkAllocs     int64 = 3      // measured 2
 	decodeBulkBytes      int64 = 112    // measured 48 + 64
 	decodeArrayAllocs    int64 = 12     // measured 11
