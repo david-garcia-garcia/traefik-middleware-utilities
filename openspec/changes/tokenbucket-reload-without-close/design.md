@@ -29,7 +29,7 @@ Idle-until-Close MAY stays on the existing leaf. Close-cycles on that leaf cover
 
 ## Decisions
 
-1. **Own file `tokenbucket/traefik_issue13618_e2e_test.go`.** Helpers `countingProxy13618`, `startCountingProxy13618`, `liveKey13618` in that package. Alternative: copy the shared reference file — rejected; it mixes other issues.
+1. **Own file `tokenbucket/traefik_issue13618_e2e_test.go`.** Helpers `testCountingProxy13618`, `startTestCountingProxy13618`, `liveKey13618` in that package. Alternative: copy the shared reference file — rejected; it mixes other issues.
 
 2. **Proxy counts open sockets only.** Accept loop plus bidirectional `io.Copy`; increment/decrement `open` around each accepted session. No `holdWrites`, no `forwardHeld`. Alternative: copy the reference proxy whole — rejected; write hold is #14173.
 

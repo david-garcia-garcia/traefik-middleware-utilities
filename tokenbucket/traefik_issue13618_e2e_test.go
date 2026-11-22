@@ -13,20 +13,20 @@ import (
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
-// countingProxy13618 is a loopback TCP proxy that counts open client connections.
-type countingProxy13618 struct {
+// testCountingProxy13618 is a loopback TCP proxy that counts open client connections.
+type testCountingProxy13618 struct {
 	listener net.Listener
 	open     atomic.Int64
 }
 
-// startCountingProxy13618 forwards every accepted connection to upstream until the test ends.
-func startCountingProxy13618(t *testing.T, upstream string) *countingProxy13618 {
+// startTestCountingProxy13618 forwards every accepted connection to upstream until the test ends.
+func startTestCountingProxy13618(t *testing.T, upstream string) *testCountingProxy13618 {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	proxy := &countingProxy13618{listener: listener}
+	proxy := &testCountingProxy13618{listener: listener}
 	go func() {
 		for {
 			down, acceptErr := listener.Accept()
@@ -72,7 +72,7 @@ func TestTraefik13618_ReloadWithoutClose(t *testing.T) {
 		t.Helper()
 		const reloads = 50
 		liveClient := waitLiveClient(t, addr)
-		proxy := startCountingProxy13618(t, addr)
+		proxy := startTestCountingProxy13618(t, addr)
 		liveClient.Close()
 		key := liveKey13618(t, "client-1")
 
