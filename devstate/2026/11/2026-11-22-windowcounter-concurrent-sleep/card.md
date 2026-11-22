@@ -1,30 +1,47 @@
 ## Motivation
-Not yet.
+`Sleep` on a buffered limiter flushes pending deltas then parks the AfterFunc flush timer. `stopFlushAndWait` sets a single `stopping` bool, detaches `flushTimer`, and waits on `flushBusy` for the in-flight tick. `Wake` refuses to arm while `stopping` is true. The live contract already covers one `Sleep` versus a concurrent `Wake`. Several owners can share one `Limiter` (the README `reclaim.Hooks` pattern) and call `Sleep` at the same time. Reclaim last-holder Sleep is serialized per key, so that path does not hit this hole.
+
+Sleep one sets `stopping` true, copies the timer, sets `flushTimer` to nil, and waits on `flushBusy` while a flush EVAL is in flight. A concurrent Sleep two finds `flushTimer` already nil, sets `stopping` false, and returns at once. That caller treats pending hits as flushed while the EVAL is still held. A `Wake` in that gap sees `stopping` false and `flushTimer` nil, starts a second AfterFunc chain, and Sleep one's `flushBusy.Wait()` then waits on a chain that re-arms forever, so Sleep one never returns. A hung Sleep can keep a reclaim key busy, so later Opens on that key block.
+
+Left alone, concurrent `Sleep` on a shared `Limiter` can return a false flush-complete, hang the other Sleep, and stall later Opens on that key. The blast radius is that sharing path, not the serialized last-holder Sleep.
+
+```mermaid
+sequenceDiagram
+    participant SleepOne as Sleep one
+    participant SleepTwo as Sleep two
+    participant Wake as Wake
+    participant Flush as inflight flush EVAL
+    SleepOne->>SleepOne: set stopping, detach timer, wait flushBusy
+    SleepTwo->>SleepTwo: timer nil, clear stopping, return
+    Wake->>Wake: stopping false, arm second AfterFunc chain
+    SleepOne->>Flush: Wait never returns, chain re-arms
+```
+
+Priority: P2 — hang and false flush-complete on concurrent Sleep, limited blast radius
 
 ## Implementation
-Not yet.
+`stopFlushAndWait` counts callers instead of a bool. Each caller increments `stoppers`, detaches `flushTimer` if one is stored, waits on `flushBusy` even when the timer was already nil, then decrements. `Wake` and `flushAfterTick` arm only while `stoppers` is zero, so a Wake during any pending stop starts nothing and at most one AfterFunc chain exists afterwards. The AfterFunc flush model is unchanged.
+
+Black-box tests hold the next flush EVAL: two concurrent Sleeps wait until release and both return after, a Wake during those waits arms nothing and a later Wake then Sleep arms and stops one chain, and the existing one-Sleep-versus-Wake control still returns.
 
 ## What this changes
 **Operators.** None.
-
 **Admin users.** None.
-
-**Developers.** None.
-
+**Developers.** Concurrent `Sleep` on one `Limiter` each wait for the in-flight flush, and `Wake` does not arm while any Sleep is still waiting.
 **End users.** None.
 
 ## Merge readiness
-Ready for review. 0 items remain.
+In progress. 0 items remain.
 
-Priority: unknown — motivation not written
-Reviewed head: 34b70a14
+Priority: P2 — hang and false flush-complete on concurrent Sleep, limited blast radius
+Reviewed head: a4414202
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45012462186 |
+| Overall readiness | 1/6 | Not ready |
+| CI proof | 1/6 | not seen |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -34,7 +51,7 @@ Owner decision: None.
 | Branch | 2026-11-22-windowcounter-concurrent-sleep pushed | `git` |
 | OpenSpec | windowcounter-concurrent-sleep-stop | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/125 | pr-host |
-| CI | build 45012462186 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45012462186 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45012462186 |
+| CI | not seen | caller omitted CI snapshot |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -50,7 +67,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-windowcounter-concurrent-sleep on branch 2026-11-22-windowcounter-concurrent-sleep targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/125; CI build 45012462186 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45012462186.
+Ticket 2026-11-22-windowcounter-concurrent-sleep on branch 2026-11-22-windowcounter-concurrent-sleep targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/125; CI not seen.
 
 ## Explore Decisions
 None.
@@ -59,7 +76,15 @@ None.
 None.
 
 ## Axis review
-None.
+[Standards](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/devstate/2026/11/2026-11-22-windowcounter-concurrent-sleep/codereview_standards.md) — 0 total, 0 pending, 0 completed
+[Nitpicks](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/devstate/2026/11/2026-11-22-windowcounter-concurrent-sleep/codereview_nitpicks.md) — 0 total, 0 pending, 0 completed
+[Spec](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/devstate/2026/11/2026-11-22-windowcounter-concurrent-sleep/codereview_spec.md) — 0 total, 0 pending, 0 completed
+[Scope](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/devstate/2026/11/2026-11-22-windowcounter-concurrent-sleep/codereview_scope.md) — 0 total, 0 pending, 0 completed
+[Security](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/devstate/2026/11/2026-11-22-windowcounter-concurrent-sleep/codereview_security.md) — 0 total, 0 pending, 0 completed
+[Performance](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/devstate/2026/11/2026-11-22-windowcounter-concurrent-sleep/codereview_performance.md) — 0 total, 0 pending, 0 completed
+[Dead](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/devstate/2026/11/2026-11-22-windowcounter-concurrent-sleep/codereview_dead.md) — 0 total, 0 pending, 0 completed
+[Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/devstate/2026/11/2026-11-22-windowcounter-concurrent-sleep/codereview_coverage.md) — 0 total, 0 pending, 0 completed
+
 
 ## Agent review details
 
@@ -68,7 +93,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 34b70a141133252e307320d8f45e5ca322cbd360 | Card must match the branch you measured |
+| Reviewed head | a4414202ade73e5c8624823687d1fb2b5dcf4226 | Card must match the branch you measured |
 
 ### Stored data model
 None.
