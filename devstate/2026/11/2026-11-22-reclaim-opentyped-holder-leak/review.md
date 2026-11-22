@@ -19,3 +19,8 @@ head: 3ac33b36b5f0f04098456d118fd2c12b3f04ecba
 phase: implement
 verdict: ready for review
 head: ba4eb8cb7a61a1f88df34b34b2a94bb98df3ce93
+
+## codereview (2026-11-22)
+phase: codereview
+verdict: in progress
+head: 6c8a0d23bd9146f0e92438a423bd6d5dbabb8698
