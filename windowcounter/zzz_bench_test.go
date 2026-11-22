@@ -157,6 +157,39 @@ func BenchmarkFlush(b *testing.B) {
 	})
 }
 
+// BenchmarkFlushIdle measures one buffered flush with no dirty windows and no due expiry, at 10k and 200k live windows.
+func BenchmarkFlushIdle(b *testing.B) {
+	for _, live := range []struct {
+		name  string
+		count int
+	}{
+		{name: "10k", count: 10_000},
+		{name: "200k", count: 200_000},
+	} {
+		live := live
+		b.Run(live.name, func(b *testing.B) {
+			limiter, fake := newBenchLimiter(b, time.Hour)
+			now := time.Unix(1_700_000_000, 0)
+			limiter.SetNowForTest(func() time.Time { return now })
+			seedIdleWindowsFlushDirtyIndex(limiter, live.count, now.Unix()+3600)
+			ctx := context.Background()
+			if err := limiter.flushPending(ctx); err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			startCommands := fake.commandCount()
+			for i := 0; i < b.N; i++ {
+				if err := limiter.flushPending(ctx); err != nil {
+					b.Fatal(err)
+				}
+			}
+			b.StopTimer()
+			reportRedisCmdsPerOp(b, fake, startCommands)
+		})
+	}
+}
+
 // dirtyWindowKeysForBench returns the Redis window keys that hold a pending local delta.
 func dirtyWindowKeysForBench(limiter *Limiter) []string {
 	limiter.mu.Lock()
@@ -175,6 +208,10 @@ func redirtyWindowsForBench(limiter *Limiter, redisKeys []string) {
 	limiter.mu.Lock()
 	defer limiter.mu.Unlock()
 	for _, redisKey := range redisKeys {
-		limiter.windows[redisKey].localDelta++
+		state := limiter.windows[redisKey]
+		if state.localDelta == 0 {
+			limiter.dirty[redisKey] = state
+		}
+		state.localDelta++
 	}
 }

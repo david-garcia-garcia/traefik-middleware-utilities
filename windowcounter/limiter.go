@@ -61,6 +61,8 @@ type Limiter struct {
 
 	mu         sync.Mutex
 	windows    map[string]*windowState
+	dirty      map[string]*windowState           // windows with localDelta > 0, or flushDelta > 0 while a flush is in flight
+	expiry     map[int64]map[string]*windowState // windows bucketed by expireAt unix second; 0 is expireAt 0
 	closed     bool
 	stopping   bool // true while stopFlushAndWait has detached the timer and is waiting for an in-flight tick
 	flushTimer *time.Timer
@@ -99,6 +101,8 @@ func New(redis *simpleredis.SimpleRedis, syncRate time.Duration) (*Limiter, erro
 		syncRate: syncRate,
 		now:      time.Now,
 		windows:  map[string]*windowState{},
+		dirty:    map[string]*windowState{},
+		expiry:   map[int64]map[string]*windowState{},
 	}
 	if syncRate > 0 {
 		limiter.startFlushLocked()
@@ -230,6 +234,9 @@ func (l *Limiter) takeBuffered(ctx context.Context, sliding slidingWindow, limit
 
 	currentState := l.windowLocked(ctx, sliding.currentKey, sliding.expireAt)
 	previous := l.takeBufferedPreviousLocked(ctx, sliding.previousKey)
+	if currentState.localDelta == 0 {
+		l.dirty[sliding.currentKey] = currentState
+	}
 	currentState.localDelta++
 	current := currentState.redisKnown + currentState.localDelta
 	return newStatus(sliding, limit, current, previous), nil
@@ -265,7 +272,7 @@ func (l *Limiter) peekCountLocked(ctx context.Context, redisKey string, expireAt
 	if state != nil {
 		// Already in the buffer: do not GET just because localDelta is 0.
 		if expireAt > state.expireAt {
-			state.expireAt = expireAt
+			l.setExpireLocked(redisKey, state, expireAt)
 		}
 		if !needsReadLocked(state) {
 			return state.redisKnown + state.localDelta
@@ -280,7 +287,7 @@ func (l *Limiter) windowLocked(ctx context.Context, redisKey string, expireAt in
 	state := l.windows[redisKey]
 	if state != nil {
 		if expireAt > state.expireAt {
-			state.expireAt = expireAt
+			l.setExpireLocked(redisKey, state, expireAt)
 		}
 		if state.localDelta != 0 {
 			return state
@@ -355,16 +362,59 @@ func (l *Limiter) getCountUnlocked(ctx context.Context, redisKey string) (int64,
 	return l.getCount(ctx, redisKey)
 }
 
+// putWindowLocked inserts state into the live-window map and its expiry bucket. Caller holds l.mu.
+func (l *Limiter) putWindowLocked(key string, state *windowState) {
+	l.windows[key] = state
+	bucket := l.expiry[state.expireAt]
+	if bucket == nil {
+		bucket = map[string]*windowState{}
+		l.expiry[state.expireAt] = bucket
+	}
+	bucket[key] = state
+}
+
+// setExpireLocked moves state between expiry buckets when newExpire differs from the stored expireAt. Caller holds l.mu.
+func (l *Limiter) setExpireLocked(key string, state *windowState, newExpire int64) {
+	if newExpire == state.expireAt {
+		return
+	}
+	if bucket := l.expiry[state.expireAt]; bucket != nil {
+		delete(bucket, key)
+		if len(bucket) == 0 {
+			delete(l.expiry, state.expireAt)
+		}
+	}
+	state.expireAt = newExpire
+	bucket := l.expiry[newExpire]
+	if bucket == nil {
+		bucket = map[string]*windowState{}
+		l.expiry[newExpire] = bucket
+	}
+	bucket[key] = state
+}
+
+// deleteWindowLocked removes the window from the live map, its expiry bucket, and the dirty index. Caller holds l.mu.
+func (l *Limiter) deleteWindowLocked(key string, state *windowState) {
+	delete(l.windows, key)
+	if bucket := l.expiry[state.expireAt]; bucket != nil {
+		delete(bucket, key)
+		if len(bucket) == 0 {
+			delete(l.expiry, state.expireAt)
+		}
+	}
+	delete(l.dirty, key)
+}
+
 // applyGetLocked stores a GET count. Caller holds l.mu. A concurrent Take's localDelta is kept.
 func (l *Limiter) applyGetLocked(redisKey string, known, expireAt int64) *windowState {
 	state := l.windows[redisKey]
 	if state == nil {
 		state = &windowState{redisKnown: known, expireAt: expireAt}
-		l.windows[redisKey] = state
+		l.putWindowLocked(redisKey, state)
 		return state
 	}
 	if expireAt > state.expireAt {
-		state.expireAt = expireAt
+		l.setExpireLocked(redisKey, state, expireAt)
 	}
 	if state.localDelta == 0 {
 		state.redisKnown = known
@@ -488,14 +538,14 @@ type pendingFlush struct {
 	expireAt int64
 }
 
-// flushPendingLocked copies in-flight deltas, EVALs them in batches of flushBatchKeys without l.mu, then applies each key's
-// outcome. Caller holds l.mu. A second flusher skips a key whose flushDelta is set, so a later batch's keys stay in flight
-// until their EVAL returns.
+// flushPendingLocked copies in-flight deltas from the dirty index, EVALs them in batches of flushBatchKeys without l.mu, then
+// applies each key's outcome and prunes due idle windows from the expiry buckets. Caller holds l.mu. A second flusher skips a
+// key whose flushDelta is set, so a later batch's keys stay in flight until their EVAL returns.
 func (l *Limiter) flushPendingLocked(ctx context.Context) error {
-	// Copy (key, delta, expireAt) and mark in-flight so a second flusher skips this snapshot.
-	var pending []pendingFlush
+	// Copy (key, delta, expireAt) from dirty windows that are not already in flight.
+	pending := make([]pendingFlush, 0, len(l.dirty))
 	nowUnix := l.now().Unix()
-	for redisKey, state := range l.windows {
+	for redisKey, state := range l.dirty {
 		if state.localDelta > 0 && state.flushDelta == 0 {
 			state.flushDelta = state.localDelta
 			pending = append(pending, pendingFlush{
@@ -516,10 +566,15 @@ func (l *Limiter) flushPendingLocked(ctx context.Context) error {
 			firstErr = batchErr
 		}
 	}
-	// Drop windows whose TTL has passed and that have no local or in-flight delta.
-	for redisKey, state := range l.windows {
-		if state.localDelta == 0 && state.flushDelta == 0 && (state.expireAt == 0 || nowUnix >= state.expireAt) {
-			delete(l.windows, redisKey)
+	// Drop due idle windows: visit expiry buckets whose second has passed (and bucket 0).
+	for expireAt, bucket := range l.expiry {
+		if expireAt != 0 && nowUnix < expireAt {
+			continue
+		}
+		for redisKey, state := range bucket {
+			if state.localDelta == 0 && state.flushDelta == 0 {
+				l.deleteWindowLocked(redisKey, state)
+			}
 		}
 	}
 	if firstErr != nil {
@@ -567,6 +622,9 @@ func (l *Limiter) applyFlushOutcomeLocked(job pendingFlush, redisCount int64, sl
 	state.unread = false
 	state.localDelta -= job.delta
 	l.lastOutageErr = nil
+	if state.localDelta == 0 && state.flushDelta == 0 {
+		delete(l.dirty, job.redisKey)
+	}
 }
 
 // flushBatchEvalUnlocked drops l.mu for one batch flush EVAL then re-locks. batch is the caller's copy, so its KEYS and ARGV
@@ -612,12 +670,12 @@ func (l *Limiter) seedUnreadWindowLocked(redisKey string, expireAt int64) *windo
 	state := l.windows[redisKey]
 	if state != nil {
 		if expireAt > state.expireAt {
-			state.expireAt = expireAt
+			l.setExpireLocked(redisKey, state, expireAt)
 		}
 		return state
 	}
 	state = &windowState{expireAt: expireAt, unread: true}
-	l.windows[redisKey] = state
+	l.putWindowLocked(redisKey, state)
 	return state
 }
 
