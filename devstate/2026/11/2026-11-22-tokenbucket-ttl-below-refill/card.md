@@ -20,14 +20,14 @@ Tras validar el ttl del llamador, `NewMemory` y `NewRedis` guardan en el reloj c
 Ready for review. 0 items remain.
 
 Priority: P1 — el límite admite un burst nuevo tras una pausa más corta que el rellenado
-Reviewed head: 6c3ac41f
+Reviewed head: cc7bb241
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995343447 |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995800981 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -37,7 +37,7 @@ Owner decision: None.
 | Branch | 2026-11-22-tokenbucket-ttl-below-refill pushed | `git` |
 | OpenSpec | tokenbucket-ttl-refill-floor | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/108 | pr-host |
-| CI | build 44995343447 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995343447 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995343447 |
+| CI | build 44995800981 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995800981 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995800981 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -58,7 +58,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-ttl-below-refill on branch 2026-11-22-tokenbucket-ttl-below-refill targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/108; CI build 44995343447 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995343447.
+Ticket 2026-11-22-tokenbucket-ttl-below-refill on branch 2026-11-22-tokenbucket-ttl-below-refill targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/108; CI build 44995800981 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995800981.
 
 ## Explore Decisions
 None.
@@ -84,7 +84,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 walked / 0 open | Unanswered review is merge risk |
-| Reviewed head | 6c3ac41f6bb9a22e1ddedbdc9b7f4bcdc024f5bf | Card must match the branch you measured |
+| Reviewed head | cc7bb241baa831b22e9f0a28945192c95d3f90be | Card must match the branch you measured |
 
 ### Stored data model
 None.
