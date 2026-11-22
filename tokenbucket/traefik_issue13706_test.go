@@ -51,15 +51,15 @@ func TestTraefik13706_MemoryScope(t *testing.T) {
 	t.Run("sharedMemory", func(t *testing.T) {
 		shared := newFrozenMemory13706(t, now)
 		// Two routers that reuse one *Memory (the way to share a budget) drain the same key.
-		routerA := countAdmits13706(t, attempts, func() (Status, error) {
+		admittedA := countAdmits13706(t, attempts, func() (Status, error) {
 			return shared.Allow(context.Background(), key13706)
 		})
-		routerB := countAdmits13706(t, attempts, func() (Status, error) {
+		admittedB := countAdmits13706(t, attempts, func() (Status, error) {
 			return shared.Allow(context.Background(), key13706)
 		})
-		total := routerA + routerB
-		if routerA != int(burst13706) || routerB != 0 {
-			t.Fatalf("shared *Memory: first caller admitted %d, second admitted %d, want %d then 0", routerA, routerB, burst13706)
+		total := admittedA + admittedB
+		if admittedA != int(burst13706) || admittedB != 0 {
+			t.Fatalf("shared *Memory: first caller admitted %d, second admitted %d, want %d then 0", admittedA, admittedB, burst13706)
 		}
 		if total != int(burst13706) {
 			t.Fatalf("two callers sharing one *Memory admitted %d, want burst %d", total, burst13706)
