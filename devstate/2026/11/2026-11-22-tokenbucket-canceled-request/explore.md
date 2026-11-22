@@ -79,8 +79,8 @@ go test -short -count=1 -v -run '^TestStatus_ErrorReturnsTheZeroStatus$' ./token
 
 - Q: ¿Dragonfly 1.40.2 sigue sin ejecutar el EVAL retenido en este árbol?
   Rank: additive asked — no reshape de callers; Unknowns nombra la medición; Desired pide registrar si se cobró, no un assert por motor
-  Decision: assumed — el test live registra el bucket tras el hold y no falla por cobro vs vacío. Medición 2026-11-22 (análisis): Redis cobró (`tokens=2` de 3); Dragonfly vacío.
-  By: explore
+  Decision: assumed — el test live registra el bucket tras el hold y no falla por cobro vs vacío. Apply en este árbol: Redis cobró (`tokens=2` de 3); Dragonfly cobró en una corrida (`tokens=2`) y quedó vacío en otra. Medición 2026-11-22 (análisis): Redis cobró; Dragonfly vacío.
+  By: implement
 
 - Q: ¿El spec vivo `std_go_tokenbucket_allow` necesita un delta solo por GoDoc?
   Rank: additive incidental — un escenario nuevo documentaría el contrato existente; Desired nombra GoDoc y tests, no un leaf
