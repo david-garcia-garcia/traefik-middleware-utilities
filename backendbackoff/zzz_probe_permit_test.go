@@ -6,7 +6,7 @@ import (
 )
 
 func TestProbePermit_StaleSuccessDoesNotDecideProbe(t *testing.T) {
-	gate := newGateProbePermit(t)
+	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
 
@@ -59,10 +59,10 @@ func TestProbePermit_StaleSuccessDoesNotDecideProbe(t *testing.T) {
 }
 
 func TestProbePermit_ExpiredLeaseLateReportIgnored(t *testing.T) {
-	gate := newGateProbePermit(t)
+	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	tripProbePermit(t, gate)
+	trip(t, gate)
 
 	now = now.Add(time.Second)
 	probeA, _, err := gate.Allow("k")
@@ -104,7 +104,7 @@ func TestProbePermit_ExpiredLeaseLateReportIgnored(t *testing.T) {
 }
 
 func TestProbePermit_PreTripFailureAfterRecloseIgnored(t *testing.T) {
-	gate := newGateProbePermit(t)
+	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
 
@@ -112,7 +112,7 @@ func TestProbePermit_PreTripFailureAfterRecloseIgnored(t *testing.T) {
 	if err != nil || !stale.Allowed() {
 		t.Fatal(err)
 	}
-	tripProbePermit(t, gate)
+	trip(t, gate)
 
 	now = now.Add(time.Second)
 	probe, _, err := gate.Allow("k")
@@ -183,7 +183,7 @@ func TestProbePermit_ExpiredRecreatedKeyIgnored(t *testing.T) {
 }
 
 func TestProbePermit_ZeroPermitIgnored(t *testing.T) {
-	gate := newGateProbePermit(t)
+	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
 	permit, _, err := gate.Allow("k")
@@ -210,36 +210,5 @@ func TestProbePermit_ZeroPermitIgnored(t *testing.T) {
 	}
 	if !expireAfter.Equal(expireBefore) {
 		t.Fatalf("expireAt moved from %v to %v; zero permit must not refresh TTL", expireBefore, expireAfter)
-	}
-}
-
-// newGateProbePermit is a jitter-off gate for Permit generation cases.
-func newGateProbePermit(t *testing.T) *Gate {
-	t.Helper()
-	gate, err := New(Config{
-		FailureRatio: 0.30,
-		TripFailures: 5,
-		BaseCooldown: time.Second,
-		MaxCooldown:  10 * time.Second,
-		Jitter:       0,
-		TTL:          time.Minute,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return gate
-}
-
-// tripProbePermit Reports B consecutive failures so the next Allow is OPEN.
-func tripProbePermit(t *testing.T, gate *Gate) {
-	t.Helper()
-	for i := 0; i < defaultTripFailures; i++ {
-		permit, _, err := gate.Allow("k")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := gate.Report(permit, false); err != nil {
-			t.Fatal(err)
-		}
 	}
 }

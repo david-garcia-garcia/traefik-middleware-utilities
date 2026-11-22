@@ -62,7 +62,7 @@ gate.Report(p, ok)
 
 ## Gotchas
 
-- Report only real attempts the gate admitted. Reporting denies poisons credit and can strand OPEN.
+- Report only real attempts the gate admitted. Denied and zero permits are ignored.
 - Report of an admitted attempt still records after idle TTL has elapsed; expire is Allow's job.
 - After Close, Allow and Report return an error.
 - Idle longer than TTL drops the key; the next Allow treats the backend as healthy.

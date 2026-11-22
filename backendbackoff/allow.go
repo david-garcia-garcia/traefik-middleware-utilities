@@ -57,6 +57,7 @@ func (g *Gate) Report(permit Permit, success bool) error {
 	if entry == nil {
 		return nil
 	}
+	// A mismatched generation is a no-op: no credit, state, n, or TTL refresh.
 	if entry.gen != permit.gen {
 		return nil
 	}
