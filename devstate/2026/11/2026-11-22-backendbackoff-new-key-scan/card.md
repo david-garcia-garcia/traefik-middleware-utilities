@@ -20,7 +20,7 @@ Priority: P2 — dolor real de operador, con workaround o radio de impacto limit
 In progress. 0 items remain.
 
 Priority: P2 — dolor real de operador, con workaround o radio de impacto limitado
-Reviewed head: 389a705e
+Reviewed head: cea3ecab
 Owner decision: None.
 
 ## Review scores
@@ -77,7 +77,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 389a705e4702d6d974515ad20cdc65e429ffe1b2 | Card must match the branch you measured |
+| Reviewed head | cea3ecabd44e8925a378319ba7fb7db928f68713 | Card must match the branch you measured |
 
 ### Stored data model
 None.
