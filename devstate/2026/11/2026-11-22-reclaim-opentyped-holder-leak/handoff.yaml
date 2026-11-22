@@ -1,0 +1,18 @@
+issueKey: 2026-11-22-reclaim-opentyped-holder-leak
+jobName: 2026-11-22-reclaim-opentyped-holder-leak
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 46a4f5480f0d842329304a9f27db6456aed39e836b24d2a900a6e562009e8b43
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: reclaim-opentyped-mismatch-release
+pr:
+  id: 123
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/123

@@ -19,7 +19,7 @@ _Avoid_: Put vs Bind as two public calls; a nil holder context; assuming `Open` 
 _Avoid_: declaring a variable before `Open` only so hooks can close over it; faking `EnforceCloseBeforeOpen` from outside the package
 
 **OpenTyped**:
-Package function `OpenTyped[T any]`: `OpenWithHooks` that returns the stored value as `T`. On a type mismatch it returns the zero `T` and `reclaim: open %q: want %T, got %T`. The instantiation must stay a call expression in a package that can name `T`.
+Package function `OpenTyped[T any]`: `OpenWithHooks` that returns the stored value as `T`. On a type mismatch it returns the zero `T` and `reclaim: open %q: want %T, got %T`, and it does not keep the caller as a holder. The instantiation must stay a call expression in a package that can name `T`.
 _Avoid_: a package-level var, type alias, or struct field whose type names a generic instantiation from another package (Yaegi v0.16.1); `Table[T]`
 
 **Hooks**:

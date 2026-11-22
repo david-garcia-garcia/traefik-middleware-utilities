@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-reclaim-opentyped-holder-leak",
+  "jobName": "2026-11-22-reclaim-opentyped-holder-leak",
+  "startedAt": "2026-11-22T09:58:57.869Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:01:28.849Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:06:22.505Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:19:39.800Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:32:52.809Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:38:27.912Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:40:21.098Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:42:01.264Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:46:59.530Z"
+    }
+  }
+}
