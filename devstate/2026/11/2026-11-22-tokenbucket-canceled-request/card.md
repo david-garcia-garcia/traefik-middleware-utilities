@@ -22,7 +22,7 @@ Sin cambio de comportamiento de `Allow`. Se amplía el GoDoc de `Memory.Allow` (
 Ready for review. 0 items remain.
 
 Priority: P3 — documentación y tests, sin daño actual a usuarios u operadores
-Reviewed head: 071602b3
+Reviewed head: 0a2ccea5
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -82,7 +82,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 071602b3d36dd0f7ca4e0aa8d6ca8b762693fa5b | Card must match the branch you measured |
+| Reviewed head | 0a2ccea5997bd79412b850c88d07e9b6ad68c2e7 | Card must match the branch you measured |
 
 ### Stored data model
 None.
