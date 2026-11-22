@@ -24,7 +24,7 @@ Los tests autocontenidos, con helpers sufijo `13706` y la API dest `(Status, err
 In progress. 1 items remain.
 
 Priority: P3 — spec, documentación, tests o claridad interna, sin daño actual para usuarios u operadores.
-Reviewed head: 8a54b209
+Reviewed head: 62cdd67d
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -47,7 +47,10 @@ Owner decision: Required. See Explore Decisions.
 
 ## Specs
 Worktree:
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-memory-instance-scope/openspec/changes/tokenbucket-memory-instance-scope/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-memory-instance-scope/openspec/changes/archive/2026-11-22-tokenbucket-memory-instance-scope/proposal.md) — modified
+
+Completed:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-memory-instance-scope/openspec/specs/std_go_tokenbucket_allow/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -85,9 +88,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 8a54b209ff9c8f8c4260c529b7225403501f1227 | Card must match the branch you measured |
+| Reviewed head | 62cdd67dc572a0227ec38dd15cab5e852cb7f1ae | Card must match the branch you measured |
 
 ### Stored data model
 None.
