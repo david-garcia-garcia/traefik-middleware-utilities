@@ -77,8 +77,8 @@ Catálogo live AUTH: `openspec/specs/std_go_simpleredis_tcp-session` (forma `AUT
 
 - Q: ¿Propose añade un escenario al catálogo `openspec/specs/` además del GoDoc?
   Rank: additive incidental — un escenario nuevo sería un contrato añadido; el ticket es TEST + DOC y no nombra spec id (Unknowns; Out of scope inferido)
-  Decision: assumed — no escenario de catálogo; Live WRONGPASS ya promete el mapeo; la superficie DOC es el GoDoc de `Config.Pass`.
-  By: explore
+  Decision: resolved — no escenario de catálogo; Live WRONGPASS (`std_go_simpleredis_live-e2e`, `std_go_simpleredis_tcp-session`) ya promete el mapeo; este ticket no añade delta; `skip_specs: true`; `devstate/specs.md` es `none — no live contract`. La superficie DOC es el GoDoc de `Config.Pass`.
+  By: propose
 
 - Q: ¿Un Secret o fichero con `\r\n` (Windows) debe cubrirse en el test?
   Rank: additive incidental — casos extra; Out of scope: whitespace distinto del `\n` del test de referencia; Tests nombra `"secret\n"`
