@@ -106,5 +106,5 @@ Report (allow.go)
 
 - Q: `knowledge/devdocs/std_go_backendbackoff.md` does not mention the point mass at `MaxCooldown`; should usage/Gotchas name it after the formula change?
   Rank: additive incidental — packet usage is enough to call Allow/Report today; the gap is a gotcha the change would make stale or newly true; requirement does not name the packet. Attended: do not write `knowledge/devdocs` without human yes.
-  Decision: assumed — park; explore does not write the packet. Propose/devdocsimpact decide the one-line gotcha once the formula is chosen.
-  By: explore
+  Decision: resolved — Gotcha names the live draw `[wait*(1-Jitter), min(wait*(1+Jitter), MaxCooldown))` and that Jitter 0 returns wait exactly. Do not name the removed clamp point mass (not a live contract).
+  By: devdocsimpact
