@@ -1,5 +1,5 @@
 ## Summary
-Propuesta lista: test live de 50 recargas sin Close (sockets proxied a 0 tras GC; falla si `leakedGoroutines > 2`). Sin cambio de producto. Escenario aditivo en `std_go_simpleredis_tcp-session`. El defecto de Traefik no se reproduce aquí.
+Test live de 50 recargas sin Close: cada una construye un cliente simpleredis y un limitador Redis a través de un proxy TCP que cuenta sockets, llama Allow una vez y descarta el cliente sin Close. Tras GC, `proxy.open == 0` y no sobreviven goroutines de cliente (`leakedGoroutines > 2` falla). Sin cambio de producto. Redis y Dragonfly en verde.
 
 La existencia del defecto se tomó de estos informes upstream:
 - Issue https://github.com/traefik/traefik/issues/13618
@@ -21,17 +21,17 @@ Not yet.
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: a312304f
+Reviewed head: ed8537bd
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996420726 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -41,8 +41,8 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-11-22-tokenbucket-reload-without-close pushed | `git` |
 | OpenSpec | tokenbucket-reload-without-close | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/113 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 44996420726 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996420726 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996420726 |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
@@ -57,7 +57,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-reload-without-close on branch 2026-11-22-tokenbucket-reload-without-close targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/113; CI not seen.
+Ticket 2026-11-22-tokenbucket-reload-without-close on branch 2026-11-22-tokenbucket-reload-without-close targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/113; CI build 44996420726 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996420726.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -78,7 +78,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | a312304f1fcf3f09a9b40a1ea3575e5d502c1ce0 | Card must match the branch you measured |
+| Reviewed head | ed8537bd54a3f06ef0c053d471425a054cb937d2 | Card must match the branch you measured |
 
 ### Stored data model
 None.
