@@ -17,17 +17,17 @@ Una regresión live en el paquete tokenbucket simula esas cincuenta recargas a t
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: P3 — tests and catalog proof with no current user or operator harm
-Reviewed head: 06584948
+Reviewed head: fcfab88e
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997861664 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -37,7 +37,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-11-22-tokenbucket-reload-without-close pushed | `git` |
 | OpenSpec | tokenbucket-reload-without-close | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/113 | pr-host |
-| CI | not seen | ci-host |
+| CI | build 44997861664 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997861664 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997861664 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -56,7 +56,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-reload-without-close on branch 2026-11-22-tokenbucket-reload-without-close targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/113; CI not seen.
+Ticket 2026-11-22-tokenbucket-reload-without-close on branch 2026-11-22-tokenbucket-reload-without-close targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/113; CI build 44997861664 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997861664.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -85,7 +85,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 06584948224d75e32b6b454257051ab102977608 | Card must match the branch you measured |
+| Reviewed head | fcfab88e030f40dbfd52061ce8f24e1607b969bf | Card must match the branch you measured |
 
 ### Stored data model
 None.
