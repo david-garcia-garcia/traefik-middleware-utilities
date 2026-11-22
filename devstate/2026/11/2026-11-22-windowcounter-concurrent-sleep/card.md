@@ -34,7 +34,7 @@ Black-box tests hold the next flush EVAL: two concurrent Sleeps wait until relea
 In progress. 0 items remain.
 
 Priority: P2 — hang and false flush-complete on concurrent Sleep, limited blast radius
-Reviewed head: a4414202
+Reviewed head: 8a35eca2
 Owner decision: None.
 
 ## Review scores
@@ -93,7 +93,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | a4414202ade73e5c8624823687d1fb2b5dcf4226 | Card must match the branch you measured |
+| Reviewed head | 8a35eca2524a33a90a9afb32266369407971e388 | Card must match the branch you measured |
 
 ### Stored data model
 None.
