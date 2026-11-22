@@ -65,7 +65,7 @@ func (r *Redis) Allow(ctx context.Context, key string) (Status, error) {
 		strconv.FormatInt(nowMicro, 10),
 		strconv.FormatInt(r.clock.maxDelay.Microseconds(), 10),
 	}
-	// Script owns HGETALL/HSET/EXPIRE. Go maps its wait and tokens to a Status.
+	// Script owns HMGET/HSET/EXPIRE. Go maps its wait and tokens to a Status.
 	values, err := r.redis.Eval(ctx, allowScript, allowScriptDigest, []string{key}, args)
 	if err != nil {
 		return Status{}, err

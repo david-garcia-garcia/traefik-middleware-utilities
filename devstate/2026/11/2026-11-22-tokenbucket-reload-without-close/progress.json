@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-tokenbucket-reload-without-close",
+  "jobName": "2026-11-22-tokenbucket-reload-without-close",
+  "startedAt": "2026-11-22T06:46:05.497Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:49:30.067Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:54:18.640Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:58:31.651Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:05:42.155Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:13:44.603Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:16:51.845Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:20:03.856Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:23:59.177Z"
+    }
+  }
+}

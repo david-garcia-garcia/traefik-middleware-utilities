@@ -145,6 +145,12 @@ The in-memory store SHALL hold at most 65536 sources. Before storing a new sourc
 - **THEN** the store treats it as a full bucket (`tokens = burst`, last equal to now) before consuming 1
 - **AND** that Allow returns allowed true
 
+#### Scenario: Idle expired sources leave one stored source
+- **WHEN** the in-memory store holds ten sources whose `ttl` has elapsed by the limiter clock
+- **AND** Allow is called on a key that is not stored
+- **THEN** the store holds exactly one source
+- **AND** that source is the new key
+
 ### Requirement: Eval tokens that is not a finite number is not a consume
 When the Redis store is used and Eval returns three fields, Allow SHALL read the third field as the tokens left after this Allow. A tokens field that is not a finite number, including `nan`, `+Inf`, `-Inf`, `inf`, or text that does not parse, SHALL return `tokenbucket: eval tokens is not a number`. Allow MUST NOT return a `Status` with a nil error in that case. The Eval script MUST NOT change to produce this field.
 
@@ -157,6 +163,16 @@ When the Redis store is used and Eval returns three fields, Allow SHALL read the
 - **WHEN** Eval returns a tokens field written as `4`, `4.0`, `-1.0`, `0.3`, or `1e+15`
 - **THEN** Allow returns a nil error
 - **AND** the `Status` is built from that tokens value
+
+### Requirement: Concurrent first requests share one in-process bucket
+The in-process store SHALL hold the mutex that guards the bucket map across lookup, create, and consume of one Allow, so concurrent first Allows on a new opaque key share one bucket.
+
+#### Scenario: Concurrent first requests admit at most burst
+- **WHEN** 16 goroutines call Allow at the same instant on a new opaque key
+- **AND** rate is 1 per minute, burst is 5, and maxDelay is 500 ms
+- **THEN** at most 5 of those Allows return `Allowed` true
+- **AND** the store MUST NOT create a second full bucket for that key
+- **AND** a non-nil Allow error fails the check
 
 ### Requirement: Idle TTL is at least the refill time
 Constructors SHALL store one effective ttl for both stores: the caller ttl raised, in whole seconds, to ceil(burst divided by rate, plus maxDelay in seconds). The floor MUST be clamped to the largest whole-second duration that does not overflow. The effective ttl MUST NOT be shorter than the caller ttl. A caller ttl below 1s or with a fractional second SHALL still be rejected before that floor.

@@ -71,6 +71,9 @@ func TestLookupLiveEngineAddrs(t *testing.T) {
 }
 
 // runForEachLiveEngine table-drives Redis then Dragonfly after liveEngineAddrs.
+// The env names stay parameters to keep the same harness shape as simpleredis and windowcounter.
+//
+//nolint:unparam // every tokenbucket test reads the TOKENBUCKET_LIVE_* pair
 func runForEachLiveEngine(t *testing.T, redisEnv, dragonflyEnv string, run func(t *testing.T, addr string)) {
 	t.Helper()
 	for _, backend := range liveEngineAddrs(t, redisEnv, dragonflyEnv) {

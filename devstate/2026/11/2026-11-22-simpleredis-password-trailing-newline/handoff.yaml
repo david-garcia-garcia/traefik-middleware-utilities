@@ -1,0 +1,16 @@
+issueKey: 2026-11-22-simpleredis-password-trailing-newline
+jobName: 2026-11-22-simpleredis-password-trailing-newline
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 47d9a290d6c4c072
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: simpleredis-password-trailing-newline
+pr: { id: 115, url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/115 }
