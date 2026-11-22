@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-simpleredis-password-trailing-newline",
+  "jobName": "2026-11-22-simpleredis-password-trailing-newline",
+  "startedAt": "2026-11-22T06:50:01.378Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:53:33.721Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:57:01.322Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:01:19.395Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:11:30.103Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:16:17.287Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:18:45.246Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:20:36.283Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:25:26.550Z"
+    }
+  }
+}

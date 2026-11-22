@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-tokenbucket-concurrent-first-requests",
+  "jobName": "2026-11-22-tokenbucket-concurrent-first-requests",
+  "startedAt": "2026-11-22T06:40:02.576Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:43:19.397Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:48:29.031Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:52:28.506Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:59:26.917Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:03:52.642Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:06:24.091Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:09:02.005Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:13:00.389Z"
+    }
+  }
+}
