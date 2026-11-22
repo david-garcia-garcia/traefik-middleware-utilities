@@ -42,8 +42,8 @@ Hechos de fuera: `knowledge/research/ext_traefik_ratelimiter_token-bucket/` (el 
 
 - Q: ¿El contrato público «caduca tras el ttl del argumento» cambia para importadores que este repo no lista?
   Rank: structural asked — `openspec/specs/std_go_tokenbucket_allow/spec.md` nombra la caducidad del `ttl` del llamador; la búsqueda `**/*.go` solo encuentra llamadas dentro de `tokenbucket/`, y los importadores de fuera no están en el árbol. El diseño del requisito pide subir el TTL.
-  Decision: resolved — se sube el TTL efectivo y propose enmienda ese spec. La firma de `NewMemory` y `NewRedis` no cambia. `validateClock` no rechaza un ttl corto válido.
-  By: explore
+  Decision: resolved — se sube el TTL efectivo. Propose pliega el delta en `std_go_tokenbucket_allow` y `std_go_tokenbucket_lua-eval` (cambio `tokenbucket-ttl-refill-floor`). La firma de `NewMemory` y `NewRedis` no cambia. `validateClock` no rechaza un ttl corto válido.
+  By: propose
 
 - Q: ¿Hay que alargar el reloj de `TestYaegi_MemoryCapAndExpiry`, que construye con rate 1e-6, burst 1 y ttl 1 s y avanza 1 s?
   Rank: additive asked — el diseño dice que subir el TTL no cambia las admisiones, solo cuánto vive una clave ociosa. El suelo aquí es 1000000 s.

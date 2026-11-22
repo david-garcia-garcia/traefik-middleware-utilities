@@ -12,7 +12,7 @@ localTests: none
 requirement: requirement.md
 comments: comments.md
 explore: explore.md
-change: none
+change: tokenbucket-ttl-refill-floor
 pr:
   id: 108
   url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/108
