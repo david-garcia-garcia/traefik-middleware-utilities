@@ -20,7 +20,7 @@ Una regresión live en el paquete tokenbucket simula esas cincuenta recargas a t
 In progress. 0 items remain.
 
 Priority: P3 — tests and catalog proof with no current user or operator harm
-Reviewed head: 36385d2e
+Reviewed head: 4d0828b5
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -82,7 +82,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 36385d2efd402ef3b03571ae593313bac2f9bea7 | Card must match the branch you measured |
+| Reviewed head | 4d0828b59d65fdef13a16446797652ba4ba16c1f | Card must match the branch you measured |
 
 ### Stored data model
 None.
