@@ -20,7 +20,7 @@ El script pide `last` y `tokens` con `HMGET` por nombre. El bucket ya existe sol
 In progress. 1 items remain.
 
 Priority: P1 — un proceso Redis con `tokens` antes que `last` admite todas las peticiones
-Reviewed head: 46549fe6
+Reviewed head: 22608afa
 Owner decision: None.
 
 ## Review scores
@@ -43,7 +43,10 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-hgetall-field-order/openspec/changes/tokenbucket-hmget-named-fields/proposal.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-hgetall-field-order/openspec/changes/archive/2026-11-22-tokenbucket-hmget-named-fields/proposal.md) — modified
+
+Completed:
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-hgetall-field-order/openspec/specs/std_go_tokenbucket_lua-eval/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -78,9 +81,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 46549fe68c44c8f104fc47a644dc7e2590c63627 | Card must match the branch you measured |
+| Reviewed head | 22608afab7083d72886accd645993854f2b8cbc2 | Card must match the branch you measured |
 
 ### Stored data model
 None.
