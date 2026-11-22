@@ -17,17 +17,17 @@ El script pide `last` y `tokens` con `HMGET` por nombre. El bucket ya existe sol
 **End users.** Un bucket ya lleno vuelve a denegar al pasar de `burst`, también cuando el hash guarda `tokens` antes que `last`.
 
 ## Merge readiness
-In progress. 1 items remain.
+Ready for review. 1 items remain.
 
 Priority: P1 — un proceso Redis con `tokens` antes que `last` admite todas las peticiones
-Reviewed head: 22608afa
+Reviewed head: d31dce8a
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995589684 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -37,7 +37,7 @@ Owner decision: None.
 | Branch | 2026-11-22-tokenbucket-hgetall-field-order pushed | `git` |
 | OpenSpec | tokenbucket-hmget-named-fields | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/107 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
+| CI | build 44995589684 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995589684 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995589684 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -57,7 +57,7 @@ None.
 
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-hgetall-field-order on branch 2026-11-22-tokenbucket-hgetall-field-order targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/107; CI not seen.
+Ticket 2026-11-22-tokenbucket-hgetall-field-order on branch 2026-11-22-tokenbucket-hgetall-field-order targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/107; CI build 44995589684 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995589684.
 
 ## Explore Decisions
 None.
@@ -83,7 +83,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 22608afab7083d72886accd645993854f2b8cbc2 | Card must match the branch you measured |
+| Reviewed head | d31dce8aa8fb29c5ca2278aa30e9ebdfb6ee5704 | Card must match the branch you measured |
 
 ### Stored data model
 None.
