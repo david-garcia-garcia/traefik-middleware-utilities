@@ -140,5 +140,5 @@ El hermano `std_go_tokenbucket_allow` deja «which live source is removed» sin 
 
 - Q: El paquete de uso `knowledge/devdocs/std_go_backendbackoff.md` no menciona el coste del barrido en clave nueva ni una lista de expiración. ¿Se documenta en este cambio?
   Rank: additive incidental — el paquete existe; el hueco es de uso, no de Language (Gate/Allow/Report/Credit ya están); esta fase no escribe usage (produce atendido espera al humano y el run para en explore).
-  Decision: assumed — aparcado para `opd-devdocsimpact` / produce atendido; no se escribe Language ni usage ahora. No hay término nuevo hasta que propose nombre la costura.
-  By: explore
+  Decision: resolved — usage in `knowledge/devdocs/std_go_backendbackoff.md` now names the expiry-ordered list, O(1) new-key, cap 65536, Allow/Report tail move, and the backwards-clock caveat. No new Language term (Gate/Allow/Report/Credit already named; the list is the store mechanic of Gate).
+  By: devdocsimpact
