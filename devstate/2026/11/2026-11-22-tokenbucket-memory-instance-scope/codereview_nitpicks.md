@@ -48,7 +48,7 @@
    ```
    Fix: Rename the sharedMemory counts to `admittedA`/`admittedB` (the role this body adds and asserts)
    Status: done
-   Argument: renamed sharedMemory counts to admittedA/admittedB in tokenbucket/traefik_issue13706_test.go
+   Argument: renamed sharedMemory counts to admittedA/admittedB in tokenbucket/traefik_issue13706_test.go (7f31f0c7)
 2. [hard] Symmetry and consistency — `tokenbucket/traefik_issue13706_test.go:51` — sibling subtests spell the admit-count role as `routerA`/`routerB` then `admittedA`/`admittedB`, and reuse `routerA` for an int in one branch and a `*Memory` in the other
    Quote:
    ```
@@ -89,4 +89,4 @@
    ```
    Fix: Use `admittedA`/`admittedB` for admit counts in both subtests; keep `routerA`/`routerB` only for the separate `*Memory` values
    Status: done
-   Argument: sharedMemory now uses admittedA/admittedB; separateMemory still uses routerA/routerB for *Memory values
+   Argument: sharedMemory now uses admittedA/admittedB; separateMemory still uses routerA/routerB for *Memory values (7f31f0c7)
