@@ -19,6 +19,8 @@ type memEntry struct {
 }
 
 // Memory is an in-process Traefik token bucket (Lua formulas, not x/time/rate).
+// Each value is its own key space: Allow on one *Memory does not consume tokens stored on another.
+// To share a budget across routers or reloads, share one *Memory (for example a reclaim table keyed by middleware name).
 type Memory struct {
 	clock clockConfig
 	now   func() time.Time
@@ -36,6 +38,7 @@ type Memory struct {
 const maxMemorySources = 65536
 
 // NewMemory builds an in-process limiter. rate is requests per second.
+// The returned value has its own bucket map. To share a budget across routers or reloads, reuse this *Memory (for example via reclaim keyed by middleware name).
 func NewMemory(rate float64, burst int64, maxDelay, ttl time.Duration) (*Memory, error) {
 	if err := validateClock(rate, burst, maxDelay, ttl); err != nil {
 		return nil, err
