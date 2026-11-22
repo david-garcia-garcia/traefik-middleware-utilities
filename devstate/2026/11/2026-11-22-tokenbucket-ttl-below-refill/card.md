@@ -20,7 +20,7 @@ Tras validar el ttl del llamador, `NewMemory` y `NewRedis` guardan en el reloj c
 Ready for review. 0 items remain.
 
 Priority: P1 — el límite admite un burst nuevo tras una pausa más corta que el rellenado
-Reviewed head: c6eb7fcd
+Reviewed head: e583c4bf
 Owner decision: None.
 
 ## Review scores
@@ -80,7 +80,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 walked / 0 open | Unanswered review is merge risk |
-| Reviewed head | c6eb7fcdcdcc23155e56d1e68e04421bd228e490 | Card must match the branch you measured |
+| Reviewed head | e583c4bfe1e4c2c441665e4cb9fbda7f92606fce | Card must match the branch you measured |
 
 ### Stored data model
 None.
