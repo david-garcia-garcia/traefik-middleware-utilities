@@ -48,6 +48,7 @@ func BenchmarkYaegiContainsIPv6Miss(b *testing.B) {
 	})
 }
 
+// runYaegiHostMapStoreBench evaluates a host-map load or Contains loop under Yaegi.
 func runYaegiHostMapStoreBench(b *testing.B, setupExpr string, loopExpr func(count int) string) {
 	b.Helper()
 	goPath := b.TempDir()
@@ -85,6 +86,7 @@ func runYaegiHostMapStoreBench(b *testing.B, setupExpr string, loopExpr func(cou
 	}
 }
 
+// writeGopathIplookupHostMapStore copies non-test iplookup sources into a GOPATH module tree.
 func writeGopathIplookupHostMapStore(b *testing.B, goPath string) {
 	b.Helper()
 	srcDir := callerDirHostMapStore(b)
@@ -116,6 +118,7 @@ func writeGopathIplookupHostMapStore(b *testing.B, goPath string) {
 	}
 }
 
+// writeGopathFileHostMapStore writes one interpreted package file under GOPATH/src/<pkg>.
 func writeGopathFileHostMapStore(b *testing.B, goPath, pkg, name, src string) {
 	b.Helper()
 	dir := filepath.Join(goPath, "src", pkg)
@@ -127,6 +130,7 @@ func writeGopathFileHostMapStore(b *testing.B, goPath, pkg, name, src string) {
 	}
 }
 
+// callerDirHostMapStore is the directory of this Yaegi bench harness file.
 func callerDirHostMapStore(b *testing.B) string {
 	b.Helper()
 	_, thisFile, _, ok := runtime.Caller(0)

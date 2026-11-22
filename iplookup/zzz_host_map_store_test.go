@@ -99,6 +99,26 @@ func TestHostMapStoreLabelRefcount(t *testing.T) {
 	assertLabelTableOnlyEmptyHostMapStore(t, h)
 }
 
+func TestHostMapStoreEmptyHostLabelRemove(t *testing.T) {
+	h := New()
+	mustAddCIDRHostMapStore(t, h, "192.0.2.9/32", "")
+	removed, err := h.RemoveCIDR("192.0.2.9/32")
+	if err != nil || !removed {
+		t.Fatalf("RemoveCIDR empty-label host: removed=%v err=%v", removed, err)
+	}
+	if h.Count() != 0 {
+		t.Fatalf("count after remove = %d, want 0", h.Count())
+	}
+	found, prefixLen, meta, containsErr := h.Contains(net.ParseIP("192.0.2.9"))
+	if containsErr != nil {
+		t.Fatalf("Contains: %v", containsErr)
+	}
+	if found || prefixLen != 0 || meta != "" {
+		t.Fatalf("Contains after remove: found=%v prefix=%d meta=%q", found, prefixLen, meta)
+	}
+	assertLabelTableOnlyEmptyHostMapStore(t, h)
+}
+
 func TestHostMapStoreHostBeatsShorterPrefix(t *testing.T) {
 	h := New()
 	mustAddCIDRHostMapStore(t, h, "10.0.0.0/8", "wide")
@@ -240,17 +260,11 @@ func coversHostMapStore(cidr *net.IPNet, ip net.IP) (covers bool, prefixLen int)
 	if (cidr.IP.To4() != nil) != (ip.To4() != nil) {
 		return false, 0
 	}
-	walkIP, maxLen := familyWalk(ip)
-	cidrWalk, storedLen := prefixWalk(cidr)
-	if storedLen > maxLen {
+	if !cidr.Contains(ip) {
 		return false, 0
 	}
-	for i := 0; i < storedLen; i++ {
-		if bitAt(cidrWalk, i) != bitAt(walkIP, i) {
-			return false, 0
-		}
-	}
-	return true, storedLen
+	_, prefixLen = prefixWalk(cidr)
+	return true, prefixLen
 }
 
 func randomLookupIPHostMapStore(rng *rand.Rand) net.IP {
@@ -303,13 +317,13 @@ func assertMemoryBoundHostMapStore(t *testing.T, v6 bool, maxBytesPerPrefix int)
 		cidrs[i] = randomIPv4HostCIDRHostMapStore(rng)
 	}
 	h := New()
-	base := heapInuseHostMapStore()
+	base := heapAllocHostMapStore()
 	for _, cidr := range cidrs {
 		if err := h.AddCIDR(cidr, ""); err != nil {
 			t.Fatalf("AddCIDR: %v", err)
 		}
 	}
-	after := heapInuseHostMapStore()
+	after := heapAllocHostMapStore()
 	runtime.KeepAlive(h)
 	runtime.KeepAlive(cidrs)
 	n := h.Count()
@@ -317,7 +331,7 @@ func assertMemoryBoundHostMapStore(t *testing.T, v6 bool, maxBytesPerPrefix int)
 		t.Fatal("no prefixes stored")
 	}
 	if after <= base {
-		t.Fatalf("heap inuse did not grow (before=%d after=%d n=%d)", base, after, n)
+		t.Fatalf("heap alloc did not grow (before=%d after=%d n=%d)", base, after, n)
 	}
 	used := after - base
 	perPrefix := float64(used) / float64(n)
@@ -327,18 +341,18 @@ func assertMemoryBoundHostMapStore(t *testing.T, v6 bool, maxBytesPerPrefix int)
 	}
 }
 
-func heapInuseHostMapStore() uint64 {
+func heapAllocHostMapStore() uint64 {
 	prev := ^uint64(0)
 	var stats runtime.MemStats
 	for i := 0; i < 8; i++ {
 		runtime.GC()
 		runtime.ReadMemStats(&stats)
-		if i >= 2 && stats.HeapInuse >= prev {
-			return stats.HeapInuse
+		if i >= 2 && stats.HeapAlloc >= prev {
+			return stats.HeapAlloc
 		}
-		prev = stats.HeapInuse
+		prev = stats.HeapAlloc
 	}
-	return stats.HeapInuse
+	return stats.HeapAlloc
 }
 
 func assertLabelTableOnlyEmptyHostMapStore(t *testing.T, h *Helper) {
@@ -346,12 +360,12 @@ func assertLabelTableOnlyEmptyHostMapStore(t *testing.T, h *Helper) {
 	if len(h.ipv4.hosts) != 0 || len(h.ipv6.hosts) != 0 {
 		t.Fatalf("host maps still hold %d IPv4 and %d IPv6 entries", len(h.ipv4.hosts), len(h.ipv6.hosts))
 	}
-	if len(h.labels.id) != 1 {
-		t.Fatalf("labelID size = %d, want only empty string", len(h.labels.id))
+	if len(h.labels.byLabel) != 1 {
+		t.Fatalf("labelID size = %d, want only empty string", len(h.labels.byLabel))
 	}
-	id, ok := h.labels.id[""]
+	id, ok := h.labels.byLabel[""]
 	if !ok || id != 0 {
-		t.Fatalf("labelID %v, want {\"\": 0}", h.labels.id)
+		t.Fatalf("labelID %v, want {\"\": 0}", h.labels.byLabel)
 	}
 	for i, refs := range h.labels.refs {
 		if i == 0 {
