@@ -26,14 +26,14 @@ El catálogo vivo recibe un escenario bajo el requisito de tope y caducadas: die
 Ready for review. 0 items remain.
 
 Priority: P3 — tests y claridad de spec, sin daño actual a usuarios u operadores
-Reviewed head: 0228944e
+Reviewed head: e265bfc5
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996123943 |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997518861 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -43,7 +43,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-11-22-tokenbucket-expired-bucket-reclaim pushed | `git` |
 | OpenSpec | tokenbucket-expired-bucket-reclaim | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/111 | pr-host |
-| CI | build 44996123943 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996123943 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996123943 |
+| CI | build 44997518861 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997518861 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997518861 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -62,7 +62,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-expired-bucket-reclaim on branch 2026-11-22-tokenbucket-expired-bucket-reclaim targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/111; CI build 44996123943 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996123943.
+Ticket 2026-11-22-tokenbucket-expired-bucket-reclaim on branch 2026-11-22-tokenbucket-expired-bucket-reclaim targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/111; CI build 44997518861 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997518861.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -91,7 +91,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 0228944e69ffcea1d0f503c8d277c0c642f6cbc7 | Card must match the branch you measured |
+| Reviewed head | e265bfc5e8de54426f0fabf9164f21d7fc577e9d | Card must match the branch you measured |
 
 ### Stored data model
 None.

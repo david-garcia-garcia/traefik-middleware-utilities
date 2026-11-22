@@ -34,3 +34,8 @@ head: be24d75041b70872ce193d8c7f8ce366f338a488
 phase: archive
 verdict: ready for review
 head: 0228944e69ffcea1d0f503c8d277c0c642f6cbc7
+
+## pullrequest (2026-11-22)
+phase: pullrequest
+verdict: ready for review
+head: e265bfc5e8de54426f0fabf9164f21d7fc577e9d
