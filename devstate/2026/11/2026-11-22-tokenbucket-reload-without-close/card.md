@@ -1,0 +1,79 @@
+## Summary
+Solo test de regresión: 50 recargas sin Close no deben dejar sockets proxied ni goroutines. Sin cambio de producto.
+
+La existencia del defecto se tomó de estos informes upstream:
+- Issue https://github.com/traefik/traefik/issues/13618
+- PR upstream https://github.com/traefik/traefik/pull/13619 (abierto)
+
+## Motivation
+Not yet.
+
+## Implementation
+Not yet.
+
+## What this changes
+**Operators.** None.
+
+**Admin users.** None.
+
+**Developers.** None.
+
+**End users.** None.
+
+## Merge readiness
+In progress. 0 items remain.
+
+Priority: unknown — motivation not written
+Reviewed head: e7d4cc28
+Owner decision: None.
+
+## Review scores
+| Measure | Result | What it means |
+| --- | --- | --- |
+| Overall readiness | 1/6 | Not ready |
+| CI proof | 1/6 | not seen |
+| Local tests proof | N/A | remote PR — CI proof covers this |
+| Review resolution | 6/6 | no open PR comments |
+
+## Verification
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Branch | 2026-11-22-tokenbucket-reload-without-close pushed | `git` |
+| OpenSpec | none | `openspec/` |
+| Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/113 | pr-host |
+| CI | not seen | caller omitted CI snapshot |
+| Local tests | none | handoff.yaml localTests |
+| PR comments | no comments | devstate/comments.md |
+
+## Specs
+None.
+
+## Deviations from the ask
+None.
+
+## Follow-up issues
+None.
+
+## How this fits together
+Ticket 2026-11-22-tokenbucket-reload-without-close on branch 2026-11-22-tokenbucket-reload-without-close targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/113; CI not seen.
+
+## Explore Decisions
+None.
+
+## Findings
+None.
+
+## Axis review
+None.
+
+## Agent review details
+
+### Review metrics
+| Metric | Value | Why it matters |
+| --- | --- | --- |
+| Specs in this PR | none | Same list as ## Specs |
+| Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
+| Reviewed head | e7d4cc283eb91f123ee066dde66c2a5aeb171a31 | Card must match the branch you measured |
+
+### Stored data model
+None.
