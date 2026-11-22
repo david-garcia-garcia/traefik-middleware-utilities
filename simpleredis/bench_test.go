@@ -418,8 +418,8 @@ const (
 	encodeGetBytes       int64 = 0      // framing allocates nothing
 	encodeMSetEXAllocs   int64 = 0      // framing allocates nothing
 	encodeMSetEXBytes    int64 = 0      // framing allocates nothing
-	encodeEvalAllocs     int64 = 10     // measured 9, all of them the argv build
-	encodeEvalBytes      int64 = 808    // measured 744 + 64
+	encodeEvalAllocs     int64 = 10     // measured 10, all of them the argv build
+	encodeEvalBytes      int64 = 1520   // measured 1456 + 64 (tokenbucket allowScript, 5 ARGV)
 	decodeBulkAllocs     int64 = 3      // measured 2
 	decodeBulkBytes      int64 = 112    // measured 48 + 64
 	decodeArrayAllocs    int64 = 12     // measured 11
