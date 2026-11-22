@@ -17,7 +17,7 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: f39a7bdc
+Reviewed head: a6a6da1e
 Owner decision: None.
 
 ## Review scores
@@ -66,7 +66,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 walked / 0 open | Unanswered review is merge risk |
-| Reviewed head | f39a7bdcd9c1adb6ef6e6a68aa89a6ff637f0d49 | Card must match the branch you measured |
+| Reviewed head | a6a6da1e2abfd4cece7d9735a2673f36116399e1 | Card must match the branch you measured |
 
 ### Stored data model
 None.
