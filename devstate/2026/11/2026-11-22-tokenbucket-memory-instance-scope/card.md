@@ -17,8 +17,8 @@ Not yet.
 In progress. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 56a562ce
-Owner decision: None.
+Reviewed head: 95948be2
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -52,7 +52,10 @@ None.
 Ticket 2026-11-22-tokenbucket-memory-instance-scope on branch 2026-11-22-tokenbucket-memory-instance-scope targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/109; CI not seen.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| ¿El catálogo vivo necesita un requisito de ámbito (Memory por instancia, Redis por clave) o basta GoDoc + tests? | additive asked — Desired «El ámbito pasa a ser contrato documentado»; binding «Make the scope part of the documented contract»; Affected nombra `openspec/specs/std_go_tokenbucket_allow/spec.md`; el delta añade una promesa, los callers existentes siguen valiendo | assumed — ADDED en `std_go_tokenbucket_allow`: cada `*Memory` es su propio espacio de claves; cualquier `*Redis` sobre la misma `key` comparte el estado del servidor; el prefijo sigue siendo del llamante. GoDoc es la superficie encargada; el catálogo registra la misma promesa. No nueva familia. | explore |
+
 
 ## Findings
 None.
@@ -67,7 +70,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 56a562ce227ea9d19091da6d87e6fd9121636e82 | Card must match the branch you measured |
+| Reviewed head | 95948be2a0429cb051f43930508ed2896d717f33 | Card must match the branch you measured |
 
 ### Stored data model
 None.
