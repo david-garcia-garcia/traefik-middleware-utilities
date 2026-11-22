@@ -15,3 +15,7 @@ verdicts:
 proposal.md: Modified `std_go_tokenbucket_allow` (fold). New: none. Skip: none.
 
 - folded std_go_tokenbucket_allow
+
+Archive FindSpecHost (authoritative):
+verdicts:
+  - { deltaId: std_go_tokenbucket_allow, fold, spec-id: std_go_tokenbucket_allow, confidence: high, candidates: [std_go_tokenbucket_allow, std_go_tokenbucket_lua-eval, std_go_tokenbucket_status] }
