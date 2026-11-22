@@ -73,12 +73,12 @@ Live contract: `openspec/specs/std_go_tokenbucket_allow/spec.md`, `openspec/spec
 - Q: Cómo adaptar los tests de referencia a `Allow(ctx, key) (Status, error)` sin copiar helpers de otros issues?
   Rank: additive asked — ficheros de test que este cambio crea; la línea Tests del Design nombra ficheros autocontenidos con sufijo 13704
   Decision: assumed — llamar `Allow` como `(status, err)` y fallar si `err != nil`. El test Memory no usa `countAdmits`; cuenta `len(limiter.buckets)` bajo el mutex. El e2e declara `liveKey13704` y `evalKey13704` en `traefik_issue13704_e2e_test.go` (Eval `pttl` con `ScriptSHA1Hex`, KEYS[1] para Dragonfly). No copiar `liveKey`/`evalKey` del árbol de repros ni de otros issues.
-  By: explore
+  By: propose
 
 - Q: Propose añade un escenario al spec vivo para diez+uno / PTTL o deja el catálogo como está?
   Rank: additive incidental — escenario nuevo en un leaf que ya existe; el Design dice "No product change" y no nombra un delta de spec
   Decision: assumed — fold de un escenario en el requisito "Memory store caps sources and removes expired ones first" de `std_go_tokenbucket_allow`: diez fuentes ociosas más allá de `ttl` más una nueva dejan exactamente una fuente almacenada. No añadir un SHALL de `PTTL` en `std_go_tokenbucket_lua-eval`; el `EXPIRE` entero ya es el contrato; el e2e observa el TTL restante.
-  By: explore
+  By: propose
 
 - Q: Comportamiento de `PTTL` en Dragonfly frente a Redis en los motores locales?
   Rank: additive asked — el e2e de este cambio afirma `(0, ttl]` en ambos motores; Desired 2 nombra Redis y Dragonfly
@@ -93,9 +93,9 @@ Live contract: `openspec/specs/std_go_tokenbucket_allow/spec.md`, `openspec/spec
 - Q: El test Memory usa reloj de test o espera el `ttl` real, como podría leerse el brief?
   Rank: additive asked — Tests nombra `TestTraefik13704_MemoryReclaimsExpiredBuckets`, que congela el reloj
   Decision: assumed — `SetNowForTest` y salto `ttl+9s`, igual que la referencia y que `memory_test.go`. No dormir el `ttl` de pared.
-  By: explore
+  By: propose
 
 - Q: Hace falta un `traefik_issue13704_yaegi_test.go` además de los dos ficheros nombrados?
   Rank: additive incidental — Tests nombra dos ficheros; no un fichero Yaegi
   Decision: assumed — solo esos dos. El tope/caducidad interpretado ya lo cubre `TestYaegi_MemoryCapAndExpiry`.
-  By: explore
+  By: propose
