@@ -15,12 +15,13 @@ import (
 // instantiation from another package; Yaegi v0.16.1 cannot resolve those.
 func OpenTyped[T any](ctx context.Context, t *Table, key string, logger *slog.Logger, create func() (any, Hooks, error)) (T, error) {
 	var zero T
-	stored, err := t.OpenWithHooks(ctx, key, logger, create)
+	stored, lease, err := t.openWithLease(ctx, key, logger, create)
 	if err != nil {
 		return zero, err
 	}
 	typed, ok := stored.(T)
 	if !ok {
+		t.releaseLease(lease)
 		return zero, fmt.Errorf("reclaim: open %q: want %T, got %T", key, zero, stored)
 	}
 	return typed, nil

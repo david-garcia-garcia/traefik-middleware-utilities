@@ -398,21 +398,28 @@ func (t *Table) Open(ctx context.Context, key string, logger *slog.Logger, creat
 // Open (bind or reclaim) never runs create and keeps the stored hooks. Everything else, including
 // EnforceCloseBeforeOpen, behaves exactly as documented on Open.
 func (t *Table) OpenWithHooks(ctx context.Context, key string, logger *slog.Logger, create func() (any, Hooks, error)) (any, error) {
+	value, _, err := t.openWithLease(ctx, key, logger, create)
+	return value, err
+}
+
+// openWithLease is the bind path shared by OpenWithHooks and OpenTyped. A non-nil lease is a
+// live holder OpenTyped can release on a type mismatch; OpenWithHooks discards it.
+func (t *Table) openWithLease(ctx context.Context, key string, logger *slog.Logger, create func() (any, Hooks, error)) (any, *bindLease, error) {
 	if t == nil {
-		return nil, fmt.Errorf("reclaim: open %q: nil table", key)
+		return nil, nil, fmt.Errorf("reclaim: open %q: nil table", key)
 	}
 	if logger == nil {
-		return nil, fmt.Errorf("reclaim: open %q: nil logger", key)
+		return nil, nil, fmt.Errorf("reclaim: open %q: nil logger", key)
 	}
 	if create == nil {
-		return nil, fmt.Errorf("reclaim: create %q: nil create", key)
+		return nil, nil, fmt.Errorf("reclaim: create %q: nil create", key)
 	}
 	requireContext(ctx)
 
 	for {
 		step, err := t.lookupOpen(key, logger)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		switch step.action {
 		case openCreate:
@@ -425,7 +432,7 @@ func (t *Table) OpenWithHooks(ctx context.Context, key string, logger *slog.Logg
 		case openPark:
 			<-step.ready
 			if err := t.createErrOf(step.incarnation); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 		case openRetry:
 			// Gone incarnation was unmapped; look up again and create.
@@ -472,7 +479,7 @@ func (t *Table) Peek(key string) (value any, state State, ok bool) {
 // put runs create for a slot this Open registered, then publishes the value or the failure to
 // every caller waiting on that slot. The hooks create returns are the ones stored on this
 // incarnation, so a Sleep or Close hook may close over what create just built.
-func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *slog.Logger, create func() (any, Hooks, error)) (any, error) {
+func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *slog.Logger, create func() (any, Hooks, error)) (any, *bindLease, error) {
 	var value any
 	var hooks Hooks
 	var err error
@@ -481,7 +488,7 @@ func (t *Table) put(ctx context.Context, key string, incarnation *slot, logger *
 	}
 	if err != nil {
 		t.endBusySlot(key, incarnation, err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	t.publishPut(key, incarnation, value, hooks)
@@ -508,13 +515,13 @@ func (t *Table) publishPut(key string, incarnation *slot, value any, hooks Hooks
 // wakeAndBind wakes a sleeping slot for this Open and binds ctx. Wake must not run under the
 // table mutex. If ctx is already done after wake, it drops this holder and returns that error
 // without the pointer.
-func (t *Table) wakeAndBind(ctx context.Context, key string, incarnation *slot, logger *slog.Logger, value any, storedHooks Hooks) (any, error) {
+func (t *Table) wakeAndBind(ctx context.Context, key string, incarnation *slot, logger *slog.Logger, value any, storedHooks Hooks) (any, *bindLease, error) {
 	if recovered := runHook(storedHooks.Wake); recovered != nil {
 		// This Open has a caller to answer, so it reports the panic as its error. A waiter parked
 		// on ready replays it from createErr rather than resuming a value Wake left half-done.
 		err := fmt.Errorf("reclaim: wake %q: panic: %v", key, recovered)
 		t.endBusyAfterPanic(key, incarnation, storedHooks, logger, err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	t.publishWake(incarnation)
@@ -532,15 +539,24 @@ func (t *Table) publishWake(incarnation *slot) {
 	close(incarnation.ready)
 }
 
+// bindLease is one bind's drop right. OpenTyped releases it on a type mismatch; the context
+// watcher uses the same guard so release and AfterFunc or watch cannot both drop.
+type bindLease struct {
+	key         string
+	incarnation *slot
+	stop        func() bool
+	dropped     bool
+}
+
 // finishBind returns the bound value if ctx is still live, and watches it until Done. If ctx is
-// already done, it drops this holder now (no AfterFunc) and returns that error without the pointer.
-func (t *Table) finishBind(ctx context.Context, key string, incarnation *slot, value any) (any, error) {
+// already done, it drops this holder now (no lease, no AfterFunc) and returns that error without
+// the pointer.
+func (t *Table) finishBind(ctx context.Context, key string, incarnation *slot, value any) (any, *bindLease, error) {
 	if err := ctx.Err(); err != nil {
 		t.drop(key, incarnation)
-		return nil, err
+		return nil, nil, err
 	}
-	t.dropWhenDone(ctx, key, incarnation)
-	return value, nil
+	return value, t.dropWhenDone(ctx, key, incarnation), nil
 }
 
 // finishedAtBind copies incarnation.finished under t.mu so dropWhenDone can start watch without
@@ -551,30 +567,67 @@ func (t *Table) finishedAtBind(incarnation *slot) <-chan struct{} {
 	return incarnation.finished
 }
 
-// dropWhenDone runs drop when ctx is done. A holder with a Done channel uses AfterFunc so the
-// hold does not park a waiter. A holder whose Done is nil still needs watch to poll Err.
-func (t *Table) dropWhenDone(ctx context.Context, key string, incarnation *slot) {
+// dropWhenDone arms the watcher that will drop this bind and returns the lease for that drop.
+// A holder with a Done channel uses AfterFunc so the hold does not park a waiter. A holder whose
+// Done is nil still needs watch to poll Err.
+func (t *Table) dropWhenDone(ctx context.Context, key string, incarnation *slot) *bindLease {
+	lease := &bindLease{key: key, incarnation: incarnation}
 	if ctx.Done() != nil {
-		context.AfterFunc(ctx, func() { t.drop(key, incarnation) })
-		return
+		lease.stop = context.AfterFunc(ctx, func() { t.dropOnce(lease) })
+		return lease
 	}
 	finished := t.finishedAtBind(incarnation)
 	if finished == nil {
 		// This incarnation ended between the bind and here, so there is no holder left to drop
 		// and no channel left to wake a watcher. Starting one would poll ctx.Err forever.
-		return
+		lease.dropped = true
+		return lease
 	}
-	go t.watch(ctx, key, incarnation, finished)
+	go t.watch(ctx, lease, finished)
+	return lease
 }
 
 // watch waits until ctx is done or this incarnation has ended. It drops the holder only when ctx
 // is done while the incarnation is still live. finished is the channel from bind time, so a
 // later closeFinished nil does not hide the close from this goroutine.
-func (t *Table) watch(ctx context.Context, key string, incarnation *slot, finished <-chan struct{}) {
+func (t *Table) watch(ctx context.Context, lease *bindLease, finished <-chan struct{}) {
 	if waitCtx(ctx, finished) {
 		return
 	}
-	t.drop(key, incarnation)
+	t.dropOnce(lease)
+}
+
+// dropOnce runs drop for this lease at most once.
+func (t *Table) dropOnce(lease *bindLease) {
+	if lease == nil {
+		return
+	}
+	if !t.claimLeaseDrop(lease) {
+		return
+	}
+	t.drop(lease.key, lease.incarnation)
+}
+
+// claimLeaseDrop marks the lease dropped under t.mu and reports whether this caller must drop.
+func (t *Table) claimLeaseDrop(lease *bindLease) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if lease.dropped {
+		return false
+	}
+	lease.dropped = true
+	return true
+}
+
+// releaseLease stops the AfterFunc when one was registered, then drops this bind once.
+func (t *Table) releaseLease(lease *bindLease) {
+	if lease == nil {
+		return
+	}
+	if lease.stop != nil {
+		lease.stop()
+	}
+	t.dropOnce(lease)
 }
 
 // releaseHolder decrements the incarnation's holder count.

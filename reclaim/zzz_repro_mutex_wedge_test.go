@@ -61,7 +61,7 @@ func TestRepro_PanicUnderTableMutexWedgesTable(t *testing.T) {
 	}
 	close(incarnation.ready)
 	panicValue = recovered(func() {
-		_, _ = tab.put(context.Background(), "k", incarnation, recLogger(h), func() (any, Hooks, error) {
+		_, _, _ = tab.put(context.Background(), "k", incarnation, recLogger(h), func() (any, Hooks, error) {
 			return "v", Hooks{}, nil
 		})
 	})
