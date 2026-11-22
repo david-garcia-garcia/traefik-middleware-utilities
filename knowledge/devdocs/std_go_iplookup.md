@@ -3,7 +3,7 @@
 ## Language
 
 **Helper**:
-An in-process CIDR store in package `iplookup`. IPv4 and IPv6 prefixes live on separate trees. Callers pass `net.IP` they already selected.
+An in-process CIDR store in package `iplookup`. IPv4 and IPv6 prefixes live on separate family stores. Callers pass `net.IP` they already selected.
 _Avoid_: reconstructing client address from HTTP or X-Forwarded-For; a shared radix root for both families; geoblock `IpLookupHelper` as the type name in this module
 
 **Match label**:
@@ -11,7 +11,7 @@ The string stored on one CIDR prefix. `Contains` returns the winning longest-pre
 _Avoid_: attaching the label to every node walked; a second lookup method for metadata
 
 **Family tree**:
-One radix root for IPv4 (including IPv4-mapped IPv6 via `ip.To4() != nil`) and one for IPv6. A prefix cannot match the other family.
+One family store for IPv4 (including IPv4-mapped IPv6 via `ip.To4() != nil`) and one for IPv6. Host-length prefixes sit in a map; shorter prefixes sit on that family's radix trie. A prefix cannot match the other family.
 _Avoid_: classifying IPv4-mapped addresses as a third family
 
 ## Overview
@@ -48,7 +48,9 @@ _ = label
 ## Key files
 
 - `iplookup/helper.go` — `Helper`, `New`, `AddCIDR`, `AddEntry`, `HostCIDR`, `RemoveCIDR`, `Contains`, `Reset`, `Count`
-- `iplookup/tree.go` — family-agnostic radix insert, contains, remove
+- `iplookup/store.go` — family store: host map plus radix trie for shorter prefixes
+- `iplookup/labeltable.go` — interned match labels so host maps hold ids
+- `iplookup/tree.go` — family-agnostic radix insert, contains, remove for non-host prefixes
 - `openspec/specs/std_go_iplookup_family-match/spec.md`, `openspec/specs/std_go_iplookup_cidr-store/spec.md`, `openspec/specs/std_go_iplookup_match-label/spec.md`
 
 ## Gotchas
@@ -56,6 +58,7 @@ _ = label
 - `1.2.3.4/32` does not match `102:304::1`. List both families when both should match.
 - `10.0.0.1/8` and `10.0.0.0/8` are the same stored prefix after `ParseCIDR`.
 - `"::ffff:10.0.0.1" + "/32"` is an IPv6 `/32` (`::/32`), not the IPv4 host. That is why callers use `AddEntry` / `HostCIDR` instead of choosing the suffix from `To4()` and appending it to the original text.
-- An IPv4-mapped CIDR (`To4()` non-nil and mask `bits==128`, such as `::ffff:0:0/96`) remaps to IPv4 prefix `ones-96` on the v4 tree. Do not walk `ones` from bit 96. Membership matches `net.IPNet.Contains` (IPv4 and IPv4-mapped hit; native IPv6 miss).
+- An IPv4-mapped CIDR (`To4()` non-nil and mask `bits==128`, such as `::ffff:0:0/96`) remaps to IPv4 prefix `ones-96` on the IPv4 family store. Do not walk `ones` from bit 96. Membership matches `net.IPNet.Contains` (IPv4 and IPv4-mapped hit; native IPv6 miss).
+- Host-length prefixes (`/32`, `/128`) sit in maps; shorter prefixes still use the radix trie (heap and GC cost of `tree.go`).
 - Traefik request lookup can overlap a reload: Helper serializes mutations with Contains.
 - Do not import geoblock `pkg/iplookup`; this module is the reusable copy.
