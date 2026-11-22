@@ -54,7 +54,9 @@ func (r *Redis) SetNowForTest(now func() time.Time) {
 }
 
 // Allow consumes one token for key via Eval and returns its Status: whether it is allowed, the wait as Delay or RetryAfter,
-// and the bucket the script kept. The Status is the zero value when the error is non-nil.
+// and the bucket the script kept. The Status is the zero value when the error is non-nil. A context.Canceled or
+// DeadlineExceeded return does not prove the script did not run; the token may have been charged. HTTP mapping (499 on
+// Canceled, no wait when wait==0) belongs to the middleware (see traefik/traefik#14173).
 func (r *Redis) Allow(ctx context.Context, key string) (Status, error) {
 	if err := ctx.Err(); err != nil {
 		return Status{}, err

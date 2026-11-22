@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-tokenbucket-canceled-request",
+  "jobName": "2026-11-22-tokenbucket-canceled-request",
+  "startedAt": "2026-11-22T06:44:15.225Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:48:34.769Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:52:18.164Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:56:25.115Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:11:59.558Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:20:35.959Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:23:01.845Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:24:31.921Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T07:29:25.398Z"
+    }
+  }
+}

@@ -68,7 +68,9 @@ func (m *Memory) SetNowForTest(now func() time.Time) {
 }
 
 // Allow consumes one token for key and returns its Status: whether it is allowed, the wait as Delay or RetryAfter, and the
-// bucket after this consume. The Status is the zero value when the error is non-nil.
+// bucket after this consume. The Status is the zero value when the error is non-nil. A ctx already done returns its error
+// and charges nothing. HTTP mapping (499 on Canceled, no wait when wait==0) belongs to the middleware (see
+// traefik/traefik#14173).
 func (m *Memory) Allow(ctx context.Context, key string) (Status, error) {
 	if err := ctx.Err(); err != nil {
 		return Status{}, err

@@ -1,0 +1,18 @@
+issueKey: 2026-11-22-tokenbucket-canceled-request
+jobName: 2026-11-22-tokenbucket-canceled-request
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: 5c35b8872becfffddf50fd2b1e95c6e2e46973457f2dad7fa1ab18a84a43459a
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: tokenbucket-canceled-request
+pr:
+  id: 112
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/112
