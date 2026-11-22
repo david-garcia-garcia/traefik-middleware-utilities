@@ -59,3 +59,8 @@ description: What Redis proto-max-bulk-len defaults to and which protocol sizes 
 priority: normal
 local: ext_redis_tls/
 description: How Redis 7.4 serves TLS (flags, default client-cert requirement) and the failure modes a Go TLS client sees.
+
+## HMGET missing field
+priority: normal
+local: ext_redis_hmget_missing-field/
+description: Lua type of an HMGET element when that hash field is not stored.

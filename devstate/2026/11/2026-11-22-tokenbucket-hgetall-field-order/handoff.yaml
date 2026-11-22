@@ -1,0 +1,18 @@
+issueKey: 2026-11-22-tokenbucket-hgetall-field-order
+jobName: 2026-11-22-tokenbucket-hgetall-field-order
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: c68385997f2df3470fc6b3800de17980752683fd3ca29944902e0adb73a17be0
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: tokenbucket-hmget-named-fields
+pr:
+  id: 107
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/107
