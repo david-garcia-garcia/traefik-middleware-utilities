@@ -1,0 +1,16 @@
+issueKey: 2026-11-22-tokenbucket-redis-unreachable
+jobName: 2026-11-22-tokenbucket-redis-unreachable
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: 074c6a2e3e94fbf1
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: tokenbucket-redis-unreachable
+pr: { id: 114, url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114 }

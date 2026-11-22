@@ -1,4 +1,4 @@
 {
   "commentId": "pr-body",
-  "issueKey": "2026-11-22-tokenbucket-reload-without-close"
+  "issueKey": "2026-11-22-tokenbucket-redis-unreachable"
 }
