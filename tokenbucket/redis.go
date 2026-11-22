@@ -13,6 +13,7 @@ import (
 var allowScriptDigest = simpleredis.ScriptSHA1Hex(allowScript)
 
 // Redis is a Traefik token bucket stored as a Redis hash via Eval.
+// Bucket state lives on the server. Any limiter that Allows the same key shares that budget, so the key prefix defines the scope.
 type Redis struct {
 	clock clockConfig
 	now   func() time.Time
@@ -21,6 +22,7 @@ type Redis struct {
 
 // NewRedis builds a Redis limiter on a SimpleRedis from simpleredis.New. rate is requests per second.
 // ttl is a minimum idle lifetime. The library raises it to the whole seconds needed to refill burst at rate, including maxDelay, so an expired bucket is already full and recreating it grants nothing (traefik/traefik#13957).
+// Any *Redis on the same key shares the server budget; the caller prefixes the key to choose the scope.
 func NewRedis(redis *simpleredis.SimpleRedis, rate float64, burst int64, maxDelay, ttl time.Duration) (*Redis, error) {
 	if redis == nil {
 		return nil, errRedis
