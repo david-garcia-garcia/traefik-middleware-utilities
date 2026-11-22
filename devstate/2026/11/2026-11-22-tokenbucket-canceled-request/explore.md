@@ -119,5 +119,5 @@ go test -short -count=1 -v -run '^TestStatus_ErrorReturnsTheZeroStatus$' ./token
 
 - Q: ¿Actualizar `knowledge/devdocs/std_go_tokenbucket.md` en esta entrega?
   Rank: additive incidental — el packet no cita el cobro en vuelo; Desired nombra GoDoc en Allow, no el packet; Tensions: el impacto lo mide otra fase
-  Decision: assumed — no escribir el packet en explore ni en el alcance mínimo de apply; `opd-devdocsimpact` lo mide después.
-  By: explore
+  Decision: resolved — sí. How-to: 499 / skip-wait is the middleware. Gotchas: Redis `Canceled`/`DeadlineExceeded` does not prove the script did not run (token may have been charged); Memory already-done ctx charges nothing. No new Language term.
+  By: devdocsimpact

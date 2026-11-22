@@ -26,7 +26,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket`
 
 - `NewMemory(rate, burst, maxDelay, ttl)` or `NewRedis(client, rate, burst, maxDelay, ttl)` once.
 - Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline. Match Redis errors by `Error()` text.
-- Read the returned `Status`: deny on `!Allowed` and put `RetryAfter` in `Retry-After`; sleep `Delay` when allowed to keep Traefik's delayed admit; take `Limit`, `Remaining`, `Period`, and `Reset` for `X-RateLimit-*`. Formatting (whole seconds, HTTP date) is the middleware's job. On a non-nil error the `Status` is the zero value.
+- Read the returned `Status`: deny on `!Allowed` and put `RetryAfter` in `Retry-After`; sleep `Delay` when allowed to keep Traefik's delayed admit; take `Limit`, `Remaining`, `Period`, and `Reset` for `X-RateLimit-*`. Formatting (whole seconds, HTTP date) is the middleware's job. On a non-nil error the `Status` is the zero value. Map `context.Canceled` to HTTP 499 in the middleware and skip the wait when wait is 0; this package writes no HTTP (traefik/traefik#14173).
 - Prove with `go test -short ./tokenbucket/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
 - Benchmark with `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/`: `bench_test.go` (compiled, fake Redis with a warm script cache, `redis-cmds/op`), `bench_yaegi_test.go` (interpreted: hot key, 10k rotating sources, new key at a full table; it writes a test-only `zz_bench_hooks.go` into the interpreter's GOPATH copy of the package to prefill sources without `Allow`), `bench_e2e_test.go` (`-bench Live`, needs `TOKENBUCKET_LIVE_*`, skips under `-short`). CI does not run benchmarks. Results and machine: `README.md` `## Rate limiters compared`.
 
@@ -40,7 +40,7 @@ if err != nil {
 ctx := req.Context()
 status, err := limiter.Allow(ctx, "ip:"+ip)
 if err != nil {
-	return err
+	return err // 499 on context.Canceled; this package writes no HTTP
 }
 if !status.Allowed {
 	return errLimited // 429 with Retry-After from status.RetryAfter
@@ -56,6 +56,7 @@ time.Sleep(status.Delay)
 
 ## Gotchas
 
+- `Redis.Allow` returning `context.Canceled` or `DeadlineExceeded` does not prove the Eval script did not run; the token may have been charged. Do not refund from this package. `Memory.Allow` on an already-done ctx returns that error and charges nothing.
 - `rate <= 0`, NaN, Inf, `burst < 1`, `maxDelay < 0`, or a `ttl` that is not a whole number of seconds of at least 1s fails New. Redis EXPIRE is integer seconds; New must not accept a Duration Redis cannot represent. Passthrough is skipping construction. This package has no unlimited-rate constructor.
 - Lua always returns `"true"`; Go maps `Allowed` from wait microseconds vs maxDelay microseconds (Lua refunds on `>`). The `Delay` and `RetryAfter` durations are not the admit gate.
 - The wait is `Delay` when allowed and `RetryAfter` when denied; the other is 0, and `Delay + RetryAfter` is the single wait `Allow` used to return. `RetryAfter` is the full wait (the delay Traefik puts in `Retry-After`), not `wait - maxDelay`.
