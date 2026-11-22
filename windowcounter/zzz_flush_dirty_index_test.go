@@ -186,25 +186,40 @@ func nsPerIdleFlushFlushDirtyIndex(t *testing.T, liveWindows int) int64 {
 	if err := limiter.flushPending(ctx); err != nil {
 		t.Fatal(err)
 	}
-	const rounds = 50_000
+	assertIdleWindowsFlushDirtyIndex(t, limiter, liveWindows)
+	// Idle flush is faster than a coarse wall clock (50k rounds can read as 0s). Sample until minElapsed.
+	const minElapsed = 50 * time.Millisecond
 	const samples = 7
 	times := make([]time.Duration, samples)
 	for sample := 0; sample < samples; sample++ {
+		n := 0
 		start := time.Now()
-		for i := 0; i < rounds; i++ {
+		for {
 			if err := limiter.flushPending(ctx); err != nil {
 				t.Fatal(err)
 			}
+			n++
+			if elapsed := time.Since(start); elapsed >= minElapsed {
+				times[sample] = elapsed / time.Duration(n)
+				break
+			}
 		}
-		elapsed := time.Since(start)
-		if elapsed <= 0 {
-			t.Fatalf("idle flush at %d windows: %d rounds elapsed %s", liveWindows, rounds, elapsed)
-		}
-		times[sample] = elapsed / rounds
 	}
 	median := medianDurationFlushDirtyIndex(times)
 	if median <= 0 {
 		t.Fatalf("idle flush at %d windows median %s", liveWindows, median)
 	}
+	assertIdleWindowsFlushDirtyIndex(t, limiter, liveWindows)
 	return int64(median)
+}
+
+// assertIdleWindowsFlushDirtyIndex asserts liveWindows idle windows remain after an idle flush. Caller must not hold l.mu.
+func assertIdleWindowsFlushDirtyIndex(t *testing.T, limiter *Limiter, liveWindows int) {
+	t.Helper()
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+	if got := len(limiter.windows); got != liveWindows {
+		t.Fatalf("live windows after idle flush %d, want %d", got, liveWindows)
+	}
+	checkIndexesLockedFlushDirtyIndex(t, limiter)
 }

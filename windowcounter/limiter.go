@@ -363,23 +363,23 @@ func (l *Limiter) getCountUnlocked(ctx context.Context, redisKey string) (int64,
 }
 
 // putWindowLocked inserts state into the live-window map and its expiry bucket. Caller holds l.mu.
-func (l *Limiter) putWindowLocked(key string, state *windowState) {
-	l.windows[key] = state
+func (l *Limiter) putWindowLocked(redisKey string, state *windowState) {
+	l.windows[redisKey] = state
 	bucket := l.expiry[state.expireAt]
 	if bucket == nil {
 		bucket = map[string]*windowState{}
 		l.expiry[state.expireAt] = bucket
 	}
-	bucket[key] = state
+	bucket[redisKey] = state
 }
 
 // setExpireLocked moves state between expiry buckets when newExpire differs from the stored expireAt. Caller holds l.mu.
-func (l *Limiter) setExpireLocked(key string, state *windowState, newExpire int64) {
+func (l *Limiter) setExpireLocked(redisKey string, state *windowState, newExpire int64) {
 	if newExpire == state.expireAt {
 		return
 	}
 	if bucket := l.expiry[state.expireAt]; bucket != nil {
-		delete(bucket, key)
+		delete(bucket, redisKey)
 		if len(bucket) == 0 {
 			delete(l.expiry, state.expireAt)
 		}
@@ -390,19 +390,19 @@ func (l *Limiter) setExpireLocked(key string, state *windowState, newExpire int6
 		bucket = map[string]*windowState{}
 		l.expiry[newExpire] = bucket
 	}
-	bucket[key] = state
+	bucket[redisKey] = state
 }
 
 // deleteWindowLocked removes the window from the live map, its expiry bucket, and the dirty index. Caller holds l.mu.
-func (l *Limiter) deleteWindowLocked(key string, state *windowState) {
-	delete(l.windows, key)
+func (l *Limiter) deleteWindowLocked(redisKey string, state *windowState) {
+	delete(l.windows, redisKey)
 	if bucket := l.expiry[state.expireAt]; bucket != nil {
-		delete(bucket, key)
+		delete(bucket, redisKey)
 		if len(bucket) == 0 {
 			delete(l.expiry, state.expireAt)
 		}
 	}
-	delete(l.dirty, key)
+	delete(l.dirty, redisKey)
 }
 
 // applyGetLocked stores a GET count. Caller holds l.mu. A concurrent Take's localDelta is kept.
@@ -568,7 +568,8 @@ func (l *Limiter) flushPendingLocked(ctx context.Context) error {
 	}
 	// Drop due idle windows: visit expiry buckets whose second has passed (and bucket 0).
 	for expireAt, bucket := range l.expiry {
-		if expireAt != 0 && nowUnix < expireAt {
+		due := expireAt == 0 || nowUnix >= expireAt
+		if !due {
 			continue
 		}
 		for redisKey, state := range bucket {
