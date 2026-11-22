@@ -76,13 +76,13 @@ Report (allow.go)
 
 - Q: Which jitter-at-cap formula meets Desired (never exceed Max, no point mass at the cap, Jitter 0 still disables)?
   Rank: bounded asked — `cooldownDuration` already has 2 production callers (`backendbackoff/allow.go:72`, `:86`; roots: worktree, pattern `cooldownDuration`, 4 hits / 2 files) and this change would migrate them here; Desired names "no single value carries a point mass at the cap; jittered probes stay spread when the nominal cooldown is at the cap".
-  Decision: assumed — leave the choice to tech-lead propose among the listed options
-  By: explore
+  Decision: resolved — by propose, pointing to design.md (pre-bounded interval, option 2)
+  By: propose
 
 - Q: Should the chosen formula also spread when `wait < Max` but `wait*(1+J) > Max` (near-cap clip), not only when `wait == Max`?
   Rank: bounded asked — same `cooldownDuration` callers (2, roots as above); Unknowns names below-cap overshoot; Desired's "no single value carries a point mass at the cap" is true of that clip too.
-  Decision: resolved as fact — default 1s/10s `n=3` wait=8s is 0.0% at Max; legal `Base=9.5s` `Max=10s` `J=0.1` `n=0` measured 23.9% at Max. Which options cover that band: (1) does not, (2) and (3) do. Which band to cover is part of the formula choice for propose, not a second crowned design.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md (cover the near-cap band with option 2; option 1 rejected because it leaves the 23.9% mass)
+  By: propose
 
 - Q: Does `float64` → `time.Duration` truncation create extra point masses besides the Max clamp?
   Rank: additive incidental — conversion already sits inside `cooldownDuration`; Desired does not name truncation; no new callers.
@@ -101,8 +101,8 @@ Report (allow.go)
 
 - Q: How to isolate hunks against sibling `backendbackoff-*` tickets (`new-key-scan`, `stale-probe-report`) on the same package?
   Rank: bounded asked — Constraints: "Touch only what this ticket needs" and "keep hunks minimal so merges stay mechanical"; three `backendbackoff-*` tickets of the batch.
-  Decision: assumed — keep this ticket's product hunk in `cooldownDuration` (`gate.go`) plus the cooldown spec delta and a self-contained `zzz_*` test file with slug-suffixed helpers. Do not edit `allow.go` (siblings own `loadEntry` and Report/Allow identity). `Jitter` 0 / `newTestGate` stay put unless a new test needs its own gate.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md (product hunk stays in `cooldownDuration`; `allow.go` untouched)
+  By: propose
 
 - Q: `knowledge/devdocs/std_go_backendbackoff.md` does not mention the point mass at `MaxCooldown`; should usage/Gotchas name it after the formula change?
   Rank: additive incidental — packet usage is enough to call Allow/Report today; the gap is a gotcha the change would make stale or newly true; requirement does not name the packet. Attended: do not write `knowledge/devdocs` without human yes.
