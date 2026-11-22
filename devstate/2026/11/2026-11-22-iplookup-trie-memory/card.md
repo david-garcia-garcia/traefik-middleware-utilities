@@ -20,7 +20,7 @@ Cada familia pasa a un almacén partido: mapa de hosts sin punteros más el trie
 In progress. 1 items remain.
 
 Priority: P2 — dolor real de operador, con radio limitado a quien carga listas grandes de hosts
-Reviewed head: 8d2cac76
+Reviewed head: 01544faf
 Owner decision: None.
 
 ## Review scores
@@ -78,7 +78,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 8d2cac76bcde6c619af04d3e5b34664e070443a2 | Card must match the branch you measured |
+| Reviewed head | 01544faf73b72950aa8c83985e30d653ceae4098 | Card must match the branch you measured |
 
 ### Stored data model
 None.
