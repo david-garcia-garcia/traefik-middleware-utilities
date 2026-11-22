@@ -131,6 +131,8 @@ Pros and cons:
 
 The buffered flush sends several keys in one `EVAL`, so all of them have to live on one Redis node. A Redis Cluster engine or cluster proxy would answer `CROSSSLOT`; SimpleRedis does not support Redis Cluster either.
 
+On Dragonfly, start the engine with `--num_shards=1`. With its default flags, a script whose keys land on more than one Dragonfly shard is slow: a 1,000-key buffered flush took 68 to 78 ms instead of 1.7 to 1.8 ms, and a `tokenbucket.NewRedis` `Allow` over 10,000 clients took 111 to 123 µs instead of 71 to 82 µs. `--num_shards=1` keeps Dragonfly's I/O threads but processes data on one shard, like Redis, for every application on that instance. The alternative is `--lock_on_hashtags` with every limiter key under one hashtag (for example `{rl}ip:1.2.3.4`): same flush time, but the flag changes locking for every hashtagged key on the instance and puts all limiter calls behind one lock. Both were measured with 20 concurrent goroutines from one process, not under the load of many Traefik instances. `--cache_mode`, `--lua_auto_async`, `--multi_eval_squash_buffer`, `--num_shards=4`, and `disable-atomicity` did not help.
+
 ### Compared with Traefik's rate limiters
 
 Traefik Proxy `RateLimit` (open source, read at commit `903e8a9`): a token bucket configured with `average`, `period`, and `burst`. Without Redis it keeps a `golang.org/x/time/rate` limiter per source in an in-memory map capped at 65536 sources. With Redis it runs the Lua script `AllowTokenBucketRaw` (`EVALSHA`, then `EVAL` when the engine does not have the script). The maximum wait is computed from the rate, not configured. The middleware waits up to that delay, answers 429 with `Retry-After` above it, and answers 500 when Redis returns an error; its documentation says nothing about a Redis outage.
@@ -168,7 +170,7 @@ Against Redis 7.4:
 | `windowcounter`, `sync_rate` 1 s | 1 client | 284 ns | 15 µs | ~0 |
 | `windowcounter`, `sync_rate` 1 s | 10,000 clients | 4.7 µs (3.1 to 7.5 µs across runs) | 318 µs | 0.09 / 2 |
 
-The same Redis-backed rows on each supported engine, compiled / Yaegi:
+The same Redis-backed rows on each supported engine, compiled / Yaegi (Dragonfly with its default flags; see `--num_shards=1` above):
 
 | Configuration | Traffic | Redis 7.4 | Dragonfly 1.40.2 | Valkey 9.0.1 |
 |---|---|---:|---:|---:|
@@ -182,7 +184,7 @@ How to read it:
 
 - **Redis rows include a real network round trip.** The engine runs in its own container and the benchmark in another, on the same Docker network. One `PING` between them takes about 35 µs on average (`redis-benchmark`, one client). If your Traefik-to-Redis round trip is longer, each round trip in the last column costs that much more.
 - **Buffered `windowcounter` stays local only while a key comes back before the next flush.** A `Take` on a key with no hit since the last flush reads Redis (2 round trips), like `sync_rate` 0. In the 10,000-client rows that depends on how fast the benchmark cycles through the keys: compiled at 1 s most keys come back in time, so the cost varies from run to run; at 20 ms, under Yaegi, or on Dragonfly, almost every `Take` reads Redis. In production the deciding factor is requests per key per `sync_rate`, not CPU.
-- **Dragonfly flushes slowly.** A 1,000-key flush took 58 ms on Dragonfly against 1.4 to 1.7 ms on Redis and Valkey, longer than a 20 ms `sync_rate`. Measured, not explained here.
+- **Dragonfly with default flags flushes slowly.** A 1,000-key flush took 58 ms on Dragonfly against 1.4 to 1.7 ms on Redis and Valkey, longer than a 20 ms `sync_rate`. With `--num_shards=1` it took 1.7 to 1.8 ms (see above).
 - **Limits.** The token bucket runs at 1000 req/s with a burst of 100, so in the 1-client rows the bucket is empty after about 100 calls and most calls are denied. The window counter limit is never reached, so every `Take` is admitted.
 - **One more in-process cost.** In `tokenbucket.NewMemory`, a new client while 65,536 clients are live evicts one: 182 ns compiled, 14 µs under Yaegi.
 
