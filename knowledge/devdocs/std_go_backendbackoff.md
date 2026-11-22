@@ -64,4 +64,5 @@ gate.Report("backend:"+host, ok)
 - Idle longer than TTL drops the key; the next Allow treats the backend as healthy.
 - HALF-OPEN admits one probe. Concurrent Allows during that probe are denied.
 - Two Gate instances do not share state. N Traefik replicas each burn `TripFailures` locally.
+- When `Jitter` is greater than 0, OPEN waits are uniform in `[wait*(1-Jitter), min(wait*(1+Jitter), MaxCooldown))`; they never pile on `MaxCooldown`. `Jitter` 0 returns `wait` exactly.
 - `SetNowForTest` is tests only.

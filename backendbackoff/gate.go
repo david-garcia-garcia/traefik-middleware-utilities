@@ -3,6 +3,7 @@ package backendbackoff
 
 import (
 	"errors"
+	"math"
 	"math/rand"
 	"sync"
 	"time"
@@ -152,7 +153,9 @@ func (g *Gate) successCredit() float64 {
 	return g.cfg.FailureRatio / (1 - g.cfg.FailureRatio)
 }
 
-// cooldownDuration is BaseCooldown * 2^n, jittered, capped at MaxCooldown.
+// cooldownDuration is BaseCooldown * 2^n, never above MaxCooldown.
+// With Jitter > 0 the wait is drawn uniformly from
+// [wait*(1-Jitter), min(wait*(1+Jitter), MaxCooldown)).
 func (g *Gate) cooldownDuration(n int) time.Duration {
 	wait := g.cfg.BaseCooldown
 	// Double until MaxCooldown rather than 2^n in float.
@@ -169,14 +172,8 @@ func (g *Gate) cooldownDuration(n int) time.Duration {
 	if g.cfg.Jitter <= 0 {
 		return wait
 	}
-	// Spread wait by ±Jitter so replicas that trip together do not probe in lockstep.
-	jitterSample := g.rng.Float64()
-	jittered := time.Duration(float64(wait) * (1 + g.cfg.Jitter*(2*jitterSample-1)))
-	if jittered < 0 {
-		jittered = 0
-	}
-	if jittered > g.cfg.MaxCooldown {
-		return g.cfg.MaxCooldown
-	}
-	return jittered
+	// Draw inside the pre-bounded interval so the cap is an endpoint, not a clamp pile-up.
+	lower := float64(wait) * (1 - g.cfg.Jitter)
+	upper := math.Min(float64(wait)*(1+g.cfg.Jitter), float64(g.cfg.MaxCooldown))
+	return time.Duration(lower + g.rng.Float64()*(upper-lower))
 }
