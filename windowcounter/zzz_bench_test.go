@@ -23,10 +23,11 @@ type benchTakeMode struct {
 	syncRate time.Duration
 }
 
-// benchTakeModes are exact mode and the 20ms floor, the buffered rate with the most Redis traffic.
+// benchTakeModes are exact mode, the 20ms floor (the buffered rate with the most Redis traffic), and a one-second buffered rate.
 var benchTakeModes = []benchTakeMode{
 	{name: "sync-rate-0", syncRate: 0},
 	{name: "sync-rate-20ms", syncRate: benchSyncRate},
+	{name: "sync-rate-1s", syncRate: time.Second},
 }
 
 // benchKeyNames returns count distinct opaque keys with prefix.
@@ -70,7 +71,7 @@ func takeForBench(b *testing.B, limiter *Limiter, key string) {
 	benchStatusSink = status
 }
 
-// BenchmarkTake measures Take in exact mode and at sync_rate 20ms against the fake with a warm script cache:
+// BenchmarkTake measures Take in exact mode and at sync_rate 20ms and 1s against the fake with a warm script cache:
 // one hot key, 10k rotating keys, and a hot key from parallel goroutines. The buffered flush timer runs for real in the background.
 func BenchmarkTake(b *testing.B) {
 	for _, mode := range benchTakeModes {

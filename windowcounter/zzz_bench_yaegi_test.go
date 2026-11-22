@@ -3,52 +3,65 @@ package windowcounter
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
 )
 
-// BenchmarkYaegiTake measures interpreted Take on one hot key in exact mode and at sync_rate 20ms against the fake with a warm script cache.
-// Each Eval builds one limiter, Takes count times, then Closes it, so a Close that hangs fails the benchmark by timeout.
+// BenchmarkYaegiTake measures interpreted Take in every benchTakeModes mode against the fake with a warm script cache:
+// one hot key and 10k rotating keys, the interpreted twins of BenchmarkTake's hot-key and rotating-10k. Setup Takes every
+// key once, untimed; the limiter is Closed in cleanup, so a Close that hangs fails the benchmark by timeout.
 func BenchmarkYaegiTake(b *testing.B) {
 	for _, mode := range benchTakeModes {
 		mode := mode
 		b.Run(mode.name+"/hot-key", func(b *testing.B) {
-			fake, addr := startTestFakeRedis(b)
-			fake.enableScriptCache()
-			goPath := b.TempDir()
-			writeGopathWindowcounter(b, goPath)
-			writeGopathFile(b, goPath, "takebench", "loop.go", takebenchSrc)
-
-			// Interpreter with stdlib only (no unsafe), as Traefik loads a plugin.
-			interpreter := interp.New(interp.Options{GoPath: goPath})
-			if err := interpreter.Use(stdlib.Symbols); err != nil {
-				b.Fatalf("use stdlib: %v", err)
-			}
-			if _, err := interpreter.Eval(`import "takebench"`); err != nil {
-				b.Fatalf("import takebench: %v", err)
-			}
-			loopExpr := func(count int) string {
-				return fmt.Sprintf(`takebench.HotKeyLoop(%q, %d, %d)`, addr, mode.syncRate.Milliseconds(), count)
-			}
-			if _, err := interpreter.Eval(loopExpr(1)); err != nil {
-				b.Fatalf("warmup: %v", err)
-			}
-
-			// One timed Eval runs b.N Take calls inside the interpreter.
-			startCommands := fake.commandCount()
-			b.ResetTimer()
-			evaluated, err := interpreter.Eval(loopExpr(b.N))
-			if err != nil {
-				b.Fatalf("eval loop: %v", err)
-			}
-			b.StopTimer()
-			if got := evaluated.Interface().(string); got != "ok" {
-				b.Fatalf("HotKeyLoop = %q, want ok", got)
-			}
-			reportRedisCmdsPerOp(b, fake, startCommands)
+			runYaegiTakeBench(b, mode.syncRate, 1)
+		})
+		b.Run(mode.name+"/rotating-10k", func(b *testing.B) {
+			runYaegiTakeBench(b, mode.syncRate, benchRotatingKeys)
 		})
 	}
+}
+
+// runYaegiTakeBench interprets the takebench probe with keyCount keys at syncRate and times one Eval of b.N Takes.
+func runYaegiTakeBench(b *testing.B, syncRate time.Duration, keyCount int) {
+	b.Helper()
+	fake, addr := startTestFakeRedis(b)
+	fake.enableScriptCache()
+	goPath := b.TempDir()
+	writeGopathWindowcounter(b, goPath)
+	writeGopathFile(b, goPath, "takebench", "loop.go", takebenchSrc)
+
+	// Interpreter with stdlib only (no unsafe), as Traefik loads a plugin.
+	interpreter := interp.New(interp.Options{GoPath: goPath})
+	if err := interpreter.Use(stdlib.Symbols); err != nil {
+		b.Fatalf("use stdlib: %v", err)
+	}
+	if _, err := interpreter.Eval(`import "takebench"`); err != nil {
+		b.Fatalf("import takebench: %v", err)
+	}
+	evaluated, err := interpreter.Eval(fmt.Sprintf(`takebench.Setup(%q, %d, %d)`, addr, syncRate.Milliseconds(), keyCount))
+	if err != nil {
+		b.Fatalf("setup: %v", err)
+	}
+	if got := evaluated.Interface().(string); got != "ok" {
+		b.Fatalf("Setup = %q, want ok", got)
+	}
+	b.Cleanup(func() { _, _ = interpreter.Eval(`takebench.Close()`) })
+
+	// One timed Eval runs b.N Take calls inside the interpreter.
+	startCommands := fake.commandCount()
+	b.ResetTimer()
+	evaluated, err = interpreter.Eval(fmt.Sprintf(`takebench.Loop(%d)`, b.N))
+	if err != nil {
+		b.Fatalf("eval loop: %v", err)
+	}
+	b.StopTimer()
+	if got := evaluated.Interface().(string); got != "ok" {
+		b.Fatalf("Loop = %q, want ok", got)
+	}
+	reportRedisCmdsPerOp(b, fake, startCommands)
 }
 
 // BenchmarkYaegiFlush measures one interpreted buffered flush of 1000 dirty window keys against the fake with a warm script
@@ -321,19 +334,26 @@ func Close() {
 }
 `
 
-// takebenchSrc is the interpreted probe: one limiter per loop, count Takes on one key, then Close.
+// takebenchSrc is the interpreted probe: Setup builds one limiter and Takes every key once, Loop Takes the keys in turn.
 const takebenchSrc = `package takebench
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter"
 )
 
-// HotKeyLoop runs count Take calls on one key with sync_rate syncRateMs, then Closes the limiter.
-func HotKeyLoop(host string, syncRateMs int64, count int) string {
+// benchLimiter and benchKeys are the state Setup leaves for Loop and Close.
+var (
+	benchLimiter *windowcounter.Limiter
+	benchKeys    []string
+)
+
+// Setup builds a limiter with sync_rate syncRateMs and Takes keys ip:0..ip:(keyCount-1) once each.
+func Setup(host string, syncRateMs int64, keyCount int) string {
 	client, err := simpleredis.New(simpleredis.Config{Host: host})
 	if err != nil {
 		return "client:" + err.Error()
@@ -342,14 +362,29 @@ func HotKeyLoop(host string, syncRateMs int64, count int) string {
 	if err != nil {
 		return "new:" + err.Error()
 	}
+	benchLimiter = limiter
+	benchKeys = make([]string, keyCount)
+	for i := range benchKeys {
+		benchKeys[i] = "ip:" + strconv.Itoa(i)
+	}
+	return Loop(keyCount)
+}
+
+// Loop runs count Take calls over the keys in turn.
+func Loop(count int) string {
 	ctx := context.Background()
 	for i := 0; i < count; i++ {
-		if _, err := limiter.Take(ctx, "ip:1.2.3.4", int64(1)<<40, time.Minute); err != nil {
-			limiter.Close()
+		if _, err := benchLimiter.Take(ctx, benchKeys[i%len(benchKeys)], int64(1)<<40, time.Minute); err != nil {
 			return "take:" + err.Error()
 		}
 	}
-	limiter.Close()
 	return "ok"
+}
+
+// Close stops the limiter.
+func Close() {
+	if benchLimiter != nil {
+		benchLimiter.Close()
+	}
 }
 `
