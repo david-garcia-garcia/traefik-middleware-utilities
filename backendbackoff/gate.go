@@ -58,7 +58,19 @@ type Gate struct {
 
 	mu     sync.Mutex
 	closed bool
+	seq    uint64
 	keys   map[string]*memEntry
+}
+
+// Permit identifies one admitted Allow. The zero value is a deny.
+type Permit struct {
+	key string
+	gen uint64
+}
+
+// Allowed reports whether Allow admitted a backend attempt.
+func (p Permit) Allowed() bool {
+	return p.gen != 0
 }
 
 // memEntry is one key's credit, backoff exponent, and idle expire time.
@@ -71,6 +83,7 @@ type memEntry struct {
 	probeUntil       time.Time
 	probeOutstanding bool
 	expireAt         time.Time
+	gen              uint64
 }
 
 // New builds an in-process gate. Zero Config applies defaults.

@@ -4,13 +4,13 @@ import (
 	"time"
 )
 
-// Allow returns whether a backend attempt for key may proceed, plus how long to wait if not.
-func (g *Gate) Allow(key string) (bool, time.Duration, error) {
+// Allow returns a Permit for a backend attempt for key, plus how long to wait if not admitted.
+func (g *Gate) Allow(key string) (Permit, time.Duration, error) {
 	now := g.now()
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closed {
-		return false, 0, errClosed
+		return Permit{}, 0, errClosed
 	}
 	entry := g.loadEntry(key, now)
 	// Idle longer than ttl is a new key. Refresh so OPEN denies do not drop the map slot.
@@ -18,37 +18,46 @@ func (g *Gate) Allow(key string) (bool, time.Duration, error) {
 	switch entry.state {
 	case stateClosed:
 		g.resetNIfClosedLongEnough(entry, now)
-		return true, 0, nil
+		return Permit{key: key, gen: entry.gen}, 0, nil
 	case stateOpen:
 		if now.Before(entry.openUntil) {
-			return false, entry.openUntil.Sub(now), nil
+			return Permit{}, entry.openUntil.Sub(now), nil
 		}
 		entry.state = stateHalfOpen
 		entry.probeOutstanding = true
 		entry.probeUntil = now.Add(g.cfg.BaseCooldown)
-		return true, 0, nil
+		g.bumpGen(entry)
+		return Permit{key: key, gen: entry.gen}, 0, nil
 	case stateHalfOpen:
 		if entry.probeOutstanding && now.Before(entry.probeUntil) {
-			return false, entry.probeUntil.Sub(now), nil
+			return Permit{}, entry.probeUntil.Sub(now), nil
 		}
+		// Lease expired (or no probe): take the slot with a new generation.
 		entry.probeOutstanding = true
 		entry.probeUntil = now.Add(g.cfg.BaseCooldown)
-		return true, 0, nil
+		g.bumpGen(entry)
+		return Permit{key: key, gen: entry.gen}, 0, nil
 	default:
-		return false, 0, errUnknown
+		return Permit{}, 0, errUnknown
 	}
 }
 
 // Report records the outcome of a real backend attempt the gate admitted.
-func (g *Gate) Report(key string, success bool) error {
+func (g *Gate) Report(permit Permit, success bool) error {
 	now := g.now()
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closed {
 		return errClosed
 	}
-	entry := g.keys[key]
+	if !permit.Allowed() {
+		return nil
+	}
+	entry := g.keys[permit.key]
 	if entry == nil {
+		return nil
+	}
+	if entry.gen != permit.gen {
 		return nil
 	}
 	// Expire is Allow's job. An admitted attempt that Reports after TTL still lands.
@@ -65,11 +74,13 @@ func (g *Gate) Report(key string, success bool) error {
 			entry.credit = g.budget
 			entry.state = stateClosed
 			entry.closedSince = now
+			g.bumpGen(entry)
 			return nil
 		}
 		entry.n++
 		entry.state = stateOpen
 		entry.openUntil = now.Add(g.cooldownDuration(entry.n))
+		g.bumpGen(entry)
 		return nil
 	case stateClosed:
 		if success {
@@ -85,11 +96,18 @@ func (g *Gate) Report(key string, success bool) error {
 			entry.state = stateOpen
 			entry.openUntil = now.Add(g.cooldownDuration(entry.n))
 			entry.closedSince = time.Time{}
+			g.bumpGen(entry)
 		}
 		return nil
 	default:
 		return errUnknown
 	}
+}
+
+// bumpGen assigns the next gate-wide generation so a stale permit cannot match.
+func (g *Gate) bumpGen(entry *memEntry) {
+	g.seq++
+	entry.gen = g.seq
 }
 
 // loadEntry returns the key's slot, dropping it first when idle TTL has elapsed.
@@ -109,6 +127,7 @@ func (g *Gate) loadEntry(key string, now time.Time) *memEntry {
 			state:       stateClosed,
 			closedSince: now,
 		}
+		g.bumpGen(entry)
 		g.keys[key] = entry
 	}
 	return entry
