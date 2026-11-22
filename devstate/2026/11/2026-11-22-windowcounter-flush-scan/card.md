@@ -26,7 +26,7 @@ El coste del tick queda en O(sucias + que caducan ahora + segundos distintos de 
 In progress. 0 items remain.
 
 Priority: P2 — dolor real de operador y usuario final, con radio de impacto limitado
-Reviewed head: 22a1563c
+Reviewed head: de435f5c
 Owner decision: None.
 
 ## Review scores
@@ -83,7 +83,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 22a1563cbd2bcb0b4c866b8c71f990673473071b | Card must match the branch you measured |
+| Reviewed head | de435f5c559a034619554aedfee2e8e5fb4669cf | Card must match the branch you measured |
 
 ### Stored data model
 None.
