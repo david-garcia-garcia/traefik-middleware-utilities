@@ -20,7 +20,7 @@ Tras validar el ttl del llamador, `NewMemory` y `NewRedis` guardan en el reloj c
 Ready for review. 0 items remain.
 
 Priority: P1 — el límite admite un burst nuevo tras una pausa más corta que el rellenado
-Reviewed head: e583c4bf
+Reviewed head: 6c3ac41f
 Owner decision: None.
 
 ## Review scores
@@ -43,8 +43,12 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-ttl-below-refill/openspec/changes/tokenbucket-ttl-refill-floor/proposal.md) — modified
-- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-ttl-below-refill/openspec/changes/tokenbucket-ttl-refill-floor/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-ttl-below-refill/openspec/changes/archive/2026-11-22-tokenbucket-ttl-refill-floor/proposal.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-ttl-below-refill/openspec/changes/archive/2026-11-22-tokenbucket-ttl-refill-floor/proposal.md) — modified
+
+Completed:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-ttl-below-refill/openspec/specs/std_go_tokenbucket_allow/spec.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-ttl-below-refill/openspec/specs/std_go_tokenbucket_lua-eval/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -78,9 +82,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 walked / 0 open | Unanswered review is merge risk |
-| Reviewed head | e583c4bfe1e4c2c441665e4cb9fbda7f92606fce | Card must match the branch you measured |
+| Reviewed head | 6c3ac41f6bb9a22e1ddedbdc9b7f4bcdc024f5bf | Card must match the branch you measured |
 
 ### Stored data model
 None.
