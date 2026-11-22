@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-backendbackoff-stale-probe-report",
+  "jobName": "2026-11-22-backendbackoff-stale-probe-report",
+  "startedAt": "2026-11-22T09:58:03.746Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:00:52.397Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:05:30.529Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:19:05.550Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:29:30.733Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:38:41.397Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:40:47.063Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:44:16.961Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:49:13.799Z"
+    }
+  }
+}

@@ -191,23 +191,23 @@ Compiled rows are `BenchmarkMemoryAllow`, `BenchmarkRedisAllow`, `BenchmarkTake`
 
 Package `backendbackoff/`. An in-memory per-key admission gate: stop forwarding into an unhealthy backend, then back off exponentially while it recovers. It is not Traefik's CircuitBreaker middleware and not a token bucket.
 
-`Allow` says whether a real backend attempt may proceed and how long to wait if not. After an admitted attempt, `Report` the boolean outcome. The library does not sleep, does not write HTTP, and does not classify status codes. Denied requests must not be Reported.
+`Allow` returns a `Permit` for whether a real backend attempt may proceed and how long to wait if not. After an admitted attempt, `Report(p, success)` the boolean outcome. A report from another generation is ignored; `Report` returns `applied` false for it. The library does not sleep, does not write HTTP, and does not classify status codes. Denied requests must not be Reported.
 
 ```go
 gate, err := backendbackoff.New(backendbackoff.Config{})
 if err != nil {
 	return err
 }
-allowed, retryAfter, err := gate.Allow(req.Context(), "backend:"+host)
+p, retryAfter, err := gate.Allow("backend:"+host)
 if err != nil {
 	return err
 }
-if !allowed {
+if !p.Allowed() {
 	return errLimited
 }
 _ = retryAfter
 ok := callBackend()
-gate.Report("backend:"+host, ok)
+_, _ = gate.Report(p, ok)
 ```
 
 Prefix keys in the caller. Store the Gate in a reclaim table the caller owns so a Traefik reload keeps the map (`Close` as the reclaim hook; no Sleep/Wake). Two Gate instances do not share state. Do not import `tokenbucket`.

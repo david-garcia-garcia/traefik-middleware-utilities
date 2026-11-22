@@ -59,12 +59,24 @@ type Gate struct {
 
 	mu     sync.Mutex
 	closed bool
+	seq    uint64
 	keys   map[string]*memEntry
-	// head and tail are the expiry list over keys. Every Allow and Report sets expireAt = now + TTL (TTL is fixed) and
-	// moves its entry to the tail, so the head expires first while the clock does not move backwards. Concrete pointers,
-	// not container/list: its any-typed Value is a Yaegi risk.
+	// head and tail are the expiry list over keys. Every Allow, and every Report that lands, sets expireAt = now + TTL
+	// (TTL is fixed) and moves its entry to the tail, so the head expires first while the clock does not move backwards.
+	// Concrete pointers, not container/list: its any-typed Value is a Yaegi risk.
 	head *memEntry
 	tail *memEntry
+}
+
+// Permit identifies one admitted Allow. The zero value is a deny.
+type Permit struct {
+	key string
+	gen uint64
+}
+
+// Allowed reports whether Allow admitted a backend attempt.
+func (p Permit) Allowed() bool {
+	return p.gen != 0
 }
 
 // memEntry is one key's credit, backoff exponent, idle expire time, and its place in Gate's expiry list.
@@ -77,6 +89,7 @@ type memEntry struct {
 	probeUntil       time.Time
 	probeOutstanding bool
 	expireAt         time.Time
+	gen              uint64
 
 	// key, prev, and next link the entry into the expiry list; key is the keys map key, so the list head can be deleted from the map.
 	key  string

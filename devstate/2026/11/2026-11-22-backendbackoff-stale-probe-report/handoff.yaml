@@ -1,0 +1,18 @@
+issueKey: 2026-11-22-backendbackoff-stale-probe-report
+jobName: 2026-11-22-backendbackoff-stale-probe-report
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: sha256:6387058bab2a89158d2162c041ca48df3ea4775a41c1493e7e01fc66f052eacc
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: backendbackoff-probe-permit
+pr:
+  id: 121
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/121

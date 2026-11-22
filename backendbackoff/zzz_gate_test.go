@@ -37,19 +37,19 @@ func TestReport_ConsecutiveFailuresTrip(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
 	for i := 0; i < defaultTripFailures; i++ {
-		allowed, _, err := gate.Allow("k")
-		if err != nil || !allowed {
-			t.Fatalf("admit %d: allowed=%v err=%v", i, allowed, err)
+		permit, _, err := gate.Allow("k")
+		if err != nil || !permit.Allowed() {
+			t.Fatalf("admit %d: allowed=%v err=%v", i, permit.Allowed(), err)
 		}
-		if err := gate.Report("k", false); err != nil {
+		if _, err := gate.Report(permit, false); err != nil {
 			t.Fatal(err)
 		}
 	}
-	allowed, retryAfter, err := gate.Allow("k")
+	permit, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed {
+	if permit.Allowed() {
 		t.Fatal("want deny after B failures")
 	}
 	if retryAfter != time.Second {
@@ -67,9 +67,9 @@ func TestAllow_LostProbeLeaseAdmits(t *testing.T) {
 		t.Fatal(err)
 	}
 	now = now.Add(time.Second)
-	allowed, _, err := gate.Allow("k")
-	if err != nil || !allowed {
-		t.Fatalf("lost probe lease must admit: allowed=%v err=%v", allowed, err)
+	permit, _, err := gate.Allow("k")
+	if err != nil || !permit.Allowed() {
+		t.Fatalf("lost probe lease must admit: allowed=%v err=%v", permit.Allowed(), err)
 	}
 }
 
@@ -78,14 +78,17 @@ func TestReport_OpenIgnored(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
-	if err := gate.Report("k", true); err != nil {
+	gate.mu.Lock()
+	openPermit := Permit{key: "k", gen: gate.keys["k"].gen}
+	gate.mu.Unlock()
+	if _, err := gate.Report(openPermit, true); err != nil {
 		t.Fatal(err)
 	}
-	allowed, retryAfter, err := gate.Allow("k")
+	permit, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed {
+	if permit.Allowed() {
 		t.Fatal("Report success while OPEN must not close")
 	}
 	if retryAfter != time.Second {
@@ -95,10 +98,11 @@ func TestReport_OpenIgnored(t *testing.T) {
 
 func TestReport_SuccessCapsAtB(t *testing.T) {
 	gate := newTestGate(t)
-	if _, _, err := gate.Allow("k"); err != nil {
+	permit, _, err := gate.Allow("k")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report("k", true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	gate.mu.Lock()
@@ -113,11 +117,12 @@ func TestReport_AfterTTLStillRecords(t *testing.T) {
 	gate := newTestGate(t)
 	now := time.Unix(1_700_000_000, 0)
 	gate.SetNowForTest(func() time.Time { return now })
-	if _, _, err := gate.Allow("k"); err != nil {
+	permit, _, err := gate.Allow("k")
+	if err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Minute)
-	if err := gate.Report("k", false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	gate.mu.Lock()
@@ -130,14 +135,14 @@ func TestReport_AfterTTLStillRecords(t *testing.T) {
 
 func TestReport_SuccessCredits(t *testing.T) {
 	gate := newTestGate(t)
-	allowed, _, err := gate.Allow("k")
-	if err != nil || !allowed {
+	permit, _, err := gate.Allow("k")
+	if err != nil || !permit.Allowed() {
 		t.Fatal(err)
 	}
-	if err := gate.Report("k", false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report("k", true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	gate.mu.Lock()
@@ -165,11 +170,11 @@ func TestAllow_IdleKeyPresumedHealthy(t *testing.T) {
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
 	now = now.Add(4 * time.Second)
-	allowed, _, err := gate.Allow("k")
+	permit, _, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !allowed {
+	if !permit.Allowed() {
 		t.Fatal("idle OPEN key must drop and admit")
 	}
 	gate.mu.Lock()
@@ -178,11 +183,11 @@ func TestAllow_IdleKeyPresumedHealthy(t *testing.T) {
 	if credit != 5 {
 		t.Fatalf("credit = %v, want B", credit)
 	}
-	if err := gate.Report("k", false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
-	allowed, _, err = gate.Allow("k")
-	if err != nil || !allowed {
+	permit, _, err = gate.Allow("k")
+	if err != nil || !permit.Allowed() {
 		t.Fatal("one failure after idle drop must not re-OPEN")
 	}
 }
@@ -203,19 +208,19 @@ func TestAllow_DenyRefreshesTTL(t *testing.T) {
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
 	now = now.Add(2 * time.Second)
-	allowed, _, err := gate.Allow("k")
+	permit, _, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed {
+	if permit.Allowed() {
 		t.Fatal("still OPEN at 2s, cooldown 10s")
 	}
 	now = now.Add(2 * time.Second)
-	allowed, _, err = gate.Allow("k")
+	permit, _, err = gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed {
+	if permit.Allowed() {
 		t.Fatal("deny must have refreshed TTL; key must still be OPEN, not a dropped CLOSED")
 	}
 }
@@ -226,15 +231,15 @@ func TestAllow_ProbeAfterCooldown(t *testing.T) {
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
 	now = now.Add(time.Second)
-	allowed, _, err := gate.Allow("k")
-	if err != nil || !allowed {
-		t.Fatalf("probe: allowed=%v err=%v", allowed, err)
+	permit, _, err := gate.Allow("k")
+	if err != nil || !permit.Allowed() {
+		t.Fatalf("probe: allowed=%v err=%v", permit.Allowed(), err)
 	}
-	allowed, retryAfter, err := gate.Allow("k")
+	permit, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed {
+	if permit.Allowed() {
 		t.Fatal("second Allow during probe must deny")
 	}
 	if retryAfter != time.Second {
@@ -248,17 +253,19 @@ func TestReport_ProbeSuccessRetainsN(t *testing.T) {
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
 	now = now.Add(time.Second)
-	if _, _, err := gate.Allow("k"); err != nil {
+	permit, _, err := gate.Allow("k")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report("k", false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Second)
-	if _, _, err := gate.Allow("k"); err != nil {
+	permit, _, err = gate.Allow("k")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report("k", true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	gate.mu.Lock()
@@ -272,11 +279,11 @@ func TestReport_ProbeSuccessRetainsN(t *testing.T) {
 		t.Fatalf("state = %v, want CLOSED", state)
 	}
 	trip(t, gate)
-	allowed, retryAfter, err := gate.Allow("k")
+	permit, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed {
+	if permit.Allowed() {
 		t.Fatal("want OPEN")
 	}
 	if retryAfter != 2*time.Second {
@@ -290,17 +297,18 @@ func TestReport_ProbeFailureIncrementsN(t *testing.T) {
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
 	now = now.Add(time.Second)
-	if _, _, err := gate.Allow("k"); err != nil {
-		t.Fatal(err)
-	}
-	if err := gate.Report("k", false); err != nil {
-		t.Fatal(err)
-	}
-	allowed, retryAfter, err := gate.Allow("k")
+	permit, _, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed {
+	if _, err := gate.Report(permit, false); err != nil {
+		t.Fatal(err)
+	}
+	permit, retryAfter, err := gate.Allow("k")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if permit.Allowed() {
 		t.Fatal("want OPEN after failed probe")
 	}
 	if retryAfter != 2*time.Second {
@@ -314,26 +322,28 @@ func TestAllow_NResetsAfterMaxClosed(t *testing.T) {
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
 	now = now.Add(time.Second)
-	if _, _, err := gate.Allow("k"); err != nil {
+	permit, _, err := gate.Allow("k")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report("k", false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Second)
-	if _, _, err := gate.Allow("k"); err != nil {
+	permit, _, err = gate.Allow("k")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report("k", true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(10 * time.Second)
 	trip(t, gate)
-	allowed, retryAfter, err := gate.Allow("k")
+	permit, retryAfter, err := gate.Allow("k")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if allowed {
+	if permit.Allowed() {
 		t.Fatal("want OPEN")
 	}
 	if retryAfter != time.Second {
@@ -347,17 +357,19 @@ func TestAllow_EarlyRetripKeepsN(t *testing.T) {
 	gate.SetNowForTest(func() time.Time { return now })
 	trip(t, gate)
 	now = now.Add(time.Second)
-	if _, _, err := gate.Allow("k"); err != nil {
+	permit, _, err := gate.Allow("k")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report("k", false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Second)
-	if _, _, err := gate.Allow("k"); err != nil {
+	permit, _, err = gate.Allow("k")
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report("k", true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(time.Second)
@@ -374,14 +386,14 @@ func TestAllow_EarlyRetripKeepsN(t *testing.T) {
 func TestClose_AllowErrors(t *testing.T) {
 	gate := newTestGate(t)
 	gate.Close()
-	allowed, _, err := gate.Allow("k")
+	permit, _, err := gate.Allow("k")
 	if !errors.Is(err, errClosed) {
 		t.Fatalf("err = %v", err)
 	}
-	if allowed {
+	if permit.Allowed() {
 		t.Fatal("closed gate must not admit")
 	}
-	if err := gate.Report("k", true); !errors.Is(err, errClosed) {
+	if _, err := gate.Report(Permit{}, true); !errors.Is(err, errClosed) {
 		t.Fatalf("Report = %v", err)
 	}
 }
@@ -389,12 +401,12 @@ func TestClose_AllowErrors(t *testing.T) {
 func TestReport_CanceledRequestStillRecords(t *testing.T) {
 	gate := newTestGate(t)
 	_, cancel := context.WithCancel(context.Background())
-	allowed, _, err := gate.Allow("k")
-	if err != nil || !allowed {
+	permit, _, err := gate.Allow("k")
+	if err != nil || !permit.Allowed() {
 		t.Fatal(err)
 	}
 	cancel()
-	if err := gate.Report("k", false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -420,10 +432,11 @@ func newTestGate(t *testing.T) *Gate {
 func trip(t *testing.T, gate *Gate) {
 	t.Helper()
 	for i := 0; i < defaultTripFailures; i++ {
-		if _, _, err := gate.Allow("k"); err != nil {
+		permit, _, err := gate.Allow("k")
+		if err != nil {
 			t.Fatal(err)
 		}
-		if err := gate.Report("k", false); err != nil {
+		if _, err := gate.Report(permit, false); err != nil {
 			t.Fatal(err)
 		}
 	}

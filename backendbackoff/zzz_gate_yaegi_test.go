@@ -119,22 +119,22 @@ func TripAfterFailures() string {
 		return "new:" + err.Error()
 	}
 	for i := 0; i < 5; i++ {
-		allowed, _, allowErr := gate.Allow("k")
+		p, _, allowErr := gate.Allow("k")
 		if allowErr != nil {
 			return "allow:" + allowErr.Error()
 		}
-		if !allowed {
+		if !p.Allowed() {
 			return "early"
 		}
-		if reportErr := gate.Report("k", false); reportErr != nil {
+		if _, reportErr := gate.Report(p, false); reportErr != nil {
 			return "report:" + reportErr.Error()
 		}
 	}
-	allowed, _, err := gate.Allow("k")
+	p, _, err := gate.Allow("k")
 	if err != nil {
 		return "deny:" + err.Error()
 	}
-	if allowed {
+	if p.Allowed() {
 		return "not-denied"
 	}
 	return "ok"

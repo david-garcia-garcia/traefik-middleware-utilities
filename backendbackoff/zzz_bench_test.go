@@ -25,8 +25,12 @@ func BenchmarkAllowWarm(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, _, err := gate.Allow("k"); err != nil {
+		p, _, err := gate.Allow("k")
+		if err != nil {
 			b.Fatal(err)
+		}
+		if !p.Allowed() {
+			b.Fatal("warm Allow must admit")
 		}
 	}
 }
@@ -96,8 +100,12 @@ func BenchmarkAllow(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, _, err := gate.Allow("new:" + strconv.Itoa(i)); err != nil {
+			p, _, err := gate.Allow("new:" + strconv.Itoa(i))
+			if err != nil {
 				b.Fatal(err)
+			}
+			if !p.Allowed() {
+				b.Fatal("new-key Allow must admit")
 			}
 		}
 	})
@@ -110,8 +118,12 @@ func BenchmarkAllow(b *testing.B) {
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if _, _, err := gate.Allow("new:" + strconv.Itoa(i)); err != nil {
+			p, _, err := gate.Allow("new:" + strconv.Itoa(i))
+			if err != nil {
 				b.Fatal(err)
+			}
+			if !p.Allowed() {
+				b.Fatal("new-key Allow must admit")
 			}
 		}
 	})

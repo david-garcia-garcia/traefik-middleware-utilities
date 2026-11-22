@@ -100,8 +100,12 @@ func SetupFullTable(count int) string {
 func NewKeyLoop(count int) string {
 	for i := 0; i < count; i++ {
 		benchNewKeys++
-		if _, _, err := benchGate.Allow("new:" + strconv.Itoa(benchNewKeys)); err != nil {
+		p, _, err := benchGate.Allow("new:" + strconv.Itoa(benchNewKeys))
+		if err != nil {
 			return "allow:" + err.Error()
+		}
+		if !p.Allowed() {
+			return "denied"
 		}
 	}
 	return "ok"
@@ -130,6 +134,7 @@ func PrefillForBench(g *Gate, prefix string, count int, now time.Time) {
 			expireAt:    expireAt,
 			key:         prefix + strconv.Itoa(i),
 		}
+		g.bumpGen(entry)
 		g.storeLocked(entry)
 	}
 }
