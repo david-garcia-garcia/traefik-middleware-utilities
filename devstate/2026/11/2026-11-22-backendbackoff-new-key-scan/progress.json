@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-backendbackoff-new-key-scan",
+  "jobName": "2026-11-22-backendbackoff-new-key-scan",
+  "startedAt": "2026-11-22T09:57:44.976Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:00:40.235Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:06:02.600Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:19:22.142Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:28:59.000Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:35:04.010Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:37:19.463Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:38:40.000Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:42:52.313Z"
+    }
+  }
+}
