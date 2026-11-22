@@ -44,6 +44,34 @@ func TestYaegi_AddEntryMappedHost(t *testing.T) {
 	}
 }
 
+func TestYaegi_HostMapStoreHosts(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathIplookup(t, goPath)
+	writeGopathFile(t, goPath, "hostmapstoreprobe", "hosts.go", hostMapStoreProbeSrc)
+
+	got := evalHostMapStore(t, goPath, `hostmapstoreprobe.HostRoundtrip()`)
+	if got != "ok" {
+		t.Fatalf("yaegi host map store: %q, want ok (IPv6 key type [16]byte)", got)
+	}
+}
+
+// evalHostMapStore evaluates expr in a GOPATH interp with stdlib only (no unsafe).
+func evalHostMapStore(t *testing.T, goPath, expr string) string {
+	t.Helper()
+	interpreter := interp.New(interp.Options{GoPath: goPath})
+	if err := interpreter.Use(stdlib.Symbols); err != nil {
+		t.Fatalf("use stdlib: %v", err)
+	}
+	if _, err := interpreter.Eval(`import "hostmapstoreprobe"`); err != nil {
+		t.Fatalf("import hostmapstoreprobe: %v", err)
+	}
+	evaluated, err := interpreter.Eval(expr)
+	if err != nil {
+		t.Fatalf("eval %s: %v", expr, err)
+	}
+	return evaluated.Interface().(string)
+}
+
 // evalLookupprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalLookupprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -190,6 +218,94 @@ func EntryMappedHost() string {
 	}
 	if found {
 		return "ipv6-slash32"
+	}
+	return "ok"
+}
+`
+
+const hostMapStoreProbeSrc = `package hostmapstoreprobe
+
+import (
+	"net"
+
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/iplookup"
+)
+
+func HostRoundtrip() string {
+	h := iplookup.New()
+	if err := h.AddCIDR("192.0.2.1/32", "v4"); err != nil {
+		return "add-v4:" + err.Error()
+	}
+	if err := h.AddCIDR("2001:db8::1/128", "v6"); err != nil {
+		return "add-v6:" + err.Error()
+	}
+	if h.Count() != 2 {
+		return "count-add"
+	}
+
+	found, prefixLen, metadata, err := h.Contains(net.ParseIP("192.0.2.1"))
+	if err != nil {
+		return err.Error()
+	}
+	if !found || prefixLen != 32 || metadata != "v4" {
+		return "hit-v4"
+	}
+	found, prefixLen, metadata, err = h.Contains(net.ParseIP("2001:db8::1"))
+	if err != nil {
+		return err.Error()
+	}
+	if !found || prefixLen != 128 || metadata != "v6" {
+		return "hit-v6"
+	}
+
+	if err := h.AddCIDR("192.0.2.1/32", "v4b"); err != nil {
+		return "replace-v4:" + err.Error()
+	}
+	if err := h.AddCIDR("2001:db8::1/128", "v6b"); err != nil {
+		return "replace-v6:" + err.Error()
+	}
+	if h.Count() != 2 {
+		return "count-replace"
+	}
+	found, prefixLen, metadata, err = h.Contains(net.ParseIP("192.0.2.1"))
+	if err != nil || !found || prefixLen != 32 || metadata != "v4b" {
+		return "replaced-v4"
+	}
+	found, prefixLen, metadata, err = h.Contains(net.ParseIP("2001:db8::1"))
+	if err != nil || !found || prefixLen != 128 || metadata != "v6b" {
+		return "replaced-v6"
+	}
+
+	removed, err := h.RemoveCIDR("192.0.2.1/32")
+	if err != nil || !removed {
+		return "remove-v4"
+	}
+	removed, err = h.RemoveCIDR("2001:db8::1/128")
+	if err != nil || !removed {
+		return "remove-v6"
+	}
+	if h.Count() != 0 {
+		return "count-remove"
+	}
+	found, _, _, err = h.Contains(net.ParseIP("192.0.2.1"))
+	if err != nil || found {
+		return "miss-after-remove-v4"
+	}
+	found, _, _, err = h.Contains(net.ParseIP("2001:db8::1"))
+	if err != nil || found {
+		return "miss-after-remove-v6"
+	}
+
+	if err := h.AddCIDR("192.0.2.9/32", "again"); err != nil {
+		return "readd:" + err.Error()
+	}
+	h.Reset()
+	if h.Count() != 0 {
+		return "count-reset"
+	}
+	found, _, _, err = h.Contains(net.ParseIP("192.0.2.9"))
+	if err != nil || found {
+		return "hit-after-reset"
 	}
 	return "ok"
 }

@@ -1,0 +1,18 @@
+issueKey: 2026-11-22-iplookup-trie-memory
+jobName: 2026-11-22-iplookup-trie-memory
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified
+src: a18f100135bdda92e62481f062f262afe423bbc32d827ea6f37e97fd4e7fc479
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: iplookup-host-map-store
+pr:
+  id: 119
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/119
