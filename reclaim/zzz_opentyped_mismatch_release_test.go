@@ -9,6 +9,9 @@ import (
 	"time"
 )
 
+// storedStringMismatchRelease is the value create stores so OpenTyped[int] mismatches.
+const storedStringMismatchRelease = "string-value"
+
 // TestMismatchRelease_ZeroGraceCloseRunsWhileCallerCtxLive is Decision 5 (a): a creating
 // OpenTyped mismatch at grace 0 Closes once and unmaps the key while the caller's ctx is live.
 func TestMismatchRelease_ZeroGraceCloseRunsWhileCallerCtxLive(t *testing.T) {
@@ -18,12 +21,12 @@ func TestMismatchRelease_ZeroGraceCloseRunsWhileCallerCtxLive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	got, err := OpenTyped[int](ctx, tab, "k", recLogger(h), func() (any, Hooks, error) {
-		return "string-value", Hooks{Close: func() { closes.Add(1) }}, nil
+		return storedStringMismatchRelease, Hooks{Close: func() { closes.Add(1) }}, nil
 	})
 	if got != 0 {
 		t.Fatalf("mismatch value %v, want 0", got)
 	}
-	want := fmt.Sprintf("reclaim: open %q: want %T, got %T", "k", 0, "string-value")
+	want := fmt.Sprintf("reclaim: open %q: want %T, got %T", "k", 0, storedStringMismatchRelease)
 	if err == nil || err.Error() != want {
 		t.Fatalf("mismatch err %v, want %s", err, want)
 	}
@@ -49,7 +52,7 @@ func TestMismatchRelease_HundredFailedCallsKeepOneLiveHolder(t *testing.T) {
 	keep, keepCancel := context.WithCancel(context.Background())
 	defer keepCancel()
 	if _, err := tab.Open(keep, "k", recLogger(h), func() (any, error) {
-		return "string-value", nil
+		return storedStringMismatchRelease, nil
 	}, Hooks{Close: func() { closes.Add(1) }}); err != nil {
 		t.Fatalf("keep open: %v", err)
 	}
@@ -87,7 +90,7 @@ func TestMismatchRelease_CancelAfterMismatchDoesNotDropTwice(t *testing.T) {
 	keep, keepCancel := context.WithCancel(context.Background())
 	defer keepCancel()
 	if _, err := tab.Open(keep, "k", recLogger(h), func() (any, error) {
-		return "string-value", nil
+		return storedStringMismatchRelease, nil
 	}, Hooks{Close: func() { closes.Add(1) }}); err != nil {
 		t.Fatalf("keep open: %v", err)
 	}
@@ -135,7 +138,7 @@ func TestMismatchRelease_NilDoneContextReleasesWithoutLeftoverWatch(t *testing.T
 	tab := New(Config{Grace: 0})
 	var closes atomic.Int32
 	_, err := OpenTyped[int](context.Background(), tab, "k", recLogger(h), func() (any, Hooks, error) {
-		return "string-value", Hooks{Close: func() { closes.Add(1) }}, nil
+		return storedStringMismatchRelease, Hooks{Close: func() { closes.Add(1) }}, nil
 	})
 	if err == nil {
 		t.Fatal("mismatch err nil")

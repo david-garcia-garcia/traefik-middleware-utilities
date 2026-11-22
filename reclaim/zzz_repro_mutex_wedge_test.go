@@ -61,9 +61,10 @@ func TestRepro_PanicUnderTableMutexWedgesTable(t *testing.T) {
 	}
 	close(incarnation.ready)
 	panicValue = recovered(func() {
-		_, _, _ = tab.put(context.Background(), "k", incarnation, recLogger(h), func() (any, Hooks, error) {
+		_, lease, err := tab.put(context.Background(), "k", incarnation, recLogger(h), func() (any, Hooks, error) {
 			return "v", Hooks{}, nil
 		})
+		_, _ = lease, err
 	})
 	if panicValue == nil {
 		t.Fatal("put did not panic on a pre-closed ready channel; this repro needs a panic inside a lock-held region")
