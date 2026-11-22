@@ -5,7 +5,7 @@ Cuando Redis no responde, Traefik responde HTTP 500 `Could not insert/update buc
 
 Si no se fija, un cambio posterior puede tragar el corte como un deny silencioso, los callers siguen comparando cadenas de display que pueden derivar, y los autores de middleware no pueden ver en esta biblioteca que ellos eligen el código HTTP.
 
-Priority: P3 — spec, docs, tests o claridad interna — sin daño actual a usuario u operador
+Priority: P3 — spec, docs, tests, or internal clarity — no current user or operator harm
 
 ## Implementation
 Sin cambio de comportamiento: `Redis.Allow` sigue devolviendo `Status{}, err` si Eval falla. El GoDoc de ese método nombra `simpleredis.ErrUnreachable` (o `ErrTimeout`) con `allowed=false` en un corte de Redis y que fail-open o fail-closed lo decide el middleware, citando el issue de Traefik. Un test unitario autónomo apunta el limiter a `127.0.0.1:1` con `MaxRetries: -1` y afirma `errors.Is(err, simpleredis.ErrUnreachable)` y `allowed=false`. El How to use compara esos sentinels con `errors.Is` / `IsUnreachable`; el texto de display sigue `redis:unreachable`. El delta del contrato de allow nombra el mismo matching y mantiene el corte como error, no como deny sustituto. Los tests de `Error()` existentes siguen como control del texto de display.
@@ -17,29 +17,29 @@ Sin cambio de comportamiento: `Redis.Allow` sigue devolviendo `Status{}, err` si
 **End users.** None.
 
 ## Merge readiness
-Listo para revisión. 0 ítems pendientes.
+Ready for review. 0 items remain.
 
-Priority: P3 — spec, docs, tests o claridad interna — sin daño actual a usuario u operador
-Reviewed head: 7977d39a
-Owner decision: Requerido. Ver Explore Decisions.
+Priority: P3 — spec, docs, tests, or internal clarity — no current user or operator harm
+Reviewed head: 8aab30d3
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
-| Medida | Resultado | Qué significa |
+| Measure | Result | What it means |
 | --- | --- | --- |
-| Preparación global | 6/6 | Listo |
-| Prueba de CI | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008 |
-| Prueba de tests locales | N/A | PR remoto — la prueba de CI cubre esto |
-| Resolución de review | 6/6 | sin comentarios de PR abiertos |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008 |
+| Local tests proof | N/A | remote PR — CI proof covers this |
+| Review resolution | 6/6 | no open PR comments |
 
 ## Verification
-| Comprobación | Resultado | Evidencia |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Rama | 2026-11-22-tokenbucket-redis-unreachable pushed | `git` |
+| Branch | 2026-11-22-tokenbucket-redis-unreachable pushed | `git` |
 | OpenSpec | tokenbucket-redis-unreachable | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114 | pr-host |
 | CI | build 44997670008 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008 |
-| Tests locales | passed | handoff.yaml localTests |
-| Comentarios de PR | no comments | devstate/comments.md |
+| Local tests | passed | handoff.yaml localTests |
+| PR comments | no comments | devstate/comments.md |
 
 ## Specs
 Worktree:
@@ -53,7 +53,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-redis-unreachable en la rama 2026-11-22-tokenbucket-redis-unreachable hacia master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114; CI build 44997670008 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008.
+Ticket 2026-11-22-tokenbucket-redis-unreachable on branch 2026-11-22-tokenbucket-redis-unreachable targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114; CI build 44997670008 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -78,11 +78,11 @@ None.
 ## Agent review details
 
 ### Review metrics
-| Métrica | Valor | Por qué importa |
+| Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Misma lista que ## Specs |
-| Comentarios de review abiertos recorridos | 0 FIX / 0 ANSWER / 0 open | Un review sin responder es riesgo de merge |
-| Reviewed head | 7977d39a487b6765f981a0295dae4c7e2e29e094 | La tarjeta debe coincidir con la rama medida |
+| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
+| Reviewed head | 8aab30d3438925e21567306ed5e42f647badf71e | Card must match the branch you measured |
 
 ### Stored data model
 None.
