@@ -145,6 +145,12 @@ The in-memory store SHALL hold at most 65536 sources. Before storing a new sourc
 - **THEN** the store treats it as a full bucket (`tokens = burst`, last equal to now) before consuming 1
 - **AND** that Allow returns allowed true
 
+#### Scenario: Idle expired sources leave one stored source
+- **WHEN** the in-memory store holds ten sources whose `ttl` has elapsed by the limiter clock
+- **AND** Allow is called on a key that is not stored
+- **THEN** the store holds exactly one source
+- **AND** that source is the new key
+
 ### Requirement: Eval tokens that is not a finite number is not a consume
 When the Redis store is used and Eval returns three fields, Allow SHALL read the third field as the tokens left after this Allow. A tokens field that is not a finite number, including `nan`, `+Inf`, `-Inf`, `inf`, or text that does not parse, SHALL return `tokenbucket: eval tokens is not a number`. Allow MUST NOT return a `Status` with a nil error in that case. The Eval script MUST NOT change to produce this field.
 
