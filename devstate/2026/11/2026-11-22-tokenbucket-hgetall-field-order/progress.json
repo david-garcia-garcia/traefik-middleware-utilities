@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-tokenbucket-hgetall-field-order",
+  "jobName": "2026-11-22-tokenbucket-hgetall-field-order",
+  "startedAt": "2026-11-22T06:35:23.670Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:37:23.859Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:39:55.479Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:41:33.432Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:47:41.759Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:48:41.164Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:49:47.127Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:50:49.321Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:54:06.623Z"
+    }
+  }
+}

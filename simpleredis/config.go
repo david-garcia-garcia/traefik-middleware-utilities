@@ -34,6 +34,8 @@ type Config struct {
 	// AUTH <User> <Pass>, also when Pass is empty (a nopass ACL user). Empty keeps the one-argument form.
 	User string
 	// Pass is AUTH on each new dial when non-empty: AUTH <Pass>, or AUTH <User> <Pass> when User is set.
+	// AUTH receives Pass byte for byte, with no trimming. A trailing newline from a Secret or file makes AUTH fail
+	// (https://github.com/traefik/traefik/issues/12078).
 	Pass string
 	// Database is SELECT on each new dial when non-empty.
 	Database string
