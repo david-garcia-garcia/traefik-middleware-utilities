@@ -40,21 +40,21 @@ func evalTripprobe(t *testing.T, goPath, expr string) string {
 }
 
 // writeGopathBackendbackoff copies non-test backendbackoff sources into a GOPATH module tree.
-func writeGopathBackendbackoff(t *testing.T, goPath string) {
-	t.Helper()
-	copyNonTestGo(t, callerDir(t), goPath, "backendbackoff")
+func writeGopathBackendbackoff(tb testing.TB, goPath string) {
+	tb.Helper()
+	copyNonTestGo(tb, callerDir(tb), goPath, "backendbackoff")
 }
 
 // copyNonTestGo copies non-test .go files from srcDir into GOPATH/src/.../<pkg>.
-func copyNonTestGo(t *testing.T, srcDir, goPath, pkg string) {
-	t.Helper()
+func copyNonTestGo(tb testing.TB, srcDir, goPath, pkg string) {
+	tb.Helper()
 	destDir := filepath.Join(goPath, "src", "github.com", "david-garcia-garcia", "traefik-middleware-utilities", pkg)
 	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	entries, err := os.ReadDir(srcDir)
 	if err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	copied := 0
 	for _, entry := range entries {
@@ -64,37 +64,37 @@ func copyNonTestGo(t *testing.T, srcDir, goPath, pkg string) {
 		}
 		body, err := os.ReadFile(filepath.Join(srcDir, name))
 		if err != nil {
-			t.Fatal(err)
+			tb.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(destDir, name), body, 0o600); err != nil {
-			t.Fatal(err)
+			tb.Fatal(err)
 		}
 		copied++
 	}
 	if copied == 0 {
-		t.Fatalf("no %s sources copied into GOPATH", pkg)
+		tb.Fatalf("no %s sources copied into GOPATH", pkg)
 	}
 }
 
 // callerDir is the directory of the test file that called writeGopathBackendbackoff.
-func callerDir(t *testing.T) string {
-	t.Helper()
+func callerDir(tb testing.TB) string {
+	tb.Helper()
 	_, thisFile, _, ok := runtime.Caller(1)
 	if !ok {
-		t.Fatal("no caller path")
+		tb.Fatal("no caller path")
 	}
 	return filepath.Dir(thisFile)
 }
 
 // writeGopathFile writes one interpreted package file under GOPATH/src/<pkg>.
-func writeGopathFile(t *testing.T, goPath, pkg, name, src string) {
-	t.Helper()
+func writeGopathFile(tb testing.TB, goPath, pkg, name, src string) {
+	tb.Helper()
 	dir := filepath.Join(goPath, "src", pkg)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
-		t.Fatal(err)
+		tb.Fatal(err)
 	}
 }
 

@@ -1,6 +1,7 @@
 package backendbackoff
 
 import (
+	"strconv"
 	"testing"
 	"time"
 )
@@ -67,4 +68,51 @@ func assertAllocCeiling(t *testing.T, name string, result testing.BenchmarkResul
 func TestAllocAllowWarm(t *testing.T) {
 	skipAllocCeilingIfRace(t)
 	assertAllocCeiling(t, "warm Allow", testing.Benchmark(BenchmarkAllowWarm), allowWarmAllocs, allowWarmBytes)
+}
+
+// newBenchGate builds a jitter-off gate with packaged trip and cooldown knobs.
+func newBenchGate(tb testing.TB) *Gate {
+	tb.Helper()
+	gate, err := New(Config{
+		FailureRatio: defaultFailureRatio,
+		TripFailures: defaultTripFailures,
+		BaseCooldown: time.Second,
+		MaxCooldown:  defaultMaxCooldown,
+		Jitter:       0,
+		TTL:          defaultTTL,
+	})
+	if err != nil {
+		tb.Fatal(err)
+	}
+	return gate
+}
+
+// BenchmarkAllow measures new-key admission against an empty table and against a full table of live keys.
+func BenchmarkAllow(b *testing.B) {
+	b.Run("new-key-empty", func(b *testing.B) {
+		gate := newBenchGate(b)
+		now := time.Unix(1_700_000_000, 0)
+		gate.SetNowForTest(func() time.Time { return now })
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, _, err := gate.Allow("new:" + strconv.Itoa(i)); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("new-key-full-table", func(b *testing.B) {
+		// Frozen clock: no stored key ever expires, so every new key evicts a live one.
+		gate := newBenchGate(b)
+		now := time.Unix(1_700_000_000, 0)
+		gate.SetNowForTest(func() time.Time { return now })
+		prefillKeysExpiryList(gate, "live:", maxMemorySources, now)
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if _, _, err := gate.Allow("new:" + strconv.Itoa(i)); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
 }
