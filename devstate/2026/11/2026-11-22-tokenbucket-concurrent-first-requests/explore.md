@@ -97,8 +97,8 @@ Contrato vivo: `std_go_tokenbucket_allow`, `std_go_tokenbucket_lua-eval`, `std_g
 
 - Q: ¿Hay que añadir un escenario al spec vivo de 16 primeras peticiones concurrentes?
   Rank: additive incidental — contrato existente `std_go_tokenbucket_allow` / `lua-eval` sin ese escenario; Affected no lista specs; es medio para alinear el contrato con los tests
-  Decision: assumed — propose añade un escenario en `std_go_tokenbucket_allow` (mutex, admits ≤ burst) y uno en `std_go_tokenbucket_lua-eval` (Eval atómico, misma carga). Sin carpeta spec nueva.
-  By: explore
+  Decision: resolved — deltas ADDED en `std_go_tokenbucket_allow` (mutex, admits ≤ burst) y `std_go_tokenbucket_lua-eval` (Eval atómico, misma carga). Sin carpeta spec nueva.
+  By: propose
 
 - Q: ¿TTL 120 s (repro) o el TTL de Traefik para 1 req/min (~61 s)?
   Rank: additive asked — tests nuevos; Desired copia la carga del repro (1 req/min, burst 5, maxDelay 500 ms)
