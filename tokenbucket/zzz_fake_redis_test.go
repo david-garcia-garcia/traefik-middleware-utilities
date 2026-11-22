@@ -9,8 +9,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
 // testHash is last/tokens for one fake Redis key.
@@ -25,12 +23,6 @@ type testFakeRedis struct {
 	hashes    map[string]*testHash
 	lastEval  []string
 	evalReply string
-
-	// scriptCache makes EVAL store the script digest and EVALSHA of a stored digest run it (warm engine cache). Off: EVALSHA is always NOSCRIPT.
-	scriptCache   bool
-	loadedScripts map[string]string
-	// commands counts every served command so benchmarks can report Redis round trips per operation.
-	commands int
 }
 
 // startTestFakeRedis listens on a local TCP port and serves an in-process RESP map.
@@ -41,7 +33,7 @@ func startTestFakeRedis(tb testing.TB) (server *testFakeRedis, listenAddr string
 		tb.Fatal(err)
 	}
 	tb.Cleanup(func() { _ = listener.Close() })
-	fake := &testFakeRedis{hashes: map[string]*testHash{}, loadedScripts: map[string]string{}}
+	fake := &testFakeRedis{hashes: map[string]*testHash{}}
 	go func() {
 		for {
 			conn, err := listener.Accept()
@@ -64,13 +56,6 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 			return
 		}
 		f.mu.Lock()
-		f.commands++
-		// A cached EVALSHA runs the stored body as if it were EVAL; without the cache it is NOSCRIPT.
-		if args[0] == "EVALSHA" && f.scriptCache && len(args) > 1 {
-			if script, loaded := f.loadedScripts[args[1]]; loaded {
-				args = append([]string{"EVAL", script}, args[2:]...)
-			}
-		}
 		switch args[0] {
 		case "AUTH", "SELECT":
 			_, _ = io.WriteString(conn, "+OK\r\n")
@@ -79,9 +64,6 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 			_, _ = io.WriteString(conn, "-NOSCRIPT No matching script. Please use EVAL.\r\n")
 		case "EVAL":
 			f.lastEval = append([]string(nil), args...)
-			if f.scriptCache && len(args) > 1 {
-				f.loadedScripts[simpleredis.ScriptSHA1Hex(args[1])] = args[1]
-			}
 			if f.evalReply != "" {
 				_, _ = io.WriteString(conn, f.evalReply)
 				break
@@ -127,20 +109,6 @@ func (f *testFakeRedis) setEvalReply(reply string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.evalReply = reply
-}
-
-// enableScriptCache makes the fake keep EVAL digests so EVALSHA hits, like an engine with a warm script cache.
-func (f *testFakeRedis) enableScriptCache() {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.scriptCache = true
-}
-
-// commandCount returns how many commands the fake has served.
-func (f *testFakeRedis) commandCount() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.commands
 }
 
 // lastEvalCommand returns the last EVAL argv.

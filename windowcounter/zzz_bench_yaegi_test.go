@@ -9,26 +9,29 @@ import (
 	"github.com/traefik/yaegi/stdlib"
 )
 
-// BenchmarkYaegiTake measures interpreted Take in every benchTakeModes mode against the fake with a warm script cache:
+// BenchmarkYaegiTake measures interpreted Take against each live engine (WINDOWCOUNTER_LIVE_*) in every benchTakeModes mode:
 // one hot key and 10k rotating keys, the interpreted twins of BenchmarkTake's hot-key and rotating-10k. Setup Takes every
-// key once, untimed; the limiter is Closed in cleanup, so a Close that hangs fails the benchmark by timeout.
+// key once, untimed; the limiter is Closed in cleanup, so a Close that hangs fails the benchmark by timeout. It skips under
+// -short or when no engine address is set.
 func BenchmarkYaegiTake(b *testing.B) {
-	for _, mode := range benchTakeModes {
-		mode := mode
-		b.Run(mode.name+"/hot-key", func(b *testing.B) {
-			runYaegiTakeBench(b, mode.syncRate, 1)
-		})
-		b.Run(mode.name+"/rotating-10k", func(b *testing.B) {
-			runYaegiTakeBench(b, mode.syncRate, benchRotatingKeys)
-		})
+	for _, engine := range liveEngineAddrs(b) {
+		engine := engine
+		for _, mode := range benchTakeModes {
+			mode := mode
+			b.Run(engine.name+"/"+mode.name+"/hot-key", func(b *testing.B) {
+				runYaegiTakeBench(b, engine.addr, mode.syncRate, 1)
+			})
+			b.Run(engine.name+"/"+mode.name+"/rotating-10k", func(b *testing.B) {
+				runYaegiTakeBench(b, engine.addr, mode.syncRate, benchRotatingKeys)
+			})
+		}
 	}
 }
 
-// runYaegiTakeBench interprets the takebench probe with keyCount keys at syncRate and times one Eval of b.N Takes.
-func runYaegiTakeBench(b *testing.B, syncRate time.Duration, keyCount int) {
+// runYaegiTakeBench interprets the takebench probe with keyCount keys at syncRate against the engine at addr and times one
+// Eval of b.N Takes.
+func runYaegiTakeBench(b *testing.B, addr string, syncRate time.Duration, keyCount int) {
 	b.Helper()
-	fake, addr := startTestFakeRedis(b)
-	fake.enableScriptCache()
 	goPath := b.TempDir()
 	writeGopathWindowcounter(b, goPath)
 	writeGopathFile(b, goPath, "takebench", "loop.go", takebenchSrc)
@@ -41,7 +44,7 @@ func runYaegiTakeBench(b *testing.B, syncRate time.Duration, keyCount int) {
 	if _, err := interpreter.Eval(`import "takebench"`); err != nil {
 		b.Fatalf("import takebench: %v", err)
 	}
-	evaluated, err := interpreter.Eval(fmt.Sprintf(`takebench.Setup(%q, %d, %d)`, addr, syncRate.Milliseconds(), keyCount))
+	evaluated, err := interpreter.Eval(fmt.Sprintf(`takebench.Setup(%q, %d, %d, %q)`, addr, syncRate.Milliseconds(), keyCount, benchRunPrefix()))
 	if err != nil {
 		b.Fatalf("setup: %v", err)
 	}
@@ -51,7 +54,7 @@ func runYaegiTakeBench(b *testing.B, syncRate time.Duration, keyCount int) {
 	b.Cleanup(func() { _, _ = interpreter.Eval(`takebench.Close()`) })
 
 	// One timed Eval runs b.N Take calls inside the interpreter.
-	startCommands := fake.commandCount()
+	start := liveBenchRoundTrips(b, addr)
 	b.ResetTimer()
 	evaluated, err = interpreter.Eval(fmt.Sprintf(`takebench.Loop(%d)`, b.N))
 	if err != nil {
@@ -61,56 +64,57 @@ func runYaegiTakeBench(b *testing.B, syncRate time.Duration, keyCount int) {
 	if got := evaluated.Interface().(string); got != "ok" {
 		b.Fatalf("Loop = %q, want ok", got)
 	}
-	reportRedisCmdsPerOp(b, fake, startCommands)
+	reportRoundTripsPerOp(b, addr, start)
 }
 
-// BenchmarkYaegiFlush measures one interpreted buffered flush of 1000 dirty window keys against the fake with a warm script
-// cache. sync_rate is one hour so no timer tick fires. The probe's Flush and Redirty are called from Go as interpreted
+// BenchmarkYaegiFlush measures one interpreted buffered flush of 1000 dirty window keys against each live engine
+// (WINDOWCOUNTER_LIVE_*). sync_rate is one hour so no timer tick fires. The probe's Flush and Redirty are called from Go as interpreted
 // function values, so re-dirtying the keys runs with the timer stopped, as in BenchmarkFlush.
 func BenchmarkYaegiFlush(b *testing.B) {
-	b.Run("dirty-keys-1000", func(b *testing.B) {
-		fake, addr := startTestFakeRedis(b)
-		fake.enableScriptCache()
-		goPath := b.TempDir()
-		writeGopathWindowcounter(b, goPath)
-		// Test-only flush hooks, written into the interpreter's copy of the package only.
-		writeGopathFile(b, goPath, "github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter", "zz_bench_hooks.go", flushBenchHooksSrc)
-		writeGopathFile(b, goPath, "flushbench", "flush.go", flushbenchSrc)
+	for _, engine := range liveEngineAddrs(b) {
+		addr := engine.addr
+		b.Run(engine.name+"/dirty-keys-1000", func(b *testing.B) {
+			goPath := b.TempDir()
+			writeGopathWindowcounter(b, goPath)
+			// Test-only flush hooks, written into the interpreter's copy of the package only.
+			writeGopathFile(b, goPath, "github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter", "zz_bench_hooks.go", flushBenchHooksSrc)
+			writeGopathFile(b, goPath, "flushbench", "flush.go", flushbenchSrc)
 
-		// Interpreter with stdlib only (no unsafe), as Traefik loads a plugin.
-		interpreter := interp.New(interp.Options{GoPath: goPath})
-		if err := interpreter.Use(stdlib.Symbols); err != nil {
-			b.Fatalf("use stdlib: %v", err)
-		}
-		if _, err := interpreter.Eval(`import "flushbench"`); err != nil {
-			b.Fatalf("import flushbench: %v", err)
-		}
-		// Setup Takes every key once and flushes once, so the script is loaded and the timed flushes are one EVALSHA per EVAL.
-		evaluated, err := interpreter.Eval(fmt.Sprintf(`flushbench.Setup(%q, %d)`, addr, benchFlushKeys))
-		if err != nil {
-			b.Fatalf("setup: %v", err)
-		}
-		if got := evaluated.Interface().(string); got != "ok" {
-			b.Fatalf("setup = %q, want ok", got)
-		}
-		b.Cleanup(func() { _, _ = interpreter.Eval(`flushbench.Close()`) })
-		redirty := interpretedFuncForBench(b, interpreter, `flushbench.Redirty`).(func())
-		flush := interpretedFuncForBench(b, interpreter, `flushbench.Flush`).(func() string)
-
-		// Each timed iteration is one interpreted flush; the re-dirty before it is untimed.
-		b.ResetTimer()
-		startCommands := fake.commandCount()
-		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			redirty()
-			b.StartTimer()
-			if got := flush(); got != "ok" {
-				b.Fatalf("Flush = %q, want ok", got)
+			// Interpreter with stdlib only (no unsafe), as Traefik loads a plugin.
+			interpreter := interp.New(interp.Options{GoPath: goPath})
+			if err := interpreter.Use(stdlib.Symbols); err != nil {
+				b.Fatalf("use stdlib: %v", err)
 			}
-		}
-		b.StopTimer()
-		reportRedisCmdsPerOp(b, fake, startCommands)
-	})
+			if _, err := interpreter.Eval(`import "flushbench"`); err != nil {
+				b.Fatalf("import flushbench: %v", err)
+			}
+			// Setup Takes every key once and flushes once, so the script is loaded and the timed flushes are one EVALSHA per EVAL.
+			evaluated, err := interpreter.Eval(fmt.Sprintf(`flushbench.Setup(%q, %d, %q)`, addr, benchFlushKeys, benchRunPrefix()))
+			if err != nil {
+				b.Fatalf("setup: %v", err)
+			}
+			if got := evaluated.Interface().(string); got != "ok" {
+				b.Fatalf("setup = %q, want ok", got)
+			}
+			b.Cleanup(func() { _, _ = interpreter.Eval(`flushbench.Close()`) })
+			redirty := interpretedFuncForBench(b, interpreter, `flushbench.Redirty`).(func())
+			flush := interpretedFuncForBench(b, interpreter, `flushbench.Flush`).(func() string)
+
+			// Each timed iteration is one interpreted flush; the re-dirty before it is untimed.
+			b.ResetTimer()
+			start := liveBenchRoundTrips(b, addr)
+			for i := 0; i < b.N; i++ {
+				b.StopTimer()
+				redirty()
+				b.StartTimer()
+				if got := flush(); got != "ok" {
+					b.Fatalf("Flush = %q, want ok", got)
+				}
+			}
+			b.StopTimer()
+			reportRoundTripsPerOp(b, addr, start)
+		})
+	}
 }
 
 // interpretedFuncForBench evaluates name to an interpreted function and returns it as a Go func value.
@@ -175,8 +179,9 @@ var (
 	benchDirty   []string
 )
 
-// Setup builds a buffered limiter on a frozen clock, Takes keyCount keys once, records their windows, and flushes once.
-func Setup(host string, keyCount int) string {
+// Setup builds a buffered limiter on a clock frozen at the current time, Takes keyCount keys prefix0..prefix(keyCount-1)
+// once, records their windows, and flushes once.
+func Setup(host string, keyCount int, prefix string) string {
 	client, err := simpleredis.New(simpleredis.Config{Host: host})
 	if err != nil {
 		return "client:" + err.Error()
@@ -185,11 +190,11 @@ func Setup(host string, keyCount int) string {
 	if err != nil {
 		return "new:" + err.Error()
 	}
-	now := time.Unix(1700000000, 0)
+	now := time.Now()
 	limiter.SetNowForTest(func() time.Time { return now })
 	ctx := context.Background()
 	for i := 0; i < keyCount; i++ {
-		if _, err := limiter.Take(ctx, "ip:"+strconv.Itoa(i), int64(1)<<40, time.Minute); err != nil {
+		if _, err := limiter.Take(ctx, prefix+strconv.Itoa(i), int64(1)<<40, time.Minute); err != nil {
 			return "take:" + err.Error()
 		}
 	}
@@ -241,8 +246,8 @@ var (
 	benchKeys    []string
 )
 
-// Setup builds a limiter with sync_rate syncRateMs and Takes keys ip:0..ip:(keyCount-1) once each.
-func Setup(host string, syncRateMs int64, keyCount int) string {
+// Setup builds a limiter with sync_rate syncRateMs and Takes keys prefix0..prefix(keyCount-1) once each.
+func Setup(host string, syncRateMs int64, keyCount int, prefix string) string {
 	client, err := simpleredis.New(simpleredis.Config{Host: host})
 	if err != nil {
 		return "client:" + err.Error()
@@ -254,7 +259,7 @@ func Setup(host string, syncRateMs int64, keyCount int) string {
 	benchLimiter = limiter
 	benchKeys = make([]string, keyCount)
 	for i := range benchKeys {
-		benchKeys[i] = "ip:" + strconv.Itoa(i)
+		benchKeys[i] = prefix + strconv.Itoa(i)
 	}
 	return Loop(keyCount)
 }

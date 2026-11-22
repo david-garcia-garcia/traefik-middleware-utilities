@@ -9,9 +9,9 @@ import (
 )
 
 // runYaegiAllowBench interprets the allowbench probe and times one Eval of loopExpr(b.N) after a warm-up Eval of loopExpr(1).
-// setupExpr, when not empty, runs once before the warm-up and is not timed. fake is the Redis the loop talks to (nil for
-// Memory); its served commands are reported as redis-cmds/op.
-func runYaegiAllowBench(b *testing.B, fake *testFakeRedis, setupExpr string, loopExpr func(count int) string) {
+// setupExpr, when not empty, runs once before the warm-up and is not timed. redisAddr is the live engine the loop talks to
+// ("" for Memory); its round trips are reported as redis-roundtrips/op.
+func runYaegiAllowBench(b *testing.B, redisAddr string, setupExpr string, loopExpr func(count int) string) {
 	b.Helper()
 	goPath := b.TempDir()
 	writeGopathTokenbucket(b, goPath)
@@ -41,9 +41,9 @@ func runYaegiAllowBench(b *testing.B, fake *testFakeRedis, setupExpr string, loo
 	}
 
 	// One timed Eval runs b.N Allow calls inside the interpreter.
-	startCommands := 0
-	if fake != nil {
-		startCommands = fake.commandCount()
+	var start int64
+	if redisAddr != "" {
+		start = liveBenchRoundTrips(b, redisAddr)
 	}
 	b.ResetTimer()
 	evaluated, err := interpreter.Eval(loopExpr(b.N))
@@ -54,8 +54,8 @@ func runYaegiAllowBench(b *testing.B, fake *testFakeRedis, setupExpr string, loo
 	if got := evaluated.Interface().(string); got != "ok" {
 		b.Fatalf("loop = %q, want ok", got)
 	}
-	if fake != nil {
-		reportRedisCmdsPerOp(b, fake, startCommands)
+	if redisAddr != "" {
+		reportRoundTripsPerOp(b, redisAddr, start)
 	}
 }
 
@@ -63,39 +63,38 @@ func runYaegiAllowBench(b *testing.B, fake *testFakeRedis, setupExpr string, loo
 // 10k rotating sources (every Allow moves a stored source), and a never-seen key against a full table of live sources.
 func BenchmarkYaegiMemoryAllow(b *testing.B) {
 	b.Run("hot-key", func(b *testing.B) {
-		runYaegiAllowBench(b, nil, "", func(count int) string {
+		runYaegiAllowBench(b, "", "", func(count int) string {
 			return fmt.Sprintf(`allowbench.MemoryHotKeyLoop(%d)`, count)
 		})
 	})
 	b.Run("rotating-10k", func(b *testing.B) {
-		runYaegiAllowBench(b, nil, fmt.Sprintf(`allowbench.SetupMemoryRotating(%d)`, benchRotatingKeys), func(count int) string {
+		runYaegiAllowBench(b, "", fmt.Sprintf(`allowbench.SetupMemoryRotating(%d)`, benchRotatingKeys), func(count int) string {
 			return fmt.Sprintf(`allowbench.MemoryRotatingLoop(%d)`, count)
 		})
 	})
 	b.Run("new-key-full-table", func(b *testing.B) {
-		runYaegiAllowBench(b, nil, fmt.Sprintf(`allowbench.SetupMemoryFullTable(%d)`, maxMemorySources), func(count int) string {
+		runYaegiAllowBench(b, "", fmt.Sprintf(`allowbench.SetupMemoryFullTable(%d)`, maxMemorySources), func(count int) string {
 			return fmt.Sprintf(`allowbench.MemoryNewKeyLoop(%d)`, count)
 		})
 	})
 }
 
-// BenchmarkYaegiRedisAllow measures interpreted Redis Allow against the fake with a warm script cache: one hot key and
-// 10k rotating keys, each Allowed once during setup, untimed.
+// BenchmarkYaegiRedisAllow measures interpreted Redis Allow against each live engine (TOKENBUCKET_LIVE_*): one hot key and
+// 10k rotating keys, each Allowed once during setup, untimed. It skips under -short or when no engine address is set.
 func BenchmarkYaegiRedisAllow(b *testing.B) {
-	b.Run("hot-key", func(b *testing.B) {
-		fake, addr := startTestFakeRedis(b)
-		fake.enableScriptCache()
-		runYaegiAllowBench(b, fake, "", func(count int) string {
-			return fmt.Sprintf(`allowbench.RedisHotKeyLoop(%q, %d)`, addr, count)
+	for _, engine := range liveEngineAddrs(b) {
+		engine := engine
+		b.Run(engine.name+"/hot-key", func(b *testing.B) {
+			runYaegiAllowBench(b, engine.addr, "", func(count int) string {
+				return fmt.Sprintf(`allowbench.RedisHotKeyLoop(%q, %d)`, engine.addr, count)
+			})
 		})
-	})
-	b.Run("rotating-10k", func(b *testing.B) {
-		fake, addr := startTestFakeRedis(b)
-		fake.enableScriptCache()
-		runYaegiAllowBench(b, fake, fmt.Sprintf(`allowbench.SetupRedisRotating(%q, %d)`, addr, benchRotatingKeys), func(count int) string {
-			return fmt.Sprintf(`allowbench.RedisRotatingLoop(%d)`, count)
+		b.Run(engine.name+"/rotating-10k", func(b *testing.B) {
+			runYaegiAllowBench(b, engine.addr, fmt.Sprintf(`allowbench.SetupRedisRotating(%q, %d)`, engine.addr, benchRotatingKeys), func(count int) string {
+				return fmt.Sprintf(`allowbench.RedisRotatingLoop(%d)`, count)
+			})
 		})
-	})
+	}
 }
 
 // allowbenchSrc is the interpreted probe: each loop builds one limiter with the bench settings and Allows count times.
