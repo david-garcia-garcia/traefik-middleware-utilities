@@ -12,7 +12,7 @@ localTests: none
 requirement: requirement.md
 comments: none
 explore: explore.md
-change: none
+change: tokenbucket-canceled-request
 pr:
   id: 112
   url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/112

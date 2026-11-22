@@ -84,8 +84,8 @@ go test -short -count=1 -v -run '^TestStatus_ErrorReturnsTheZeroStatus$' ./token
 
 - Q: ¿El spec vivo `std_go_tokenbucket_allow` necesita un delta solo por GoDoc?
   Rank: additive incidental — un escenario nuevo documentaría el contrato existente; Desired nombra GoDoc y tests, no un leaf
-  Decision: assumed — propose transcribe. Si hay delta, documenta que `Canceled`/`DeadlineExceeded` de `Redis.Allow` no prueba que el script no corrió; no añade SHALL de reembolso ni de retener EVAL. «Error returns the zero status» ya cubre Status cero.
-  By: explore
+  Decision: resolved — no. No live promise: el comportamiento no cambia; «Error returns the zero status» ya cubre Status cero. GoDoc y tests se acotan en proposal/design/tasks. No SHALL de cobro en vuelo ni de reembolso. `skip_specs: true`; specs.md = `none — no live contract`.
+  By: propose
 
 - Q: ¿Cómo adaptar los asserts del repro de referencia a `(Status, error)`?
   Rank: additive asked — Dest es `(Status, error)` en `memory.go:67` y `redis.go:54`; Desired afirma `allowed=false`; Tensions: no reintroducir la firma vieja
