@@ -93,8 +93,8 @@ Live contract: `openspec/specs/std_go_windowcounter_sync-flush/spec.md` (flush b
 
 - Q: Qué estructura (conjunto sucio, agrupación por `windowStart` / `expireAt`, lista de expiración estilo `tokenbucket` #105, tope, u otra) cumple O(sucias + que caducan ahora) bajo Yaegi v0.16.1 sin perder deltas ni romper `std_go_windowcounter_sync-flush`?
   Rank: bounded asked — 1 call site de `flushPendingLocked` (`flushPending` `:481`) y 3 callers de producción de `flushPending` (Sleep, Close, flushAfterTick); raíces `**/*.go`; Desired «O(dirty windows + windows that expire now)» y Unknowns «Qué estructura (conjunto sucio, agrupación por `windowStart`, u otra)»
-  Decision: assumed — defer to propose; options are dirty-set, windowStart grouping, expireAt grouping, tokenbucket concrete expiry list (#105), cap
-  By: explore
+  Decision: resolved — by propose, pointing to design.md: dirty index (`dirty map[string]*windowState`) plus expiry buckets by `expireAt`; cap out of scope
+  By: propose
 
 - Q: Cuánto dura el mutex de un tick idle sobre dest `35aaa343` frente a la tabla del spec (`1f5ec454`)?
   Rank: additive asked — medición, no reshape; Unknowns «Tiempo de mutex de un tick idle re-medido sobre dest `35aaa343`»
@@ -108,10 +108,10 @@ Live contract: `openspec/specs/std_go_windowcounter_sync-flush/spec.md` (flush b
 
 - Q: Cómo afirmar el hold time del mutex en un test de regresión sin tautología y sin un probe de caja blanca que choque con Yaegi?
   Rank: additive asked — test nuevo de este cambio; Desired «A regression test/benchmark proves that the mutex hold time of an idle tick does not grow with the number of live windows» y Unknowns «Cómo afirmar el hold time»
-  Decision: assumed — defer to propose; options are compiled+Yaegi wall time of idle `flushPending` (EVAL vacío ⇒ wall ≈ hold), Take latency under the ticker, or a test-only hook. `BenchmarkFlush` mide 1000 dirty, no idle vs K. Helpers con sufijo del slug del ticket (Constraints). No copiar `ScanProbe`/`itoaWC` del lote scale-hunt.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Decision 5: median wall time of idle `flushPending` at 200k live windows below 3× the median at 10k (compiled); `BenchmarkFlushIdle/{10k,200k}` compiled and Yaegi
+  By: propose
 
 - Q: Un tope de `l.windows` hace falta para el coste pedido, o es otro producto?
   Rank: bounded incidental — inserts de producción enumerados (`applyGetLocked` `:363`, `seedUnreadWindowLocked` `:620`); raíces `**/*.go`; Out of scope «Un tope de ventanas como política de producto distinta del coste O(sucias + que caducan ahora)»; Desired no nombra un cap
-  Decision: assumed — defer to propose; cap stays an option for the cost; Out of scope as a distinct product policy; existing debt `knowledge/debt/2026-09-13-windowcounter-outage-windows-unbounded.md`
-  By: explore
+  Decision: resolved — by propose, pointing to design.md: cap stays out of scope (`knowledge/debt/2026-09-13-windowcounter-outage-windows-unbounded.md`)
+  By: propose
