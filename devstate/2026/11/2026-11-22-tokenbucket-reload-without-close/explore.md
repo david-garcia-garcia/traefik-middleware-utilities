@@ -67,8 +67,8 @@ Hechos de fuera: issue https://github.com/traefik/traefik/issues/13618 y PR http
 
 - Q: ¿Este cambio añade un escenario de catálogo (sockets de clientes abandonados tras GC) o solo el test contra el live contract existente?
   Rank: additive asked — Desired es test only; el contrato live ya cubre «New MUST NOT start a goroutine»
-  Decision: assumed — propose transcribe un change de test. Si el catálogo necesita un escenario, es aditivo sobre `std_go_simpleredis_tcp-session` (síntoma proxied=0), sin reescribir el MAY de idle-hasta-Close para un cliente aún alcanzable.
-  By: explore
+  Decision: resolved — escenario aditivo en `std_go_simpleredis_tcp-session`: tras GC, clientes abandonados (sin Close, sin refs) dejan proxied=0 y `leakedGoroutines > 2` falla. No se reescribe el MAY de idle-hasta-Close para un cliente aún alcanzable. Close-cycles del catálogo cubre New/use/Close, no el drop.
+  By: propose
 
 - Q: ¿Sigue dest HEAD pasando la aserción live del repro de referencia (50 recargas, GC, `proxy.open == 0`, goroutines residuales ≤ 2)?
   Rank: additive asked — el test es una unidad que este cambio crea; Desired nombra esa aserción
