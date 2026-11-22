@@ -15,8 +15,8 @@
     },
     "propose": {
       "work": true,
-      "card": false,
-      "at": null
+      "card": true,
+      "at": "2026-11-22T06:50:28.886Z"
     },
     "implement": {
       "work": false,

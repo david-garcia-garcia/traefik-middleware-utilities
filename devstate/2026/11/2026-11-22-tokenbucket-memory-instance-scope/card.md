@@ -17,7 +17,7 @@ Not yet.
 In progress. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 95948be2
+Reviewed head: 020350cb
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -32,14 +32,16 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-11-22-tokenbucket-memory-instance-scope pushed | `git` |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | tokenbucket-memory-instance-scope | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/109 | pr-host |
 | CI | not seen | caller omitted CI snapshot |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
-None.
+Worktree:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-memory-instance-scope/openspec/changes/tokenbucket-memory-instance-scope/proposal.md) — modified
+
 
 ## Deviations from the ask
 None.
@@ -68,9 +70,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 95948be2a0429cb051f43930508ed2896d717f33 | Card must match the branch you measured |
+| Reviewed head | 020350cb8dc5a480392c130dd07d76b259ebc4f7 | Card must match the branch you measured |
 
 ### Stored data model
 None.
