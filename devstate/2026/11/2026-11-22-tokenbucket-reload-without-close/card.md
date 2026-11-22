@@ -1,10 +1,3 @@
-## Summary
-Solo test de regresión: 50 recargas sin Close no deben dejar sockets proxied ni goroutines. Sin cambio de producto.
-
-La existencia del defecto se tomó de estos informes upstream:
-- Issue https://github.com/traefik/traefik/issues/13618
-- PR upstream https://github.com/traefik/traefik/pull/13619 (abierto)
-
 ## Motivation
 Not yet.
 
@@ -24,8 +17,8 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: e7d4cc28
-Owner decision: None.
+Reviewed head: 59285485
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -58,7 +51,10 @@ None.
 Ticket 2026-11-22-tokenbucket-reload-without-close on branch 2026-11-22-tokenbucket-reload-without-close targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/113; CI not seen.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| ¿Se conserva el umbral `leakedGoroutines > 2` del repro o se ajusta en dest? | additive asked — Tests pide conservar casos de control; Unknowns deja el umbral a implement al transcribir | assumed — transcribir `leakedGoroutines > 2`. Hoy el repro midió +0. Implement solo lo aprieta con evidencia dest; no lo afloja. | explore |
+
 
 ## Findings
 None.
@@ -73,7 +69,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | e7d4cc283eb91f123ee066dde66c2a5aeb171a31 | Card must match the branch you measured |
+| Reviewed head | 592854850eaded42a079bc69eee88e7185b20f03 | Card must match the branch you measured |
 
 ### Stored data model
 None.

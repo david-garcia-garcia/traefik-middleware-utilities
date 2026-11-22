@@ -60,6 +60,16 @@ Hechos de fuera: issue https://github.com/traefik/traefik/issues/13618 y PR http
 
 ## Open questions
 
+- Q: ¿Se conserva el umbral `leakedGoroutines > 2` del repro o se ajusta en dest?
+  Rank: additive asked — Tests pide conservar casos de control; Unknowns deja el umbral a implement al transcribir
+  Decision: assumed — transcribir `leakedGoroutines > 2`. Hoy el repro midió +0. Implement solo lo aprieta con evidencia dest; no lo afloja.
+  By: explore
+
+- Q: ¿Este cambio añade un escenario de catálogo (sockets de clientes abandonados tras GC) o solo el test contra el live contract existente?
+  Rank: additive asked — Desired es test only; el contrato live ya cubre «New MUST NOT start a goroutine»
+  Decision: assumed — propose transcribe un change de test. Si el catálogo necesita un escenario, es aditivo sobre `std_go_simpleredis_tcp-session` (síntoma proxied=0), sin reescribir el MAY de idle-hasta-Close para un cliente aún alcanzable.
+  By: explore
+
 - Q: ¿Sigue dest HEAD pasando la aserción live del repro de referencia (50 recargas, GC, `proxy.open == 0`, goroutines residuales ≤ 2)?
   Rank: additive asked — el test es una unidad que este cambio crea; Desired nombra esa aserción
   Decision: resolved — not reproduced. El repro de referencia pasó hoy contra Redis y Dragonfly (tablas en Concepts). Dest aún no tiene el test; implement lo transcribe con la firma dest de `Allow`.
@@ -68,11 +78,6 @@ Hechos de fuera: issue https://github.com/traefik/traefik/issues/13618 y PR http
 - Q: ¿El test afirma el mecanismo (finalizer de `netFD` de la stdlib) o el síntoma (sockets proxied a 0)?
   Rank: additive asked — Design «After GC no proxied socket stays open»; Unknowns dice que el cierre del fd es de la stdlib
   Decision: resolved — afirmar `proxy.open == 0` tras GC. No afirmar finalizers ni `netFD`.
-  By: explore
-
-- Q: ¿Se conserva el umbral `leakedGoroutines > 2` del repro o se ajusta en dest?
-  Rank: additive asked — Tests pide conservar casos de control; Unknowns deja el umbral a implement al transcribir
-  Decision: assumed — transcribir `leakedGoroutines > 2`. Hoy el repro midió +0. Implement solo lo aprieta con evidencia dest; no lo afloja.
   By: explore
 
 - Q: ¿Hay cambio de producto (Close en el limitador, reaper/finalizer, cliente vía reclaim)?
@@ -103,9 +108,4 @@ Hechos de fuera: issue https://github.com/traefik/traefik/issues/13618 y PR http
 - Q: ¿Se reutilizan `runForEachLiveEngine` / `waitLiveClient` dest o se copian helpers compartidos entre PRs?
   Rank: additive asked — Tests «via the existing runForEachLiveEngine/waitLiveClient»; Out of scope prohíbe ficheros helper compartidos entre PRs
   Decision: resolved — llamar a los helpers dest (2 + 4 call sites enumerados en Concepts). Proxy y clave viven en el fichero del issue con sufijo `13618`.
-  By: explore
-
-- Q: ¿Este cambio añade un escenario de catálogo (sockets de clientes abandonados tras GC) o solo el test contra el live contract existente?
-  Rank: additive asked — Desired es test only; el contrato live ya cubre «New MUST NOT start a goroutine»
-  Decision: assumed — propose transcribe un change de test. Si el catálogo necesita un escenario, es aditivo sobre `std_go_simpleredis_tcp-session` (síntoma proxied=0), sin reescribir el MAY de idle-hasta-Close para un cliente aún alcanzable.
   By: explore
