@@ -26,7 +26,7 @@ El catálogo vivo recibe un escenario bajo el requisito de tope y caducadas: die
 Ready for review. 0 items remain.
 
 Priority: P3 — tests y claridad de spec, sin daño actual a usuarios u operadores
-Reviewed head: be24d750
+Reviewed head: 0228944e
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -49,7 +49,10 @@ Owner decision: Required. See Explore Decisions.
 
 ## Specs
 Worktree:
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-expired-bucket-reclaim/openspec/changes/tokenbucket-expired-bucket-reclaim/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-expired-bucket-reclaim/openspec/changes/archive/2026-11-22-tokenbucket-expired-bucket-reclaim/proposal.md) — modified
+
+Completed:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-expired-bucket-reclaim/openspec/specs/std_go_tokenbucket_allow/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -86,9 +89,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | be24d75041b70872ce193d8c7f8ce366f338a488 | Card must match the branch you measured |
+| Reviewed head | 0228944e69ffcea1d0f503c8d277c0c642f6cbc7 | Card must match the branch you measured |
 
 ### Stored data model
 None.
