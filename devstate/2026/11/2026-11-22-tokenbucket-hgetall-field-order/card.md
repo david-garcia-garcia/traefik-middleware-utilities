@@ -20,7 +20,7 @@ El script pide `last` y `tokens` con `HMGET` por nombre. El bucket ya existe sol
 In progress. 1 items remain.
 
 Priority: P1 — un proceso Redis con `tokens` antes que `last` admite todas las peticiones
-Reviewed head: c2d20a37
+Reviewed head: 46549fe6
 Owner decision: None.
 
 ## Review scores
@@ -80,7 +80,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | c2d20a378ccaa057ccf12ea902c544897991afff | Card must match the branch you measured |
+| Reviewed head | 46549fe68c44c8f104fc47a644dc7e2590c63627 | Card must match the branch you measured |
 
 ### Stored data model
 None.
