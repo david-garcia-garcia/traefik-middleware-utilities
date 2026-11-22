@@ -34,7 +34,7 @@ Black-box tests hold the next flush EVAL: two concurrent Sleeps wait until relea
 In progress. 0 items remain.
 
 Priority: P2 — hang and false flush-complete on concurrent Sleep, limited blast radius
-Reviewed head: 8a35eca2
+Reviewed head: 32821a68
 Owner decision: None.
 
 ## Review scores
@@ -57,7 +57,10 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/openspec/changes/windowcounter-concurrent-sleep-stop/proposal.md) — modified
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/openspec/changes/archive/2026-11-22-windowcounter-concurrent-sleep-stop/proposal.md) — modified
+
+Completed:
+- [std_go_windowcounter_sync-flush](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-windowcounter-concurrent-sleep/openspec/specs/std_go_windowcounter_sync-flush/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -91,9 +94,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 8a35eca2524a33a90a9afb32266369407971e388 | Card must match the branch you measured |
+| Reviewed head | 32821a68217b746f2cee78546a0d7bc1f0a26dc5 | Card must match the branch you measured |
 
 ### Stored data model
 None.
