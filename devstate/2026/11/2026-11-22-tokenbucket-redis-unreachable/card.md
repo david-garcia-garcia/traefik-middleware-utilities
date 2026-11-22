@@ -1,24 +1,24 @@
 ## Motivation
-Aún no.
+Not yet.
 
 ## Implementation
-Aún no.
+Not yet.
 
 ## What this changes
-**Operators.** Ninguno.
+**Operators.** None.
 
-**Admin users.** Ninguno.
+**Admin users.** None.
 
-**Developers.** Ninguno.
+**Developers.** None.
 
-**End users.** Ninguno.
+**End users.** None.
 
 ## Merge readiness
-En curso. 0 ítems pendientes.
+In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 4f14296d
-Owner decision: Ninguna.
+Reviewed head: b7de05d8
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -48,10 +48,13 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-redis-unreachable en la rama homónima hacia master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114; CI no visto. Pedido TEST + DOC: cubrir Redis inalcanzable como `simpleredis.ErrUnreachable` (o `ErrTimeout`) con `allowed=false`, sin cambio de comportamiento. La existencia del defecto se tomó de https://github.com/traefik/traefik/issues/12091 (cerrado aguas arriba como duplicado de https://github.com/traefik/traefik/issues/12043; no hay PR upstream que cerrara #12091).
+Ticket 2026-11-22-tokenbucket-redis-unreachable on branch 2026-11-22-tokenbucket-redis-unreachable targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114; CI not seen.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| ¿Basta el GoDoc de `Redis.Allow` o hay que alinear `knowledge/devdocs/std_go_tokenbucket.md:28` («Match Redis errors by `Error()` text») con `errors.Is`? | additive incidental — una línea de usage existente; ningún criterio del Design nombra el usage (Affected lo deja a explore/propose; el pedido nombra GoDoc). | assumed — alinear How to use a `errors.Is` / `IsUnreachable` contra `ErrUnreachable` y `ErrTimeout`, igual que `std_go_simpleredis.md`. El snippet que solo propaga `err != nil` puede quedarse como un fail-closed de ejemplo; el GoDoc dice que la política es del middleware. No tocar `std_go_windowcounter.md`. | explore |
+
 
 ## Findings
 None.
@@ -66,7 +69,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 4f14296d66e3e1954bf2f72d0306a1e6f8183071 | Card must match the branch you measured |
+| Reviewed head | b7de05d87bad6882deb23b18464e6a19077a33e6 | Card must match the branch you measured |
 
 ### Stored data model
 None.

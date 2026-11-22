@@ -119,7 +119,7 @@ Conclusión: **reproducido como «not a library policy defect»**. El 500 de Tra
 
 - Q: ¿Basta el GoDoc de `Redis.Allow` o hay que alinear `knowledge/devdocs/std_go_tokenbucket.md:28` («Match Redis errors by `Error()` text») con `errors.Is`?
   Rank: additive incidental — una línea de usage existente; ningún criterio del Design nombra el usage (Affected lo deja a explore/propose; el pedido nombra GoDoc).
-  Decision: assumed — alinear How to use a `errors.Is` / `IsUnreachable` contra `ErrUnreachable` y `ErrTimeout`, igual que `std_go_simpleredis.md`. El snippet `if err != nil { return err }` puede quedarse como un fail-closed de ejemplo; el GoDoc dice que la política es del middleware. No tocar `std_go_windowcounter.md`.
+  Decision: assumed — alinear How to use a `errors.Is` / `IsUnreachable` contra `ErrUnreachable` y `ErrTimeout`, igual que `std_go_simpleredis.md`. El snippet que solo propaga `err != nil` puede quedarse como un fail-closed de ejemplo; el GoDoc dice que la política es del middleware. No tocar `std_go_windowcounter.md`.
   By: explore
 
 - Q: ¿El spec vivo necesita un escenario que nombre `ErrUnreachable` / `ErrTimeout` (hoy el escenario de error dice «Redis error» y Unreachable casa el texto `redis:unreachable`)?
@@ -139,7 +139,7 @@ Conclusión: **reproducido como «not a library policy defect»**. El 500 de Tra
 
 - Q: ¿Cómo adaptar la firma del repro de referencia (`Allow` devolvía `bool, wait, error`) a `(Status, error)` de dest (#106)?
   Rank: additive asked — Desired Tests mapea `TestTraefik12091_RedisUnreachable`; dest ya cambió la firma en #106 (In-scope / Current).
-  Decision: assumed — `status, err := limiter.Allow(...)`; `errors.Is(err, simpleredis.ErrUnreachable)`; `if status.Allowed { t.Fatal(...) }`. No reintroducir la tupla. `wait` no se afirma en outage (Status cero).
+  Decision: assumed — `status, err := limiter.Allow(...)`; `errors.Is(err, simpleredis.ErrUnreachable)`; fallar el test si `status.Allowed` es true. No reintroducir la tupla. `wait` no se afirma en outage (Status cero).
   By: explore
 
 - Q: ¿Los tests existentes que casan `err.Error() == RedisUnreachable` se reescriben a `errors.Is`?
