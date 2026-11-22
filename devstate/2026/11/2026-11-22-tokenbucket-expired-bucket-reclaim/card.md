@@ -26,7 +26,7 @@ El catálogo vivo recibe un escenario bajo el requisito de tope y caducadas: die
 Ready for review. 0 items remain.
 
 Priority: P3 — tests y claridad de spec, sin daño actual a usuarios u operadores
-Reviewed head: 2aca1e72
+Reviewed head: be24d750
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -88,7 +88,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 2aca1e7253c9bb557ca4c7af184701eb38abbbc1 | Card must match the branch you measured |
+| Reviewed head | be24d75041b70872ce193d8c7f8ce366f338a488 | Card must match the branch you measured |
 
 ### Stored data model
 None.
