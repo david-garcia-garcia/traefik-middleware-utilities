@@ -197,6 +197,78 @@ jobs:
       if: always()
       run: docker rm -f simpleredis-dragonfly-tls
 
+  e2e-valkey:
+    name: Go E2E Valkey
+    runs-on: ubuntu-latest
+    services:
+      valkey:
+        image: valkey/valkey:9.0.1-alpine
+        ports:
+        - 6385:6379
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    env:
+      WINDOWCOUNTER_LIVE_VALKEY: 127.0.0.1:6385
+      TOKENBUCKET_LIVE_VALKEY: 127.0.0.1:6385
+      SIMPLEREDIS_LIVE_VALKEY: 127.0.0.1:6385
+      SIMPLEREDIS_LIVE_VALKEY_AUTH: 127.0.0.1:6386
+      SIMPLEREDIS_LIVE_VALKEY_TLS: 127.0.0.1:6387
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+    - name: Setup Go
+      uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5
+      with:
+        go-version: "1.21"
+    - name: Start passworded Valkey
+      run: |
+        docker run -d --name simpleredis-valkey-auth -p 6386:6379 valkey/valkey:9.0.1-alpine valkey-server --requirepass secret
+        ok=0
+        for i in $(seq 1 30); do
+          if docker run --rm --network host redis:7-alpine redis-cli -h 127.0.0.1 -p 6386 -a secret ping | grep -q PONG; then
+            ok=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$ok" != 1 ]; then
+          echo "passworded Valkey on 6386 did not become ready"
+          exit 1
+        fi
+    - name: Start TLS Valkey
+      run: |
+        TLS_DIR="$RUNNER_TEMP/simpleredis-tls"
+        SIMPLEREDIS_TLS_FIXTURE_OUT="$TLS_DIR" go test -count=1 -run '^TestWriteTLSFixtureFiles$' ./simpleredis/
+        echo "SIMPLEREDIS_LIVE_TLS_DIR=$TLS_DIR" >> "$GITHUB_ENV"
+        docker create --name simpleredis-valkey-tls -p 6387:6379 valkey/valkey:9.0.1-alpine valkey-server --port 0 --tls-port 6379 --tls-cert-file /tls/server.crt --tls-key-file /tls/server.key --tls-ca-cert-file /tls/ca.crt
+        docker cp "$TLS_DIR" simpleredis-valkey-tls:/tls
+        docker start simpleredis-valkey-tls
+        ok=0
+        for i in $(seq 1 30); do
+          if docker exec simpleredis-valkey-tls valkey-cli --tls --cacert /tls/ca.crt --cert /tls/client.crt --key /tls/client.key -p 6379 ping | grep -q PONG; then
+            ok=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$ok" != 1 ]; then
+          echo "TLS Valkey on 6387 did not become ready"
+          docker logs simpleredis-valkey-tls
+          exit 1
+        fi
+        docker exec simpleredis-valkey-tls valkey-cli --tls --cacert /tls/ca.crt --cert /tls/client.crt --key /tls/client.key -p 6379 ACL SETUSER app on '>apppass' '~*' '+@all'
+    - name: Run Tests
+      run: go test -timeout 5m -count=1 -v ./...
+    - name: Stop passworded Valkey
+      if: always()
+      run: docker rm -f simpleredis-valkey-auth
+    - name: Stop TLS Valkey
+      if: always()
+      run: docker rm -f simpleredis-valkey-tls
+
   integration:
     name: Integration Tests
     runs-on: ubuntu-latest
@@ -261,7 +333,7 @@ jobs:
         pwsh -c "Install-Module -Name Pester -Force -Scope CurrentUser -SkipPublisherCheck"
     - name: Run integration tests
       shell: pwsh
-      run: ./Test-Integration.ps1 -SkipDockerCleanup -Suite simpleredis -Engine redis
+      run: ./Test-Integration.ps1 -SkipDockerCleanup -Suite simpleredis,ratelimit -Engine redis
     - name: Show logs on failure
       if: failure()
       run: |
@@ -279,6 +351,8 @@ jobs:
         docker compose logs whoami-redis-wrong-password
         echo "=== Whoami-redis-database-99 logs ==="
         docker compose logs whoami-redis-database-99
+        echo "=== Whoami-ratelimit-redis logs ==="
+        docker compose logs whoami-ratelimit-redis
     - name: Cleanup
       if: always()
       run: docker compose down -v
@@ -308,7 +382,7 @@ jobs:
         pwsh -c "Install-Module -Name Pester -Force -Scope CurrentUser -SkipPublisherCheck"
     - name: Run integration tests
       shell: pwsh
-      run: ./Test-Integration.ps1 -SkipDockerCleanup -Suite simpleredis -Engine dragonfly
+      run: ./Test-Integration.ps1 -SkipDockerCleanup -Suite simpleredis,ratelimit -Engine dragonfly
     - name: Show logs on failure
       if: failure()
       run: |
@@ -326,6 +400,57 @@ jobs:
         docker compose logs whoami-dragonfly-wrong-password
         echo "=== Whoami-dragonfly-database-99 logs ==="
         docker compose logs whoami-dragonfly-database-99
+        echo "=== Whoami-ratelimit-dragonfly logs ==="
+        docker compose logs whoami-ratelimit-dragonfly
+    - name: Cleanup
+      if: always()
+      run: docker compose down -v
+
+  integration-valkey:
+    name: Integration Tests Valkey
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    - name: Install PowerShell and Pester
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+
+        sudo apt-get update
+        sudo apt-get install -y wget apt-transport-https software-properties-common
+
+        wget -q "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/packages-microsoft-prod.deb"
+
+        sudo dpkg --force-confdef --force-confold -i packages-microsoft-prod.deb
+
+        sudo apt-get update
+        sudo apt-get install -y powershell
+
+        pwsh -c "Install-Module -Name Pester -Force -Scope CurrentUser -SkipPublisherCheck"
+    - name: Run integration tests
+      shell: pwsh
+      run: ./Test-Integration.ps1 -SkipDockerCleanup -Suite simpleredis,ratelimit -Engine valkey
+    - name: Show logs on failure
+      if: failure()
+      run: |
+        echo "=== Traefik logs ==="
+        docker compose logs traefik
+        echo "=== Valkey logs ==="
+        docker compose logs valkey
+        echo "=== Whoami-valkey logs ==="
+        docker compose logs whoami-valkey
+        echo "=== Valkey-drop logs ==="
+        docker compose logs valkey-drop
+        echo "=== Valkey-auth logs ==="
+        docker compose logs valkey-auth
+        echo "=== Whoami-valkey-wrong-password logs ==="
+        docker compose logs whoami-valkey-wrong-password
+        echo "=== Whoami-valkey-database-99 logs ==="
+        docker compose logs whoami-valkey-database-99
+        echo "=== Whoami-ratelimit-valkey logs ==="
+        docker compose logs whoami-ratelimit-valkey
     - name: Cleanup
       if: always()
       run: docker compose down -v

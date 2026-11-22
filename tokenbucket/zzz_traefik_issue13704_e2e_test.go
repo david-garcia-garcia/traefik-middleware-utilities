@@ -29,7 +29,7 @@ func evalKey13704(t *testing.T, client *simpleredis.SimpleRedis, script, key str
 // The Redis side only reclaims idle sources if the script sets an expiry on every write. After Allow
 // the bucket must carry a TTL in (0, ttl].
 func TestTraefik13704_RedisBucketExpires(t *testing.T) {
-	runForEachLiveEngine(t, "TOKENBUCKET_LIVE_REDIS", "TOKENBUCKET_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, func(t *testing.T, addr string) {
 		t.Helper()
 		client := waitLiveClient(t, addr)
 		const ttl = 7 * time.Second

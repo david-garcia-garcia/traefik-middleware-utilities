@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// TestYaegiLive_RedisAndDragonfly runs the same live limiter scenarios interpreted against each engine.
-func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
-	runForEachLiveEngine(t, "TOKENBUCKET_LIVE_REDIS", "TOKENBUCKET_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+// TestYaegiLive_Engines runs the same live limiter scenarios interpreted against each engine.
+func TestYaegiLive_Engines(t *testing.T) {
+	runForEachLiveEngine(t, func(t *testing.T, addr string) {
 		t.Helper()
 		goPath := t.TempDir()
 		writeGopathTokenbucket(t, goPath)

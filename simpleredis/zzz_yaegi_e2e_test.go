@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// TestYaegiLive_RedisAndDragonfly runs interpreted New plus every public verb against each live engine.
-func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
-	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+// TestYaegiLive_Engines runs interpreted New plus every public verb against each live engine.
+func TestYaegiLive_Engines(t *testing.T) {
+	runForEachLiveEngine(t, "", func(t *testing.T, addr string) {
 		t.Helper()
 		client := waitLiveSimpleRedis(t, addr)
 		t.Cleanup(client.Close)
@@ -21,10 +21,10 @@ func TestYaegiLive_RedisAndDragonfly(t *testing.T) {
 	})
 }
 
-// TestYaegiLive_TLSRedisAndDragonfly runs interpreted New with Config.TLS (test CA and client certificate) and ACL
+// TestYaegiLive_TLSEngines runs interpreted New with Config.TLS (test CA and client certificate) and ACL
 // user app, plus Set and Get, against each live TLS engine.
-func TestYaegiLive_TLSRedisAndDragonfly(t *testing.T) {
-	runForEachLiveEngine(t, liveTLSRedisEnv, liveTLSDragonflyEnv, func(t *testing.T, addr string) {
+func TestYaegiLive_TLSEngines(t *testing.T) {
+	runForEachLiveEngine(t, liveTLSSuffix, func(t *testing.T, addr string) {
 		t.Helper()
 		goPath := t.TempDir()
 		writeGopathSimpleredis(t, goPath)

@@ -46,10 +46,10 @@ func liveKey13957(t *testing.T, suffix string) string {
 	return "tb-13957:" + t.Name() + ":" + suffix
 }
 
-// TestTraefik13957_RedisIdleBucketRecreatedFull: traefik/traefik#13957 on Redis and Dragonfly.
+// TestTraefik13957_RedisIdleBucketRecreatedFull: traefik/traefik#13957 on Redis, Dragonfly, and Valkey.
 // A 4s pause may admit the refilled tokens plus one for scheduling slack, not a fresh burst of 30.
 func TestTraefik13957_RedisIdleBucketRecreatedFull(t *testing.T) {
-	runForEachLiveEngine(t, "TOKENBUCKET_LIVE_REDIS", "TOKENBUCKET_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, func(t *testing.T, addr string) {
 		t.Helper()
 		client := waitLiveClient(t, addr)
 		const (

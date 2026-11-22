@@ -46,7 +46,7 @@ limiter = stored.(*windowcounter.Limiter)
 
 ## SimpleRedis
 
-Package `simpleredis/`. A stdlib Redis/Dragonfly client (GET, MGET, SET, DEL, INCR, EXPIRE, EVAL, MSetEX). Use this instead of go-redis: that client does not interpret under Yaegi.
+Package `simpleredis/`. A stdlib Redis/Dragonfly/Valkey client (GET, MGET, SET, DEL, INCR, EXPIRE, EVAL, MSetEX). Use this instead of go-redis: that client does not interpret under Yaegi.
 
 Call `simpleredis.New` in Traefik `New`. It stores host, password, and database; it does not dial. The first command in `ServeHTTP` dials. Pass `req.Context()` on the request path.
 
@@ -284,19 +284,20 @@ Four suites (see `knowledge/devdocs/std_go_test-suites.md`):
 ```text
 go test -short ./...          # unit Go — fake TCP, no Redis (CI job Unit; TestAlloc* run)
 go test -race -short ./...   # same suite under the detector (CI job race; needs gcc)
-go test ./...                # also Go E2E for each *_LIVE_REDIS / *_LIVE_DRAGONFLY addr that is set
-./Test-Integration.ps1                         # Pester reclaim then SimpleRedis redis then dragonfly
+go test ./...                # also Go E2E for each *_LIVE_REDIS / *_LIVE_DRAGONFLY / *_LIVE_VALKEY addr that is set
+./Test-Integration.ps1                         # Pester reclaim, then rate limiters and SimpleRedis on redis, dragonfly, valkey
 ./Test-Integration.ps1 -Suite reclaim             # CI Integration Tests
-./Test-Integration.ps1 -Suite simpleredis -Engine redis
-./Test-Integration.ps1 -Suite simpleredis -Engine dragonfly
+./Test-Integration.ps1 -Suite simpleredis,ratelimit -Engine redis
+./Test-Integration.ps1 -Suite simpleredis,ratelimit -Engine dragonfly
+./Test-Integration.ps1 -Suite simpleredis,ratelimit -Engine valkey
 ```
 
-`Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. `-Suite reclaim` is reclaim only; `-Suite simpleredis -Engine redis|dragonfly` runs the SimpleRedis file once against that backend.
+`Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`, `e2e/ratelimitprobe`) so reclaim, SimpleRedis, and both rate limiters run under Traefik's Yaegi. Docker is required. `-Suite reclaim` is reclaim only; `-Suite simpleredis,ratelimit -Engine redis|dragonfly|valkey` runs the rate-limit file then the SimpleRedis file against that backend.
 
-Go E2E files are `{domain}_e2e_test.go` next to that domain (`zzz_commands_e2e_test.go`, `zzz_limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`). `backendbackoff/` and `iplookup/` have no store and no `*_LIVE_*` var.
+Go E2E files are `{domain}_e2e_test.go` next to that domain (`zzz_commands_e2e_test.go`, `zzz_limiter_e2e_test.go`). They skip under `-short` or when no live addr is set. Each addr that is set runs that engine. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`, Valkey `:6385`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_<ENGINE>_AUTH` (`:6381` / `:6382` / `:6386`). `backendbackoff/` and `iplookup/` have no store and no `*_LIVE_*` var.
 
 The rate limiter benchmarks (`zzz_bench_test.go`, `zzz_bench_yaegi_test.go`, `zzz_bench_e2e_test.go` in `tokenbucket/` and `windowcounter/`) compile in CI but do not run there; the command and the results are in `## Rate limiters compared`.
 
-CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines, 2m timeout, `TestAlloc*` run), unit `go test -race -short` (no engines, 10m timeout), Go E2E Redis (`go test` with Redis 7, no `-race`), Go E2E Dragonfly (`go test` with Dragonfly, no `-race`), Pester reclaim (`Integration Tests`), Pester SimpleRedis Redis, and Pester SimpleRedis Dragonfly on every pull request and on pushes to `master`.
+CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines, 2m timeout, `TestAlloc*` run), unit `go test -race -short` (no engines, 10m timeout), Go E2E Redis (`go test` with Redis 7, no `-race`), Go E2E Dragonfly (`go test` with Dragonfly, no `-race`), Go E2E Valkey (`go test` with Valkey 9, no `-race`), Pester reclaim (`Integration Tests`), and Pester SimpleRedis plus rate limiters on Redis, Dragonfly, and Valkey on every pull request and on pushes to `master`.
 
 Tag a version (`v1.0.0`) to cut a GitHub release via GoReleaser (source archive + SBOM; no plugin binary).

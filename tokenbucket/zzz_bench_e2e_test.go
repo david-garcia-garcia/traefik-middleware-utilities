@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-// BenchmarkLiveRedisAllow measures compiled Redis Allow against live Redis and Dragonfly (TOKENBUCKET_LIVE_*): one hot key and 10k rotating keys.
+// BenchmarkLiveRedisAllow measures compiled Redis Allow against live Redis, Dragonfly, and Valkey (TOKENBUCKET_LIVE_*): one hot key and 10k rotating keys.
 // It skips under -short or when both addresses are unset. Keys carry a per-run prefix so reruns start from empty buckets.
 func BenchmarkLiveRedisAllow(b *testing.B) {
 	ctx := context.Background()
-	for _, engine := range liveEngineAddrs(b, "TOKENBUCKET_LIVE_REDIS", "TOKENBUCKET_LIVE_DRAGONFLY") {
+	for _, engine := range liveEngineAddrs(b) {
 		engine := engine
 		b.Run(engine.name, func(b *testing.B) {
 			client := waitLiveClient(b, engine.addr)

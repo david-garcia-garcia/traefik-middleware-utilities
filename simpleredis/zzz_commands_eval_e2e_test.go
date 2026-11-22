@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-// TestLive_Eval proves Eval integer, KEYS argv, EVALSHA, and NOSCRIPT after SCRIPT FLUSH on live Redis and Dragonfly.
+// TestLive_Eval proves Eval integer, KEYS argv, EVALSHA, and NOSCRIPT after SCRIPT FLUSH on live Redis, Dragonfly, and Valkey.
 func TestLive_Eval(t *testing.T) {
-	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", runLiveEvalBackend)
+	runForEachLiveEngine(t, "", runLiveEvalBackend)
 }
 
 // runLiveEvalBackend proves Eval integer, KEYS incrby+expireat, a second Eval after EVALSHA, and Eval after SCRIPT FLUSH.

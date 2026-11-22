@@ -1,0 +1,10 @@
+displayName: ratelimitprobe
+type: middleware
+import: github.com/david-garcia-garcia/ratelimitprobe
+summary: Fake Traefik middleware that runs the tokenbucket or windowcounter limiter on each request for Yaegi e2e.
+testData:
+  host: redis:6379
+  limiter: tokenbucket
+  keyPrefix: probe
+  rate: "1"
+  burst: "3"

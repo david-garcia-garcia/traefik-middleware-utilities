@@ -13,7 +13,7 @@ import (
 // way: the configured password authenticates, the same password plus "\n" is rejected as redis:noauth.
 // The CI requirepass engines use the password "secret".
 func TestTraefik12078_PasswordWithTrailingNewline(t *testing.T) {
-	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS_AUTH", "SIMPLEREDIS_LIVE_DRAGONFLY_AUTH", func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, "_AUTH", func(t *testing.T, addr string) {
 		t.Helper()
 		cases := []struct {
 			name     string

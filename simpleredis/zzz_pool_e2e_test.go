@@ -7,17 +7,17 @@ import (
 
 // TestLive_PoolWait proves a waiter is redis:unreachable when the only in-use turn is held.
 func TestLive_PoolWait(t *testing.T) {
-	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", runLivePoolBackend)
+	runForEachLiveEngine(t, "", runLivePoolBackend)
 }
 
-// TestLive_PeerCloseEOFRedial proves live Redis and Dragonfly recover after CLIENT KILL of the pooled socket.
+// TestLive_PeerCloseEOFRedial proves live Redis, Dragonfly, and Valkey recover after CLIENT KILL of the pooled socket.
 func TestLive_PeerCloseEOFRedial(t *testing.T) {
-	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", runLivePeerCloseRecovery)
+	runForEachLiveEngine(t, "", runLivePeerCloseRecovery)
 }
 
 // TestLive_SelectOutOfRange proves SELECT 99 on dest engines is not pooled.
 func TestLive_SelectOutOfRange(t *testing.T) {
-	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, "", func(t *testing.T, addr string) {
 		t.Helper()
 		client := newTestRedis(t, Config{Host: addr, Database: "99"})
 		t.Cleanup(client.Close)
@@ -33,7 +33,7 @@ func TestLive_SelectOutOfRange(t *testing.T) {
 
 // TestLive_WrongPassword proves WRONGPASS on requirepass engines maps to redis:noauth.
 func TestLive_WrongPassword(t *testing.T) {
-	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS_AUTH", "SIMPLEREDIS_LIVE_DRAGONFLY_AUTH", func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, "_AUTH", func(t *testing.T, addr string) {
 		t.Helper()
 		client := newTestRedis(t, Config{Host: addr, Pass: "wrong-password"})
 		t.Cleanup(client.Close)

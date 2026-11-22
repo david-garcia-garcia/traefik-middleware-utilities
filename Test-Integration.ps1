@@ -10,16 +10,31 @@ param(
     [switch]$SkipDockerCleanup,
     [switch]$SkipWait,
     [string]$TestPath,
-    [ValidateSet("reclaim", "simpleredis", "all")]
-    [string]$Suite = "all",
-    [ValidateSet("redis", "dragonfly")]
+    # One or more suites, e.g. -Suite simpleredis,ratelimit. simpleredis and ratelimit run once per engine.
+    [ValidateSet("reclaim", "simpleredis", "ratelimit", "all")]
+    [string[]]$Suite = @("all"),
+    [ValidateSet("redis", "dragonfly", "valkey")]
     [string]$Engine
 )
 
 $ErrorActionPreference = "Stop"
 
-if ($Suite -eq "simpleredis" -and -not $Engine) {
-    throw "-Engine redis or dragonfly is required when -Suite simpleredis"
+$allEngines = @("redis", "dragonfly", "valkey")
+$runAll = $Suite -contains "all"
+$runReclaim = $runAll -or ($Suite -contains "reclaim")
+# ratelimit runs before simpleredis on each engine: the simpleredis pool-cap case leaves TIME busy-wait scripts running after it
+# returns (TIME does not advance inside a script until busy-reply-threshold, about 5s on Redis 7 and Valkey), so the engine
+# answers BUSY to whatever runs next.
+$engineSuites = @(@("ratelimit", "simpleredis") | Where-Object { $runAll -or ($Suite -contains $_) })
+if ($engineSuites.Count -gt 0 -and -not $runAll -and -not $Engine) {
+    throw "-Engine redis, dragonfly or valkey is required with -Suite $($engineSuites -join ',')"
+}
+$engines = @()
+if ($Engine) {
+    $engines = @($Engine)
+}
+elseif ($runAll) {
+    $engines = $allEngines
 }
 
 function Write-Step {
@@ -128,18 +143,18 @@ try {
 
     if (-not $SkipWait) {
         $ready = @((Test-ServiceHealth -Url "http://localhost:8080/api/rawdata" -ServiceName "Traefik API"))
-        if ($Suite -eq "reclaim") {
+        if ($runReclaim) {
             $ready += (Test-ServiceHealth -Url "http://localhost:8000/a" -ServiceName "whoami /a")
             $ready += (Test-ServiceHealth -Url "http://localhost:8000/b" -ServiceName "whoami /b")
         }
-        elseif ($Suite -eq "simpleredis") {
-            $ready += (Test-EngineStackHealth -Engine $Engine)
-        }
-        else {
-            $ready += (Test-EngineStackHealth -Engine "redis")
-            $ready += (Test-EngineStackHealth -Engine "dragonfly")
-            $ready += (Test-ServiceHealth -Url "http://localhost:8000/a" -ServiceName "whoami /a")
-            $ready += (Test-ServiceHealth -Url "http://localhost:8000/b" -ServiceName "whoami /b")
+        foreach ($stackEngine in $engines) {
+            $ready += (Test-EngineStackHealth -Engine $stackEngine)
+            if ($engineSuites -contains "ratelimit") {
+                # Each probe spends one hit on the shared "default" key; the Pester cases use their own keys.
+                foreach ($limiter in @("tokenbucket", "windowcounter")) {
+                    $ready += (Test-ServiceHealth -Url "http://localhost:8000/$stackEngine-$limiter/a" -ServiceName "whoami /$stackEngine-$limiter/a")
+                }
+            }
         }
         if ($ready -contains $false) {
             docker logs reclaim-e2e-traefik 2>&1 | Select-Object -Last 80
@@ -165,17 +180,13 @@ try {
         Invoke-IntegrationPester -Path $pesterPath
     }
     else {
-        if ($Suite -in @("reclaim", "all")) {
+        if ($runReclaim) {
             Invoke-IntegrationPester -Path "./scripts/integration-tests.reclaim.Tests.ps1"
         }
-        if ($Suite -in @("simpleredis", "all")) {
-            $engines = @($Engine)
-            if (-not $Engine) {
-                $engines = @("redis", "dragonfly")
-            }
-            foreach ($Engine in $engines) {
-                $env:INTEGRATION_ENGINE = $Engine
-                Invoke-IntegrationPester -Path "./scripts/integration-tests.simpleredis.Tests.ps1"
+        foreach ($suiteEngine in $engines) {
+            $env:INTEGRATION_ENGINE = $suiteEngine
+            foreach ($engineSuite in $engineSuites) {
+                Invoke-IntegrationPester -Path "./scripts/integration-tests.$engineSuite.Tests.ps1"
             }
         }
     }

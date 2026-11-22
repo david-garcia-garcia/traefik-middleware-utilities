@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// TestLive_MSetEX proves Lua MSetEX TTL, future EXAT TTL, and past EXAT miss on live Redis and Dragonfly.
+// TestLive_MSetEX proves Lua MSetEX TTL, future EXAT TTL, and past EXAT miss on live Redis, Dragonfly, and Valkey.
 func TestLive_MSetEX(t *testing.T) {
-	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", runLiveMSetEXBackend)
+	runForEachLiveEngine(t, "", runLiveMSetEXBackend)
 }
 
 // runLiveMSetEXBackend proves Lua MSetEX TTL landed, future EXAT TTL, and past EXAT miss on one engine.
