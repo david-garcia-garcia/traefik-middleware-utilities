@@ -20,14 +20,14 @@ Priority: P1 — production replica probes lockstep at MaxCooldown today, a wron
 Ready for review. 0 items remain.
 
 Priority: P1 — production replica probes lockstep at MaxCooldown today, a wrong jitter contract
-Reviewed head: 64e19a38
+Reviewed head: 5f3d2b5e
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013660104 |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014123617 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -37,7 +37,7 @@ Owner decision: None.
 | Branch | 2026-11-22-backendbackoff-jitter-cap pushed | `git` |
 | OpenSpec | backendbackoff-jitter-below-cap | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/124 | pr-host |
-| CI | build 45013660104 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013660104 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013660104 |
+| CI | build 45014123617 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014123617 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014123617 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -56,7 +56,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-backendbackoff-jitter-cap on branch 2026-11-22-backendbackoff-jitter-cap targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/124; CI build 45013660104 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013660104.
+Ticket 2026-11-22-backendbackoff-jitter-cap on branch 2026-11-22-backendbackoff-jitter-cap targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/124; CI build 45014123617 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014123617.
 
 ## Explore Decisions
 None.
@@ -82,7 +82,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 64e19a388752511ad5d36ac84f5aa42fee678d54 | Card must match the branch you measured |
+| Reviewed head | 5f3d2b5e7563bf8fdabe4529992aa7204df4692d | Card must match the branch you measured |
 
 ### Stored data model
 None.
