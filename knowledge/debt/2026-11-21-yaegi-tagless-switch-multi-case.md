@@ -14,5 +14,5 @@ This is a different interpreter defect from the shared `select` case list that t
 A later change that writes a tagless `switch` with a multi-expression `case` in session source could misroute errors under Traefik while every compiled test still passes.
 
 ## Context
-Observed in: `simpleredis/repro_yaegi_select_probe_test.go` `SelectProbeSaturatedGet`.
+Observed in: `simpleredis/zzz_repro_yaegi_select_probe_test.go` `SelectProbeSaturatedGet`.
 Proposed: reduce the case to a minimal repro under `interp.New` and record it under `knowledge/research/` (or upstream). If the case list is confirmed as the cause, extend the `go/parser` guard next to `TestSessionSourceHasNoSelect` to reject a tagless `switch` with a multi-expression `case` in session source.

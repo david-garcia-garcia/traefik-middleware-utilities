@@ -42,10 +42,10 @@ return [][]byte{append([]byte(nil), line[1:]...)}, true, nil
 ## Key files
 
 - `simpleredis/resp.go` — `readLine`, `readReply`, `readBulk`, `parseLen`
-- `simpleredis/resp_test.go` — copy-on-escape, `ErrBufferFull` (`redis:issue?`, ≤4096 bytes from the peer), over-cap `$`/`*` headers
-- `simpleredis/resp_fuzz_test.go` — `FuzzReadReply` (no panic, no values on a dirty stream) and `FuzzParseLen` (no `length+2` overflow)
-- `simpleredis/fake_redis_test.go` — `startSequentialRedis` for distinct later-read payloads
-- `simpleredis/bench_test.go` — `BenchmarkDecodeBulk`, `BenchmarkDecodeArray10`, `BenchmarkDecodeInteger`
+- `simpleredis/zzz_resp_test.go` — copy-on-escape, `ErrBufferFull` (`redis:issue?`, ≤4096 bytes from the peer), over-cap `$`/`*` headers
+- `simpleredis/zzz_resp_fuzz_test.go` — `FuzzReadReply` (no panic, no values on a dirty stream) and `FuzzParseLen` (no `length+2` overflow)
+- `simpleredis/zzz_fake_redis_test.go` — `startSequentialRedis` for distinct later-read payloads
+- `simpleredis/zzz_bench_test.go` — `BenchmarkDecodeBulk`, `BenchmarkDecodeArray10`, `BenchmarkDecodeInteger`
 - `openspec/specs/std_go_simpleredis_resp-decode/spec.md`
 
 ## Gotchas

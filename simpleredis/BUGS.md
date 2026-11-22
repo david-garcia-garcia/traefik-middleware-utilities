@@ -20,7 +20,7 @@ This coverage PR does **not** assert interpreted AUTH/SELECT matcher results; th
 
 ### 2. Interpreted defer runs on panic under Yaegi
 
-**Proof:** `simpleredis/yaegi_defer_test.go`
+**Proof:** `simpleredis/zzz_yaegi_defer_test.go`
 
 Interpreted `defer` does run on panic under Yaegi v0.16.1, for an explicit interpreted panic, the interpreter's own `errors.As` panic, and a nil-map write. Closed PR 29 rejected deferred `release` on the opposite belief; do not treat that close as policy. `runOnConn` defers `release`, `borrow` defers `freeInUseTurn` when it does not hand a socket off, and `release` unlocks the idle-list mutex via defer inside the keep-or-close owner.
 
@@ -52,7 +52,7 @@ Recorded so these are not re-hunted. Measurements are from the hunt. **Lock** is
 | `handshakeFailure` type assert panicking under Yaegi | Does not panic. Interpreted AUTH EOF opens 1 accept, same as compiled; the no-redial fix works interpreted. | `TestHandshakeAuthEOFMustNotOpenSecondConnection` (and siblings). This PR does not re-assert interpreted handshake matching. |
 | Yaegi panic on the retry, I/O-timeout, cancel, pool-wait, or truncated-bulk paths | None. All five drive cleanly interpreted; only sentinel *matching* is wrong (bug 1). | `TestYaegiErrorpath_DialRetry`, `TestYaegiErrorpath_StallTimeout`, `TestYaegiErrorpath_CancelMidCommand`, `TestYaegiErrorpath_PoolWait`, `TestYaegiErrorpath_TruncatedBulk` |
 | Concurrent `MSetEX` unknown-command fallback racing `groupWrite` | Benign. 16 goroutines × 25 `MSetEX` against a reject-MSETEX fake: 0 failures, 16 MSETEX probes, turns full, `OverFrees() == 0`. | `TestConcurrentMSetEXUnknownCommandFallback` |
-| Compliant-peer trigger for the bug 3 desync | Not found. Every decoder path that cannot prove a boundary (over-cap `$`/`*`, bad CRLF trailer, nested array, error-in-array, unknown type byte, mid-array timeout, partial write) already marks the socket dirty and closes it. | dest `resp_test.go` / `pool_test.go` dirty-reply cases (not expanded here) |
+| Compliant-peer trigger for the bug 3 desync | Not found. Every decoder path that cannot prove a boundary (over-cap `$`/`*`, bad CRLF trailer, nested array, error-in-array, unknown type byte, mid-array timeout, partial write) already marks the socket dirty and closes it. | dest `zzz_resp_test.go` / `zzz_pool_test.go` dirty-reply cases (not expanded here) |
 | Command injection via key, value, script, or TTL | Not possible. `writeCommand` emits length-prefixed RESP bulk strings for every argument; payload bytes are never scanned for CRLF. | `TestWriteCommandDoesNotInjectCommands` |
 | Clean socket discarded when the deadline passes after a successful read | Real but specified. `exec`'s post-`do` `contextStop` releases with `reusable = false`; the spec requires closing the in-use socket on cancel. Churn, not a killer: honest fast peer with tight caller deadlines measured 0.31 dials per command. | dest `TestGetCancelFreesTurnAndDoesNotPool` |
 | `takeIdleConn` in-place filter (`sr.idleConns[:0]`) aliasing | Safe. Write index never exceeds the read index. Retains at most `cap - len` closed `*pooledConn` (≈8KB each, bounded by `PoolSize`); not a leak worth changing. | dest idle-sweep tests |
@@ -68,6 +68,6 @@ The first pass (2026-09-12) reported three items; all three are fixed and covere
 |---|---|---|
 | Handshake failure redialed a second TCP connection | `handshakeFailure` mark + `shouldRetry` short-circuit | `TestHandshakeAuthEOFMustNotOpenSecondConnection`, `…SelectEOF…`, `…AuthLoading…`, `…AuthMaxClients…` |
 | `Eval` / `MSetEX` bound a second overall deadline | Accepted as intended; documented in comments | n/a |
-| `Eval` mapped Lua `false`/`nil` (`$-1`) to `redis:miss` | `readReply` returns a nil slot; `Get` interprets it | `TestGetNullBulkIsMiss`, `commands_eval_test.go:176` |
+| `Eval` mapped Lua `false`/`nil` (`$-1`) to `redis:miss` | `readReply` returns a nil slot; `Get` interprets it | `TestGetNullBulkIsMiss`, `zzz_commands_eval_test.go:176` |
 
 Note that the fix for the first item is what introduced recorded defect 1 above.

@@ -7,7 +7,7 @@ See `proposal.md` — Why. On `master` there is no `traefikemulator/` directory.
 **Goals:**
 
 - Copy `emulator.go` verbatim in behavior from bouncer `pkg/traefikemulator`.
-- Port all six existing tests into `emulator_test.go` (in-package `traefikemulator`, not `traefikemulator_test`).
+- Port all six existing tests into `zzz_emulator_test.go` (in-package `traefikemulator`, not `traefikemulator_test`).
 - Add unit tests for uncovered branches listed in `explore.md` until `go test -cover ./traefikemulator/` reaches ~95%+ statement coverage (same band as `iplookup`).
 - Register one new live spec leaf for generation semantics.
 
@@ -26,7 +26,7 @@ See `proposal.md` — Why. On `master` there is no `traefikemulator/` directory.
 
 3. **Single spec leaf** — One capability covers cancel, shared context, partial failure, duplicate names, Stop, and Serve/Handler. Rejected: splitting routing vs generation (one cohesive surface, ~100 LOC).
 
-4. **Test layout** — `emulator_test.go` only for unit proofs. Rejected: `traefikemulator_yaegi_test.go` (helper is compiled-test-only; no plugin entrypoint under Yaegi).
+4. **Test layout** — `zzz_emulator_test.go` only for unit proofs. Rejected: `traefikemulator_yaegi_test.go` (helper is compiled-test-only; no plugin entrypoint under Yaegi).
 
 5. **Coverage bar** — Port six bouncer tests first, then add: duplicate route in one `Apply`; `Serve`/`Handler` false for missing route and after `Stop`; `Stop` cancels contexts; empty `Apply` if needed for map reset; document or test `New(nil)` panic (only branch that may stay below 100%).
 

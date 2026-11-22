@@ -4,7 +4,7 @@
 - [x] 1.2 Apply measured `reclaim/table.go` hunks: `aliases` map, slot reverse links, `Peek` + `State`, `unbindIncarnationLocked` on `endBusySlot`, `unmapLocked`, `installCloser` failure, `expireDispose`, and `takeAll`
 - [x] 1.3 Confirm `reclaim/opentyped.go` is byte-identical to `origin/master`; do not edit other packages
 
-## 2. Alias tests (`reclaim/alias_test.go` or focused tables)
+## 2. Alias tests (`reclaim/zzz_alias_test.go` or focused tables)
 
 Port scenarios from bouncer `pkg/reclaim/zzz_alias_test.go` using `NewTable(shortGrace)` and `Table.Reset()`:
 
@@ -27,7 +27,7 @@ Port scenarios from bouncer `pkg/reclaim/zzz_alias_test.go` using `NewTable(shor
 - [x] 3.3 After `SetAlias`, `Table.Reset()` leaves watchers empty and clears alias map
 - [x] 3.4 Failed busy slot / `installCloser` failure path unbinds aliases (match vendor call sites)
 
-## 4. Peek tests (`reclaim/peek_test.go`)
+## 4. Peek tests (`reclaim/zzz_peek_test.go`)
 
 Port scenarios from bouncer `pkg/reclaim/zzz_peek_test.go`:
 
@@ -38,7 +38,7 @@ Port scenarios from bouncer `pkg/reclaim/zzz_peek_test.go`:
 
 ## 5. Yaegi (optional, interpreter constraints only)
 
-- [x] 5.1 Add `reclaim/yaegi_test.go` cases for `Watch` with `Published` delivered to `func(any)` and stable `Box` in `atomic.Value`, skip under `-race` like existing reclaim Yaegi tests
+- [x] 5.1 Add `reclaim/zzz_yaegi_test.go` cases for `Watch` with `Published` delivered to `func(any)` and stable `Box` in `atomic.Value`, skip under `-race` like existing reclaim Yaegi tests
 
 ## 6. Specs and gates
 

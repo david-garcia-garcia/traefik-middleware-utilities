@@ -23,6 +23,6 @@ Downstream middleware (crowdsec bouncer) vendors `traefik-middleware-utilities` 
 ## Impact
 
 - `reclaim/alias.go` (new), `reclaim/table.go` (modify).
-- New or extended tests under `reclaim/` (`alias_test.go`, `peek_test.go`, optional `yaegi_test.go` cases).
+- New or extended tests under `reclaim/` (`zzz_alias_test.go`, `zzz_peek_test.go`, optional `zzz_yaegi_test.go` cases).
 - Live spec delta under this change; `knowledge/devdocs/std_go_reclaim.md` in a later devdocsimpact phase.
 - `e2e/reclaimprobe` unchanged (still `Open` only). No module tag or version bump in this PR. Bouncer repo out of scope.
