@@ -17,11 +17,11 @@ import (
 // runNonce14173 keeps keys from one run apart from keys a previous run left on the same server.
 var runNonce14173 = strconv.FormatInt(time.Now().UnixNano(), 36)
 
-// countingProxy14173 is a loopback TCP proxy that can hold client writes so a request already read still reaches the
+// writeHoldProxy14173 is a loopback TCP proxy that can hold client writes so a request already read still reaches the
 // server after the client leaves.
-type countingProxy14173 struct {
-	listener   net.Listener
-	holdWrites atomic.Int64 // nanoseconds each client-to-server chunk waits before it is forwarded
+type writeHoldProxy14173 struct {
+	listener       net.Listener
+	writeHoldNanos atomic.Int64 // nanoseconds each client-to-server chunk waits before it is forwarded
 }
 
 // liveKey14173 is a per-run, per-test Redis key.
@@ -41,13 +41,13 @@ func evalKey14173(t *testing.T, client *simpleredis.SimpleRedis, script, key str
 }
 
 // startCountingProxy14173 forwards every accepted connection to upstream until the test ends.
-func startCountingProxy14173(t *testing.T, upstream string) *countingProxy14173 {
+func startCountingProxy14173(t *testing.T, upstream string) *writeHoldProxy14173 {
 	t.Helper()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := &countingProxy14173{listener: listener}
+	p := &writeHoldProxy14173{listener: listener}
 	go func() {
 		for {
 			down, acceptErr := listener.Accept()
@@ -74,14 +74,14 @@ func startCountingProxy14173(t *testing.T, upstream string) *countingProxy14173 
 	return p
 }
 
-// forwardHeld14173 copies src to dst, waiting holdWrites before each chunk. A chunk read before src closes is still
+// forwardHeld14173 copies src to dst, waiting writeHoldNanos before each chunk. A chunk read before src closes is still
 // delivered, the way a request already on the wire reaches the server after the client leaves.
-func (p *countingProxy14173) forwardHeld14173(dst io.Writer, src io.Reader) {
+func (p *writeHoldProxy14173) forwardHeld14173(dst io.Writer, src io.Reader) {
 	buf := make([]byte, 32*1024)
 	for {
 		n, readErr := src.Read(buf)
 		if n > 0 {
-			if hold := time.Duration(p.holdWrites.Load()); hold > 0 {
+			if hold := time.Duration(p.writeHoldNanos.Load()); hold > 0 {
 				time.Sleep(hold)
 			}
 			if _, writeErr := dst.Write(buf[:n]); writeErr != nil {
@@ -121,7 +121,7 @@ func runCanceledInFlight14173(t *testing.T, addr string) {
 		t.Fatal(err)
 	}
 
-	proxy.holdWrites.Store(int64(hold))
+	proxy.writeHoldNanos.Store(int64(hold))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	time.AfterFunc(200*time.Millisecond, cancel)
