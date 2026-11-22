@@ -1,0 +1,18 @@
+issueKey: 2026-11-22-tokenbucket-concurrent-first-requests
+jobName: 2026-11-22-tokenbucket-concurrent-first-requests
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: c36dda09200d991c0a3a330ff9eb40d404838227d09bd2fefcaa18f54f7d320d
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: tokenbucket-concurrent-first-requests
+pr:
+  id: 110
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/110

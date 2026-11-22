@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-tokenbucket-ttl-below-refill",
+  "jobName": "2026-11-22-tokenbucket-ttl-below-refill",
+  "startedAt": "2026-11-22T06:36:13.790Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:38:59.897Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:41:35.746Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:44:26.296Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:50:51.674Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:52:02.943Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:52:53.143Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:53:46.454Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T06:57:59.500Z"
+    }
+  }
+}

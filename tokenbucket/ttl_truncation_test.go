@@ -44,7 +44,7 @@ func TestTTLTruncation_RejectsFractionalTTL(t *testing.T) {
 	if len(eval) < 9 {
 		t.Fatalf("eval argv %v", eval)
 	}
-	if eval[6] != "2" {
-		t.Fatalf("Redis ARGV ttl = %q, want 2; argv %v", eval[6], eval)
+	if eval[6] != "3" {
+		t.Fatalf("Redis ARGV ttl = %q, want 3 (caller 2s raised by the refill floor); argv %v", eval[6], eval)
 	}
 }

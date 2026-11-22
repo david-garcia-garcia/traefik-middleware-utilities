@@ -39,3 +39,8 @@ description: Dragonfly v1.40 command matrix has no MSETEX; Lua SET EX/EXAT is th
 priority: normal
 local: ext_dragonfly_tls/
 description: How Dragonfly v1.40.2 serves TLS (flags, startup auth requirement, CA-driven client certs, key format).
+
+## HMGET missing field
+priority: normal
+local: ext_dragonfly_hmget_missing-field/
+description: Lua type of an HMGET element when that hash field is not stored.
