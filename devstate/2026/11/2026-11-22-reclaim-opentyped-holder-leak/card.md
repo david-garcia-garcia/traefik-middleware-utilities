@@ -22,7 +22,7 @@ releaseLease para el AfterFunc cuando hay stop y luego dropOnce. dropOnce, bajo 
 In progress. 0 items remain.
 
 Priority: P2 — fuga real de holders y Close que no corre, radio limitado al mismatch de OpenTyped
-Reviewed head: c1750eb4
+Reviewed head: 826203d7
 Owner decision: None.
 
 ## Review scores
@@ -45,7 +45,10 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_reclaim_value-lifecycle](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-reclaim-opentyped-holder-leak/openspec/changes/reclaim-opentyped-mismatch-release/proposal.md) — modified
+- [std_go_reclaim_value-lifecycle](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-reclaim-opentyped-holder-leak/openspec/changes/archive/2026-11-22-reclaim-opentyped-mismatch-release/proposal.md) — modified
+
+Completed:
+- [std_go_reclaim_value-lifecycle](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-reclaim-opentyped-holder-leak/openspec/specs/std_go_reclaim_value-lifecycle/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -79,9 +82,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | c1750eb4871e40d2526abf2c2084fee27f257955 | Card must match the branch you measured |
+| Reviewed head | 826203d7426b904a2bb2d1f2294da2ae20e5705c | Card must match the branch you measured |
 
 ### Stored data model
 None.
