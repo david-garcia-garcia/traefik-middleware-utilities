@@ -23,21 +23,21 @@ func TestJitterBelowCap(t *testing.T) {
 
 // testJitterBelowCapAtCap fails against the old clamp: that piled ~50 % onto MaxCooldown.
 func testJitterBelowCapAtCap(t *testing.T) {
-	gate := newGateJitterBelowCap(t, configJitterBelowCap(defaultBaseCooldown, defaultMaxCooldown, defaultJitter), jitterBelowCapSeed)
+	gate := newGateJitterBelowCap(t, configJitterBelowCap(defaultBaseCooldown, defaultJitter))
 	samples := drawCooldownsJitterBelowCap(gate, jitterBelowCapAtN, jitterBelowCapSamples)
 	assertSpreadJitterBelowCap(t, samples, 9*time.Second, gate.cfg.MaxCooldown)
 }
 
 // testJitterBelowCapNearCap fails against the old clamp: Base 9.5s overshot onto Max.
 func testJitterBelowCapNearCap(t *testing.T) {
-	gate := newGateJitterBelowCap(t, configJitterBelowCap(9500*time.Millisecond, defaultMaxCooldown, defaultJitter), jitterBelowCapSeed)
+	gate := newGateJitterBelowCap(t, configJitterBelowCap(9500*time.Millisecond, defaultJitter))
 	samples := drawCooldownsJitterBelowCap(gate, 0, jitterBelowCapSamples)
 	assertSpreadJitterBelowCap(t, samples, 8550*time.Millisecond, gate.cfg.MaxCooldown)
 }
 
 // testJitterBelowCapBelowCap keeps the old ±Jitter band when the +J side is still under Max.
 func testJitterBelowCapBelowCap(t *testing.T) {
-	gate := newGateJitterBelowCap(t, configJitterBelowCap(defaultBaseCooldown, defaultMaxCooldown, defaultJitter), jitterBelowCapSeed)
+	gate := newGateJitterBelowCap(t, configJitterBelowCap(defaultBaseCooldown, defaultJitter))
 	samples := drawCooldownsJitterBelowCap(gate, 0, jitterBelowCapSamples)
 	lo, hi := minMaxJitterBelowCap(samples)
 	bandLo := 900 * time.Millisecond
@@ -52,8 +52,8 @@ func testJitterBelowCapBelowCap(t *testing.T) {
 
 // testJitterBelowCapZeroJitter is the control: Jitter 0 returns wait exactly.
 func testJitterBelowCapZeroJitter(t *testing.T) {
-	atCap := newGateJitterBelowCap(t, configJitterBelowCap(defaultBaseCooldown, defaultMaxCooldown, 0), jitterBelowCapSeed)
-	below := newGateJitterBelowCap(t, configJitterBelowCap(defaultBaseCooldown, defaultMaxCooldown, 0), jitterBelowCapSeed)
+	atCap := newGateJitterBelowCap(t, configJitterBelowCap(defaultBaseCooldown, 0))
+	below := newGateJitterBelowCap(t, configJitterBelowCap(defaultBaseCooldown, 0))
 	if got := atCap.cooldownDuration(jitterBelowCapAtN); got != defaultMaxCooldown {
 		t.Fatalf("Jitter 0 at cap = %v, want 10s", got)
 	}
@@ -63,25 +63,25 @@ func testJitterBelowCapZeroJitter(t *testing.T) {
 }
 
 // configJitterBelowCap is a valid Config with the cooldown knobs this file varies.
-func configJitterBelowCap(base, max time.Duration, jitter float64) Config {
+func configJitterBelowCap(base time.Duration, jitter float64) Config {
 	return Config{
 		FailureRatio: defaultFailureRatio,
 		TripFailures: defaultTripFailures,
 		BaseCooldown: base,
-		MaxCooldown:  max,
+		MaxCooldown:  defaultMaxCooldown,
 		Jitter:       jitter,
 		TTL:          defaultTTL,
 	}
 }
 
 // newGateJitterBelowCap builds a gate and seeds rng so draws are repeatable.
-func newGateJitterBelowCap(t *testing.T, cfg Config, seed int64) *Gate {
+func newGateJitterBelowCap(t *testing.T, cfg Config) *Gate {
 	t.Helper()
 	gate, err := New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	gate.rng = rand.New(rand.NewSource(seed)) //nolint:gosec // G404: test seed, not a secret
+	gate.rng = rand.New(rand.NewSource(jitterBelowCapSeed)) //nolint:gosec // G404: test seed, not a secret
 	return gate
 }
 
@@ -94,13 +94,13 @@ func drawCooldownsJitterBelowCap(gate *Gate, n, count int) []time.Duration {
 	return samples
 }
 
-// assertSpreadJitterBelowCap requires every sample in [lower, max) and no 0.1 % pile-up.
-func assertSpreadJitterBelowCap(t *testing.T, samples []time.Duration, lower, max time.Duration) {
+// assertSpreadJitterBelowCap requires every sample in [lower, maxCooldown) and no 0.1 % pile-up.
+func assertSpreadJitterBelowCap(t *testing.T, samples []time.Duration, lower, maxCooldown time.Duration) {
 	t.Helper()
 	counts := make(map[time.Duration]int, len(samples))
 	for i, sample := range samples {
-		if sample < lower || sample >= max {
-			t.Fatalf("sample %d = %v, want in [%v, %v) (old clamp returned MaxCooldown)", i, sample, lower, max)
+		if sample < lower || sample >= maxCooldown {
+			t.Fatalf("sample %d = %v, want in [%v, %v) (old clamp returned MaxCooldown)", i, sample, lower, maxCooldown)
 		}
 		counts[sample]++
 	}
