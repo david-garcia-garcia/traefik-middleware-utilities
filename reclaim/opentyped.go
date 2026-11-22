@@ -7,8 +7,9 @@ import (
 )
 
 // OpenTyped is OpenWithHooks with the stored value returned as T, so a caller that knows what it
-// created does not repeat the same type assert on every Open. It is a function and not a method
-// because Go does not allow a method to declare its own type parameter.
+// created does not repeat the same type assert on every Open. A type mismatch returns the error
+// and does not keep the caller as a holder. It is a function and not a method because Go does
+// not allow a method to declare its own type parameter.
 //
 // Yaegi: the instantiation must stay a call expression in a package that can name T. Do not
 // declare a package-level var, type alias, or struct field whose type names a generic
