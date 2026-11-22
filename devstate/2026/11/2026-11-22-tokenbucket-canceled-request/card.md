@@ -22,14 +22,14 @@ Sin cambio de comportamiento de `Allow`. Se amplía el GoDoc de `Memory.Allow` (
 Ready for review. 0 items remain.
 
 Priority: P3 — documentación y tests, sin daño actual a usuarios u operadores
-Reviewed head: 0a2ccea5
+Reviewed head: 359bd7f6
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996362034 |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998241898 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -39,7 +39,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-11-22-tokenbucket-canceled-request pushed | `git` |
 | OpenSpec | tokenbucket-canceled-request | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/112 | pr-host |
-| CI | build 44996362034 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996362034 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996362034 |
+| CI | build 44998241898 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998241898 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998241898 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -53,7 +53,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-canceled-request on branch 2026-11-22-tokenbucket-canceled-request targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/112; CI build 44996362034 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996362034.
+Ticket 2026-11-22-tokenbucket-canceled-request on branch 2026-11-22-tokenbucket-canceled-request targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/112; CI build 44998241898 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998241898.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -82,7 +82,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 0a2ccea5997bd79412b850c88d07e9b6ad68c2e7 | Card must match the branch you measured |
+| Reviewed head | 359bd7f615adf10e44f641e22844cc4f84e35a89 | Card must match the branch you measured |
 
 ### Stored data model
 None.
