@@ -60,9 +60,14 @@ type Gate struct {
 	mu     sync.Mutex
 	closed bool
 	keys   map[string]*memEntry
+	// head and tail are the expiry list over keys. Every Allow and Report sets expireAt = now + TTL (TTL is fixed) and
+	// moves its entry to the tail, so the head expires first while the clock does not move backwards. Concrete pointers,
+	// not container/list: its any-typed Value is a Yaegi risk.
+	head *memEntry
+	tail *memEntry
 }
 
-// memEntry is one key's credit, backoff exponent, and idle expire time.
+// memEntry is one key's credit, backoff exponent, idle expire time, and its place in Gate's expiry list.
 type memEntry struct {
 	credit           float64
 	n                int
@@ -72,6 +77,11 @@ type memEntry struct {
 	probeUntil       time.Time
 	probeOutstanding bool
 	expireAt         time.Time
+
+	// key, prev, and next link the entry into the expiry list; key is the keys map key, so the list head can be deleted from the map.
+	key  string
+	prev *memEntry
+	next *memEntry
 }
 
 // New builds an in-process gate. Zero Config applies defaults.
@@ -136,6 +146,8 @@ func (g *Gate) Close() {
 	g.mu.Lock()
 	g.closed = true
 	g.keys = nil
+	g.head = nil
+	g.tail = nil
 	g.mu.Unlock()
 }
 

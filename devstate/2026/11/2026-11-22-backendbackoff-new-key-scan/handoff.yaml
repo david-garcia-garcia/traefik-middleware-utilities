@@ -1,0 +1,18 @@
+issueKey: 2026-11-22-backendbackoff-new-key-scan
+jobName: 2026-11-22-backendbackoff-new-key-scan
+issueHost: local
+issueRef: none
+prHost: github
+ciHost: github
+repoSlug: traefik-middleware-utilities
+destBranch: master
+qualify: qualified-with-gaps
+src: bde3acd7d25d46c7b406dce3d7b50251868e2814cb5c92bb93347716de04b252
+localTests: passed
+requirement: requirement.md
+comments: none
+explore: explore.md
+change: backendbackoff-expiry-list
+pr:
+  id: 122
+  url: https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/122
