@@ -1,12 +1,14 @@
 package tokenbucket
 
 import (
+	"bufio"
 	"context"
+	"io"
+	"net"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
-
-	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
 // Benchmark limiter settings: a Traefik-style average of 1000 req/s with a burst of 100.
@@ -49,30 +51,57 @@ func prefillBenchMemory(limiter *Memory, keys []string, now time.Time) {
 	}
 }
 
-// newBenchRedis builds a Redis limiter on a fake with a warm script cache and loads the script once.
-func newBenchRedis(tb testing.TB) (*Redis, *testFakeRedis) {
+// liveBenchRoundTrips returns how many limiter round trips the engine at addr has served: the EVAL, EVALSHA, GET, and MGET
+// calls in INFO commandstats. The commands a Lua script runs inside the engine are not round trips and are not counted; none
+// of the limiter scripts calls GET or MGET. The engine must serve only this benchmark for the count to be per limiter.
+func liveBenchRoundTrips(tb testing.TB, addr string) int64 {
 	tb.Helper()
-	fake, addr := startTestFakeRedis(tb)
-	fake.enableScriptCache()
-	client, err := simpleredis.New(simpleredis.Config{Host: addr})
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
-		tb.Fatal(err)
+		tb.Fatalf("INFO dial %s: %v", addr, err)
 	}
-	limiter, err := NewRedis(client, benchRate, benchBurst, benchMaxDelay, benchTTL)
+	defer conn.Close()
+	if _, err := conn.Write([]byte("*2\r\n$4\r\nINFO\r\n$12\r\ncommandstats\r\n")); err != nil {
+		tb.Fatalf("INFO write: %v", err)
+	}
+	reader := bufio.NewReader(conn)
+	header, err := reader.ReadString('\n')
+	if err != nil || !strings.HasPrefix(header, "$") {
+		tb.Fatalf("INFO reply header %q: %v", header, err)
+	}
+	size, err := strconv.Atoi(strings.TrimSpace(header[1:]))
 	if err != nil {
-		tb.Fatal(err)
+		tb.Fatalf("INFO reply size %q: %v", header, err)
 	}
-	// First Eval is EVALSHA NOSCRIPT then EVAL; later Evals are one EVALSHA, like a warm engine.
-	if _, err := limiter.Allow(context.Background(), "warm-up"); err != nil {
-		tb.Fatal(err)
+	body := make([]byte, size+2)
+	if _, err := io.ReadFull(reader, body); err != nil {
+		tb.Fatalf("INFO reply body: %v", err)
 	}
-	return limiter, fake
+	var total int64
+	for _, line := range strings.Split(string(body), "\n") {
+		name, stats, found := strings.Cut(strings.TrimSpace(line), ":")
+		if !found {
+			continue
+		}
+		switch strings.ToLower(name) {
+		case "cmdstat_eval", "cmdstat_evalsha", "cmdstat_get", "cmdstat_mget":
+		default:
+			continue
+		}
+		calls, _, _ := strings.Cut(stats, ",")
+		count, err := strconv.ParseInt(strings.TrimPrefix(calls, "calls="), 10, 64)
+		if err != nil {
+			tb.Fatalf("INFO %s: %v", line, err)
+		}
+		total += count
+	}
+	return total
 }
 
-// reportRedisCmdsPerOp reports the fake's served commands since startCommands divided by b.N.
-func reportRedisCmdsPerOp(b *testing.B, fake *testFakeRedis, startCommands int) {
+// reportRoundTripsPerOp reports the engine's round trips since start divided by b.N.
+func reportRoundTripsPerOp(b *testing.B, addr string, start int64) {
 	b.Helper()
-	b.ReportMetric(float64(fake.commandCount()-startCommands)/float64(b.N), "redis-cmds/op")
+	b.ReportMetric(float64(liveBenchRoundTrips(b, addr)-start)/float64(b.N), "redis-roundtrips/op")
 }
 
 // benchStatusSink keeps each timed Allow's Status alive so the compiler cannot drop building it.
@@ -138,59 +167,76 @@ func BenchmarkMemoryAllow(b *testing.B) {
 	})
 }
 
-// BenchmarkRedisAllow measures Redis Allow against the in-process fake with a warm script cache: one hot key, 10k rotating keys, and a hot key from parallel goroutines.
+// BenchmarkRedisAllow measures Redis Allow against each live engine (TOKENBUCKET_LIVE_*): one hot key, 10k rotating keys,
+// and a hot key from parallel goroutines. It skips under -short or when no engine address is set. Keys carry a per-run prefix.
 func BenchmarkRedisAllow(b *testing.B) {
 	ctx := context.Background()
-	b.Run("hot-key", func(b *testing.B) {
-		limiter, fake := newBenchRedis(b)
-		b.ReportAllocs()
-		b.ResetTimer()
-		startCommands := fake.commandCount()
-		for i := 0; i < b.N; i++ {
-			status, err := limiter.Allow(ctx, benchHotKey)
+	for _, engine := range liveEngineAddrs(b) {
+		engine := engine
+		b.Run(engine.name, func(b *testing.B) {
+			client := waitLiveClient(b, engine.addr)
+			limiter, err := NewRedis(client, benchRate, benchBurst, benchMaxDelay, benchTTL)
 			if err != nil {
 				b.Fatal(err)
 			}
-			benchStatusSink = status
-		}
-		b.StopTimer()
-		reportRedisCmdsPerOp(b, fake, startCommands)
-	})
-	b.Run("rotating-10k", func(b *testing.B) {
-		limiter, fake := newBenchRedis(b)
-		keys := benchKeyNames("ip:", benchRotatingKeys)
-		for _, key := range keys {
-			if _, err := limiter.Allow(ctx, key); err != nil {
-				b.Fatal(err)
-			}
-		}
-		b.ReportAllocs()
-		b.ResetTimer()
-		startCommands := fake.commandCount()
-		for i := 0; i < b.N; i++ {
-			status, err := limiter.Allow(ctx, keys[i%len(keys)])
-			if err != nil {
-				b.Fatal(err)
-			}
-			benchStatusSink = status
-		}
-		b.StopTimer()
-		reportRedisCmdsPerOp(b, fake, startCommands)
-	})
-	b.Run("hot-key-parallel", func(b *testing.B) {
-		limiter, fake := newBenchRedis(b)
-		b.ReportAllocs()
-		b.ResetTimer()
-		startCommands := fake.commandCount()
-		b.RunParallel(func(pb *testing.PB) {
-			for pb.Next() {
-				if _, err := limiter.Allow(ctx, benchHotKey); err != nil {
-					b.Error(err)
-					return
+			runPrefix := "tokenbucket-bench:" + strconv.FormatInt(time.Now().UnixNano(), 36) + ":"
+			b.Run("hot-key", func(b *testing.B) {
+				hotKey := runPrefix + benchHotKey
+				if _, err := limiter.Allow(ctx, hotKey); err != nil {
+					b.Fatal(err)
 				}
-			}
+				b.ReportAllocs()
+				start := liveBenchRoundTrips(b, engine.addr)
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					status, err := limiter.Allow(ctx, hotKey)
+					if err != nil {
+						b.Fatal(err)
+					}
+					benchStatusSink = status
+				}
+				b.StopTimer()
+				reportRoundTripsPerOp(b, engine.addr, start)
+			})
+			b.Run("rotating-10k", func(b *testing.B) {
+				keys := benchKeyNames(runPrefix+"ip:", benchRotatingKeys)
+				for _, key := range keys {
+					if _, err := limiter.Allow(ctx, key); err != nil {
+						b.Fatal(err)
+					}
+				}
+				b.ReportAllocs()
+				start := liveBenchRoundTrips(b, engine.addr)
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					status, err := limiter.Allow(ctx, keys[i%len(keys)])
+					if err != nil {
+						b.Fatal(err)
+					}
+					benchStatusSink = status
+				}
+				b.StopTimer()
+				reportRoundTripsPerOp(b, engine.addr, start)
+			})
+			b.Run("hot-key-parallel", func(b *testing.B) {
+				hotKey := runPrefix + "parallel:" + benchHotKey
+				if _, err := limiter.Allow(ctx, hotKey); err != nil {
+					b.Fatal(err)
+				}
+				b.ReportAllocs()
+				start := liveBenchRoundTrips(b, engine.addr)
+				b.ResetTimer()
+				b.RunParallel(func(pb *testing.PB) {
+					for pb.Next() {
+						if _, err := limiter.Allow(ctx, hotKey); err != nil {
+							b.Error(err)
+							return
+						}
+					}
+				})
+				b.StopTimer()
+				reportRoundTripsPerOp(b, engine.addr, start)
+			})
 		})
-		b.StopTimer()
-		reportRedisCmdsPerOp(b, fake, startCommands)
-	})
+	}
 }

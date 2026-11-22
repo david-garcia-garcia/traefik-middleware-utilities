@@ -141,7 +141,7 @@ Traefik Hub `DistributedRateLimit` (commercial; only its documentation was read,
 
 ### Benchmarks
 
-Each number is the time one rate-limit check takes inside the library: one `tokenbucket` `Allow` or one `windowcounter` `Take`, the call a middleware makes per request before it forwards or rejects it. Traefik, HTTP, and the backend are not included.
+Each number is the time one rate-limit check takes inside the library: one `tokenbucket` `Allow` or one `windowcounter` `Take`, the call a middleware makes per request before it forwards or rejects it. When the configuration uses Redis, the time includes the round trips to a real Redis server. Traefik, HTTP, and the backend are not included.
 
 Every configuration runs in both deployment modes, from the same source:
 
@@ -153,39 +153,50 @@ Two traffic patterns:
 - **1 client**: every request carries the same key, as when one IP sends all the traffic.
 - **10,000 clients**: requests cycle through 10,000 keys, all seen before the timing starts.
 
-| Configuration | Traffic | Compiled | Yaegi | Redis commands per request (compiled / Yaegi) |
+Against Redis 7.4:
+
+| Configuration | Traffic | Compiled | Yaegi | Redis round trips per request (compiled / Yaegi) |
 |---|---|---:|---:|---:|
-| `tokenbucket.NewMemory` | 1 client | 35 ns | 8.8 µs | 0 |
-| `tokenbucket.NewMemory` | 10,000 clients | 39 ns | 9.2 µs | 0 |
-| `tokenbucket.NewRedis` | 1 client | 23 µs | 161 µs | 1 |
-| `tokenbucket.NewRedis` | 10,000 clients | 24 µs | 189 µs | 1 |
-| `windowcounter`, `sync_rate` 0 | 1 client | 52 µs | 214 µs | 2 |
-| `windowcounter`, `sync_rate` 0 | 10,000 clients | 48 µs | 269 µs | 2 |
-| `windowcounter`, `sync_rate` 20 ms | 1 client | 218 ns | 20 µs | ~0 |
-| `windowcounter`, `sync_rate` 20 ms | 10,000 clients | 40 µs | 280 µs | 2 / 2 |
-| `windowcounter`, `sync_rate` 1 s | 1 client | 249 ns | 15 µs | ~0 |
-| `windowcounter`, `sync_rate` 1 s | 10,000 clients | 524 ns | 231 µs | 0.009 / 2 |
+| `tokenbucket.NewMemory` | 1 client | 72 ns | 9.2 µs | 0 |
+| `tokenbucket.NewMemory` | 10,000 clients | 90 ns | 9.2 µs | 0 |
+| `tokenbucket.NewRedis` | 1 client | 70 µs | 219 µs | 1 |
+| `tokenbucket.NewRedis` | 10,000 clients | 63 µs | 211 µs | 1 |
+| `windowcounter`, `sync_rate` 0 | 1 client | 103 µs | 291 µs | 2 |
+| `windowcounter`, `sync_rate` 0 | 10,000 clients | 106 µs | 313 µs | 2 |
+| `windowcounter`, `sync_rate` 20 ms | 1 client | 284 ns | 15 µs | ~0 |
+| `windowcounter`, `sync_rate` 20 ms | 10,000 clients | 105 µs | 385 µs | 2 / 2 |
+| `windowcounter`, `sync_rate` 1 s | 1 client | 284 ns | 15 µs | ~0 |
+| `windowcounter`, `sync_rate` 1 s | 10,000 clients | 4.7 µs (3.1 to 7.5 µs across runs) | 318 µs | 0.09 / 2 |
+
+The same Redis-backed rows on each supported engine, compiled / Yaegi:
+
+| Configuration | Traffic | Redis 7.4 | Dragonfly 1.40.2 | Valkey 9.0.1 |
+|---|---|---:|---:|---:|
+| `tokenbucket.NewRedis` | 1 client | 70 / 219 µs | 64 / 212 µs | 63 / 214 µs |
+| `tokenbucket.NewRedis` | 10,000 clients | 63 / 211 µs | 102 / 285 µs | 63 / 199 µs |
+| `windowcounter`, `sync_rate` 0 | 1 client | 103 / 291 µs | 167 / 364 µs | 101 / 297 µs |
+| `windowcounter`, `sync_rate` 0 | 10,000 clients | 106 / 313 µs | 169 / 407 µs | 103 / 301 µs |
+| `windowcounter` buffered flush of 1,000 keys (background, every `sync_rate`, 4 round trips) | — | 1.7 / 12.6 ms | 58 / 70 ms | 1.4 / 11.8 ms |
 
 How to read it:
 
-- **Redis rows measure a local round trip, not your network.** They talk over TCP loopback to an in-process fake Redis on the same machine. In production, add your network round trip for each Redis command, so the last column is the one to compare across setups.
-- **Buffered `windowcounter` stays local only while a key comes back before the next flush.** A `Take` on a key that has had no hit since the last flush reads Redis (2 commands), like `sync_rate` 0. In the 10,000-client rows that depends on how fast the loop cycles through the keys: compiled at 1 s each key comes back every ~5 ms and stays local; at 20 ms, or under Yaegi, the cycle takes longer than `sync_rate` and every `Take` reads Redis. In production the deciding factor is requests per key per `sync_rate`, not CPU.
+- **Redis rows include a real network round trip.** The engine runs in its own container and the benchmark in another, on the same Docker network. One `PING` between them takes about 35 µs on average (`redis-benchmark`, one client). If your Traefik-to-Redis round trip is longer, each round trip in the last column costs that much more.
+- **Buffered `windowcounter` stays local only while a key comes back before the next flush.** A `Take` on a key with no hit since the last flush reads Redis (2 round trips), like `sync_rate` 0. In the 10,000-client rows that depends on how fast the benchmark cycles through the keys: compiled at 1 s most keys come back in time, so the cost varies from run to run; at 20 ms, under Yaegi, or on Dragonfly, almost every `Take` reads Redis. In production the deciding factor is requests per key per `sync_rate`, not CPU.
+- **Dragonfly flushes slowly.** A 1,000-key flush took 58 ms on Dragonfly against 1.4 to 1.7 ms on Redis and Valkey, longer than a 20 ms `sync_rate`. Measured, not explained here.
 - **Limits.** The token bucket runs at 1000 req/s with a burst of 100, so in the 1-client rows the bucket is empty after about 100 calls and most calls are denied. The window counter limit is never reached, so every `Take` is admitted.
+- **One more in-process cost.** In `tokenbucket.NewMemory`, a new client while 65,536 clients are live evicts one: 182 ns compiled, 14 µs under Yaegi.
 
-Costs outside the per-request path above:
-
-| What | Compiled | Yaegi |
-|---|---:|---:|
-| `tokenbucket.NewMemory`, a new client while 65,536 clients are live (evicts one) | 176 ns | 14 µs |
-| `windowcounter` buffered flush of 1,000 keys (runs in the background every `sync_rate`; 4 Redis commands) | 0.69 ms | 10.8 ms |
-
-Measured on 2026-11-22 on an Intel Core Ultra 7 265K (20 threads), Windows 11, `go1.25.6 windows/amd64`. Each value is the median of five runs of:
+Measured on 2026-11-22 on an Intel Core Ultra 7 265K (20 threads), Windows 11 with Docker Desktop (WSL2). Go `go1.25.6 linux/amd64` ran in a `golang:1.25.6` container; each engine ran in its own container and served only the benchmark. Each value is the median of five runs. To reproduce:
 
 ```text
-go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
+docker network create tmu-bench
+docker run -d --name tmu-bench-redis --network tmu-bench redis:7-alpine
+docker run --rm --network tmu-bench -v "$PWD:/src" -w /src \
+  -e TOKENBUCKET_LIVE_REDIS=tmu-bench-redis:6379 -e WINDOWCOUNTER_LIVE_REDIS=tmu-bench-redis:6379 \
+  golang:1.25.6 go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
 ```
 
-Compiled rows are `BenchmarkMemoryAllow`, `BenchmarkRedisAllow`, `BenchmarkTake`, and `BenchmarkFlush`; Yaegi rows are the `BenchmarkYaegi*` twins, which run the same code inside one interpreter `Eval` per timed loop. The suite also has parallel-goroutine variants (compiled only) and `BenchmarkLiveRedisAllow` / `BenchmarkLiveTake`, which run against a real Redis, Dragonfly, or Valkey when `TOKENBUCKET_LIVE_*` / `WINDOWCOUNTER_LIVE_*` are set; neither is in the tables. CI compiles the benchmarks but does not run them.
+Add `*_LIVE_DRAGONFLY` / `*_LIVE_VALKEY` for the other engines. Without any `*_LIVE_*` address, the Redis benchmarks skip and only the in-process ones run. Compiled rows are `BenchmarkMemoryAllow`, `BenchmarkRedisAllow`, `BenchmarkTake`, and `BenchmarkFlush`; Yaegi rows are the `BenchmarkYaegi*` twins, which run the same code inside one interpreter `Eval` per timed loop. Round trips are counted on the engine: the `EVAL`, `EVALSHA`, `GET`, and `MGET` calls in `INFO commandstats` (the limiter scripts never call `GET` or `MGET` inside the engine). The suite also has parallel-goroutine variants (compiled only), which are not in the tables. CI compiles the benchmarks but does not run them.
 
 ## Backend backoff
 
@@ -307,7 +318,7 @@ go test ./...                # also Go E2E for each *_LIVE_REDIS / *_LIVE_DRAGON
 
 Go E2E files are `{domain}_e2e_test.go` next to that domain (`zzz_commands_e2e_test.go`, `zzz_limiter_e2e_test.go`). They skip under `-short` or when no live addr is set. Each addr that is set runs that engine. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`, Valkey `:6385`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_<ENGINE>_AUTH` (`:6381` / `:6382` / `:6386`). `backendbackoff/` and `iplookup/` have no store and no `*_LIVE_*` var.
 
-The rate limiter benchmarks (`zzz_bench_test.go`, `zzz_bench_yaegi_test.go`, `zzz_bench_e2e_test.go` in `tokenbucket/` and `windowcounter/`) compile in CI but do not run there; the command and the results are in `## Rate limiters compared`.
+The rate limiter benchmarks (`zzz_bench_test.go`, `zzz_bench_yaegi_test.go` in `tokenbucket/` and `windowcounter/`) compile in CI but do not run there. The Redis ones need a live engine from the same `*_LIVE_*` vars; the command and the results are in `## Rate limiters compared`.
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines, 2m timeout, `TestAlloc*` run), unit `go test -race -short` (no engines, 10m timeout), Go E2E Redis (`go test` with Redis 7, no `-race`), Go E2E Dragonfly (`go test` with Dragonfly, no `-race`), Go E2E Valkey (`go test` with Valkey 9, no `-race`), Pester reclaim (`Integration Tests`), and Pester SimpleRedis plus rate limiters on Redis, Dragonfly, and Valkey on every pull request and on pushes to `master`.
 
