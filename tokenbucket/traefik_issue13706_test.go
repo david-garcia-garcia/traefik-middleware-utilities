@@ -10,6 +10,9 @@ const burst13706 = int64(3)
 
 const key13706 = "client-1"
 
+// ttl13706 is long enough that Redis EXPIRE (server wall clock, not the frozen Allow now) cannot drop the key mid-test.
+const ttl13706 = 120 * time.Second
+
 // countAdmits13706 calls allow until a deny and returns how many Status.Allowed were true.
 // attempts is a cap so a limiter that never denies cannot loop forever.
 func countAdmits13706(t *testing.T, attempts int, allow func() (Status, error)) int {
@@ -32,7 +35,7 @@ func countAdmits13706(t *testing.T, attempts int, allow func() (Status, error)) 
 // newFrozenMemory13706 builds a Memory with maxDelay 0 and a frozen clock so refill cannot hide the burst cap.
 func newFrozenMemory13706(t *testing.T, now time.Time) *Memory {
 	t.Helper()
-	limiter, err := NewMemory(1, burst13706, 0, testTTL)
+	limiter, err := NewMemory(1, burst13706, 0, ttl13706)
 	if err != nil {
 		t.Fatal(err)
 	}

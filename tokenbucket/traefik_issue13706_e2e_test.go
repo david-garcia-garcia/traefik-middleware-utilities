@@ -47,7 +47,7 @@ func runTraefik13706LiveShare(t *testing.T, addr string) {
 // newFrozenRedis13706 builds a live Redis limiter with maxDelay 0 and a frozen clock so refill cannot hide the burst cap.
 func newFrozenRedis13706(t *testing.T, addr string, now time.Time) *Redis {
 	t.Helper()
-	limiter, err := NewRedis(waitLiveClient(t, addr), 1, burst13706, 0, testTTL)
+	limiter, err := NewRedis(waitLiveClient(t, addr), 1, burst13706, 0, ttl13706)
 	if err != nil {
 		t.Fatal(err)
 	}
