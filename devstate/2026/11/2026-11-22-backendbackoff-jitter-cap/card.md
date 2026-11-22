@@ -20,7 +20,7 @@ Priority: P1 — production replica probes lockstep at MaxCooldown today, a wron
 In progress. 0 items remain.
 
 Priority: P1 — production replica probes lockstep at MaxCooldown today, a wrong jitter contract
-Reviewed head: d19ca18a
+Reviewed head: f77df5c8
 Owner decision: None.
 
 ## Review scores
@@ -43,7 +43,10 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_backendbackoff_cooldown](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-jitter-cap/openspec/changes/backendbackoff-jitter-below-cap/proposal.md) — modified
+- [std_go_backendbackoff_cooldown](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-jitter-cap/openspec/changes/archive/2026-11-22-backendbackoff-jitter-below-cap/proposal.md) — modified
+
+Completed:
+- [std_go_backendbackoff_cooldown](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-jitter-cap/openspec/specs/std_go_backendbackoff_cooldown/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -77,9 +80,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | d19ca18a6ad4752c1338a59b58a853284ec00a23 | Card must match the branch you measured |
+| Reviewed head | f77df5c891d06e54d9c5afa5b091b2442000bdce | Card must match the branch you measured |
 
 ### Stored data model
 None.
