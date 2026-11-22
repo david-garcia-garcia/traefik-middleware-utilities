@@ -69,8 +69,8 @@ Hechos de fuera: informe de caza §2 `iplookup` (solo lectura); research `ext_tr
 
 - Q: Cuánto cuestan la carga y Contains en Yaegi de una representación nueva?
   Rank: additive asked — medición de una representación que este cambio introduciría; Desired nombra medir compilado y Yaegi (tiempo de carga y Contains)
-  Decision: assumed — este reproduce y la tabla de caza son solo compilados (`go test` en `go1.25.6`). El `zzz_helper_yaegi_test.go` existente prueba roundtrips de contrato, no una carga de 100k prefijos. No afirmar una victoria Yaegi a partir de 89 ms / 1.072 s / 291 ms de carga ni de 106 ns / 51 ns de Contains compilados. Medir los dos motores cuando propose elija una forma.
-  By: explore
+  Decision: resolved — host maps + trie, IPv6 key `[16]byte` (Yaegi v0.16.1 lo aceptó). 100k hosts, `go test -bench` en esta máquina. Compilado load IPv4 13.0 ms (dest 89–92 ms), IPv6 25.2 ms (dest 291 ms). Compilado Contains IPv4 hit 14.07 ns / miss 20.96 ns; IPv6 hit 31.97 ns / miss 29.86 ns (dest IPv6 hit 106 ns / miss 51 ns). Yaegi load IPv4 1.36 s, IPv6 1.48 s. Yaegi Contains IPv4 hit 7769 ns / miss 14936 ns; IPv6 hit 6654 ns / miss 9602 ns. Memoria HeapInuse 100k: IPv4 12.6 B/prefix (dest HeapAlloc 748), IPv6 28.2 B/prefix (dest 4,952).
+  By: implement
 
 - Q: Cuál es la latencia de Contains a 100k IPv6 /128?
   Rank: additive asked — no cambia un contrato existente; Desired nombra que la latencia de lookup no debe regresar de forma material; Unknowns del requirement la daban por no medida

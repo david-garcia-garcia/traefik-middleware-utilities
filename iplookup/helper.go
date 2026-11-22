@@ -1,5 +1,5 @@
 // Package iplookup is a Yaegi-safe CIDR store. IPv4 and IPv6 prefixes live on
-// separate trees so a prefix cannot match the other family.
+// separate family stores so a prefix cannot match the other family.
 package iplookup
 
 import (
@@ -13,29 +13,23 @@ import (
 // Helper stores CIDR prefixes and returns the winning longest-prefix match.
 // Callers pass net.IP they already selected; Helper does not read HTTP.
 type Helper struct {
-	mu       sync.RWMutex
-	ipv4Tree *ipRadixTree
-	ipv6Tree *ipRadixTree
-	count    int
+	mu     sync.RWMutex
+	ipv4   ipv4Store
+	ipv6   ipv6Store
+	labels labelTable
+	count  int
 }
 
 // New returns an empty Helper.
 func New() *Helper {
 	return &Helper{
-		ipv4Tree: newIPRadixTree(),
-		ipv6Tree: newIPRadixTree(),
+		ipv4:   newIPv4Store(),
+		ipv6:   newIPv6Store(),
+		labels: newLabelTable(),
 	}
 }
 
-// treeFor returns the IPv4 tree when ip is IPv4 (including IPv4-mapped IPv6).
-func (h *Helper) treeFor(ip net.IP) *ipRadixTree {
-	if ip.To4() != nil {
-		return h.ipv4Tree
-	}
-	return h.ipv6Tree
-}
-
-// AddCIDR stores cidr on the family tree for that network.
+// AddCIDR stores cidr on the family store for that network.
 // A second store of the same canonical prefix replaces metadata and does not bump Count.
 func (h *Helper) AddCIDR(cidr, metadata string) error {
 	_, block, err := net.ParseCIDR(cidr)
@@ -44,7 +38,7 @@ func (h *Helper) AddCIDR(cidr, metadata string) error {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.treeFor(block.IP).insert(block, metadata) {
+	if h.insert(block, metadata) {
 		h.count++
 	}
 	return nil
@@ -92,7 +86,7 @@ func (h *Helper) RemoveCIDR(cidr string) (removed bool, err error) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if !h.treeFor(block.IP).remove(block) {
+	if !h.remove(block) {
 		return false, nil
 	}
 	h.count--
@@ -106,16 +100,17 @@ func (h *Helper) Contains(ipAddr net.IP) (found bool, prefixLen int, metadata st
 	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	found, prefixLen, metadata = h.treeFor(ipAddr).contains(ipAddr)
+	found, prefixLen, metadata = h.lookup(ipAddr)
 	return found, prefixLen, metadata, nil
 }
 
-// Reset drops every stored prefix on both family trees.
+// Reset drops every stored prefix on both family stores.
 func (h *Helper) Reset() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	h.ipv4Tree = newIPRadixTree()
-	h.ipv6Tree = newIPRadixTree()
+	h.ipv4 = newIPv4Store()
+	h.ipv6 = newIPv6Store()
+	h.labels = newLabelTable()
 	h.count = 0
 }
 
@@ -124,4 +119,29 @@ func (h *Helper) Count() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.count
+}
+
+// insert stores block on the IPv4 store when the network is IPv4 (including
+// IPv4-mapped IPv6), otherwise on the IPv6 store.
+func (h *Helper) insert(block *net.IPNet, metadata string) bool {
+	if block.IP.To4() != nil {
+		return h.ipv4.insert(block, metadata, &h.labels)
+	}
+	return h.ipv6.insert(block, metadata, &h.labels)
+}
+
+// remove drops block from the family store chosen by To4().
+func (h *Helper) remove(block *net.IPNet) bool {
+	if block.IP.To4() != nil {
+		return h.ipv4.remove(block, &h.labels)
+	}
+	return h.ipv6.remove(block, &h.labels)
+}
+
+// lookup is Contains without the nil-IP check or lock.
+func (h *Helper) lookup(ipAddr net.IP) (found bool, prefixLen int, metadata string) {
+	if ipAddr.To4() != nil {
+		return h.ipv4.contains(ipAddr, &h.labels)
+	}
+	return h.ipv6.contains(ipAddr, &h.labels)
 }
