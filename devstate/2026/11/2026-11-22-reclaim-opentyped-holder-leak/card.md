@@ -22,7 +22,7 @@ releaseLease para el AfterFunc cuando hay stop y luego dropOnce. dropOnce, bajo 
 In progress. 0 items remain.
 
 Priority: P2 — fuga real de holders y Close que no corre, radio limitado al mismatch de OpenTyped
-Reviewed head: 6c8a0d23
+Reviewed head: c1750eb4
 Owner decision: None.
 
 ## Review scores
@@ -81,7 +81,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 6c8a0d23bd9146f0e92438a423bd6d5dbabb8698 | Card must match the branch you measured |
+| Reviewed head | c1750eb4871e40d2526abf2c2084fee27f257955 | Card must match the branch you measured |
 
 ### Stored data model
 None.
