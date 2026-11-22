@@ -29,17 +29,17 @@ El cliente vivo usa `waitLiveClient14328` local (`PoolSize` 16, `MaxIdleConns` 1
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: P3 — tests y spec cubren un hueco de prueba, sin daño actual a operadores ni usuarios
-Reviewed head: a25e493c
+Reviewed head: ceb2f501
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996996190 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -49,7 +49,7 @@ Owner decision: None.
 | Branch | 2026-11-22-tokenbucket-concurrent-first-requests pushed | `git` |
 | OpenSpec | tokenbucket-concurrent-first-requests | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/110 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
+| CI | build 44996996190 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996996190 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996996190 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -71,7 +71,7 @@ Completed:
 None.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-concurrent-first-requests on branch 2026-11-22-tokenbucket-concurrent-first-requests targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/110; CI not seen.
+Ticket 2026-11-22-tokenbucket-concurrent-first-requests on branch 2026-11-22-tokenbucket-concurrent-first-requests targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/110; CI build 44996996190 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996996190.
 
 ## Explore Decisions
 None.
@@ -97,7 +97,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | a25e493c1d29dd00115d7df7eb83e9776f6b9cbc | Card must match the branch you measured |
+| Reviewed head | ceb2f5011a7b8e4cbf771a5fc784284e6ae0c019 | Card must match the branch you measured |
 
 ### Stored data model
 None.
