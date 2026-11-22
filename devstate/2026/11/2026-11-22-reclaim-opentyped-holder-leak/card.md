@@ -17,8 +17,8 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 950d9772
-Owner decision: None.
+Reviewed head: 72ccdd56
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -51,7 +51,10 @@ None.
 Ticket 2026-11-22-reclaim-opentyped-holder-leak on branch 2026-11-22-reclaim-opentyped-holder-leak targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/123; CI not seen.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| ¿Qué mecanismo cumple el efecto (soltar el holder tras el assert, comprobar el tipo antes de bind, o un híbrido)? | additive incidental — las tres opciones caben en la ruta de mismatch de `OpenTyped` (firma pública igual; 0 callers de producto in-tree); Out of scope dice que elegir el mecanismo no es un requisito de producto extra | assumed — deferred to tech-lead propose; esta fase lista las alternativas con evidencia y no elige seam. | explore |
+
 
 ## Findings
 None.
@@ -66,7 +69,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 950d9772c30623afe6c408ed799d51ab46c3a05c | Card must match the branch you measured |
+| Reviewed head | 72ccdd56ca00e201d1afd20d4acd3b4e99cbeffe | Card must match the branch you measured |
 
 ### Stored data model
 None.
