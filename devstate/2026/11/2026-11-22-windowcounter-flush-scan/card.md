@@ -14,17 +14,17 @@ Not yet.
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: e52521dd
+Reviewed head: eff6a3b2
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013236614 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -34,8 +34,8 @@ Owner decision: None.
 | Branch | 2026-11-22-windowcounter-flush-scan pushed | `git` |
 | OpenSpec | windowcounter-flush-dirty-index | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/120 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 45013236614 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013236614 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013236614 |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
@@ -48,7 +48,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-windowcounter-flush-scan on branch 2026-11-22-windowcounter-flush-scan targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/120; CI not seen.
+Ticket 2026-11-22-windowcounter-flush-scan on branch 2026-11-22-windowcounter-flush-scan targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/120; CI build 45013236614 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013236614.
 
 ## Explore Decisions
 None.
@@ -66,7 +66,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | e52521dde5f66b24a99d8fe21b0b50bec867ce3f | Card must match the branch you measured |
+| Reviewed head | eff6a3b23c802626329894b0ba78b6b84b92d0fc | Card must match the branch you measured |
 
 ### Stored data model
 None.
