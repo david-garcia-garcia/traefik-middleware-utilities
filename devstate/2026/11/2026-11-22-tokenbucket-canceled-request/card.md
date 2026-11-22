@@ -22,7 +22,7 @@ Sin cambio de comportamiento de `Allow`. Se amplía el GoDoc de `Memory.Allow` (
 Ready for review. 0 items remain.
 
 Priority: P3 — documentación y tests, sin daño actual a usuarios u operadores
-Reviewed head: 1805e384
+Reviewed head: 071602b3
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -75,14 +75,14 @@ None.
 [Test coverage](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-canceled-request/devstate/2026/11/2026-11-22-tokenbucket-canceled-request/codereview_coverage.md) — 0 total, 0 pending, 0 completed
 
 
-## Review details
+## Agent review details
 
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 1805e384ef242555528607959ef75d944bd84910 | Card must match the branch you measured |
+| Reviewed head | 071602b3d36dd0f7ca4e0aa8d6ca8b762693fa5b | Card must match the branch you measured |
 
 ### Stored data model
 None.
