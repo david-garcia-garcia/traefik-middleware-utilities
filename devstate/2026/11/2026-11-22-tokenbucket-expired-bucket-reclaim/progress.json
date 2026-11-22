@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-tokenbucket-expired-bucket-reclaim",
+  "jobName": "2026-11-22-tokenbucket-expired-bucket-reclaim",
+  "startedAt": "2026-11-22T06:42:05.178Z",
+  "phases": {
+    "prepare": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "explore": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "propose": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "implement": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "codereview": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "devdocsimpact": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "archive": {
+      "work": false,
+      "card": false,
+      "at": null
+    },
+    "pullrequest": {
+      "work": false,
+      "card": false,
+      "at": null
+    }
+  }
+}
