@@ -79,13 +79,21 @@ func BenchmarkYaegiMemoryAllow(b *testing.B) {
 	})
 }
 
-// BenchmarkYaegiRedisAllow measures interpreted Redis Allow on one hot key against the fake with a warm script cache.
+// BenchmarkYaegiRedisAllow measures interpreted Redis Allow against the fake with a warm script cache: one hot key and
+// 10k rotating keys, each Allowed once during setup, untimed.
 func BenchmarkYaegiRedisAllow(b *testing.B) {
 	b.Run("hot-key", func(b *testing.B) {
 		fake, addr := startTestFakeRedis(b)
 		fake.enableScriptCache()
 		runYaegiAllowBench(b, fake, "", func(count int) string {
 			return fmt.Sprintf(`allowbench.RedisHotKeyLoop(%q, %d)`, addr, count)
+		})
+	})
+	b.Run("rotating-10k", func(b *testing.B) {
+		fake, addr := startTestFakeRedis(b)
+		fake.enableScriptCache()
+		runYaegiAllowBench(b, fake, fmt.Sprintf(`allowbench.SetupRedisRotating(%q, %d)`, addr, benchRotatingKeys), func(count int) string {
+			return fmt.Sprintf(`allowbench.RedisRotatingLoop(%d)`, count)
 		})
 	})
 }
@@ -102,9 +110,10 @@ import (
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket"
 )
 
-// benchMemory, benchKeys, and benchNewKeys are the state a Setup function leaves for the timed loop.
+// benchMemory, benchRedis, benchKeys, and benchNewKeys are the state a Setup function leaves for the timed loop.
 var (
 	benchMemory  *tokenbucket.Memory
+	benchRedis   *tokenbucket.Redis
 	benchKeys    []string
 	benchNewKeys int
 )
@@ -178,6 +187,35 @@ func MemoryHotKeyLoop(count int) string {
 	ctx := context.Background()
 	for i := 0; i < count; i++ {
 		if _, err := limiter.Allow(ctx, "ip:1.2.3.4"); err != nil {
+			return "allow:" + err.Error()
+		}
+	}
+	return "ok"
+}
+
+// SetupRedisRotating builds a Redis limiter and Allows keys ip:0..ip:(count-1) once each for RedisRotatingLoop.
+func SetupRedisRotating(host string, count int) string {
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "client:" + err.Error()
+	}
+	limiter, err := tokenbucket.NewRedis(client, 1000, 100, 5*time.Millisecond, 2*time.Second)
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	benchRedis = limiter
+	benchKeys = make([]string, count)
+	for i := range benchKeys {
+		benchKeys[i] = "ip:" + strconv.Itoa(i)
+	}
+	return RedisRotatingLoop(count)
+}
+
+// RedisRotatingLoop runs count Redis Allow calls over the stored keys in turn.
+func RedisRotatingLoop(count int) string {
+	ctx := context.Background()
+	for i := 0; i < count; i++ {
+		if _, err := benchRedis.Allow(ctx, benchKeys[i%len(benchKeys)]); err != nil {
 			return "allow:" + err.Error()
 		}
 	}
