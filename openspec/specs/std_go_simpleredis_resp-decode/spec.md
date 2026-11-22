@@ -103,7 +103,7 @@ Compiled tests in `simpleredis/` SHALL prove a held `+` or `:` slice stays corre
 - **AND** a test fails if an unterminated stream that fills the buffer is decoded or if more than 4096 bytes were consumed from the peer
 
 ### Requirement: Decode allocation benches exist
-`simpleredis/bench_test.go` SHALL include `BenchmarkDecodeBulk`, `BenchmarkDecodeArray10`, and `BenchmarkDecodeInteger` against compiled fake RESP. Those benches MUST NOT dial live Redis or Dragonfly.
+`simpleredis/zzz_bench_test.go` SHALL include `BenchmarkDecodeBulk`, `BenchmarkDecodeArray10`, and `BenchmarkDecodeInteger` against compiled fake RESP. Those benches MUST NOT dial live Redis or Dragonfly.
 
 #### Scenario: Named decode benches compile
 - **WHEN** `go test ./simpleredis/ -bench=BenchmarkDecode -benchmem` runs

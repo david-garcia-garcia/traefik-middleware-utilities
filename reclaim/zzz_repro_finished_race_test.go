@@ -82,7 +82,7 @@ func TestRepro_FinishedReadRacesReset(t *testing.T) {
 // finished before dropWhenDone reads it, the watcher is started with a nil channel: waitCtx then
 // selects on nil forever and only cancellation can stop it. A holder that is never canceled
 // therefore polls for the life of the process even though its incarnation has already ended,
-// which is the leak repro_nildone_watcher_test.go says is fixed.
+// which is the leak zzz_repro_nildone_watcher_test.go says is fixed.
 func TestRepro_FinishedReadRaceLeaksWatcher(t *testing.T) {
 	const keys = 20
 	const slack = 2

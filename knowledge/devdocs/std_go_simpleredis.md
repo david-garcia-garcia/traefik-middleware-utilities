@@ -70,27 +70,27 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `simpleredis/commands_eval.go` — Eval (EVALSHA, NOSCRIPT → EVAL)
 - `simpleredis/commands_msetex.go` — MSetEX / MSetEXAt, capability cache
 - `simpleredis/resp.go` — RESP codec
-- `simpleredis/peer_drop_all_test.go` — sequential Gets after every accepted socket is dropped
-- `simpleredis/pool_e2e_test.go` — live pool wait, SELECT 99, WRONGPASS, CLIENT KILL recover
-- `simpleredis/commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go` — live verbs
-- `simpleredis/simpleredis_e2e_test.go` — skip/fail harness
-- `simpleredis/yaegi_e2e_test.go` — interpreted live verbs
-- `simpleredis/bench_test.go` — encode/decode benches and CI alloc guards
-- `simpleredis/interpretedcost_test.go` — asserting Yaegi conversion matrix, copy-vs-unsafe benches, and Yaegi encode cost
-- `simpleredis/yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval/MSetEX; live LiveVerbs is the full public set
-- `simpleredis/yaegi_defer_test.go` — interpreted defer runs on panic (evidence that overturns PR #29)
-- `simpleredis/panic_safety_test.go` — recovered panic inside `do` returns the turn and closes the socket
-- `simpleredis/yaegi_errorpath_test.go` — interpreted dial-retry, stall timeout, cancel-mid-command, pool wait, truncated bulk
-- `simpleredis/pool_test.go` — in-use-turn semaphore: FIFO hand-off, wait woken by cancel, `PoolTimeout` as pool wait, grant/abandon race keeps the semaphore balanced, over-free
-- `simpleredis/repro_yaegi_select_crosstalk_test.go`, `simpleredis/repro_yaegi_select_probe_test.go` — Yaegi shared-`select` probes (`TestReproSelect_*`): compiled control and interpreted regression for `waitUntil`, the borrow wait, two pools, and a saturated Get
-- `simpleredis/chaos_pool_test.go` — chaos mix: no cross-key Get, at-rest turns, `OverFrees() == 0`, settled open sockets
-- `simpleredis/lifecycle_test.go` — New/use/Close cycles and Close during held Gets
-- `simpleredis/commands_msetex_concurrent_test.go` — concurrent unknown-command MSetEX fallback
-- `simpleredis/resp_injection_test.go` — CRLF and inline PING round-trip as data
-- `simpleredis/BUGS.md` — hunt record: handshake matcher under Yaegi; interpreted defer-on-panic proof (`yaegi_defer_test.go`); desync eviction. Rejected rows name the locking test
-- `simpleredis/slog_test.go` — capturing slog handler, site lines, secrets
-- `simpleredis/tls_test.go`, `simpleredis/tls_fake_test.go`, `simpleredis/tls_fixture_test.go` — TLS dial and `redis:tls` classification; the in-process TLS fake; the one test certificate generator
-- `simpleredis/yaegi_tls_test.go`, `simpleredis/tls_e2e_test.go` — interpreted TLS + ACL user; live TLS engines (`SIMPLEREDIS_LIVE_*_TLS`)
+- `simpleredis/zzz_peer_drop_all_test.go` — sequential Gets after every accepted socket is dropped
+- `simpleredis/zzz_pool_e2e_test.go` — live pool wait, SELECT 99, WRONGPASS, CLIENT KILL recover
+- `simpleredis/zzz_commands_e2e_test.go`, `zzz_commands_eval_e2e_test.go`, `zzz_commands_msetex_e2e_test.go` — live verbs
+- `simpleredis/zzz_simpleredis_e2e_test.go` — skip/fail harness
+- `simpleredis/zzz_yaegi_e2e_test.go` — interpreted live verbs
+- `simpleredis/zzz_bench_test.go` — encode/decode benches and CI alloc guards
+- `simpleredis/zzz_interpretedcost_test.go` — asserting Yaegi conversion matrix, copy-vs-unsafe benches, and Yaegi encode cost
+- `simpleredis/zzz_yaegi_test.go` — interpreter New/Get/Set/Del/Incr/Eval/MSetEX; live LiveVerbs is the full public set
+- `simpleredis/zzz_yaegi_defer_test.go` — interpreted defer runs on panic (evidence that overturns PR #29)
+- `simpleredis/zzz_panic_safety_test.go` — recovered panic inside `do` returns the turn and closes the socket
+- `simpleredis/zzz_yaegi_errorpath_test.go` — interpreted dial-retry, stall timeout, cancel-mid-command, pool wait, truncated bulk
+- `simpleredis/zzz_pool_test.go` — in-use-turn semaphore: FIFO hand-off, wait woken by cancel, `PoolTimeout` as pool wait, grant/abandon race keeps the semaphore balanced, over-free
+- `simpleredis/zzz_repro_yaegi_select_crosstalk_test.go`, `simpleredis/zzz_repro_yaegi_select_probe_test.go` — Yaegi shared-`select` probes (`TestReproSelect_*`): compiled control and interpreted regression for `waitUntil`, the borrow wait, two pools, and a saturated Get
+- `simpleredis/zzz_chaos_pool_test.go` — chaos mix: no cross-key Get, at-rest turns, `OverFrees() == 0`, settled open sockets
+- `simpleredis/zzz_lifecycle_test.go` — New/use/Close cycles and Close during held Gets
+- `simpleredis/zzz_commands_msetex_concurrent_test.go` — concurrent unknown-command MSetEX fallback
+- `simpleredis/zzz_resp_injection_test.go` — CRLF and inline PING round-trip as data
+- `simpleredis/BUGS.md` — hunt record: handshake matcher under Yaegi; interpreted defer-on-panic proof (`zzz_yaegi_defer_test.go`); desync eviction. Rejected rows name the locking test
+- `simpleredis/zzz_slog_test.go` — capturing slog handler, site lines, secrets
+- `simpleredis/zzz_tls_test.go`, `simpleredis/zzz_tls_fake_test.go`, `simpleredis/zzz_tls_fixture_test.go` — TLS dial and `redis:tls` classification; the in-process TLS fake; the one test certificate generator
+- `simpleredis/zzz_yaegi_tls_test.go`, `simpleredis/zzz_tls_e2e_test.go` — interpreted TLS + ACL user; live TLS engines (`SIMPLEREDIS_LIVE_*_TLS`)
 - `e2e/simpleredisprobe/plugin.go` — Traefik local plugin (`Host`, optional `Password`, `Database`, `DropHost`)
 - `openspec/specs/std_go_simpleredis_tcp-session/spec.md`, `openspec/specs/std_go_simpleredis_resp-commands/spec.md`, `openspec/specs/std_go_simpleredis_slog-events/spec.md`
 - `knowledge/devdocs/std_go_simpleredis_resp-decode.md` — ReadSlice decode, escaping `+`/`:` copies, `parseLen`
@@ -101,7 +101,7 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `New` does not dial. A refusing host is fine until the first command.
 - After `Close`, later commands return `redis:unreachable` and do not redial. Closed-client unreachable is not retried. Call `Close` while a command is in flight: that command may finish; its socket is closed on release, not returned to idle.
 - Live cap is `Config.PoolSize` (`PoolSize()`, const default 8; unused plus in-flight). `New` builds the in-use-turn semaphore (mutex, free count, cap frozen from `PoolSize`, FIFO of waiting borrows). After `New` a `PoolSize` write does not resize. A waiter past `PoolSize` waits `PoolTimeout` (default 200ms), then `redis:unreachable`. Idle trim is `MaxIdleConns` (default 8). Pool wait is not retried. An extra return of an in-use turn when the semaphore is already full does not hang: it is dropped and `OverFrees()` increments. Dest used to park that goroutine forever. Correct accounting stays at `OverFrees() == 0`.
-- Do not treat `len(idleConns)` plus the free in-use turns as a live-socket count. The two reads are not atomic, and `release` publishes into `idleConns` before `freeInUseTurn`, so a releasing socket is counted in both (up to 2× PoolSize). Server-side peak open also over-counts because the serve goroutine exits after the client's `Close`. Assert only at-rest turns (free turns == cap via `inUseTurnsForTest` in `simpleredis/repro_yaegi_select_probe_test.go`, and no queued waiter via `queuedTurnWaiters` in `simpleredis/pool_test.go`) and settled server open ≤ PoolSize. Do not assert peak live sockets.
+- Do not treat `len(idleConns)` plus the free in-use turns as a live-socket count. The two reads are not atomic, and `release` publishes into `idleConns` before `freeInUseTurn`, so a releasing socket is counted in both (up to 2× PoolSize). Server-side peak open also over-counts because the serve goroutine exits after the client's `Close`. Assert only at-rest turns (free turns == cap via `inUseTurnsForTest` in `simpleredis/zzz_repro_yaegi_select_probe_test.go`, and no queued waiter via `queuedTurnWaiters` in `simpleredis/zzz_pool_test.go`) and settled server open ≤ PoolSize. Do not assert peak live sockets.
 - Borrow sweeps idle sockets older than `IdleTimeout` (default 30s) and closes them, including a stale head behind a younger tail that is reused. `New` starts no reaper and no other background goroutine.
 - A fully quiet client that is still reachable keeps those idle sockets until `Close`. Drop the client without `Close` (no remaining references): after GC those sockets are gone. Do not add a reaper or a finalizer to get that.
 - A client that did not come from `New` (`&SimpleRedis{}`) fails the first command immediately with `redis:unreachable` and is not retried.
@@ -138,6 +138,6 @@ if err := client.MSetEX(ctx, []string{"a", "b"}, [][]byte{[]byte("1"), []byte("2
 - `SELECT` out of range is `ERR DB index is out of range`, not `redis:noauth`. A handshake AUTH or SELECT error closes the socket, is not pooled, and is not retried. Peer-close is the unreachable sentinel; AUTH-class is `ErrNoAuth`. Those values match `errors.Is` / `IsUnreachable` under Yaegi (the session does not wrap them in a package-local type).
 - Probe success labels on `/redis` and `/dragonfly` stay host-only (empty password and database). Failure routes `/redis-wrong-password` `/dragonfly-wrong-password` set `Password`; `/redis-database-99` `/dragonfly-database-99` set `Database`.
 - Probe verb paths (`/<engine>/<verb>`) are terminal: HTTP 200 + Redis body or 502 + `err.Error()`. They do not forward to next. Set `CommandTimeout` to 3s on the probe clients so a 500ms TIME-wait Eval is not bound by the default 900ms budget.
-- No `select` statement in session source. Yaegi v0.16.1 keeps one case list per `select` statement and every goroutine running it overwrites that list, so concurrent waits woke on each other's channels: `borrowSocket` returned no socket and no error (Get then panicked in `runOnConn`), in-use turns moved between two clients, and retry backoff woke on another caller's timer. A borrow past `PoolSize` queues a waiter that a give-back grants in place, or that one abandon removes, armed both as `time.AfterFunc(PoolTimeout)` and as `context.AfterFunc(ctx)`; grant and abandon run under the semaphore mutex, so no `sync.Once` is needed and a turn is never lost or handed out twice. `waitUntil` receives on a `context.WithTimeout(ctx, delay)` child's `Done`. Keep the uncontended take and the give-back inline (explicit `Lock`/`Unlock`, no helper method, no `defer`): under Yaegi each interpreted call or defer costs about 1 µs per command. Guard: `TestSessionSourceHasNoSelect`; interpreted behaviour: `TestReproSelect_*_Yaegi` in `simpleredis/repro_yaegi_select_crosstalk_test.go`. Research: `knowledge/research/ext_traefik_plugins_yaegi-select/`.
-- Interpreted `defer` runs under Yaegi v0.16.1 (this module's pin, and Traefik v3.7.11's pin) when the panic is an explicit interpreted panic, the interpreter's own `errors.As` panic on a package-local struct, or a nil-map write. Yaegi converts that panic into an `Eval` error rather than propagating a Go panic outward, but it still unwinds interpreted frames and runs their defers. Do not re-derive PR #29's assumption that a deferred `release` cannot save an in-use turn. Proof: `simpleredis/yaegi_defer_test.go`.
+- No `select` statement in session source. Yaegi v0.16.1 keeps one case list per `select` statement and every goroutine running it overwrites that list, so concurrent waits woke on each other's channels: `borrowSocket` returned no socket and no error (Get then panicked in `runOnConn`), in-use turns moved between two clients, and retry backoff woke on another caller's timer. A borrow past `PoolSize` queues a waiter that a give-back grants in place, or that one abandon removes, armed both as `time.AfterFunc(PoolTimeout)` and as `context.AfterFunc(ctx)`; grant and abandon run under the semaphore mutex, so no `sync.Once` is needed and a turn is never lost or handed out twice. `waitUntil` receives on a `context.WithTimeout(ctx, delay)` child's `Done`. Keep the uncontended take and the give-back inline (explicit `Lock`/`Unlock`, no helper method, no `defer`): under Yaegi each interpreted call or defer costs about 1 µs per command. Guard: `TestSessionSourceHasNoSelect`; interpreted behaviour: `TestReproSelect_*_Yaegi` in `simpleredis/zzz_repro_yaegi_select_crosstalk_test.go`. Research: `knowledge/research/ext_traefik_plugins_yaegi-select/`.
+- Interpreted `defer` runs under Yaegi v0.16.1 (this module's pin, and Traefik v3.7.11's pin) when the panic is an explicit interpreted panic, the interpreter's own `errors.As` panic on a package-local struct, or a nil-map write. Yaegi converts that panic into an `Eval` error rather than propagating a Go panic outward, but it still unwinds interpreted frames and runs their defers. Do not re-derive PR #29's assumption that a deferred `release` cannot save an in-use turn. Proof: `simpleredis/zzz_yaegi_defer_test.go`.
 

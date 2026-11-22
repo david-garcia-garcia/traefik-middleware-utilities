@@ -26,7 +26,7 @@ type fakeRedis struct {
 	handshake     []string
 	lastAuth      []string
 	// admitConn, when set, runs on each accepted socket before RESP is served; false drops that socket.
-	// The TLS fake uses it to finish the server handshake (tls_fake_test.go).
+	// The TLS fake uses it to finish the server handshake (zzz_tls_fake_test.go).
 	admitConn            func(conn net.Conn) bool
 	incrs                int
 	incrBys              int

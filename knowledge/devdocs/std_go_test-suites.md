@@ -45,43 +45,43 @@ Four suites, eight jobs (`test` and `race` are both unit; Go E2E is Redis and Dr
 ## How to use
 
 - Lint: `.github/workflows/ci.yml` job `lint` (`.golangci.yml`). CI pins golangci-lint **v1.63.4** (`version: v1.63.4`, not `latest`; not v2). `gofmt` is on; `goimports`/`gofumpt` are omitted because they need a `diff` binary Windows contributors lack. `testpackage` stays off: tests are in-package white-box (`sr.borrowSocket`, `sr.freeTurns`). `gocritic` `unnamedResult.checkExported: false` is the stronger setting (`true` checks exported functions only).
-- Unit: `go test -short ./...`. CI job `test` (`Unit`): `go test -short -timeout 2m -count=1 -v ./...`. Files `{domain}_test.go` (and `{domain}_yaegi_test.go` against a compiled fake). SimpleRedis chaos pool and lifecycle stress skip under `-short`; they run on a default `go test ./simpleredis/` and on Go E2E (no `-short`).
+- Unit: `go test -short ./...`. CI job `test` (`Unit`): `go test -short -timeout 2m -count=1 -v ./...`. Files `zzz_{domain}_test.go` (and `zzz_{domain}_yaegi_test.go` against a compiled fake). SimpleRedis chaos pool and lifecycle stress skip under `-short`; they run on a default `go test ./simpleredis/` and on Go E2E (no `-short`).
 - Unit race: CI job `race`: `go test -race -short -timeout 10m -count=1 -v ./...`. Same files as unit. `TestAlloc*` skip. Concurrent MSetEX fallback stays on (4×8). Skip only `TestYaegiErrorpath_PoolWait` (race stacks are in `github.com/traefik/yaegi/interp`, `_select` / `itype.refType`, not this client) and the SimpleRedis `TestReproSelect_*_Yaegi` probes (same reason; their `_Compiled` controls stay on), plus reclaim `TestYaegi_OpenHooksRunSleepWakeClose` and `TestYaegi_WatchPublishedDeliveredToFuncAny` (Yaegi's own `select` races on context cancel). Other interpreted error paths stay on.
-- Go E2E: `go test ./...` with the LIVE addrs for the engines to hit. Files `{domain}_e2e_test.go` and `{domain}_yaegi_e2e_test.go` sit next to that domain’s `.go` and `{domain}_test.go`. Shared skip/wait helpers that are not one domain live in `{package}_e2e_test.go` (same job as `fake_redis_test.go` for the fake peer). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` with the same one-or-both rule. TLS plus ACL-user proof uses `SIMPLEREDIS_LIVE_REDIS_TLS` / `SIMPLEREDIS_LIVE_DRAGONFLY_TLS` (same rule) and reads `ca.crt`, `client.crt`, `client.key` from `SIMPLEREDIS_LIVE_TLS_DIR`; ACL user `app` has password `apppass` (`simpleredis/tls_e2e_test.go`). The certificates are not committed: each job writes them with `SIMPLEREDIS_TLS_FIXTURE_OUT=$RUNNER_TEMP/simpleredis-tls go test -run '^TestWriteTLSFixtureFiles$' ./simpleredis/`, `docker cp`s that directory to `/tls` in the TLS container before `docker start`, waits with `docker exec … redis-cli --tls … ping`, then runs `ACL SETUSER app on >apppass ~* +@all`. Locally, run the same lines from `.github/workflows/ci.yml` (`docker cp` also avoids bind mounts from paths a Docker host cannot share). CI job `e2e-redis` sets Redis addrs only; `e2e-dragonfly` sets Dragonfly addrs only.
+- Go E2E: `go test ./...` with the LIVE addrs for the engines to hit. Files `{domain}_e2e_test.go` and `{domain}_yaegi_e2e_test.go` sit next to that domain’s `.go` and `zzz_{domain}_test.go`. Shared skip/wait helpers that are not one domain live in `{package}_e2e_test.go` (same job as `zzz_fake_redis_test.go` for the fake peer). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` with the same one-or-both rule. TLS plus ACL-user proof uses `SIMPLEREDIS_LIVE_REDIS_TLS` / `SIMPLEREDIS_LIVE_DRAGONFLY_TLS` (same rule) and reads `ca.crt`, `client.crt`, `client.key` from `SIMPLEREDIS_LIVE_TLS_DIR`; ACL user `app` has password `apppass` (`simpleredis/zzz_tls_e2e_test.go`). The certificates are not committed: each job writes them with `SIMPLEREDIS_TLS_FIXTURE_OUT=$RUNNER_TEMP/simpleredis-tls go test -run '^TestWriteTLSFixtureFiles$' ./simpleredis/`, `docker cp`s that directory to `/tls` in the TLS container before `docker start`, waits with `docker exec … redis-cli --tls … ping`, then runs `ACL SETUSER app on >apppass ~* +@all`. Locally, run the same lines from `.github/workflows/ci.yml` (`docker cp` also avoids bind mounts from paths a Docker host cannot share). CI job `e2e-redis` sets Redis addrs only; `e2e-dragonfly` sets Dragonfly addrs only.
 - Pester: `./Test-Integration.ps1`. Docker required. Domain files are `scripts/integration-tests.<domain>.Tests.ps1` (reclaim, simpleredis). Helpers are `scripts/integration-tests.utils/*.ps1` (not `*Tests.ps1`). `-Suite reclaim` is reclaim only. `-Suite simpleredis -Engine redis|dragonfly` sets `INTEGRATION_ENGINE` and runs the SimpleRedis file once. Default (`-Suite all`) runs reclaim then both engines. CI jobs `integration`, `integration-redis`, and `integration-dragonfly` match those three slices.
-- Benchmarks: `bench_test.go` (compiled, fake), `bench_yaegi_test.go` (interpreted, fake), and `bench_e2e_test.go` (live, compiled) in `tokenbucket/` and `windowcounter/`, next to `simpleredis/bench_test.go` and `backendbackoff/bench_test.go`. CI does not pass `-bench`, so benchmarks only compile there. Run `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/`; live benchmarks run with `-bench Live` and the `*_LIVE_*` addrs set, and skip under `-short` like the live tests.
-- Do not dump every live case into one `live_test.go`. Name the file for the domain it proves (`commands_e2e_test.go` beside `commands.go` / `commands_test.go`).
-- Traefik upstream-issue regressions: `traefik_issue<id>_test.go` (unit) and `traefik_issue<id>_e2e_test.go` (live) in that domain package. Keep helpers in those files with suffix `<id>`. Do not dump them into `limiter_e2e_test.go` or a shared helper file.
+- Benchmarks: `zzz_bench_test.go` (compiled, fake), `zzz_bench_yaegi_test.go` (interpreted, fake), and `zzz_bench_e2e_test.go` (live, compiled) in `tokenbucket/` and `windowcounter/`, next to `simpleredis/zzz_bench_test.go` and `backendbackoff/zzz_bench_test.go`. CI does not pass `-bench`, so benchmarks only compile there. Run `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/`; live benchmarks run with `-bench Live` and the `*_LIVE_*` addrs set, and skip under `-short` like the live tests.
+- Do not dump every live case into one `live_test.go`. Name the file for the domain it proves (`zzz_commands_e2e_test.go` beside `commands.go` / `zzz_commands_test.go`).
+- Traefik upstream-issue regressions: `traefik_issue<id>_test.go` (unit) and `traefik_issue<id>_e2e_test.go` (live) in that domain package. Keep helpers in those files with suffix `<id>`. Do not dump them into `zzz_limiter_e2e_test.go` or a shared helper file.
 - Skip under `-short` or both live addrs unset. One addr set runs that engine only.
 
 ## Pattern snippet
 
 ```text
 limiter.go
-limiter_test.go                 # unit (fake)
-limiter_e2e_test.go             # live Redis + Dragonfly
-limiter_yaegi_test.go           # interpreted, fake
-limiter_yaegi_e2e_test.go      # interpreted, live
-traefik_issue13704_test.go      # unit regression for one upstream issue
-traefik_issue13704_e2e_test.go  # live remaining TTL / engine proof
+zzz_limiter_test.go                 # unit (fake)
+zzz_limiter_e2e_test.go             # live Redis + Dragonfly
+zzz_limiter_yaegi_test.go           # interpreted, fake
+zzz_limiter_yaegi_e2e_test.go      # interpreted, live
+zzz_traefik_issue13704_test.go      # unit regression for one upstream issue
+zzz_traefik_issue13704_e2e_test.go  # live remaining TTL / engine proof
 ```
 
 ## Key files
 
 - `.github/workflows/ci.yml` — jobs `lint` (golangci-lint **v1.63.4**), `test` (`Unit`, `-short`, no `-race`, no services), `race` (`Unit race`, `-race -short`), `e2e-redis` (`Go E2E Redis`, no `-race`), `e2e-dragonfly` (`Go E2E Dragonfly`, no `-race`), `integration` (Pester reclaim), `integration-redis` (Pester SimpleRedis Redis), `integration-dragonfly` (Pester SimpleRedis Dragonfly)
-- `simpleredis/commands_e2e_test.go`, `commands_eval_e2e_test.go`, `commands_msetex_e2e_test.go`, `pool_e2e_test.go`, `simpleredis_e2e_test.go`, `tls_e2e_test.go`, `yaegi_e2e_test.go`
-- `simpleredis/tls_fixture_test.go` — the one test certificate generator (`TestWriteTLSFixtureFiles` writes it for the live engines); `simpleredis/tls_fake_test.go` — the in-process TLS fake
-- `windowcounter/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
-- `tokenbucket/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
-- `tokenbucket/traefik_issue13704_test.go`, `traefik_issue13704_e2e_test.go` — Memory idle-reclaim and live remaining TTL
+- `simpleredis/zzz_commands_e2e_test.go`, `zzz_commands_eval_e2e_test.go`, `zzz_commands_msetex_e2e_test.go`, `zzz_pool_e2e_test.go`, `zzz_simpleredis_e2e_test.go`, `zzz_tls_e2e_test.go`, `zzz_yaegi_e2e_test.go`
+- `simpleredis/zzz_tls_fixture_test.go` — the one test certificate generator (`TestWriteTLSFixtureFiles` writes it for the live engines); `simpleredis/zzz_tls_fake_test.go` — the in-process TLS fake
+- `windowcounter/zzz_limiter_e2e_test.go`, `zzz_limiter_yaegi_e2e_test.go`
+- `tokenbucket/zzz_limiter_e2e_test.go`, `zzz_limiter_yaegi_e2e_test.go`
+- `tokenbucket/zzz_traefik_issue13704_test.go`, `zzz_traefik_issue13704_e2e_test.go` — Memory idle-reclaim and live remaining TTL
 - `Test-Integration.ps1`, `scripts/integration-tests.reclaim.Tests.ps1`, `scripts/integration-tests.simpleredis.Tests.ps1`, `scripts/integration-tests.utils/`
 
 ## Gotchas
 
-- Unit CI does not start Redis. A test that needs a live engine belongs in `*_e2e_test.go`, not `{domain}_test.go`.
+- Unit CI does not start Redis. A test that needs a live engine belongs in `*_e2e_test.go`, not `zzz_{domain}_test.go`.
 - Unit CI on Ubuntu runs `test` without `-race` (`TestAlloc*` run) and `race` with `-race` (`TestAlloc*` skip). A green race job does not prove in-use-turn or idle-cap accounting. SimpleRedis chaos/lifecycle are not in the `-short` jobs; prove them with a default `go test ./simpleredis/`.
 - Pester `scripts/integration-tests.simpleredis.Tests.ps1` drives `/<engine>/<verb>` (status + body) for `INTEGRATION_ENGINE`. Exact `/redis` and `/dragonfly` are health Set+Get. Reclaim is `scripts/integration-tests.reclaim.Tests.ps1` and CI `integration`. Compiled `*_e2e_test.go` is the client/limiter proof.
-- Auth/SELECT handshake failure is Go E2E: SELECT 99 on dest engines (`pool_e2e_test.go`); WRONGPASS on `SIMPLEREDIS_LIVE_*_AUTH`; ACL-user WRONGPASS and `redis:tls` (missing client certificate, untrusted CA) on `SIMPLEREDIS_LIVE_*_TLS` (`tls_e2e_test.go`). Malformed RESP and LOADING retry stay on fake TCP.
+- Auth/SELECT handshake failure is Go E2E: SELECT 99 on dest engines (`zzz_pool_e2e_test.go`); WRONGPASS on `SIMPLEREDIS_LIVE_*_AUTH`; ACL-user WRONGPASS and `redis:tls` (missing client certificate, untrusted CA) on `SIMPLEREDIS_LIVE_*_TLS` (`zzz_tls_e2e_test.go`). Malformed RESP and LOADING retry stay on fake TCP.
 - `testpackage` is off on purpose. Tests live in `package reclaim` / `package simpleredis` / … so they can reach unexported pool state. Do not move them to `foo_test`.
 - `unnamedResult.checkExported: false` is stronger than `true`. `true` means exported functions only. Do not “tighten” it.
 - Identity `==` on SimpleRedis retry/decode sentinels is required (`errUnreachable` so pool wait is not retried). `//nolint:errorlint` at those sites; do not rewrite to `errors.Is`.

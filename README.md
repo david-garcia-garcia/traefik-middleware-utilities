@@ -151,7 +151,7 @@ go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter
 
 How to read the numbers:
 
-- The Redis rows talk over TCP loopback to an in-process fake Redis (`fake_redis_test.go` in each package) with a warm script cache, so each `Eval` is one `EVALSHA`. Against an engine that does not have the script yet, the first call per script costs one extra `EVAL`. Loopback on Windows dominates these rows: compare them with each other, not with the latency of a real Redis.
+- The Redis rows talk over TCP loopback to an in-process fake Redis (`zzz_fake_redis_test.go` in each package) with a warm script cache, so each `Eval` is one `EVALSHA`. Against an engine that does not have the script yet, the first call per script costs one extra `EVAL`. Loopback on Windows dominates these rows: compare them with each other, not with the latency of a real Redis.
 - `redis-cmds/op` is the commands the fake served per operation, including the background flush. Allocations count everything the process allocates in the timed loop, the in-process fake included.
 - The fake serves one command at a time, so the `-parallel` rows against it measure the client plus a serialized server, not how Redis scales. `BenchmarkLiveRedisAllow` and `BenchmarkLiveTake` (`-bench Live` with `TOKENBUCKET_LIVE_*` / `WINDOWCOUNTER_LIVE_*` set) run against a real engine; they are not in this table.
 - Yaegi rows run the same code interpreted inside one `Eval` per timed loop, through a probe package. `BenchmarkYaegiFlush` calls the interpreted flush from Go once per iteration and re-dirties the keys with the timer stopped, like `BenchmarkFlush`. Yaegi rows have no allocation column.
@@ -293,9 +293,9 @@ go test ./...                # also Go E2E for each *_LIVE_REDIS / *_LIVE_DRAGON
 
 `Test-Integration.ps1` starts Traefik v3.7.11 with fake local plugins (`e2e/reclaimprobe`, `e2e/simpleredisprobe`) so reclaim and SimpleRedis run under Yaegi. Docker is required. `-Suite reclaim` is reclaim only; `-Suite simpleredis -Engine redis|dragonfly` runs the SimpleRedis file once against that backend.
 
-Go E2E files are `{domain}_e2e_test.go` next to that domain (`commands_e2e_test.go`, `limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`). `backendbackoff/` and `iplookup/` have no store and no `*_LIVE_*` var.
+Go E2E files are `{domain}_e2e_test.go` next to that domain (`zzz_commands_e2e_test.go`, `zzz_limiter_e2e_test.go`). They skip under `-short` or when both live addrs are unset. One addr set runs that engine only. Set `SIMPLEREDIS_LIVE_*`, `WINDOWCOUNTER_LIVE_*`, and `TOKENBUCKET_LIVE_*` for the engines to hit (Redis `:6379`, Dragonfly `:6380`). Passworded AUTH proof uses `SIMPLEREDIS_LIVE_REDIS_AUTH` / `SIMPLEREDIS_LIVE_DRAGONFLY_AUTH` (`:6381` / `:6382`). `backendbackoff/` and `iplookup/` have no store and no `*_LIVE_*` var.
 
-The rate limiter benchmarks (`bench_test.go`, `bench_yaegi_test.go`, `bench_e2e_test.go` in `tokenbucket/` and `windowcounter/`) compile in CI but do not run there; the command and the results are in `## Rate limiters compared`.
+The rate limiter benchmarks (`zzz_bench_test.go`, `zzz_bench_yaegi_test.go`, `zzz_bench_e2e_test.go` in `tokenbucket/` and `windowcounter/`) compile in CI but do not run there; the command and the results are in `## Rate limiters compared`.
 
 CI (`.github/workflows/ci.yml`) runs golangci-lint, unit `go test -short` (no engines, 2m timeout, `TestAlloc*` run), unit `go test -race -short` (no engines, 10m timeout), Go E2E Redis (`go test` with Redis 7, no `-race`), Go E2E Dragonfly (`go test` with Dragonfly, no `-race`), Pester reclaim (`Integration Tests`), Pester SimpleRedis Redis, and Pester SimpleRedis Dragonfly on every pull request and on pushes to `master`.
 

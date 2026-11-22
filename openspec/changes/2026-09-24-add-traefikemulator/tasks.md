@@ -5,7 +5,7 @@
 
 ## 2. Port bouncer unit tests (six cases)
 
-- [x] 2.1 Add `traefikemulator/emulator_test.go` in package `traefikemulator` (not external test package)
+- [x] 2.1 Add `traefikemulator/zzz_emulator_test.go` in package `traefikemulator` (not external test package)
 - [x] 2.2 Port `TestApply_CancelsPreviousGenerationBeforeNextNew`
 - [x] 2.3 Port `TestApply_RoutesShareOneContext`
 - [x] 2.4 Port `TestApply_OmittedRouteIsNotConstructed`

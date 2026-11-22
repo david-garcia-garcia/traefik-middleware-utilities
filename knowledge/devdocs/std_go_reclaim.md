@@ -120,7 +120,7 @@ alternative is acting on a slot the goroutine does not own. `waitCtx`'s Done-cha
 deleted instead, because `dropWhenDone` hands every holder that has a Done channel to
 `context.AfterFunc`, so no caller could reach it.
 
-`reclaim/table_gaps_test.go` reaches those shapes by taking `tab.mu` and writing `slot` state
+`reclaim/zzz_table_gaps_test.go` reaches those shapes by taking `tab.mu` and writing `slot` state
 directly, as `mustSlot` and `readState` do. A locking rewrite that renames `Table.mu`, `slot.state`,
 `slot.holders`, `slot.ready`, or the `slotState` constants must update that file in the same change.
 

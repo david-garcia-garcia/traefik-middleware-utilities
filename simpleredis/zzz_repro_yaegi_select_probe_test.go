@@ -7,7 +7,7 @@ package simpleredis
 // used a select (waitUntil, the borrowSocket wait, the in-use-turn take and give-back) from many
 // goroutines and reports every way a crossed wait shows up.
 //
-// This file has no testing import on purpose: repro_yaegi_select_crosstalk_test.go runs these
+// This file has no testing import on purpose: zzz_repro_yaegi_select_crosstalk_test.go runs these
 // probes compiled (the control, which must report no anomaly) and copies this file into the
 // interpreted simpleredis package to run them under Yaegi.
 //

@@ -12,7 +12,7 @@ import (
 )
 
 // Regression for the Yaegi v0.16.1 shared-select bug (same mechanism as crowdsec-bouncer-traefik-plugin
-// PR #208). Each probe in repro_yaegi_select_probe_test.go runs compiled (control) and interpreted.
+// PR #208). Each probe in zzz_repro_yaegi_select_probe_test.go runs compiled (control) and interpreted.
 // Both runs must be clean. The interpreted run failed while session source used select for the
 // in-use-turn semaphore and the retry backoff; TestSessionSourceHasNoSelect is the deterministic
 // gate that keeps select out, and these pairs are the behavioural evidence under Yaegi.
@@ -29,7 +29,7 @@ func selectProbeInterp(t *testing.T) *interp.Interpreter {
 	if !ok {
 		t.Fatal("no caller path")
 	}
-	src, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "repro_yaegi_select_probe_test.go"))
+	src, err := os.ReadFile(filepath.Join(filepath.Dir(thisFile), "zzz_repro_yaegi_select_probe_test.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
