@@ -20,7 +20,7 @@ Una regresión live en el paquete tokenbucket simula esas cincuenta recargas a t
 In progress. 0 items remain.
 
 Priority: P3 — tests and catalog proof with no current user or operator harm
-Reviewed head: 4d0828b5
+Reviewed head: 06584948
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -43,7 +43,10 @@ Owner decision: Required. See Explore Decisions.
 
 ## Specs
 Worktree:
-- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-reload-without-close/openspec/changes/tokenbucket-reload-without-close/proposal.md) — modified
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-reload-without-close/openspec/changes/archive/2026-11-22-tokenbucket-reload-without-close/proposal.md) — modified
+
+Completed:
+- [std_go_simpleredis_tcp-session](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-reload-without-close/openspec/specs/std_go_simpleredis_tcp-session/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -80,9 +83,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 4d0828b59d65fdef13a16446797652ba4ba16c1f | Card must match the branch you measured |
+| Reviewed head | 06584948224d75e32b6b454257051ab102977608 | Card must match the branch you measured |
 
 ### Stored data model
 None.
