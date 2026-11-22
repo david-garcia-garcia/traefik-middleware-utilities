@@ -19,8 +19,8 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 633a9183
-Owner decision: None.
+Reviewed head: 3bd8cd17
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -34,7 +34,7 @@ Owner decision: None.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-11-22-simpleredis-password-trailing-newline pushed | `git` |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | simpleredis-password-trailing-newline | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/115 | pr-host |
 | CI | not seen | caller omitted CI snapshot |
 | Local tests | none | handoff.yaml localTests |
@@ -53,9 +53,6 @@ None.
 Ticket 2026-11-22-simpleredis-password-trailing-newline on branch 2026-11-22-simpleredis-password-trailing-newline targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/115; CI not seen. Upstream: https://github.com/traefik/traefik/issues/12078 (no upstream PR).
 
 ## Explore Decisions
-- Q: ¿Propose añade un escenario al catálogo `openspec/specs/` además del GoDoc?
-  Rank: additive incidental — un escenario nuevo sería un contrato añadido; el ticket es TEST + DOC y no nombra spec id (Unknowns; Out of scope inferido)
-  Decision: assumed — no escenario de catálogo; Live WRONGPASS ya promete el mapeo; la superficie DOC es el GoDoc de `Config.Pass`.
 - Q: ¿Un Secret o fichero con `\r\n` (Windows) debe cubrirse en el test?
   Rank: additive incidental — casos extra; Out of scope: whitespace distinto del `\n` del test de referencia; Tests nombra `"secret\n"`
   Decision: assumed — solo `"secret\n"` como el repro de referencia.
@@ -85,7 +82,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 633a91830df21c4d77d0fa221aa01ca3e1d565a6 | Card must match the branch you measured |
+| Reviewed head | 3bd8cd1793173474797eb73c8797e33ec78b9bff | Card must match the branch you measured |
 
 ### Stored data model
 None.
