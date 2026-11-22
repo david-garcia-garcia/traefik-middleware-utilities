@@ -2,10 +2,11 @@ package tokenbucket
 
 // Copyright Containous SAS / Traefik Labs. MIT.
 // Copied from traefik/traefik pkg/middlewares/ratelimiter/lua.go @903e8a9.
-// table.maxn replaced with #rl_source == 4 (Dragonfly Lua 5.4).
+// This read deviates from that copy: HMGET of last and tokens by name,
+// not HGETALL by position (traefik/traefik#14297, https://github.com/traefik/traefik/pull/14300).
 
 // allowScript is Traefik AllowTokenBucketRaw. KEYS[1] is the hash.
-// Empty HGETALL seeds tokens=burst last=t (this product; Traefik used last=0).
+// A missing or partial HMGET seeds tokens=burst last=t (this product; Traefik used last=0).
 const allowScript = `
 local key = KEYS[1]
 local limit, burst, ttl, t, max_delay = tonumber(ARGV[1]), tonumber(ARGV[2]), tonumber(ARGV[3]), tonumber(ARGV[4]),
@@ -18,11 +19,11 @@ local bucket = {
 	last = 0
 }
 
-local rl_source = redis.call('hgetall', key)
+local rl_source = redis.call('hmget', key, 'last', 'tokens')
 
-if #rl_source == 4 then
-	bucket.last = tonumber(rl_source[2])
-	bucket.tokens = tonumber(rl_source[4])
+if rl_source[1] and rl_source[2] then
+	bucket.last = tonumber(rl_source[1])
+	bucket.tokens = tonumber(rl_source[2])
 else
 	bucket.tokens = burst
 	bucket.last = t
