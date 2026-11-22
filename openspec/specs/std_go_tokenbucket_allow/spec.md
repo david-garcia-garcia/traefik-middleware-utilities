@@ -37,7 +37,7 @@ Token-bucket Allow: admit or delay one consume on an opaque key against refill r
 - **AND** its `Allowed` is false
 
 ### Requirement: Memory store uses Lua formulas
-The in-memory store SHALL refill at `rate` tokens per second, cap at `burst`, consume 1, and compute wait in the same units Traefik's Redis script uses (tokens per microsecond, Unix microseconds, maxDelay microseconds). It MUST NOT import `golang.org/x/time/rate`. A missing key or a key whose `ttl` has elapsed SHALL start as a full bucket (`tokens = burst`, last equal to now) before consuming 1. Idle keys MUST NOT refill from elapsed since Unix epoch via `last = 0`. Entries SHALL expire after the caller `ttl` on later Allow (lazy). Construction SHALL fail when `rate <= 0`, rate is NaN, rate is infinite, `burst < 1`, `maxDelay < 0`, or `ttl` is not a whole number of seconds of at least 1s. `NewMemory` and `NewRedis` SHALL share that construction gate.
+The in-memory store SHALL refill at `rate` tokens per second, cap at `burst`, consume 1, and compute wait in the same units Traefik's Redis script uses (tokens per microsecond, Unix microseconds, maxDelay microseconds). It MUST NOT import `golang.org/x/time/rate`. A missing key or a key whose effective ttl has elapsed SHALL start as a full bucket (`tokens = burst`, last equal to now) before consuming 1. Idle keys MUST NOT refill from elapsed since Unix epoch via `last = 0`. Entries SHALL expire after the effective ttl on later Allow (lazy). The effective ttl MUST NOT be shorter than the caller ttl. Construction SHALL fail when `rate <= 0`, rate is NaN, rate is infinite, `burst < 1`, `maxDelay < 0`, or the caller `ttl` is not a whole number of seconds of at least 1s. `NewMemory` and `NewRedis` SHALL share that construction gate.
 
 #### Scenario: New rejects invalid clock
 - **WHEN** NewMemory is called with rate 0 or a negative rate
@@ -173,3 +173,33 @@ The in-process store SHALL hold the mutex that guards the bucket map across look
 - **THEN** at most 5 of those Allows return `Allowed` true
 - **AND** the store MUST NOT create a second full bucket for that key
 - **AND** a non-nil Allow error fails the check
+
+### Requirement: Idle TTL is at least the refill time
+Constructors SHALL store one effective ttl for both stores: the caller ttl raised, in whole seconds, to ceil(burst divided by rate, plus maxDelay in seconds). The floor MUST be clamped to the largest whole-second duration that does not overflow. The effective ttl MUST NOT be shorter than the caller ttl. A caller ttl below 1s or with a fractional second SHALL still be rejected before that floor.
+
+#### Scenario: Short ttl does not grant a fresh burst
+- **WHEN** rate is 0.5 tokens per second, burst is 30, maxDelay is 0, and the caller ttl is 3s
+- **AND** a key has consumed the burst
+- **AND** 5 seconds pass on the limiter clock
+- **THEN** the following admits are 2
+- **AND** they are not 30
+
+#### Scenario: Control ttl that already covers refill
+- **WHEN** rate is 0.5 tokens per second, burst is 30, maxDelay is 0, and the caller ttl is 60s
+- **AND** a key has consumed the burst
+- **AND** 5 seconds pass on the limiter clock
+- **THEN** the following admits are 2
+
+#### Scenario: Caller ttl above the floor is kept
+- **WHEN** rate is 0.5 tokens per second, burst is 30, maxDelay is 0, and the caller ttl is 120s
+- **THEN** the idle lifetime is 120s
+- **AND** it is not 60s
+
+#### Scenario: maxDelay is inside the floor
+- **WHEN** rate is 1, burst is 2, maxDelay is 1 hour, and the caller ttl is 2s
+- **THEN** the idle lifetime is 3602s
+
+#### Scenario: Enormous refill time is clamped
+- **WHEN** burst divided by rate is larger than the largest whole-second duration
+- **THEN** construction succeeds
+- **AND** the idle lifetime is that largest whole-second duration

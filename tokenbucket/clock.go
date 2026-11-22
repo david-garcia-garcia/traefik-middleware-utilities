@@ -49,9 +49,34 @@ func (c clockConfig) limitPerMicro() float64 {
 	return c.rate / 1e6
 }
 
+// maxWholeSecondTTL is the largest time.Duration that is a whole number of seconds.
+// A larger value overflows the nanosecond int64.
+const maxWholeSecondTTL = time.Duration(math.MaxInt64/int64(time.Second)) * time.Second
+
 // ttlSeconds is the Redis EXPIRE argument.
 func (c clockConfig) ttlSeconds() int64 {
 	return int64(c.ttl / time.Second)
+}
+
+// effectiveTTL raises caller to the whole seconds a bucket needs to refill from empty, including maxDelay.
+// An expired bucket is then already full, so seeding it full grants nothing (traefik/traefik#13957).
+// caller is already a whole number of seconds of at least 1s.
+func effectiveTTL(rate float64, burst int64, maxDelay, caller time.Duration) time.Duration {
+	floor := refillFloor(rate, burst, maxDelay)
+	if caller > floor {
+		return caller
+	}
+	return floor
+}
+
+// refillFloor is ceil(burst/rate + maxDelay seconds), clamped to maxWholeSecondTTL.
+func refillFloor(rate float64, burst int64, maxDelay time.Duration) time.Duration {
+	seconds := math.Ceil(float64(burst)/rate + maxDelay.Seconds())
+	maxSeconds := float64(int64(maxWholeSecondTTL / time.Second))
+	if math.IsNaN(seconds) || math.IsInf(seconds, 0) || seconds > maxSeconds {
+		return maxWholeSecondTTL
+	}
+	return time.Duration(int64(seconds)) * time.Second
 }
 
 // consumeOne applies one Traefik Lua consume. last and now are Unix microseconds.

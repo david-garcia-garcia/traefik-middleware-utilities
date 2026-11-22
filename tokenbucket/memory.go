@@ -36,10 +36,12 @@ type Memory struct {
 const maxMemorySources = 65536
 
 // NewMemory builds an in-process limiter. rate is requests per second.
+// ttl is a minimum idle lifetime. The library raises it to the whole seconds needed to refill burst at rate, including maxDelay, so an expired bucket is already full and recreating it grants nothing (traefik/traefik#13957).
 func NewMemory(rate float64, burst int64, maxDelay, ttl time.Duration) (*Memory, error) {
 	if err := validateClock(rate, burst, maxDelay, ttl); err != nil {
 		return nil, err
 	}
+	ttl = effectiveTTL(rate, burst, maxDelay, ttl)
 	return &Memory{
 		clock: clockConfig{
 			rate:     rate,

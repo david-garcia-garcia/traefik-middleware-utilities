@@ -20,6 +20,7 @@ type Redis struct {
 }
 
 // NewRedis builds a Redis limiter on a SimpleRedis from simpleredis.New. rate is requests per second.
+// ttl is a minimum idle lifetime. The library raises it to the whole seconds needed to refill burst at rate, including maxDelay, so an expired bucket is already full and recreating it grants nothing (traefik/traefik#13957).
 func NewRedis(redis *simpleredis.SimpleRedis, rate float64, burst int64, maxDelay, ttl time.Duration) (*Redis, error) {
 	if redis == nil {
 		return nil, errRedis
@@ -27,6 +28,7 @@ func NewRedis(redis *simpleredis.SimpleRedis, rate float64, burst int64, maxDela
 	if err := validateClock(rate, burst, maxDelay, ttl); err != nil {
 		return nil, err
 	}
+	ttl = effectiveTTL(rate, burst, maxDelay, ttl)
 	return &Redis{
 		clock: clockConfig{
 			rate:     rate,
