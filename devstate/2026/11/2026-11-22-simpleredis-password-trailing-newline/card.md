@@ -29,7 +29,7 @@ OpenSpec change metadata (`skip_specs: true`) records that the existing live AUT
 Ready for review. 0 items remain.
 
 Priority: P3 — spec, docs, tests, or internal clarity with no new user or operator harm from this branch itself.
-Reviewed head: 806e80fe
+Reviewed head: 1675607f
 Owner decision: None.
 
 ## Review scores
@@ -86,7 +86,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 806e80fe78528efefc65f97982a95d35062e1732 | Card must match the branch you measured |
+| Reviewed head | 1675607fa5013cf4b0e57ba4b317a357b0e3b329 | Card must match the branch you measured |
 
 ### Stored data model
 None.
