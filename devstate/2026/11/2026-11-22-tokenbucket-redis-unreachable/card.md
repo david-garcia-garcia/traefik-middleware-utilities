@@ -20,14 +20,14 @@ Sin cambio de comportamiento: `Redis.Allow` sigue devolviendo `Status{}, err` si
 Ready for review. 0 items remain.
 
 Priority: P3 — spec, docs, tests, or internal clarity — no current user or operator harm
-Reviewed head: d35e493e
+Reviewed head: 19b99a1b
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008 |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998331074 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -37,7 +37,7 @@ Owner decision: Required. See Explore Decisions.
 | Branch | 2026-11-22-tokenbucket-redis-unreachable pushed | `git` |
 | OpenSpec | tokenbucket-redis-unreachable | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114 | pr-host |
-| CI | build 44997670008 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008 |
+| CI | build 44998331074 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998331074 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998331074 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -56,7 +56,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-redis-unreachable on branch 2026-11-22-tokenbucket-redis-unreachable targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114; CI build 44997670008 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44997670008.
+Ticket 2026-11-22-tokenbucket-redis-unreachable on branch 2026-11-22-tokenbucket-redis-unreachable targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114; CI build 44998331074 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998331074.
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
@@ -85,7 +85,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | d35e493e4d55c645725523a718baa662b3a94517 | Card must match the branch you measured |
+| Reviewed head | 19b99a1bb10e0347b71cc5f39e3dd555a4635518 | Card must match the branch you measured |
 
 ### Stored data model
 None.
