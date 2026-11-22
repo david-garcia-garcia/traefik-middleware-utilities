@@ -47,40 +47,41 @@ OpenTyped[T]
 
 - Q: ¿Qué mecanismo cumple el efecto (soltar el holder tras el assert, comprobar el tipo antes de bind, o un híbrido)?
   Rank: additive incidental — las tres opciones caben en la ruta de mismatch de `OpenTyped` (firma pública igual; 0 callers de producto in-tree); Out of scope dice que elegir el mecanismo no es un requisito de producto extra
-  Decision: assumed — deferred to tech-lead propose; esta fase lista las alternativas con evidencia y no elige seam.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Decision 1: release after the assert via a lease; Peek and hybrid rejected.
+  By: propose
 
 - Q: Si propose suelta el holder después de bind, ¿cómo evita un segundo `drop` cuando el `AfterFunc` ya registrado dispare al cancelar `ctx`?
   Rank: bounded incidental — `dropWhenDone` ya tiene callers (todo bind con `Done != nil` vía `finishBind`); 2 registros `context.AfterFunc` enumerados en `reclaim/` (`table.go:558`, `alias.go:117`); el criterio pide el efecto, no este detalle de stop
-  Decision: assumed — el arreglo no puede hacer `releaseHolder` dos veces por el mismo bind; `AfterFunc` oficial devuelve `stop func() bool` y `dropWhenDone` hoy lo descarta (`table.go:558`); `simpleredis/resp.go` `watchConnClose` sí lo guarda.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Decision 2: `dropOnce` under `t.mu` plus `lease.stop()`; watchers call `dropOnce` instead of `drop`.
+  By: propose
 
 - Q: En el primer `OpenTyped` cuyo `create` ya publicó un valor de tipo distinto, ¿«como si no hubiera hecho bind» deja la encarnación creada (y Close a grace 0 si era el último holder) o exige no almacenar el valor?
   Rank: additive asked — Desired nombra «had not bound», holder count sin cambio, y «zero-grace Close runs when no other holder remains»; el spec live de create-once prohíbe crear un valor y descartarlo
-  Decision: assumed — create ya corrió; el efecto es no dejar este holder. Si no queda otro holder, Close a grace 0. No deshacer `create` como si la clave nunca se hubiera registrado.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Non-Goals: create that already ran is not undone; only this caller's holder goes; Close at grace 0 if no other holder remains.
+  By: propose
 
 - Q: ¿El spec live de mismatch debe pasar a exigir holder sin bind / Close a grace 0, además de zero T y el texto de error?
   Rank: additive asked — Desired nombra ese efecto; el catálogo `std_go_reclaim_value-lifecycle` Scenario `OpenTyped type mismatch returns zero T` hoy no lo exige
-  Decision: assumed — propose escribe el delta (MODIFIED en ese requirement, y en `std_go_reclaim_context-lease` solo si el contrato de holder lo necesita); esta fase no escribe `openspec/changes/`.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md and the MODIFIED delta on `std_go_reclaim_value-lifecycle` only; no delta on `std_go_reclaim_context-lease`.
+  By: propose
 
 - Q: ¿La frase de usage **OpenTyped** en `std_go_reclaim.md` debe decir que un mismatch no deja holder?
   Rank: additive incidental — sería una frase de usage/gotcha; ningún criterio pide escribir usage en explore
-  Decision: assumed — hueco aparcado; produce attended exige yes humano; esta fase no escribe `knowledge/devdocs`.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Impact / tasks.md 3.1: one sentence under OpenTyped that a type mismatch does not keep the caller as a holder.
+  By: propose
 
 - Q: ¿Los tests nuevos van en un `zzz_` propio con sufijo del slug, o se amplía `TestOpenTypedTypeMismatchReturnsZeroT`?
   Rank: additive asked — Constraints: «New test file(s) for this ticket are self-contained; helpers they need are suffixed with this ticket's slug»
-  Decision: assumed — fichero `zzz_` nuevo, self-contained, identificadores con sufijo `2026-11-22-reclaim-opentyped-holder-leak`; se conserva el test actual como control de zero + texto de error.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Decision 5: `reclaim/zzz_opentyped_mismatch_release_test.go`, helpers suffixed `MismatchRelease`; existing mismatch error test unchanged.
+  By: propose
 
 - Q: ¿Hace falta una forma genérica nueva (fuera de la call expression actual de `OpenTyped[T]`) y hay que medirla bajo Yaegi v0.16.1?
   Rank: additive asked — Constraints: Yaegi-safe only; no package-level var/alias/field de una instanciación genérica de otro package
-  Decision: assumed — se mantiene `OpenTyped` como call expression; no se añade instanciación genérica a nivel de package. Si propose introduce otra forma genérica, se mide con el harness Yaegi existente antes de darla por válida.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Goals: no new generic forms; `OpenTyped` stays a call expression; Yaegi `OpenTyped` probe unchanged.
+  By: propose
 
 - Q: ¿Plugins Traefik fuera de este repo que llamen `OpenTyped` con tipos distintos sobre la misma clave cambian de contrato público?
   Rank: additive incidental — callers fuera de este repo no se pueden enumerar; Desired deja el `OpenTyped` con éxito igual y no pide cambiar la firma ni el texto de error
-  Decision: assumed — firma y texto `reclaim: open %q: want %T, got %T` se quedan; el cambio es el efecto de holder/Close en mismatch. Plugins externos no enumerables.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Non-Goals: signature and error text `reclaim: open %q: want %T, got %T` stay; successful `OpenTyped` unchanged.
+  By: propose
+
