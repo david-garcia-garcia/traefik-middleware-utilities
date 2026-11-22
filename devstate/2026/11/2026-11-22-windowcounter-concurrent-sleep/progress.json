@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-windowcounter-concurrent-sleep",
+  "jobName": "2026-11-22-windowcounter-concurrent-sleep",
+  "startedAt": "2026-11-22T09:59:23.881Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:02:35.231Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:07:22.113Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:20:16.957Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:30:43.685Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:37:35.949Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:39:41.751Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:42:02.486Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:46:32.508Z"
+    }
+  }
+}

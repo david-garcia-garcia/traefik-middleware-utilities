@@ -62,7 +62,7 @@ type Limiter struct {
 	mu         sync.Mutex
 	windows    map[string]*windowState
 	closed     bool
-	stopping   bool // true while stopFlushAndWait has detached the timer and is waiting for an in-flight tick
+	stoppers   int // count of stopFlushAndWait callers waiting for an in-flight tick
 	flushTimer *time.Timer
 	flushBusy  sync.WaitGroup // 1 while a timer is armed or flushAfterTick is running
 
@@ -404,7 +404,7 @@ func (l *Limiter) Sleep() {
 func (l *Limiter) Wake() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.closed || l.syncRate == 0 || l.flushTimer != nil || l.stopping {
+	if l.closed || l.syncRate == 0 || l.flushTimer != nil || l.stoppers > 0 {
 		return
 	}
 	l.startFlushLocked()
@@ -444,7 +444,7 @@ func (l *Limiter) startFlushLocked() {
 func (l *Limiter) flushAfterTick() {
 	_ = l.flushPending(context.Background())
 	l.mu.Lock()
-	if l.closed || l.stopping || l.flushTimer == nil {
+	if l.closed || l.stoppers > 0 || l.flushTimer == nil {
 		l.mu.Unlock()
 		l.flushBusy.Done()
 		return
@@ -453,24 +453,19 @@ func (l *Limiter) flushAfterTick() {
 	l.mu.Unlock()
 }
 
-// stopFlushAndWait stops the flush timer then waits for an in-flight tick. Caller must not hold l.mu.
+// stopFlushAndWait stops the flush timer then waits for an in-flight tick. Every caller waits, including one that found no timer. Caller must not hold l.mu.
 func (l *Limiter) stopFlushAndWait() {
 	l.mu.Lock()
-	l.stopping = true
+	l.stoppers++
 	timer := l.flushTimer
 	l.flushTimer = nil
-	if timer == nil {
-		l.stopping = false
-		l.mu.Unlock()
-		return
-	}
 	l.mu.Unlock()
-	if timer.Stop() {
+	if timer != nil && timer.Stop() {
 		l.flushBusy.Done()
 	}
 	l.flushBusy.Wait()
 	l.mu.Lock()
-	l.stopping = false
+	l.stoppers--
 	l.mu.Unlock()
 }
 
