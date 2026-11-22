@@ -141,40 +141,51 @@ Traefik Hub `DistributedRateLimit` (commercial; only its documentation was read,
 
 ### Benchmarks
 
-Measured on 2026-11-21 on an Intel Core Ultra 7 265K (20 threads), Windows 11, `go1.25.6 windows/amd64`, with Yaegi v0.16.1 (the version Traefik v3.7.11 pins). Each value is the median of five runs. The ns/op, `redis-cmds/op`, and allocation columns come from one run at commit `7baa8f7c`; the "before" columns come from the same command at commit `ee9f5c11`, run right before it on the same machine:
+Each number is the time one rate-limit check takes inside the library: one `tokenbucket` `Allow` or one `windowcounter` `Take`, the call a middleware makes per request before it forwards or rejects it. Traefik, HTTP, and the backend are not included.
+
+Every configuration runs in both deployment modes, from the same source:
+
+- **Compiled**: the middleware is built into a custom Traefik binary.
+- **Yaegi**: the middleware is loaded as a Traefik plugin and interpreted (Yaegi v0.16.1, the version Traefik v3.7.11 pins).
+
+Two traffic patterns:
+
+- **1 client**: every request carries the same key, as when one IP sends all the traffic.
+- **10,000 clients**: requests cycle through 10,000 keys, all seen before the timing starts.
+
+| Configuration | Traffic | Compiled | Yaegi | Redis commands per request (compiled / Yaegi) |
+|---|---|---:|---:|---:|
+| `tokenbucket.NewMemory` | 1 client | 35 ns | 8.8 µs | 0 |
+| `tokenbucket.NewMemory` | 10,000 clients | 39 ns | 9.2 µs | 0 |
+| `tokenbucket.NewRedis` | 1 client | 23 µs | 161 µs | 1 |
+| `tokenbucket.NewRedis` | 10,000 clients | 24 µs | 189 µs | 1 |
+| `windowcounter`, `sync_rate` 0 | 1 client | 52 µs | 214 µs | 2 |
+| `windowcounter`, `sync_rate` 0 | 10,000 clients | 48 µs | 269 µs | 2 |
+| `windowcounter`, `sync_rate` 20 ms | 1 client | 218 ns | 20 µs | ~0 |
+| `windowcounter`, `sync_rate` 20 ms | 10,000 clients | 40 µs | 280 µs | 2 / 2 |
+| `windowcounter`, `sync_rate` 1 s | 1 client | 249 ns | 15 µs | ~0 |
+| `windowcounter`, `sync_rate` 1 s | 10,000 clients | 524 ns | 231 µs | 0.009 / 2 |
+
+How to read it:
+
+- **Redis rows measure a local round trip, not your network.** They talk over TCP loopback to an in-process fake Redis on the same machine. In production, add your network round trip for each Redis command, so the last column is the one to compare across setups.
+- **Buffered `windowcounter` stays local only while a key comes back before the next flush.** A `Take` on a key that has had no hit since the last flush reads Redis (2 commands), like `sync_rate` 0. In the 10,000-client rows that depends on how fast the loop cycles through the keys: compiled at 1 s each key comes back every ~5 ms and stays local; at 20 ms, or under Yaegi, the cycle takes longer than `sync_rate` and every `Take` reads Redis. In production the deciding factor is requests per key per `sync_rate`, not CPU.
+- **Limits.** The token bucket runs at 1000 req/s with a burst of 100, so in the 1-client rows the bucket is empty after about 100 calls and most calls are denied. The window counter limit is never reached, so every `Take` is admitted.
+
+Costs outside the per-request path above:
+
+| What | Compiled | Yaegi |
+|---|---:|---:|
+| `tokenbucket.NewMemory`, a new client while 65,536 clients are live (evicts one) | 176 ns | 14 µs |
+| `windowcounter` buffered flush of 1,000 keys (runs in the background every `sync_rate`; 4 Redis commands) | 0.69 ms | 10.8 ms |
+
+Measured on 2026-11-22 on an Intel Core Ultra 7 265K (20 threads), Windows 11, `go1.25.6 windows/amd64`. Each value is the median of five runs of:
 
 ```text
 go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/
 ```
 
-`go.mod` declares `go 1.21`; these numbers are from go1.25.6 only. CI compiles the benchmarks but does not run them.
-
-How to read the numbers:
-
-- The Redis rows talk over TCP loopback to an in-process fake Redis (`zzz_fake_redis_test.go` in each package) with a warm script cache, so each `Eval` is one `EVALSHA`. Against an engine that does not have the script yet, the first call per script costs one extra `EVAL`. Loopback on Windows dominates these rows: compare them with each other, not with the latency of a real Redis.
-- `redis-cmds/op` is the commands the fake served per operation, including the background flush. Allocations count everything the process allocates in the timed loop, the in-process fake included.
-- The fake serves one command at a time, so the `-parallel` rows against it measure the client plus a serialized server, not how Redis scales. `BenchmarkLiveRedisAllow` and `BenchmarkLiveTake` (`-bench Live` with `TOKENBUCKET_LIVE_*` / `WINDOWCOUNTER_LIVE_*` set) run against a real engine; they are not in this table.
-- Yaegi rows run the same code interpreted inside one `Eval` per timed loop, through a probe package. `BenchmarkYaegiFlush` calls the interpreted flush from Go once per iteration and re-dirties the keys with the timer stopped, like `BenchmarkFlush`. Yaegi rows have no allocation column.
-- `sync_rate` 20 ms is the floor, the buffered setting with the most Redis traffic. The flush rows time one flush of 1000 dirty keys. In buffered mode `redis-cmds/op` is the background flush spread over the Takes of the run, so a slower Take shows slightly more.
-- The "before" columns are commit `ee9f5c11`, before `Allow`, `Take`, and `Peek` returned a `Status`. Building it is the difference on the in-process rows: about 10 to 35 ns compiled and about 1 to 2.5 µs under Yaegi per `tokenbucket.NewMemory` `Allow` and per buffered `Take`. Rows that wait on a Redis round trip moved by less than the run-to-run noise (up to about 8% here), and `redis-cmds/op` and allocations did not change: the `Status` adds no Redis command.
-- The optimizations of commit `3623aafd` are not re-measured here. At `d940bf43`, before them, a new source in `tokenbucket.NewMemory` with 65536 live sources cost 1,516,150 ns compiled and 37,716,769 ns under Yaegi (it walked every stored source under the mutex), and the 1000-key flush cost 31,947,335 and 105,819,980 ns (one `EVAL` per key instead of one per batch of up to 256).
-
-| Benchmark | Compiled ns/op | Compiled before | Yaegi ns/op | Yaegi before | redis-cmds/op | Compiled allocs/op |
-|---|---:|---:|---:|---:|---:|---:|
-| `tokenbucket.NewMemory`, hot key (`BenchmarkMemoryAllow/hot-key` / `BenchmarkYaegiMemoryAllow/hot-key`) | 36.5 | 19.8 | 11,077 | 9,175 | — | 0 |
-| `tokenbucket.NewMemory`, 10k rotating keys (`BenchmarkMemoryAllow/rotating-10k` / `BenchmarkYaegiMemoryAllow/rotating-10k`) | 40.0 | 29.6 | 11,156 | 9,470 | — | 0 |
-| `tokenbucket.NewMemory`, new key, 65536 live sources (`BenchmarkMemoryAllow/new-key-full-table` / `BenchmarkYaegiMemoryAllow/new-key-full-table`) | 162 | 150 | 14,029 | 12,907 | — | 2 |
-| `tokenbucket.NewMemory`, hot key, parallel (`BenchmarkMemoryAllow/hot-key-parallel`) | 67.2 | 58.3 | — | — | — | 0 |
-| `tokenbucket.NewRedis`, hot key (`BenchmarkRedisAllow/hot-key` / `BenchmarkYaegiRedisAllow/hot-key`) | 30,393 | 32,017 | 175,465 | 169,434 | 1 | 74 |
-| `tokenbucket.NewRedis`, 10k rotating keys (`BenchmarkRedisAllow/rotating-10k`) | 31,485 | 31,442 | — | — | 1 | 72 |
-| `tokenbucket.NewRedis`, hot key, parallel (`BenchmarkRedisAllow/hot-key-parallel`) | 22,740 | 22,735 | — | — | 1 | 80 |
-| `windowcounter`, `sync_rate` 0, hot key (`BenchmarkTake/sync-rate-0/hot-key` / `BenchmarkYaegiTake/sync-rate-0/hot-key`) | 47,975 | 49,496 | 286,938 | 271,226 | 2 | 68 |
-| `windowcounter`, `sync_rate` 0, 10k rotating keys (`BenchmarkTake/sync-rate-0/rotating-10k`) | 47,435 | 47,416 | — | — | 2 | 67 |
-| `windowcounter`, `sync_rate` 0, hot key, parallel (`BenchmarkTake/sync-rate-0/hot-key-parallel`) | 26,281 | 25,956 | — | — | 2 | 81 |
-| `windowcounter`, `sync_rate` 20 ms, hot key (`BenchmarkTake/sync-rate-20ms/hot-key` / `BenchmarkYaegiTake/sync-rate-20ms/hot-key`) | 258 | 225 | 19,783 | 17,476 | 3.32e-05 | 4 |
-| `windowcounter`, `sync_rate` 20 ms, 10k rotating keys (`BenchmarkTake/sync-rate-20ms/rotating-10k`) | 51,216 | 53,038 | — | — | 2.005 | 67 |
-| `windowcounter`, `sync_rate` 20 ms, hot key, parallel (`BenchmarkTake/sync-rate-20ms/hot-key-parallel`) | 226 | 206 | — | — | 0.00026 | 4 |
-| `windowcounter` flush, 1000 dirty keys (`BenchmarkFlush/dirty-keys-1000` / `BenchmarkYaegiFlush/dirty-keys-1000`) | 879,041 | 868,129 | 13,512,090 | 13,624,990 | 4 | 15945 |
+Compiled rows are `BenchmarkMemoryAllow`, `BenchmarkRedisAllow`, `BenchmarkTake`, and `BenchmarkFlush`; Yaegi rows are the `BenchmarkYaegi*` twins, which run the same code inside one interpreter `Eval` per timed loop. The suite also has parallel-goroutine variants (compiled only) and `BenchmarkLiveRedisAllow` / `BenchmarkLiveTake`, which run against a real Redis, Dragonfly, or Valkey when `TOKENBUCKET_LIVE_*` / `WINDOWCOUNTER_LIVE_*` are set; neither is in the tables. CI compiles the benchmarks but does not run them.
 
 ## Backend backoff
 
