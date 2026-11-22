@@ -22,14 +22,14 @@ Allow returns a Permit that carries the opaque key and that entry's generation; 
 Ready for review. 0 items remain.
 
 Priority: P2 — real operator and end-user pain from a stale report deciding the probe, with limited blast radius
-Reviewed head: 8d6d4c0a
+Reviewed head: 48715dd1
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013983293 |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014370180 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -39,7 +39,7 @@ Owner decision: None.
 | Branch | 2026-11-22-backendbackoff-stale-probe-report pushed | `git` |
 | OpenSpec | backendbackoff-probe-permit | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/121 | pr-host |
-| CI | build 45013983293 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013983293 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013983293 |
+| CI | build 45014370180 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014370180 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014370180 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -60,7 +60,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-backendbackoff-stale-probe-report on branch 2026-11-22-backendbackoff-stale-probe-report targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/121; CI build 45013983293 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013983293.
+Ticket 2026-11-22-backendbackoff-stale-probe-report on branch 2026-11-22-backendbackoff-stale-probe-report targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/121; CI build 45014370180 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014370180.
 
 ## Explore Decisions
 None.
@@ -86,7 +86,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 8d6d4c0a804c0482440bc6e98dd61aa48e309520 | Card must match the branch you measured |
+| Reviewed head | 48715dd101d5e2b7aa3ae56336c0a12ddc9ce08b | Card must match the branch you measured |
 
 ### Stored data model
 None.
