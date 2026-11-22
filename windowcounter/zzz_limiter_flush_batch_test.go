@@ -124,7 +124,8 @@ func TestFlush_BatchOneKeyFailsOthersApply(t *testing.T) {
 	}
 }
 
-// TestFlush_TakeDuringBatchKeepsHit: hits counted while a batch EVAL is in flight stay in local_delta after it applies.
+// TestFlush_TakeDuringBatchKeepsHit: hits counted while a batch EVAL is in flight stay in local_delta and in dirty after it
+// applies, and the next flush writes those hits to Redis.
 func TestFlush_TakeDuringBatchKeepsHit(t *testing.T) {
 	fake, addr := startTestFakeRedis(t)
 	limiter := newFlushTestLimiter(t, addr)
@@ -153,6 +154,18 @@ func TestFlush_TakeDuringBatchKeepsHit(t *testing.T) {
 	state := windowStateForTest(t, limiter, redisKey)
 	if state.redisKnown != 3 || state.localDelta != 2 || state.flushDelta != 0 {
 		t.Fatalf("after in-flight Takes %+v, want redis_known 3, local_delta 2, not in flight", state)
+	}
+	limiter.mu.Lock()
+	_, inDirty := limiter.dirty[redisKey]
+	limiter.mu.Unlock()
+	if !inDirty {
+		t.Fatalf("window %q missing from dirty after in-flight Takes", redisKey)
+	}
+	if err := limiter.flushPending(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := fakeStoredCountForTest(t, fake, redisKey); got != 5 {
+		t.Fatalf("Redis %s = %d, want 5 (3 flushed then 2 in-flight Takes)", redisKey, got)
 	}
 }
 

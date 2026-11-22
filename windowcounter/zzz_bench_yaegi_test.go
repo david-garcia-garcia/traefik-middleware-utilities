@@ -113,6 +113,54 @@ func BenchmarkYaegiFlush(b *testing.B) {
 	})
 }
 
+// BenchmarkYaegiFlushIdle measures one interpreted idle flush with no dirty windows and no due expiry, at 10k and 200k live windows.
+func BenchmarkYaegiFlushIdle(b *testing.B) {
+	for _, live := range []struct {
+		name  string
+		count int
+	}{
+		{name: "10k", count: 10_000},
+		{name: "200k", count: 200_000},
+	} {
+		live := live
+		b.Run(live.name, func(b *testing.B) {
+			fake, addr := startTestFakeRedis(b)
+			fake.enableScriptCache()
+			goPath := b.TempDir()
+			writeGopathWindowcounter(b, goPath)
+			writeGopathFile(b, goPath, "github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter", "zz_bench_hooks.go", flushBenchHooksSrc)
+			writeGopathFile(b, goPath, "idlebench", "idle.go", idlebenchSrc)
+
+			interpreter := interp.New(interp.Options{GoPath: goPath})
+			if err := interpreter.Use(stdlib.Symbols); err != nil {
+				b.Fatalf("use stdlib: %v", err)
+			}
+			if _, err := interpreter.Eval(`import "idlebench"`); err != nil {
+				b.Fatalf("import idlebench: %v", err)
+			}
+			evaluated, err := interpreter.Eval(fmt.Sprintf(`idlebench.Setup(%q, %d)`, addr, live.count))
+			if err != nil {
+				b.Fatalf("setup: %v", err)
+			}
+			if got := evaluated.Interface().(string); got != "ok" {
+				b.Fatalf("setup = %q, want ok", got)
+			}
+			b.Cleanup(func() { _, _ = interpreter.Eval(`idlebench.Close()`) })
+			flush := interpretedFuncForBench(b, interpreter, `idlebench.Flush`).(func() string)
+
+			b.ResetTimer()
+			startCommands := fake.commandCount()
+			for i := 0; i < b.N; i++ {
+				if got := flush(); got != "ok" {
+					b.Fatalf("Flush = %q, want ok", got)
+				}
+			}
+			b.StopTimer()
+			reportRedisCmdsPerOp(b, fake, startCommands)
+		})
+	}
+}
+
 // interpretedFuncForBench evaluates name to an interpreted function and returns it as a Go func value.
 func interpretedFuncForBench(b *testing.B, interpreter *interp.Interpreter, name string) any {
 	b.Helper()
@@ -127,7 +175,10 @@ func interpretedFuncForBench(b *testing.B, interpreter *interp.Interpreter, name
 // package): it exposes the in-package flush and the re-dirty step BenchmarkFlush uses, so the interpreted probe can call them.
 const flushBenchHooksSrc = `package windowcounter
 
-import "context"
+import (
+	"context"
+	"strconv"
+)
 
 // DirtyWindowKeysForBench returns the Redis window keys that hold a pending local delta.
 func DirtyWindowKeysForBench(l *Limiter) []string {
@@ -147,13 +198,26 @@ func RedirtyWindowsForBench(l *Limiter, redisKeys []string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for _, redisKey := range redisKeys {
-		l.windows[redisKey].localDelta++
+		state := l.windows[redisKey]
+		if state.localDelta == 0 {
+			l.dirty[redisKey] = state
+		}
+		state.localDelta++
 	}
 }
 
 // FlushForBench runs one buffered flush.
 func FlushForBench(l *Limiter) error {
 	return l.flushPending(context.Background())
+}
+
+// SeedIdleWindowsForBench inserts count idle windows sharing expireAt.
+func SeedIdleWindowsForBench(l *Limiter, count int, expireAt int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for i := 0; i < count; i++ {
+		l.putWindowLocked("idle:"+strconv.Itoa(i), &windowState{expireAt: expireAt})
+	}
 }
 `
 
@@ -210,6 +274,53 @@ func Redirty() {
 }
 
 // Flush runs one buffered flush of the recorded windows.
+func Flush() string {
+	if err := windowcounter.FlushForBench(benchLimiter); err != nil {
+		return "flush:" + err.Error()
+	}
+	return "ok"
+}
+
+// Close stops the limiter.
+func Close() {
+	benchLimiter.Close()
+}
+`
+
+// idlebenchSrc is the interpreted probe for BenchmarkYaegiFlushIdle: Setup leaves one buffered limiter with count idle windows.
+const idlebenchSrc = `package idlebench
+
+import (
+	"time"
+
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
+	"github.com/david-garcia-garcia/traefik-middleware-utilities/windowcounter"
+)
+
+// benchLimiter is the state Setup leaves for Flush.
+var benchLimiter *windowcounter.Limiter
+
+// Setup builds a buffered limiter on a frozen clock and seeds count idle windows that are not due.
+func Setup(host string, count int) string {
+	client, err := simpleredis.New(simpleredis.Config{Host: host})
+	if err != nil {
+		return "client:" + err.Error()
+	}
+	limiter, err := windowcounter.New(client, time.Hour)
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	now := time.Unix(1700000000, 0)
+	limiter.SetNowForTest(func() time.Time { return now })
+	windowcounter.SeedIdleWindowsForBench(limiter, count, now.Unix()+3600)
+	if err := windowcounter.FlushForBench(limiter); err != nil {
+		return "flush:" + err.Error()
+	}
+	benchLimiter = limiter
+	return "ok"
+}
+
+// Flush runs one idle buffered flush.
 func Flush() string {
 	if err := windowcounter.FlushForBench(benchLimiter); err != nil {
 		return "flush:" + err.Error()

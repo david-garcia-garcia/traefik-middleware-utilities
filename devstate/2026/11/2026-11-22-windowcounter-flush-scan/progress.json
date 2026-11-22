@@ -1,0 +1,47 @@
+{
+  "issueKey": "2026-11-22-windowcounter-flush-scan",
+  "jobName": "2026-11-22-windowcounter-flush-scan",
+  "startedAt": "2026-11-22T09:57:21.611Z",
+  "phases": {
+    "prepare": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:03:00.884Z"
+    },
+    "explore": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:08:09.149Z"
+    },
+    "propose": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:17:44.751Z"
+    },
+    "implement": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:39:13.482Z"
+    },
+    "codereview": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:52:33.052Z"
+    },
+    "devdocsimpact": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:54:52.716Z"
+    },
+    "archive": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:56:30.734Z"
+    },
+    "pullrequest": {
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T11:00:52.053Z"
+    }
+  }
+}
