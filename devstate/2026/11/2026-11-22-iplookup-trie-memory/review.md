@@ -34,3 +34,8 @@ head: 8d2cac76bcde6c619af04d3e5b34664e070443a2
 phase: devdocsimpact
 verdict: in progress
 head: 01544faf73b72950aa8c83985e30d653ceae4098
+
+## archive (2026-11-22)
+phase: archive
+verdict: in progress
+head: ee4d1cdf2c8b482302aa7a90e0fbb74b67061f72
