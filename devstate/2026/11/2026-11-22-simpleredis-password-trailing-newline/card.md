@@ -19,7 +19,7 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 626f7cc1
+Reviewed head: 633a9183
 Owner decision: None.
 
 ## Review scores
@@ -53,7 +53,24 @@ None.
 Ticket 2026-11-22-simpleredis-password-trailing-newline on branch 2026-11-22-simpleredis-password-trailing-newline targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/115; CI not seen. Upstream: https://github.com/traefik/traefik/issues/12078 (no upstream PR).
 
 ## Explore Decisions
-None.
+- Q: ¿Propose añade un escenario al catálogo `openspec/specs/` además del GoDoc?
+  Rank: additive incidental — un escenario nuevo sería un contrato añadido; el ticket es TEST + DOC y no nombra spec id (Unknowns; Out of scope inferido)
+  Decision: assumed — no escenario de catálogo; Live WRONGPASS ya promete el mapeo; la superficie DOC es el GoDoc de `Config.Pass`.
+- Q: ¿Un Secret o fichero con `\r\n` (Windows) debe cubrirse en el test?
+  Rank: additive incidental — casos extra; Out of scope: whitespace distinto del `\n` del test de referencia; Tests nombra `"secret\n"`
+  Decision: assumed — solo `"secret\n"` como el repro de referencia.
+- Q: ¿Qué hace Traefik / go-redis con el mismo Secret?
+  Rank: additive incidental — investigación de terceros extra; Out of scope: cambiar AUTH en Redis/Dragonfly o Traefik upstream
+  Decision: assumed — fuera de este cliente; citar https://github.com/traefik/traefik/issues/12078; no portar trim de Traefik ni go-redis.
+- Q: ¿El paquete de uso `std_go_simpleredis.md` debe ganar un Gotcha de newline, o basta el GoDoc de `Config.Pass`?
+  Rank: additive incidental — edición extra de usage; Design nombra GoDoc en `Config.Pass`
+  Decision: assumed — DOC requerida = GoDoc de `Config.Pass` (byte a byte, sin recorte, newline de Secret/fichero hace fallar AUTH, cita #12078). El usage packet no es la superficie nombrada.
+- Q: ¿Se añade una fila fake `"secret\n"` en `TestAuthArgumentForms` para el job Unit `-short`?
+  Rank: additive incidental — caso unit extra; Tests nombra solo la copia live
+  Decision: assumed — solo el e2e live copiado; Unit `-short` se queda como hoy. El envío es `[]byte(sr.pass)` sin trim.
+- Q: ¿El GoDoc de `Config.User` también debe decir que no se recorta?
+  Rank: additive incidental — doc de otro campo; Design nombra `Config.Pass`; Out of scope recortar `User`
+  Decision: assumed — GoDoc solo en `Config.Pass`; `User` se queda como está.
 
 ## Findings
 None.
@@ -68,7 +85,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 626f7cc175f70da7878d94e29e3d5d6651c3a0ae | Card must match the branch you measured |
+| Reviewed head | 633a91830df21c4d77d0fa221aa01ca3e1d565a6 | Card must match the branch you measured |
 
 ### Stored data model
 None.
