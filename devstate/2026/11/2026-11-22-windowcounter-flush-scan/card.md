@@ -23,17 +23,17 @@ El coste del tick queda en O(sucias + que caducan ahora + segundos distintos de 
 **End users.** None.
 
 ## Merge readiness
-Ready for review. 0 items remain.
+In progress. 0 items remain.
 
 Priority: P2 — dolor real de operador y usuario final, con radio de impacto limitado
-Reviewed head: 3cd8ab54
+Reviewed head: 22a1563c
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014236617 |
+| Overall readiness | 1/6 | Not ready |
+| CI proof | 1/6 | not seen |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -43,7 +43,7 @@ Owner decision: None.
 | Branch | 2026-11-22-windowcounter-flush-scan pushed | `git` |
 | OpenSpec | windowcounter-flush-dirty-index | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/120 | pr-host |
-| CI | build 45014236617 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014236617 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014236617 |
+| CI | not seen | caller omitted CI snapshot |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -57,7 +57,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-windowcounter-flush-scan on branch 2026-11-22-windowcounter-flush-scan targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/120; CI build 45014236617 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45014236617.
+Ticket 2026-11-22-windowcounter-flush-scan on branch 2026-11-22-windowcounter-flush-scan targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/120; CI not seen.
 
 ## Explore Decisions
 None.
@@ -83,7 +83,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 3cd8ab542ea4b711f831791ae64e7868b0d2309d | Card must match the branch you measured |
+| Reviewed head | 22a1563cbd2bcb0b4c866b8c71f990673473071b | Card must match the branch you measured |
 
 ### Stored data model
 None.
