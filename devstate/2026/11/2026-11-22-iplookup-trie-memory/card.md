@@ -1,8 +1,8 @@
 ## Motivation
-Aún no.
+Not yet.
 
 ## Implementation
-Aún no.
+Not yet.
 
 ## What this changes
 **Operators.** None.
@@ -14,19 +14,19 @@ Aún no.
 **End users.** None.
 
 ## Merge readiness
-En curso. Quedan 0 elementos.
+In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: bb56971c
-Owner decision: None.
+Reviewed head: 5a87debf
+Owner decision: Required. See Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | No listo |
+| Overall readiness | 1/6 | Not ready |
 | CI proof | 1/6 | not seen |
-| Local tests proof | N/A | PR remoto — la prueba de CI cubre esto |
-| Review resolution | 6/6 | sin comentarios abiertos en el PR |
+| Local tests proof | N/A | remote PR — CI proof covers this |
+| Review resolution | 6/6 | no open PR comments |
 
 ## Verification
 | Check | Result | Evidence |
@@ -48,10 +48,13 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-iplookup-trie-memory en la rama 2026-11-22-iplookup-trie-memory hacia master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/119; CI not seen.
+Ticket 2026-11-22-iplookup-trie-memory on branch 2026-11-22-iplookup-trie-memory targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/119; CI not seen.
 
 ## Explore Decisions
-None.
+| Question | Rank | Decision | By |
+| --- | --- | --- | --- |
+| Which Yaegi-safe representation can drop memory and GC pointers ≥10× for large random host lists (IPv4 /32, IPv6 /128) while keeping the live contracts? | structural asked — rewrite of the existing radix store component (`ipRadixTree` / one `radixNode` per bit); Desired names drop memory and GC pointers by at least an order of magnitude while keeping every current contract | assumed — defer pick to propose (tech lead). OPTIONS, not Chosen: | explore |
+
 
 ## Findings
 None.
@@ -59,14 +62,14 @@ None.
 ## Axis review
 None.
 
-## Review details
+## Agent review details
 
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Misma lista que ## Specs |
-| Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Un comentario de revisión sin responder es riesgo de merge |
-| Reviewed head | bb56971cbb7f2aadfb28b2015687f96390547d83 | La tarjeta debe coincidir con la rama medida |
+| Specs in this PR | none | Same list as ## Specs |
+| Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
+| Reviewed head | 5a87debff33a2b19c8325c4f1fb5b3ebba8d1cce | Card must match the branch you measured |
 
 ### Stored data model
 None.
