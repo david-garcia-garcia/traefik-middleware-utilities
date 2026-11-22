@@ -40,18 +40,18 @@ Hechos de fuera: research `ext_traefik_plugins_yaegi-generics` (un tipo genéric
 
 - Q: ¿Qué forma de identidad une Allow con Report (generación, token opaco, otro)?
   Rank: bounded incidental — cambia el contrato Allow/Report que ya tiene 32 llamadas a Allow y 18 a Report (raíces: worktree `*.go` `gate.Allow(`/`gate.Report(`, identificador `backendbackoff`, `e2e/`); ningún criterio nombra generación vs token (Unknowns; Out of scope «Elegir el diseño»)
-  Decision: assumed — deferred to propose
-  By: explore
+  Decision: resolved — by propose, pointing to design.md
+  By: propose
 
 - Q: ¿Un Report de era CLOSED que llega en HALF-OPEN aplica aritmética CLOSED o es no-op?
   Rank: additive incidental — rama nueva en Report; Desired y spec cooldown dicen que no puede cerrar/reabrir ni cambiar `n`, no nombran crédito
-  Decision: assumed — deferred to propose
-  By: explore
+  Decision: resolved — by propose, pointing to design.md
+  By: propose
 
 - Q: ¿Cuál es el radio de un cambio de firma fuera de este árbol?
   Rank: bounded asked — 32 Allow + 18 Report in-tree enumerados y migrables aquí; Desired «The API may change (breaking is acceptable… no parallel legacy methods)»
-  Decision: assumed — los tests y benches in-tree se migran en este cambio; consumidores fuera del repo no se midieron y migran en su ciclo; sin métodos legacy (Out of scope)
-  By: explore
+  Decision: resolved — by propose, pointing to design.md
+  By: propose
 
 - Q: ¿Qué implicaciones Yaegi tiene el tipo de identidad elegido?
   Rank: additive asked — Constraints: Yaegi-safe only; tipo exportado nuevo
@@ -60,8 +60,8 @@ Hechos de fuera: research `ext_traefik_plugins_yaegi-generics` (un tipo genéric
 
 - Q: ¿Hay que probar latencia mayor que el cooldown y miles de inflight, más allá del repro?
   Rank: additive incidental — Unknowns lo nombra; ningún criterio pide ese banco; Desired pide el repro y el caso de lease caducado
-  Decision: assumed — la prueba del ticket es la secuencia del repro más el Report tardío del lease caducado; miles de inflight quedan como contexto de impacto, no como trabajo extra
-  By: explore
+  Decision: resolved — by propose, pointing to design.md
+  By: propose
 
 - Q: ¿Quién es dueño de la identidad del intento (permiso), no de la clave HTTP?
   Rank: additive asked — el trabajo emitiría identidad de intento; `std_go_backendbackoff_allow` ya dice que el caller posee la clave y la librería no lee HTTP
@@ -70,10 +70,10 @@ Hechos de fuera: research `ext_traefik_plugins_yaegi-generics` (un tipo genéric
 
 - Q: ¿Allow devuelve identidad también en deny, o solo si admite?
   Rank: additive incidental — valor de retorno extra en la rama deny; ningún criterio lo nombra
-  Decision: assumed — deferred to propose
-  By: explore
+  Decision: resolved — by propose, pointing to design.md
+  By: propose
 
 - Q: El paquete de uso no dice qué Report cuenta como sonda; ¿se reescribe ahora?
   Rank: additive incidental — hueco de usage; produce attended espera; el packet describe el contrato actual
-  Decision: assumed — no reescribir ahora; propose/devdocsimpact actualizan usage cuando exista seam
-  By: explore
+  Decision: resolved — by propose, pointing to design.md
+  By: propose
