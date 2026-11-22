@@ -52,5 +52,5 @@ Hechos de fuera: `knowledge/research/ext_traefik_ratelimiter_token-bucket/` (el 
 
 - Q: ¿Se actualiza `knowledge/devdocs/std_go_tokenbucket.md` si el requisito solo nombra el GoDoc de los constructores?
   Rank: additive incidental — el requisito pide el GoDoc de `NewMemory` y `NewRedis`; no nombra el paquete de uso.
-  Decision: assumed — implement corrige la frase del `ttl` en ese paquete en el mismo cambio, para que no describa un mínimo que el código ya no cumple. No es un renombre.
-  By: explore
+  Decision: resolved — `knowledge/devdocs/std_go_tokenbucket.md` dice que `ttl` es un mínimo y cita traefik/traefik#13957. No es un renombre.
+  By: implement
