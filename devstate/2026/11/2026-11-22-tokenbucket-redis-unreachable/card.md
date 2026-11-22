@@ -1,24 +1,24 @@
 ## Motivation
-Not yet.
+Aún no.
 
 ## Implementation
-Not yet.
+Aún no.
 
 ## What this changes
-**Operators.** None.
+**Operators.** Ninguno.
 
-**Admin users.** None.
+**Admin users.** Ninguno.
 
-**Developers.** None.
+**Developers.** Ninguno.
 
-**End users.** None.
+**End users.** Ninguno.
 
 ## Merge readiness
-In progress. 0 items remain.
+En curso. 0 ítems pendientes.
 
 Priority: unknown — motivation not written
-Reviewed head: b7de05d8
-Owner decision: Required. See Explore Decisions.
+Reviewed head: 7ded9ad2
+Owner decision: Obligatorio. Ver Explore Decisions.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -39,28 +39,32 @@ Owner decision: Required. See Explore Decisions.
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
-None.
+Ninguno.
 
 ## Deviations from the ask
-None.
+Ninguna.
 
 ## Follow-up issues
-None.
+Ninguno.
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-redis-unreachable on branch 2026-11-22-tokenbucket-redis-unreachable targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114; CI not seen.
+Ticket 2026-11-22-tokenbucket-redis-unreachable en la rama homónima hacia master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/114; CI no visto. Pedido TEST + DOC: cubrir Redis inalcanzable como `simpleredis.ErrUnreachable` (o `ErrTimeout`) con `allowed=false`, sin cambio de comportamiento. Medido en el worktree: `Redis.Allow` ya propaga el outage y deja la política al llamador; no hay defecto de política en esta librería. La existencia del defecto aguas arriba se tomó de https://github.com/traefik/traefik/issues/12091 (cerrado como duplicado de https://github.com/traefik/traefik/issues/12043; no hay PR upstream que cerrara #12091).
 
 ## Explore Decisions
 | Question | Rank | Decision | By |
 | --- | --- | --- | --- |
-| ¿Basta el GoDoc de `Redis.Allow` o hay que alinear `knowledge/devdocs/std_go_tokenbucket.md:28` («Match Redis errors by `Error()` text») con `errors.Is`? | additive incidental — una línea de usage existente; ningún criterio del Design nombra el usage (Affected lo deja a explore/propose; el pedido nombra GoDoc). | assumed — alinear How to use a `errors.Is` / `IsUnreachable` contra `ErrUnreachable` y `ErrTimeout`, igual que `std_go_simpleredis.md`. El snippet que solo propaga `err != nil` puede quedarse como un fail-closed de ejemplo; el GoDoc dice que la política es del middleware. No tocar `std_go_windowcounter.md`. | explore |
-
+| ¿Basta el GoDoc de Redis.Allow o hay que alinear el usage (Match Redis errors by Error() text) con errors.Is? | additive incidental — una línea de usage existente; el Design nombra GoDoc, no el usage. | assumed — alinear How to use a errors.Is / IsUnreachable contra ErrUnreachable y ErrTimeout, igual que std_go_simpleredis.md. No tocar std_go_windowcounter.md. | explore |
+| ¿El spec vivo necesita un escenario que nombre ErrUnreachable / ErrTimeout? | additive incidental — aclaración de un contrato ya vivo; Affected lo deja a propose. | assumed — propose pliega en std_go_tokenbucket_allow errors.Is y Allowed false en Status cero; conservar «does not return allowed false as a substitute». | explore |
+| ¿Hace falta un test del camino ErrTimeout? | additive incidental — el Design lo nombra en GoDoc; Tests solo nombra el puerto que rechaza. | assumed — no. GoDoc nombra ErrTimeout; el fichero 12091 cubre refuse. simpleredis ya clasifica timeout. | explore |
+| ¿Este issue necesita un test live contra Redis/Dragonfly? | additive incidental — el repro de referencia es unitario contra 127.0.0.1:1. | assumed — no. TestLive_Limiter ya es el camino feliz. | explore |
+| ¿Cómo adaptar la firma del repro (bool, wait, error) a (Status, error) de dest? | additive asked — Tests mapea TestTraefik12091_RedisUnreachable; dest cambió la firma en #106. | assumed — status, err := limiter.Allow(...); errors.Is(err, ErrUnreachable); fallar si status.Allowed es true. | explore |
+| ¿Los tests existentes que casan Error() == RedisUnreachable se reescriben a errors.Is? | additive incidental — 2 sitios enumerados; ningún criterio pide reescribirlos. | assumed — no reescribir. El fichero 12091 es la prueba errors.Is. | explore |
 
 ## Findings
-None.
+Ninguno.
 
 ## Axis review
-None.
+Ninguno.
 
 ## Agent review details
 
@@ -69,7 +73,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | b7de05d87bad6882deb23b18464e6a19077a33e6 | Card must match the branch you measured |
+| Reviewed head | 7ded9ad2fed1e3621ef2398c5a8bc13adb63bd6f | Card must match the branch you measured |
 
 ### Stored data model
-None.
+Ninguno.
