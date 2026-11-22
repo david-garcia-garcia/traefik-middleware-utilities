@@ -20,7 +20,7 @@ Sin cambio de comportamiento: `Redis.Allow` sigue devolviendo `Status{}, err` si
 Ready for review. 0 items remain.
 
 Priority: P3 — spec, docs, tests, or internal clarity — no current user or operator harm
-Reviewed head: 8aab30d3
+Reviewed head: d35e493e
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -43,7 +43,10 @@ Owner decision: Required. See Explore Decisions.
 
 ## Specs
 Worktree:
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-redis-unreachable/openspec/changes/tokenbucket-redis-unreachable/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-redis-unreachable/openspec/changes/archive/2026-11-22-tokenbucket-redis-unreachable/proposal.md) — modified
+
+Completed:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-redis-unreachable/openspec/specs/std_go_tokenbucket_allow/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -80,9 +83,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 8aab30d3438925e21567306ed5e42f647badf71e | Card must match the branch you measured |
+| Reviewed head | d35e493e4d55c645725523a718baa662b3a94517 | Card must match the branch you measured |
 
 ### Stored data model
 None.
