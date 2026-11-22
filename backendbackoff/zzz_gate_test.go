@@ -41,7 +41,7 @@ func TestReport_ConsecutiveFailuresTrip(t *testing.T) {
 		if err != nil || !permit.Allowed() {
 			t.Fatalf("admit %d: allowed=%v err=%v", i, permit.Allowed(), err)
 		}
-		if err := gate.Report(permit, false); err != nil {
+		if _, err := gate.Report(permit, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -81,7 +81,7 @@ func TestReport_OpenIgnored(t *testing.T) {
 	gate.mu.Lock()
 	openPermit := Permit{key: "k", gen: gate.keys["k"].gen}
 	gate.mu.Unlock()
-	if err := gate.Report(openPermit, true); err != nil {
+	if _, err := gate.Report(openPermit, true); err != nil {
 		t.Fatal(err)
 	}
 	permit, retryAfter, err := gate.Allow("k")
@@ -102,7 +102,7 @@ func TestReport_SuccessCapsAtB(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	gate.mu.Lock()
@@ -122,7 +122,7 @@ func TestReport_AfterTTLStillRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Minute)
-	if err := gate.Report(permit, false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	gate.mu.Lock()
@@ -139,10 +139,10 @@ func TestReport_SuccessCredits(t *testing.T) {
 	if err != nil || !permit.Allowed() {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	gate.mu.Lock()
@@ -183,7 +183,7 @@ func TestAllow_IdleKeyPresumedHealthy(t *testing.T) {
 	if credit != 5 {
 		t.Fatalf("credit = %v, want B", credit)
 	}
-	if err := gate.Report(permit, false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	permit, _, err = gate.Allow("k")
@@ -257,7 +257,7 @@ func TestReport_ProbeSuccessRetainsN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Second)
@@ -265,7 +265,7 @@ func TestReport_ProbeSuccessRetainsN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	gate.mu.Lock()
@@ -301,7 +301,7 @@ func TestReport_ProbeFailureIncrementsN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	permit, retryAfter, err := gate.Allow("k")
@@ -326,7 +326,7 @@ func TestAllow_NResetsAfterMaxClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Second)
@@ -334,7 +334,7 @@ func TestAllow_NResetsAfterMaxClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(10 * time.Second)
@@ -361,7 +361,7 @@ func TestAllow_EarlyRetripKeepsN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(2 * time.Second)
@@ -369,7 +369,7 @@ func TestAllow_EarlyRetripKeepsN(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := gate.Report(permit, true); err != nil {
+	if _, err := gate.Report(permit, true); err != nil {
 		t.Fatal(err)
 	}
 	now = now.Add(time.Second)
@@ -393,7 +393,7 @@ func TestClose_AllowErrors(t *testing.T) {
 	if permit.Allowed() {
 		t.Fatal("closed gate must not admit")
 	}
-	if err := gate.Report(Permit{}, true); !errors.Is(err, errClosed) {
+	if _, err := gate.Report(Permit{}, true); !errors.Is(err, errClosed) {
 		t.Fatalf("Report = %v", err)
 	}
 }
@@ -406,7 +406,7 @@ func TestReport_CanceledRequestStillRecords(t *testing.T) {
 		t.Fatal(err)
 	}
 	cancel()
-	if err := gate.Report(permit, false); err != nil {
+	if _, err := gate.Report(permit, false); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -436,7 +436,7 @@ func trip(t *testing.T, gate *Gate) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := gate.Report(permit, false); err != nil {
+		if _, err := gate.Report(permit, false); err != nil {
 			t.Fatal(err)
 		}
 	}

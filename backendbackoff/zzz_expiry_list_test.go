@@ -175,7 +175,7 @@ func TestAllowDenyAndReportMoveToTailExpiryList(t *testing.T) {
 	if got := strings.Join(expiryListKeysExpiryList(t, gate), ","); got != "d,a,b,c" {
 		t.Fatalf("after admits list %s, want d,a,b,c", got)
 	}
-	if err := gate.Report(pb, true); err != nil {
+	if _, err := gate.Report(pb, true); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.Join(expiryListKeysExpiryList(t, gate), ","); got != "d,a,c,b" {

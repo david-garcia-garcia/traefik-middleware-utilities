@@ -30,7 +30,7 @@ Per-key in-memory admission: Allow decides whether a real backend attempt may pr
 - **THEN** the library MUST NOT read HTTP headers, client address, user, tenant, or Host to build that key
 
 ### Requirement: Report applies saturating credit
-`Report(permit, success)` SHALL record the outcome of a real backend attempt the gate admitted, identified by the permit Allow returned for it. Each key SHALL carry a generation that changes on every state transition and is never reused by a recreated key. Report SHALL apply only when the permit's generation equals the key's current generation; any other permit (zero permit, earlier generation, expired or recreated key) SHALL be ignored without changing credit, state, `n`, or the idle deadline. A failure SHALL subtract 1 from that key's credit. A success SHALL add `p/(1-p)` to credit, capped at `B`. Credit SHALL start at `B`. When credit is at most zero while CLOSED, the key SHALL trip to OPEN. Report MUST NOT take a context: a canceled request that already hit the backend MUST still land. Report on OPEN SHALL be ignored.
+`Report(permit, success)` SHALL record the outcome of a real backend attempt the gate admitted, identified by the permit Allow returned for it. Each key SHALL carry a generation that changes on every state transition and is never reused by a recreated key. Report SHALL apply only when the permit's generation equals the key's current generation; any other permit (zero permit, earlier generation, expired or recreated key) SHALL be ignored without changing credit, state, `n`, or the idle deadline. Report SHALL return `applied` true when the outcome counted for the key and false when it was ignored, so the caller can tell a counted probe result from a stale one; a closed gate SHALL return false and an error. A failure SHALL subtract 1 from that key's credit. A success SHALL add `p/(1-p)` to credit, capped at `B`. Credit SHALL start at `B`. When credit is at most zero while CLOSED, the key SHALL trip to OPEN. Report MUST NOT take a context: a canceled request that already hit the backend MUST still land. Report on OPEN SHALL be ignored.
 
 #### Scenario: Consecutive failures trip a dead backend
 - **WHEN** a new key has credit `B`
@@ -54,6 +54,12 @@ Per-key in-memory admission: Allow decides whether a real backend attempt may pr
 - **AND** the key has since tripped and re-closed
 - **AND** Report is called with that permit and success false
 - **THEN** credit, state, and `n` do not change
+
+#### Scenario: Report says whether the outcome counted
+- **WHEN** Report is called with a permit of the key's current generation
+- **THEN** it returns applied true
+- **WHEN** Report is called with a zero permit, a permit of an earlier generation, or an expired probe's permit
+- **THEN** it returns applied false and a nil error
 
 ### Requirement: Memory map bounds idle keys
 Idle keys SHALL expire after `TTL` on a later Allow (lazy). Allow SHALL refresh the key's idle deadline on every call, including denies, so an OPEN key under denied traffic is not dropped. When a key has been idle longer than `TTL`, the next Allow SHALL treat it as unseen (CLOSED, credit `B`, `n` 0). The map SHALL not grow past 65536 keys: expired keys drop first, then one arbitrary slot if still at cap. The package MUST NOT import `tokenbucket`.

@@ -126,7 +126,7 @@ func TripAfterFailures() string {
 		if !p.Allowed() {
 			return "early"
 		}
-		if reportErr := gate.Report(p, false); reportErr != nil {
+		if _, reportErr := gate.Report(p, false); reportErr != nil {
 			return "report:" + reportErr.Error()
 		}
 	}

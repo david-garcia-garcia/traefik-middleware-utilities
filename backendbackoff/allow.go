@@ -43,34 +43,36 @@ func (g *Gate) Allow(key string) (Permit, time.Duration, error) {
 	}
 }
 
-// Report records the outcome of a real backend attempt the gate admitted.
-func (g *Gate) Report(permit Permit, success bool) error {
+// Report records the outcome of a real backend attempt the gate admitted. applied is true when the
+// outcome counted for the key (its generation matched); a zero, stale, or recreated-key permit is
+// ignored and returns applied false with a nil error. A closed gate returns errClosed.
+func (g *Gate) Report(permit Permit, success bool) (applied bool, err error) {
 	now := g.now()
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.closed {
-		return errClosed
+		return false, errClosed
 	}
 	if !permit.Allowed() {
-		return nil
+		return false, nil
 	}
 	entry := g.keys[permit.key]
 	if entry == nil {
-		return nil
+		return false, nil
 	}
 	// A mismatched generation is a no-op: no credit, state, n, or TTL refresh.
 	if entry.gen != permit.gen {
-		return nil
+		return false, nil
 	}
 	// Expire is Allow's job. An admitted attempt that Reports after TTL still lands.
 	entry.expireAt = now.Add(g.cfg.TTL)
 	g.moveToBackLocked(entry)
 	switch entry.state {
 	case stateOpen:
-		return nil
+		return false, nil
 	case stateHalfOpen:
 		if !entry.probeOutstanding {
-			return nil
+			return false, nil
 		}
 		entry.probeOutstanding = false
 		if success {
@@ -78,20 +80,20 @@ func (g *Gate) Report(permit Permit, success bool) error {
 			entry.state = stateClosed
 			entry.closedSince = now
 			g.bumpGen(entry)
-			return nil
+			return true, nil
 		}
 		entry.n++
 		entry.state = stateOpen
 		entry.openUntil = now.Add(g.cooldownDuration(entry.n))
 		g.bumpGen(entry)
-		return nil
+		return true, nil
 	case stateClosed:
 		if success {
 			entry.credit += g.successCredit()
 			if entry.credit > g.budget {
 				entry.credit = g.budget
 			}
-			return nil
+			return true, nil
 		}
 		g.resetNIfClosedLongEnough(entry, now)
 		entry.credit--
@@ -101,9 +103,9 @@ func (g *Gate) Report(permit Permit, success bool) error {
 			entry.closedSince = time.Time{}
 			g.bumpGen(entry)
 		}
-		return nil
+		return true, nil
 	default:
-		return errUnknown
+		return false, errUnknown
 	}
 }
 

@@ -30,7 +30,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/backendbacko
 
 - `New(Config{})` once (zeros apply defaults) or pass knobs. `FailureRatio` is `p`; `TripFailures` is how many consecutive failures trip a dead backend.
 - Before each request, if `req.Context()` is already done, skip Allow and the backend call. Otherwise call `Allow(key)`. If `!p.Allowed()`, the caller may set `Retry-After` from the wait; the library does not.
-- On an admitted attempt, call the backend, then `Report(p, success)`. Never Report a deny. A report from another generation is ignored.
+- On an admitted attempt, call the backend, then `Report(p, success)`. Never Report a deny. A report from another generation is ignored and `Report` returns `applied` false (use it, not your own flag, to log that a probe closed the gate).
 - Prove with `go test -short ./backendbackoff/...`. No live Redis/Dragonfly (see `knowledge/devdocs/std_go_test-suites.md`).
 - Benchmark new-key admission with `go test -run '^$' -bench 'BenchmarkAllow/new-key-full-table' ./backendbackoff/` (compiled) and `-bench 'BenchmarkYaegiAllow/new-key-full-table'` (interpreted; writes a test-only `zz_bench_hooks.go` into the interpreter GOPATH copy). CI does not run benchmarks.
 
@@ -53,7 +53,7 @@ if !p.Allowed() {
 }
 _ = retryAfter
 ok := callBackend()
-gate.Report(p, ok)
+_, _ = gate.Report(p, ok)
 ```
 
 ## Key files
