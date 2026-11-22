@@ -29,14 +29,14 @@ OpenSpec change metadata (`skip_specs: true`) records that the existing live AUT
 Ready for review. 0 items remain.
 
 Priority: P3 — spec, docs, tests, or internal clarity with no new user or operator harm from this branch itself.
-Reviewed head: 1675607f
+Reviewed head: 6a5e8805
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
 | Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996727348 |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998003830 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -46,7 +46,7 @@ Owner decision: None.
 | Branch | 2026-11-22-simpleredis-password-trailing-newline pushed | `git` |
 | OpenSpec | simpleredis-password-trailing-newline | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/115 | pr-host |
-| CI | build 44996727348 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996727348 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996727348 |
+| CI | build 44998003830 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998003830 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998003830 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -60,7 +60,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-simpleredis-password-trailing-newline on branch 2026-11-22-simpleredis-password-trailing-newline targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/115; CI build 44996727348 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44996727348.
+Ticket 2026-11-22-simpleredis-password-trailing-newline on branch 2026-11-22-simpleredis-password-trailing-newline targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/115; CI build 44998003830 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44998003830.
 
 ## Explore Decisions
 None.
@@ -86,7 +86,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 1675607fa5013cf4b0e57ba4b317a357b0e3b329 | Card must match the branch you measured |
+| Reviewed head | 6a5e88050221a985601d55d3d1266a09f7819105 | Card must match the branch you measured |
 
 ### Stored data model
 None.
