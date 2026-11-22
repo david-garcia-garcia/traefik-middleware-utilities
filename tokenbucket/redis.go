@@ -50,7 +50,9 @@ func (r *Redis) SetNowForTest(now func() time.Time) {
 }
 
 // Allow consumes one token for key via Eval and returns its Status: whether it is allowed, the wait as Delay or RetryAfter,
-// and the bucket the script kept. The Status is the zero value when the error is non-nil.
+// and the bucket the script kept. The Status is the zero value when the error is non-nil. On a Redis outage Allow returns
+// simpleredis.ErrUnreachable (or simpleredis.ErrTimeout) with allowed=false. Fail-open or fail-closed is the middleware's
+// decision; upstream Traefik answers 500 with no option (https://github.com/traefik/traefik/issues/12091).
 func (r *Redis) Allow(ctx context.Context, key string) (Status, error) {
 	if err := ctx.Err(); err != nil {
 		return Status{}, err

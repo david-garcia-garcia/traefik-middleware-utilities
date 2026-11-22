@@ -25,7 +25,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket`
 ## How to use
 
 - `NewMemory(rate, burst, maxDelay, ttl)` or `NewRedis(client, rate, burst, maxDelay, ttl)` once.
-- Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline. Match Redis errors by `Error()` text.
+- Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline. Match Redis errors with `errors.Is` / `IsUnreachable` against `ErrUnreachable` and `ErrTimeout`; the display text stays `redis:unreachable`.
 - Read the returned `Status`: deny on `!Allowed` and put `RetryAfter` in `Retry-After`; sleep `Delay` when allowed to keep Traefik's delayed admit; take `Limit`, `Remaining`, `Period`, and `Reset` for `X-RateLimit-*`. Formatting (whole seconds, HTTP date) is the middleware's job. On a non-nil error the `Status` is the zero value.
 - Prove with `go test -short ./tokenbucket/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
 - Benchmark with `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/`: `bench_test.go` (compiled, fake Redis with a warm script cache, `redis-cmds/op`), `bench_yaegi_test.go` (interpreted: hot key, 10k rotating sources, new key at a full table; it writes a test-only `zz_bench_hooks.go` into the interpreter's GOPATH copy of the package to prefill sources without `Allow`), `bench_e2e_test.go` (`-bench Live`, needs `TOKENBUCKET_LIVE_*`, skips under `-short`). CI does not run benchmarks. Results and machine: `README.md` `## Rate limiters compared`.
