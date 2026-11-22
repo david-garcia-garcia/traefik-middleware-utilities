@@ -22,7 +22,7 @@ Allow returns a Permit that carries the opaque key and that entry's generation; 
 In progress. 0 items remain.
 
 Priority: P2 — real operator and end-user pain from a stale report deciding the probe, with limited blast radius
-Reviewed head: bf614ea9
+Reviewed head: c8e64853
 Owner decision: None.
 
 ## Review scores
@@ -45,8 +45,12 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_backendbackoff_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-stale-probe-report/openspec/changes/backendbackoff-probe-permit/proposal.md) — modified
-- [std_go_backendbackoff_cooldown](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-stale-probe-report/openspec/changes/backendbackoff-probe-permit/proposal.md) — modified
+- [std_go_backendbackoff_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-stale-probe-report/openspec/changes/archive/2026-11-22-backendbackoff-probe-permit/proposal.md) — modified
+- [std_go_backendbackoff_cooldown](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-stale-probe-report/openspec/changes/archive/2026-11-22-backendbackoff-probe-permit/proposal.md) — modified
+
+Completed:
+- [std_go_backendbackoff_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-stale-probe-report/openspec/specs/std_go_backendbackoff_allow/spec.md) — modified
+- [std_go_backendbackoff_cooldown](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-stale-probe-report/openspec/specs/std_go_backendbackoff_cooldown/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -80,9 +84,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | bf614ea96fbc1896db7d37b206b8a71fd7df256c | Card must match the branch you measured |
+| Reviewed head | c8e64853052aa0bdd3e718d0af92bb1a008f672c | Card must match the branch you measured |
 
 ### Stored data model
 None.
