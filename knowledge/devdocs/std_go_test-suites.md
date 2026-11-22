@@ -51,16 +51,19 @@ Four suites, eight jobs (`test` and `race` are both unit; Go E2E is Redis and Dr
 - Pester: `./Test-Integration.ps1`. Docker required. Domain files are `scripts/integration-tests.<domain>.Tests.ps1` (reclaim, simpleredis). Helpers are `scripts/integration-tests.utils/*.ps1` (not `*Tests.ps1`). `-Suite reclaim` is reclaim only. `-Suite simpleredis -Engine redis|dragonfly` sets `INTEGRATION_ENGINE` and runs the SimpleRedis file once. Default (`-Suite all`) runs reclaim then both engines. CI jobs `integration`, `integration-redis`, and `integration-dragonfly` match those three slices.
 - Benchmarks: `bench_test.go` (compiled, fake), `bench_yaegi_test.go` (interpreted, fake), and `bench_e2e_test.go` (live, compiled) in `tokenbucket/` and `windowcounter/`, next to `simpleredis/bench_test.go` and `backendbackoff/bench_test.go`. CI does not pass `-bench`, so benchmarks only compile there. Run `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/ ./windowcounter/`; live benchmarks run with `-bench Live` and the `*_LIVE_*` addrs set, and skip under `-short` like the live tests.
 - Do not dump every live case into one `live_test.go`. Name the file for the domain it proves (`commands_e2e_test.go` beside `commands.go` / `commands_test.go`).
+- Traefik upstream-issue regressions: `traefik_issue<id>_test.go` (unit) and `traefik_issue<id>_e2e_test.go` (live) in that domain package. Keep helpers in those files with suffix `<id>`. Do not dump them into `limiter_e2e_test.go` or a shared helper file.
 - Skip under `-short` or both live addrs unset. One addr set runs that engine only.
 
 ## Pattern snippet
 
 ```text
 limiter.go
-limiter_test.go           # unit (fake)
-limiter_e2e_test.go        # live Redis + Dragonfly
-limiter_yaegi_test.go      # interpreted, fake
-limiter_yaegi_e2e_test.go # interpreted, live
+limiter_test.go                 # unit (fake)
+limiter_e2e_test.go             # live Redis + Dragonfly
+limiter_yaegi_test.go           # interpreted, fake
+limiter_yaegi_e2e_test.go      # interpreted, live
+traefik_issue13704_test.go      # unit regression for one upstream issue
+traefik_issue13704_e2e_test.go  # live remaining TTL / engine proof
 ```
 
 ## Key files
@@ -70,6 +73,7 @@ limiter_yaegi_e2e_test.go # interpreted, live
 - `simpleredis/tls_fixture_test.go` — the one test certificate generator (`TestWriteTLSFixtureFiles` writes it for the live engines); `simpleredis/tls_fake_test.go` — the in-process TLS fake
 - `windowcounter/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
 - `tokenbucket/limiter_e2e_test.go`, `limiter_yaegi_e2e_test.go`
+- `tokenbucket/traefik_issue13704_test.go`, `traefik_issue13704_e2e_test.go` — Memory idle-reclaim and live remaining TTL
 - `Test-Integration.ps1`, `scripts/integration-tests.reclaim.Tests.ps1`, `scripts/integration-tests.simpleredis.Tests.ps1`, `scripts/integration-tests.utils/`
 
 ## Gotchas
