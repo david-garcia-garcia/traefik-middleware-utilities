@@ -7,8 +7,8 @@ A Traefik RateLimit clock. Package `tokenbucket`. Refill at `rate` tokens per se
 _Avoid_: naming the package `ratelimit` or `bucket`; mixing this clock with `windowcounter`
 
 **Allow**:
-One consume against an opaque key. Returns a `Status`. The caller 429s or waits. The library does not sleep.
-_Avoid_: HTTP 429 inside the library; sourceCriterion; prefixing `rate:` inside the package
+One consume against an opaque key. Returns a `Status`. The library does not sleep and does not choose HTTP.
+_Avoid_: HTTP 429 inside the library; sourceCriterion; prefixing `rate:` inside the package; deny-on-error inside Allow
 
 **Status**:
 The outcome of one Allow: `Allowed`, the wait split into `Delay` (allowed) and `RetryAfter` (denied), and `Limit` (burst), `Remaining`, `Period`, `Reset` for rate-limit headers. A value; the library writes no header.
@@ -25,7 +25,9 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket`
 ## How to use
 
 - `NewMemory(rate, burst, maxDelay, ttl)` or `NewRedis(client, rate, burst, maxDelay, ttl)` once.
-- Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline. Match Redis errors with `errors.Is` / `IsUnreachable` against `ErrUnreachable` and `ErrTimeout`; the display text stays `redis:unreachable`.
+- Call `Allow(ctx, key)` per request. Pass `req.Context()` on the request path; pass `context.Background()` when there is no deadline.
+- Match a Redis outage with `errors.Is` against `simpleredis.ErrUnreachable` or `simpleredis.ErrTimeout` (`IsUnreachable` is the unreachable family only; it does not match `ErrTimeout`). Display text stays `redis:unreachable` / `redis:timeout`.
+- On a Redis outage `Allow` returns that error and the zero `Status`. `Allowed` is false because Status is zero, not because Allow denied. Match `err` before reading `Allowed`. Fail-open or fail-closed is the middleware's decision; this library does not pick an HTTP code. The snippet that returns `err != nil` is fail-closed.
 - Read the returned `Status`: deny on `!Allowed` and put `RetryAfter` in `Retry-After`; sleep `Delay` when allowed to keep Traefik's delayed admit; take `Limit`, `Remaining`, `Period`, and `Reset` for `X-RateLimit-*`. Formatting (whole seconds, HTTP date) is the middleware's job. On a non-nil error the `Status` is the zero value.
 - Prove with `go test -short ./tokenbucket/...`. Live Redis/Dragonfly is `limiter_e2e_test.go` / `limiter_yaegi_e2e_test.go` (see `knowledge/devdocs/std_go_test-suites.md`).
 - Benchmark with `go test -run '^$' -bench . -benchtime 1s -count 5 ./tokenbucket/`: `bench_test.go` (compiled, fake Redis with a warm script cache, `redis-cmds/op`), `bench_yaegi_test.go` (interpreted: hot key, 10k rotating sources, new key at a full table; it writes a test-only `zz_bench_hooks.go` into the interpreter's GOPATH copy of the package to prefill sources without `Allow`), `bench_e2e_test.go` (`-bench Live`, needs `TOKENBUCKET_LIVE_*`, skips under `-short`). CI does not run benchmarks. Results and machine: `README.md` `## Rate limiters compared`.
@@ -40,7 +42,7 @@ if err != nil {
 ctx := req.Context()
 status, err := limiter.Allow(ctx, "ip:"+ip)
 if err != nil {
-	return err
+	return err // fail-closed; fail-open would admit
 }
 if !status.Allowed {
 	return errLimited // 429 with Retry-After from status.RetryAfter
@@ -50,12 +52,13 @@ time.Sleep(status.Delay)
 
 ## Key files
 
-- `tokenbucket/` — Traefik token bucket; `status.go` builds the `Status` both stores return
+- `tokenbucket/` — Traefik token bucket; `status.go` builds the `Status` both stores return; `redis.go` `Allow` returns Eval errors with the zero Status
 - `tokenbucket/bench_test.go`, `bench_yaegi_test.go`, `bench_e2e_test.go` — compiled, interpreted, and live benchmarks
 - `openspec/specs/std_go_tokenbucket_allow/spec.md`, `openspec/specs/std_go_tokenbucket_lua-eval/spec.md`
 
 ## Gotchas
 
+- A non-nil Redis error with `!status.Allowed` is an outage, not a 429. Match `err` first. Fail-open (admit) or fail-closed (5xx) is the caller's choice; do not 429 from the zero Status.
 - `rate <= 0`, NaN, Inf, `burst < 1`, `maxDelay < 0`, or a `ttl` that is not a whole number of seconds of at least 1s fails New. Redis EXPIRE is integer seconds; New must not accept a Duration Redis cannot represent. Passthrough is skipping construction. This package has no unlimited-rate constructor.
 - Lua always returns `"true"`; Go maps `Allowed` from wait microseconds vs maxDelay microseconds (Lua refunds on `>`). The `Delay` and `RetryAfter` durations are not the admit gate.
 - The wait is `Delay` when allowed and `RetryAfter` when denied; the other is 0, and `Delay + RetryAfter` is the single wait `Allow` used to return. `RetryAfter` is the full wait (the delay Traefik puts in `Retry-After`), not `wait - maxDelay`.
