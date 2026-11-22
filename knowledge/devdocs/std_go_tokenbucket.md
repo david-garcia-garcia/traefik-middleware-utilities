@@ -20,7 +20,7 @@ _Avoid_: tokens before the consume; a negative count
 
 ## Overview
 
-Import `github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket`. For Redis, inject an already-`Init`ed `*simpleredis.SimpleRedis`. Prefix keys in the caller. Compute `rate` from Traefik `average/period`. Pass `maxDelay` and `ttl` (Traefik uses `1/(2*rate)` capped at 500ms when rate < 1, and ttl `2s` when rate ≥ 1 else `1 + int(1/rate)`). Do not close the Redis client from the limiter.
+Import `github.com/david-garcia-garcia/traefik-middleware-utilities/tokenbucket`. For Redis, inject an already-`Init`ed `*simpleredis.SimpleRedis`. Prefix keys in the caller. Compute `rate` from Traefik `average/period`. Pass `maxDelay` and `ttl`. `ttl` is a minimum idle lifetime: the library raises it to the whole seconds needed to refill `burst` at `rate`, including `maxDelay`, so an expired bucket is already full (traefik/traefik#13957). Traefik's own formula (`2s` when rate ≥ 1, else `1 + int(1/rate)`) may be shorter; pass it anyway. Do not close the Redis client from the limiter.
 
 ## How to use
 
@@ -63,7 +63,7 @@ time.Sleep(status.Delay)
 - `Remaining` and `Reset` come from the tokens kept after this Allow, after the refund when denied. Admitted-with-delay leaves tokens negative (debt): `Remaining` is 0 and `Reset` is longer than `Period`.
 - Duration fields saturate at the maximum `time.Duration` instead of overflowing, and are never negative. Saturation does not change `Allowed`.
 - Redis reads the tokens left from the third Eval field. Redis writes it with 14 significant digits and Dragonfly appends `.0`, so memory and Redis agree on `Remaining`/`Reset` while tokens stay whole and may differ only when that rounding crosses an integer. A tokens field that is not a finite number is `errEvalTokens` (`tokenbucket: eval tokens is not a number`); the wait is checked first, so a reply with both bad is still `errEvalWait`.
-- A new or TTL-expired key starts at `burst`, then consume 1. Missing Redis hash does the same; do not assume `last=0` refill from Unix epoch.
+- A new or TTL-expired key starts at `burst`, then consume 1. Missing Redis hash does the same; do not assume `last=0` refill from Unix epoch. The idle lifetime is the caller `ttl` raised to that refill floor, never lowered, and it is the same value Memory expires with and Redis passes to `EXPIRE`. A tiny rate clamps the floor to the largest whole-second `time.Duration`.
 - A 3-field Eval wait that is not a finite number (`nan`, `+Inf`, `-Inf`, `inf`) is `errEvalWait` (`tokenbucket: eval wait is not a number`), same as a garbage string. Do not treat it as admit or deny.
 - EVAL scripts must list keys in `KEYS` (Dragonfly). Do not use `table.maxn`.
 - Two limiter instances on one Redis key share burst. Do not expect a second full burst.

@@ -47,8 +47,8 @@ Hechos de fuera: `knowledge/research/ext_traefik_ratelimiter_token-bucket/` (el 
 
 - Q: ¿Hay que alargar el reloj de `TestYaegi_MemoryCapAndExpiry`, que construye con rate 1e-6, burst 1 y ttl 1 s y avanza 1 s?
   Rank: additive asked — el diseño dice que subir el TTL no cambia las admisiones, solo cuánto vive una clave ociosa. El suelo aquí es 1000000 s.
-  Decision: assumed — no se reescribe la sonda salvo que el test falle. Con el almacén lleno, echar una clave viva sigue admitiendo la nueva como bucket lleno.
-  By: explore
+  Decision: resolved — `go test -short -count=1 ./tokenbucket/` pasó con el suelo aplicado, incluida `TestYaegi_MemoryCapAndExpiry`. La sonda no se reescribe.
+  By: implement
 
 - Q: ¿Se actualiza `knowledge/devdocs/std_go_tokenbucket.md` si el requisito solo nombra el GoDoc de los constructores?
   Rank: additive incidental — el requisito pide el GoDoc de `NewMemory` y `NewRedis`; no nombra el paquete de uso.
