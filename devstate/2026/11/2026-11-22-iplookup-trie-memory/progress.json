@@ -39,9 +39,9 @@
       "at": "2026-11-22T10:42:02.172Z"
     },
     "pullrequest": {
-      "work": false,
-      "card": false,
-      "at": null
+      "work": true,
+      "card": true,
+      "at": "2026-11-22T10:45:38.579Z"
     }
   }
 }
