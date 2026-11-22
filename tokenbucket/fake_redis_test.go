@@ -99,7 +99,7 @@ func (f *testFakeRedis) serve(conn net.Conn) {
 				_, _ = io.WriteString(conn, "-ERR bad argv\r\n")
 				break
 			}
-			// Missing hash is a full bucket like Lua empty HGETALL, then consumeOne.
+			// Missing hash is a full bucket like a Lua hash without last and tokens, then consumeOne.
 			tokens := burst
 			last := nowMicro
 			if hash := f.hashes[key]; hash != nil {
