@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// BenchmarkLiveTake measures compiled Take against live Redis, Dragonfly, and Valkey (WINDOWCOUNTER_LIVE_*) in exact mode and at sync_rate 20ms:
+// BenchmarkLiveTake measures compiled Take against live Redis, Dragonfly, and Valkey (WINDOWCOUNTER_LIVE_*) in every benchTakeModes mode:
 // one hot key and 10k rotating keys. It skips under -short or when both addresses are unset. Keys carry a per-run prefix.
 func BenchmarkLiveTake(b *testing.B) {
 	ctx := context.Background()
