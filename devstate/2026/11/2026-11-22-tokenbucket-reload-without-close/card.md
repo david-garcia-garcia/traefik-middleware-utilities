@@ -1,3 +1,10 @@
+## Summary
+Solo test de regresión: 50 recargas sin Close no deben dejar sockets proxied ni goroutines. Sin cambio de producto. El defecto de Traefik no se reproduce aquí.
+
+La existencia del defecto se tomó de estos informes upstream:
+- Issue https://github.com/traefik/traefik/issues/13618
+- PR upstream https://github.com/traefik/traefik/pull/13619 (abierto)
+
 ## Motivation
 Not yet.
 
@@ -17,7 +24,7 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 59285485
+Reviewed head: 44446dab
 Owner decision: Required. See Explore Decisions.
 
 ## Review scores
@@ -69,7 +76,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 592854850eaded42a079bc69eee88e7185b20f03 | Card must match the branch you measured |
+| Reviewed head | 44446dabbe59cc7e48f868b678ecb21b2f6984d0 | Card must match the branch you measured |
 
 ### Stored data model
 None.
