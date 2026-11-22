@@ -19,17 +19,17 @@ releaseLease para el AfterFunc cuando hay stop y luego dropOnce. dropOnce, bajo 
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+Ready for review. 0 items remain.
 
 Priority: P2 — fuga real de holders y Close que no corre, radio limitado al mismatch de OpenTyped
-Reviewed head: 826203d7
+Reviewed head: 893882df
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013740682 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -39,7 +39,7 @@ Owner decision: None.
 | Branch | 2026-11-22-reclaim-opentyped-holder-leak pushed | `git` |
 | OpenSpec | reclaim-opentyped-mismatch-release | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/123 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
+| CI | build 45013740682 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013740682 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013740682 |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -58,7 +58,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-reclaim-opentyped-holder-leak on branch 2026-11-22-reclaim-opentyped-holder-leak targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/123; CI not seen.
+Ticket 2026-11-22-reclaim-opentyped-holder-leak on branch 2026-11-22-reclaim-opentyped-holder-leak targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/123; CI build 45013740682 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013740682.
 
 ## Explore Decisions
 None.
@@ -84,7 +84,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 826203d7426b904a2bb2d1f2294da2ae20e5705c | Card must match the branch you measured |
+| Reviewed head | 893882df4600b8f5f0e7b9628e5aa71b6fb5847e | Card must match the branch you measured |
 
 ### Stored data model
 None.
