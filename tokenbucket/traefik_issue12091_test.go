@@ -36,7 +36,7 @@ func newSimpleRedisForTest12091(t *testing.T) *simpleredis.SimpleRedis {
 	return client
 }
 
-// newRedisLimiterForTest12091 returns a Redis limiter on client.
+// newRedisLimiterForTest12091 returns a Redis limiter on this refusing client with the 12091 clock (rate 1, burst 3, maxDelay 0, ttl 2s).
 func newRedisLimiterForTest12091(t *testing.T, client *simpleredis.SimpleRedis) *Redis {
 	t.Helper()
 	limiter, err := NewRedis(client, 1, 3, 0, 2*time.Second)
