@@ -14,10 +14,10 @@ Not yet.
 **End users.** None.
 
 ## Merge readiness
-In progress. 0 items remain.
+In progress. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 5e361efb
+Reviewed head: cee08b95
 Owner decision: None.
 
 ## Review scores
@@ -45,7 +45,8 @@ None.
 None.
 
 ## Follow-up issues
-None.
+- [ ] [Alinear el script de bench de simpleredis con HMGET por nombre](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-hgetall-field-order/knowledge/debt/2026-11-22-simpleredis-bench-tokenbucket-hgetall.md) — `simpleredis/bench_test.go` conserva una copia de `tokenBucketScript` que lee `HGETALL` por posición.
+
 
 ## How this fits together
 Ticket 2026-11-22-tokenbucket-hgetall-field-order on branch 2026-11-22-tokenbucket-hgetall-field-order targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/107; CI not seen.
@@ -66,7 +67,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | none | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 5e361efb1d64579e92ffb35c150d4aa7f20204a2 | Card must match the branch you measured |
+| Reviewed head | cee08b9505699abc4afdcdf66b6e839fd332ef32 | Card must match the branch you measured |
 
 ### Stored data model
 None.
