@@ -19,17 +19,17 @@ Allow returns a Permit that carries the opaque key and that entry's generation; 
 **End users.** A HALF-OPEN outcome is no longer stolen by an in-flight request from before the probe, so an unhealthy backend is not reopened by a stale success and a healthy one is not held OPEN by a stale failure.
 
 ## Merge readiness
-Ready for review. 0 items remain.
+In progress. 0 items remain.
 
 Priority: P2 — real operator and end-user pain from a stale report deciding the probe, with limited blast radius
-Reviewed head: 78022701
+Reviewed head: bf614ea9
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 6/6 | Ready |
-| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013251494 |
+| Overall readiness | 1/6 | Not ready |
+| CI proof | 1/6 | not seen |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -39,7 +39,7 @@ Owner decision: None.
 | Branch | 2026-11-22-backendbackoff-stale-probe-report pushed | `git` |
 | OpenSpec | backendbackoff-probe-permit | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/121 | pr-host |
-| CI | build 45013251494 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013251494 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013251494 |
+| CI | not seen | caller omitted CI snapshot |
 | Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
@@ -56,7 +56,7 @@ None.
 None.
 
 ## How this fits together
-Ticket 2026-11-22-backendbackoff-stale-probe-report on branch 2026-11-22-backendbackoff-stale-probe-report targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/121; CI build 45013251494 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/45013251494.
+Ticket 2026-11-22-backendbackoff-stale-probe-report on branch 2026-11-22-backendbackoff-stale-probe-report targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/121; CI not seen.
 
 ## Explore Decisions
 None.
@@ -82,7 +82,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 780227013db45853c5e323fb16d61f7f93b9db60 | Card must match the branch you measured |
+| Reviewed head | bf614ea96fbc1896db7d37b206b8a71fd7df256c | Card must match the branch you measured |
 
 ### Stored data model
 None.
