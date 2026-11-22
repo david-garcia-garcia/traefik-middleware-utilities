@@ -87,8 +87,8 @@ Contrato vivo: `openspec/specs/std_go_windowcounter_sync-flush` (requisito Sleep
 
 - Q: Qué mecanismo de parada (generación, refcount, serializar `stopFlushAndWait`, o espera en timer nil si ya hay parada) cumple el efecto pedido?
   Rank: bounded incidental — `stopFlushAndWait` tiene 2 call sites de producto enumerados (`Sleep`, `Close`) en `windowcounter/`; Out of scope «Elegir el mecanismo (contador de paradas, generación, serializar la parada)»
-  Decision: assumed — propose (tech lead) chooses among the listed options
-  By: explore
+  Decision: resolved — by propose, pointing to design.md
+  By: propose
 
 - Q: El cuelgue de Sleep #1 se reproduce en negro (EVAL de flush bloqueado + dos Sleep reales + Wake) sobre este dest?
   Rank: additive asked — no reshape; Unknowns de requirement.md nombra esta medición
@@ -107,5 +107,5 @@ Contrato vivo: `openspec/specs/std_go_windowcounter_sync-flush` (requisito Sleep
 
 - Q: Coste y comportamiento Yaegi del arreglo?
   Rank: additive asked — Constraints exigen Yaegi-safe y AfterFunc; Unknowns nombra medir el arreglo
-  Decision: assumed — se mantiene el modelo AfterFunc y no hay `select` interpretado en el paquete (requirement + `ext_traefik_plugins_yaegi-select` / `ext_traefik_plugins_yaegi-afterfunc`); medir compilado y Yaegi en implement cuando propose elija mecanismo. Explore no inventa una suite Yaegi para un diseño no elegido
-  By: explore
+  Decision: assumed — AfterFunc kept, no interpreted select (design.md); compiled and Yaegi measurement remains implement
+  By: propose
