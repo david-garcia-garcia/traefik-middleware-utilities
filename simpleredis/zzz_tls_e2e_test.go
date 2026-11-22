@@ -11,18 +11,18 @@ import (
 )
 
 // Live TLS engines: CI starts them with the TestWriteTLSFixtureFiles certificates, client certificates required,
-// and ACL user liveTLSUser with password liveTLSUserPass (.github/workflows/ci.yml, jobs e2e-redis and e2e-dragonfly).
+// and ACL user liveTLSUser with password liveTLSUserPass (.github/workflows/ci.yml, jobs e2e-redis, e2e-dragonfly and e2e-valkey).
+// Each engine address is SIMPLEREDIS_LIVE_<ENGINE>_TLS.
 const (
-	liveTLSRedisEnv     = "SIMPLEREDIS_LIVE_REDIS_TLS"
-	liveTLSDragonflyEnv = "SIMPLEREDIS_LIVE_DRAGONFLY_TLS"
-	liveTLSDirEnv       = "SIMPLEREDIS_LIVE_TLS_DIR"
-	liveTLSUser         = "app"
-	liveTLSUserPass     = "apppass"
+	liveTLSSuffix   = "_TLS"
+	liveTLSDirEnv   = "SIMPLEREDIS_LIVE_TLS_DIR"
+	liveTLSUser     = "app"
+	liveTLSUserPass = "apppass"
 )
 
 // TestLiveTLS_MutualWithACLUser proves Set then Get over mutual TLS as ACL user app on each live TLS engine.
 func TestLiveTLS_MutualWithACLUser(t *testing.T) {
-	runForEachLiveEngine(t, liveTLSRedisEnv, liveTLSDragonflyEnv, func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, liveTLSSuffix, func(t *testing.T, addr string) {
 		t.Helper()
 		client := newTestRedis(t, Config{Host: addr, TLS: liveTLSClientConfigForTest(t, true),
 			User: liveTLSUser, Pass: liveTLSUserPass, CommandTimeout: 3 * time.Second})
@@ -40,7 +40,7 @@ func TestLiveTLS_MutualWithACLUser(t *testing.T) {
 
 // TestLiveTLS_WrongACLPassword proves a wrong password for ACL user app over TLS is redis:noauth and not pooled.
 func TestLiveTLS_WrongACLPassword(t *testing.T) {
-	runForEachLiveEngine(t, liveTLSRedisEnv, liveTLSDragonflyEnv, func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, liveTLSSuffix, func(t *testing.T, addr string) {
 		t.Helper()
 		client := newTestRedis(t, Config{Host: addr, TLS: liveTLSClientConfigForTest(t, true),
 			User: liveTLSUser, Pass: "wrong-password", CommandTimeout: 3 * time.Second})
@@ -57,7 +57,7 @@ func TestLiveTLS_WrongACLPassword(t *testing.T) {
 
 // TestLiveTLS_MissingClientCertificate proves an engine that requires a client certificate refuses one without it as redis:tls.
 func TestLiveTLS_MissingClientCertificate(t *testing.T) {
-	runForEachLiveEngine(t, liveTLSRedisEnv, liveTLSDragonflyEnv, func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, liveTLSSuffix, func(t *testing.T, addr string) {
 		t.Helper()
 		client := newTestRedis(t, Config{Host: addr, TLS: liveTLSClientConfigForTest(t, false), CommandTimeout: 3 * time.Second})
 		t.Cleanup(client.Close)
@@ -70,7 +70,7 @@ func TestLiveTLS_MissingClientCertificate(t *testing.T) {
 
 // TestLiveTLS_UntrustedServerCertificate proves a client whose RootCAs lacks the test CA gets redis:tls.
 func TestLiveTLS_UntrustedServerCertificate(t *testing.T) {
-	runForEachLiveEngine(t, liveTLSRedisEnv, liveTLSDragonflyEnv, func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, liveTLSSuffix, func(t *testing.T, addr string) {
 		t.Helper()
 		config := liveTLSClientConfigForTest(t, true)
 		config.RootCAs = x509.NewCertPool()

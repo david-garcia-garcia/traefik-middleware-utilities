@@ -13,7 +13,7 @@ import (
 // Dragonfly key admit at most burst (Traefik #14328: the Get/Set race does not happen here because Redis
 // runs one atomic Eval).
 func TestTraefik14328_RedisConcurrentFirstRequests(t *testing.T) {
-	runForEachLiveEngine(t, "TOKENBUCKET_LIVE_REDIS", "TOKENBUCKET_LIVE_DRAGONFLY", runRedisConcurrentFirstRequests14328)
+	runForEachLiveEngine(t, runRedisConcurrentFirstRequests14328)
 }
 
 // runRedisConcurrentFirstRequests14328 runs 10 rounds of 16 concurrent first Allows against one live engine.

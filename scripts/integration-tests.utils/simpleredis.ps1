@@ -191,7 +191,7 @@ function Start-NetnsReader {
     return $name
 }
 
-# Read-BackendTcp is /proc/net/tcp and tcp6 from Redis or the Dragonfly sidecar.
+# Read-BackendTcp is /proc/net/tcp and tcp6 from Redis or the sidecar in the Dragonfly or Valkey netns.
 function Read-BackendTcp {
     param(
         [string]$BackendHost,
@@ -256,11 +256,11 @@ function Assert-SimpleRedisLiveCap {
     }
 }
 
-# Stop-TraefikEngineClientForTest CLIENT KILLs Traefik ADDR on Redis or Dragonfly (not TYPE/SKIPME).
+# Stop-TraefikEngineClientForTest CLIENT KILLs Traefik ADDR on Redis, Dragonfly, or Valkey (not TYPE/SKIPME).
 function Stop-TraefikEngineClientForTest {
     param(
         [Parameter(Mandatory)]
-        [ValidateSet("redis", "dragonfly")]
+        [ValidateSet("redis", "dragonfly", "valkey")]
         [string]$Engine
     )
     # Traefik compose IP so CLIENT LIST can match addr=<ip>:<port>.
@@ -269,10 +269,10 @@ function Stop-TraefikEngineClientForTest {
         throw "traefik container IP is empty"
     }
     $cli = @("compose", "-p", "reclaim-e2e", "exec", "-T", "redis", "redis-cli")
-    if ($Engine -eq "dragonfly") {
-        $cli += @("-h", "dragonfly")
+    if ($Engine -ne "redis") {
+        $cli += @("-h", $Engine)
     }
-    # CLIENT LIST on the engine (Dragonfly via redis-cli -h dragonfly).
+    # CLIENT LIST on the engine (Dragonfly and Valkey via redis-cli -h <engine> from the redis container).
     $list = docker @cli CLIENT LIST
     if ($LASTEXITCODE -ne 0) {
         throw "CLIENT LIST on $Engine failed"

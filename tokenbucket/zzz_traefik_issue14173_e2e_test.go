@@ -98,7 +98,7 @@ func (p *writeHoldProxy14173) forwardHeld14173(dst io.Writer, src io.Reader) {
 // the wire, so the middleware can answer 499 instead of waiting for the server. Whether the held script then charged
 // the source is logged, not asserted.
 func TestTraefik14173_RedisCanceledInFlight(t *testing.T) {
-	runForEachLiveEngine(t, "TOKENBUCKET_LIVE_REDIS", "TOKENBUCKET_LIVE_DRAGONFLY", runCanceledInFlight14173)
+	runForEachLiveEngine(t, runCanceledInFlight14173)
 }
 
 // runCanceledInFlight14173 cancels Allow while a holding proxy delays the EVALSHA write to one live engine.

@@ -8,7 +8,7 @@ import (
 )
 
 // TestLive_FlushBatchSeveralKeys proves one buffered flush that carries several keys per EVAL (more keys than one batch)
-// applies every key's delta exactly once, against live Redis and Dragonfly.
+// applies every key's delta exactly once, against live Redis, Dragonfly, and Valkey.
 func TestLive_FlushBatchSeveralKeys(t *testing.T) {
 	runForEachLiveEngine(t, runLiveFlushBatchSeveralKeys)
 }
@@ -61,7 +61,7 @@ func runLiveFlushBatchSeveralKeys(t *testing.T, addr string) {
 
 // TestLive_FlushBatchFailedKeyKeepsDelta proves the flush script's per-key redis.pcall on a live engine: a key whose INCRBY
 // fails keeps its delta and stores the error, the other keys of that EVAL apply once, and the next flush sends only the
-// failed key, on Redis and Dragonfly.
+// failed key, on Redis, Dragonfly, and Valkey.
 func TestLive_FlushBatchFailedKeyKeepsDelta(t *testing.T) {
 	runForEachLiveEngine(t, runLiveFlushBatchFailedKeyKeepsDelta)
 }

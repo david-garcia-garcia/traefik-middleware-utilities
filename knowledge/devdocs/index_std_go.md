@@ -38,5 +38,5 @@ description: How a Traefik middleware stores CIDR prefixes by address family and
 ## Test suites
 priority: normal
 local: std_go_test-suites.md
-description: Lint, unit Go (plain `-short` and `Unit race`), Go E2E Redis, Go E2E Dragonfly, and Pester (reclaim, Redis, Dragonfly) — what each suite is for and how test files are named.
+description: Lint, unit Go (plain `-short` and `Unit race`), Go E2E per engine (Redis, Dragonfly, Valkey), and Pester (reclaim, plus SimpleRedis and the rate limiters per engine) — what each suite is for and how test files are named.
 

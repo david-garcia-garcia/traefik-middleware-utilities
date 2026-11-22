@@ -1,8 +1,8 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot "integration-tests.utils/Import.ps1")
     $script:Engine = $env:INTEGRATION_ENGINE
-    if ($script:Engine -notin @("redis", "dragonfly")) {
-        throw "INTEGRATION_ENGINE must be redis or dragonfly"
+    if ($script:Engine -notin @("redis", "dragonfly", "valkey")) {
+        throw "INTEGRATION_ENGINE must be redis, dragonfly or valkey"
     }
     $script:BackendHost = $script:Engine
 }

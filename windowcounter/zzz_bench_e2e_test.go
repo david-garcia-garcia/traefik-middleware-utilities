@@ -7,11 +7,11 @@ import (
 	"time"
 )
 
-// BenchmarkLiveTake measures compiled Take against live Redis and Dragonfly (WINDOWCOUNTER_LIVE_*) in exact mode and at sync_rate 20ms:
+// BenchmarkLiveTake measures compiled Take against live Redis, Dragonfly, and Valkey (WINDOWCOUNTER_LIVE_*) in exact mode and at sync_rate 20ms:
 // one hot key and 10k rotating keys. It skips under -short or when both addresses are unset. Keys carry a per-run prefix.
 func BenchmarkLiveTake(b *testing.B) {
 	ctx := context.Background()
-	for _, engine := range liveEngineAddrs(b, "WINDOWCOUNTER_LIVE_REDIS", "WINDOWCOUNTER_LIVE_DRAGONFLY") {
+	for _, engine := range liveEngineAddrs(b) {
 		engine := engine
 		b.Run(engine.name, func(b *testing.B) {
 			client := waitLiveClient(b, engine.addr)

@@ -428,7 +428,7 @@ func (l *Limiter) Close() {
 // Why AfterFunc, not go + select on ticker.C and stop: this package is interpreted under Yaegi
 // (Traefik plugins and TestYaegi_*). Yaegi v0.16.1's interp._select can miss close(stop) when
 // interpreted code selects on a channel from a goroutine started as go method(...). CI Go E2E
-// Dragonfly hung 300s on TestYaegiLive_RedisAndDragonfly/dragonfly/bufferedTwoClients that way
+// Dragonfly hung 300s on TestYaegiLive_Engines/dragonfly/bufferedTwoClients that way
 // (Eval parked in WaitGroup.Wait; flushLoop parked in interp._select). time.AfterFunc is the
 // real stdlib timer (Yaegi maps the symbol to time.AfterFunc), so the waiter is not interpreted
 // select. Do not use time.Tick.

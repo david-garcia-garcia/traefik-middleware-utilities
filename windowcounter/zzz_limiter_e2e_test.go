@@ -4,77 +4,120 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/david-garcia-garcia/traefik-middleware-utilities/simpleredis"
 )
 
-// liveEngineForTest is one Redis or Dragonfly address taken from LIVE env.
+// liveEngineForTest is one live engine address taken from LIVE env.
 type liveEngineForTest struct {
 	name string
 	addr string
 }
 
-// lookupLiveEngineAddrs returns the engines whose addresses are set, or bothUnset when neither is set.
-func lookupLiveEngineAddrs(redisAddr, dragonflyAddr string) (engines []liveEngineForTest, bothUnset bool) {
-	if redisAddr == "" && dragonflyAddr == "" {
-		return nil, true
-	}
-	if redisAddr != "" {
-		engines = append(engines, liveEngineForTest{name: "redis", addr: redisAddr})
-	}
-	if dragonflyAddr != "" {
-		engines = append(engines, liveEngineForTest{name: "dragonfly", addr: dragonflyAddr})
-	}
-	return engines, false
+// liveEngineNames are the engines a live test runs against, in run order.
+var liveEngineNames = []string{"redis", "dragonfly", "valkey"}
+
+// liveEngineEnv is the env var holding name's address: prefix, an underscore, the upper-cased name, then suffix.
+func liveEngineEnv(prefix, name, suffix string) string {
+	return prefix + "_" + strings.ToUpper(name) + suffix
 }
 
-// liveEngineAddrs skips under -short or both env unset, else returns the engines whose addrs are set.
-func liveEngineAddrs(tb testing.TB, redisEnv, dragonflyEnv string) []liveEngineForTest {
+// lookupLiveEngineAddrs returns the engines whose env is set, in liveEngineNames order, or allUnset when none is.
+func lookupLiveEngineAddrs(getenv func(string) string, prefix, suffix string) (engines []liveEngineForTest, allUnset bool) {
+	for _, name := range liveEngineNames {
+		if addr := getenv(liveEngineEnv(prefix, name, suffix)); addr != "" {
+			engines = append(engines, liveEngineForTest{name: name, addr: addr})
+		}
+	}
+	return engines, len(engines) == 0
+}
+
+// liveEngineEnvList is every engine env for prefix and suffix, comma-separated, for skip messages.
+func liveEngineEnvList(prefix, suffix string) string {
+	names := make([]string, 0, len(liveEngineNames))
+	for _, name := range liveEngineNames {
+		names = append(names, liveEngineEnv(prefix, name, suffix))
+	}
+	return strings.Join(names, ", ")
+}
+
+// TestLookupLiveEngineAddrs proves skip-all and one-or-more engines in run order without dialing (runs under -short).
+func TestLookupLiveEngineAddrs(t *testing.T) {
+	const prefix = "PKG_LIVE"
+	lookup := func(env map[string]string, suffix string) ([]liveEngineForTest, bool) {
+		return lookupLiveEngineAddrs(func(key string) string { return env[key] }, prefix, suffix)
+	}
+	t.Run("allUnset", func(t *testing.T) {
+		engines, allUnset := lookup(nil, "")
+		if !allUnset || len(engines) != 0 {
+			t.Fatalf("lookup(none) = %v unset=%v", engines, allUnset)
+		}
+	})
+	for _, name := range liveEngineNames {
+		name := name
+		t.Run("only-"+name, func(t *testing.T) {
+			engines, allUnset := lookup(map[string]string{liveEngineEnv(prefix, name, ""): "127.0.0.1:7000"}, "")
+			if allUnset || len(engines) != 1 || engines[0].name != name || engines[0].addr != "127.0.0.1:7000" {
+				t.Fatalf("only %s = %+v unset=%v", name, engines, allUnset)
+			}
+		})
+	}
+	t.Run("allSetInRunOrder", func(t *testing.T) {
+		env := map[string]string{
+			"PKG_LIVE_VALKEY":    "127.0.0.1:6385",
+			"PKG_LIVE_DRAGONFLY": "127.0.0.1:6380",
+			"PKG_LIVE_REDIS":     "127.0.0.1:6379",
+		}
+		engines, allUnset := lookup(env, "")
+		if allUnset || len(engines) != 3 {
+			t.Fatalf("allSet = %v unset=%v", engines, allUnset)
+		}
+		want := []liveEngineForTest{{"redis", "127.0.0.1:6379"}, {"dragonfly", "127.0.0.1:6380"}, {"valkey", "127.0.0.1:6385"}}
+		for i := range want {
+			if engines[i] != want[i] {
+				t.Fatalf("engines[%d] = %+v, want %+v", i, engines[i], want[i])
+			}
+		}
+	})
+	t.Run("suffixSelectsItsOwnEnv", func(t *testing.T) {
+		env := map[string]string{"PKG_LIVE_REDIS": "127.0.0.1:6379", "PKG_LIVE_VALKEY_AUTH": "127.0.0.1:6386"}
+		engines, allUnset := lookup(env, "_AUTH")
+		if allUnset || len(engines) != 1 || engines[0].name != "valkey" || engines[0].addr != "127.0.0.1:6386" {
+			t.Fatalf("suffix _AUTH = %+v unset=%v, want valkey 127.0.0.1:6386", engines, allUnset)
+		}
+	})
+	t.Run("envList", func(t *testing.T) {
+		got := liveEngineEnvList(prefix, "_TLS")
+		want := "PKG_LIVE_REDIS_TLS, PKG_LIVE_DRAGONFLY_TLS, PKG_LIVE_VALKEY_TLS"
+		if got != want {
+			t.Fatalf("liveEngineEnvList = %q, want %q", got, want)
+		}
+	})
+}
+
+// liveEnvPrefix starts every live env of this package: WINDOWCOUNTER_LIVE_<ENGINE>.
+const liveEnvPrefix = "WINDOWCOUNTER_LIVE"
+
+// liveEngineAddrs skips under -short or when no WINDOWCOUNTER_LIVE_<ENGINE> is set, else returns the engines whose addrs are set.
+func liveEngineAddrs(tb testing.TB) []liveEngineForTest {
 	tb.Helper()
 	if testing.Short() {
 		tb.Skip("live engines skipped under -short")
 	}
-	engines, bothUnset := lookupLiveEngineAddrs(os.Getenv(redisEnv), os.Getenv(dragonflyEnv))
-	if bothUnset {
-		tb.Skip(redisEnv + " and " + dragonflyEnv + " unset")
+	engines, allUnset := lookupLiveEngineAddrs(os.Getenv, liveEnvPrefix, "")
+	if allUnset {
+		tb.Skip(liveEngineEnvList(liveEnvPrefix, "") + " unset")
 	}
 	return engines
 }
 
-// TestLookupLiveEngineAddrs proves skip-both and one-or-both engines without dialing (runs under -short).
-func TestLookupLiveEngineAddrs(t *testing.T) {
-	t.Run("bothUnset", func(t *testing.T) {
-		engines, bothUnset := lookupLiveEngineAddrs("", "")
-		if !bothUnset || len(engines) != 0 {
-			t.Fatalf("lookup(\"\",\"\") = %v unset=%v", engines, bothUnset)
-		}
-	})
-	t.Run("onlyRedis", func(t *testing.T) {
-		engines, bothUnset := lookupLiveEngineAddrs("127.0.0.1:6379", "")
-		if bothUnset || len(engines) != 1 || engines[0].name != "redis" || engines[0].addr != "127.0.0.1:6379" {
-			t.Fatalf("onlyRedis = %+v unset=%v, want redis 127.0.0.1:6379", engines, bothUnset)
-		}
-	})
-	t.Run("onlyDragonfly", func(t *testing.T) {
-		engines, bothUnset := lookupLiveEngineAddrs("", "127.0.0.1:6380")
-		if bothUnset || len(engines) != 1 || engines[0].name != "dragonfly" || engines[0].addr != "127.0.0.1:6380" {
-			t.Fatalf("onlyDragonfly = %+v unset=%v, want dragonfly 127.0.0.1:6380", engines, bothUnset)
-		}
-	})
-	t.Run("bothSet", func(t *testing.T) {
-		engines, bothUnset := lookupLiveEngineAddrs("127.0.0.1:6379", "127.0.0.1:6380")
-		if bothUnset || len(engines) != 2 {
-			t.Fatalf("bothSet = %v unset=%v", engines, bothUnset)
-		}
-	})
-}
-
-// runForEachLiveEngine table-drives Redis then Dragonfly from WINDOWCOUNTER_LIVE_REDIS and WINDOWCOUNTER_LIVE_DRAGONFLY.
+// runForEachLiveEngine table-drives Redis, Dragonfly, then Valkey from WINDOWCOUNTER_LIVE_<ENGINE>.
 func runForEachLiveEngine(t *testing.T, run func(t *testing.T, addr string)) {
 	t.Helper()
-	for _, backend := range liveEngineAddrs(t, "WINDOWCOUNTER_LIVE_REDIS", "WINDOWCOUNTER_LIVE_DRAGONFLY") {
+	for _, backend := range liveEngineAddrs(t) {
 		backend := backend
 		t.Run(backend.name, func(t *testing.T) {
 			run(t, backend.addr)
@@ -105,7 +148,7 @@ func waitLiveClient(tb testing.TB, addr string) *simpleredis.SimpleRedis {
 	}
 }
 
-// TestLive_Limiter proves Take, Peek, buffered share, and first-hit EXPIRE on live Redis and Dragonfly.
+// TestLive_Limiter proves Take, Peek, buffered share, and first-hit EXPIRE on live Redis, Dragonfly, and Valkey.
 func TestLive_Limiter(t *testing.T) {
 	runForEachLiveEngine(t, runLiveLimiterBackend)
 }

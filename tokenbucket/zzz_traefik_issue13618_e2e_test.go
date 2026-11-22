@@ -68,7 +68,7 @@ func liveKey13618(t *testing.T, suffix string) string {
 // After GC, no proxied socket stays open and leaked goroutines excluding the proxy's own fail only
 // when greater than 2.
 func TestTraefik13618_ReloadWithoutClose(t *testing.T) {
-	runForEachLiveEngine(t, "TOKENBUCKET_LIVE_REDIS", "TOKENBUCKET_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, func(t *testing.T, addr string) {
 		t.Helper()
 		const reloads = 50
 		liveClient := waitLiveClient(t, addr)

@@ -18,7 +18,7 @@ func liveKey13706(t *testing.T) string {
 
 // TestTraefik13706_RedisShare: two *Redis on one key admit burst in total (state lives on the server).
 func TestTraefik13706_RedisShare(t *testing.T) {
-	runForEachLiveEngine(t, "TOKENBUCKET_LIVE_REDIS", "TOKENBUCKET_LIVE_DRAGONFLY", runTraefik13706LiveShare)
+	runForEachLiveEngine(t, runTraefik13706LiveShare)
 }
 
 // runTraefik13706LiveShare drains two Redis limiters on one liveKey13706 against addr.

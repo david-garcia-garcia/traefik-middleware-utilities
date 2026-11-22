@@ -1,8 +1,8 @@
 package tokenbucket
 
-// Live Redis and Dragonfly repro for traefik/traefik#14297.
-// Gated like TestLive_Limiter: skipped under -short or when TOKENBUCKET_LIVE_REDIS
-// and TOKENBUCKET_LIVE_DRAGONFLY are both unset.
+// Live engine repro for traefik/traefik#14297.
+// Gated like TestLive_Limiter: skipped under -short or when no
+// TOKENBUCKET_LIVE_<ENGINE> is set.
 
 import (
 	"context"
@@ -82,7 +82,7 @@ func countAdmits14297(t *testing.T, attempts int, allow func() (bool, error)) in
 //     Hashtable order depends on the per-process hash seed, so the test tries table sizes until
 //     HGETALL returns tokens first, and skips if none does. That skip is expected.
 func TestTraefik14297_HGetAllFieldOrder(t *testing.T) {
-	runForEachLiveEngine(t, "TOKENBUCKET_LIVE_REDIS", "TOKENBUCKET_LIVE_DRAGONFLY", func(t *testing.T, addr string) {
+	runForEachLiveEngine(t, func(t *testing.T, addr string) {
 		t.Helper()
 		client := waitLiveClient(t, addr)
 		const burst = int64(5)

@@ -15,10 +15,13 @@ services:
       - "--experimental.localplugins.reclaimprobe.settings.useunsafe=false"
       - "--experimental.localplugins.simpleredisprobe.modulename=github.com/david-garcia-garcia/simpleredisprobe"
       - "--experimental.localplugins.simpleredisprobe.settings.useunsafe=false"
+      - "--experimental.localplugins.ratelimitprobe.modulename=github.com/david-garcia-garcia/ratelimitprobe"
+      - "--experimental.localplugins.ratelimitprobe.settings.useunsafe=false"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./e2e/reclaimprobe:/plugins-local/src/github.com/david-garcia-garcia/reclaimprobe
       - ./e2e/simpleredisprobe:/plugins-local/src/github.com/david-garcia-garcia/simpleredisprobe
+      - ./e2e/ratelimitprobe:/plugins-local/src/github.com/david-garcia-garcia/ratelimitprobe
       - ./:/plugins-local/src/github.com/david-garcia-garcia/traefik-middleware-utilities
     ports:
       - "8000:80"
@@ -54,6 +57,10 @@ services:
     ulimits:
       memlock: -1
 
+  valkey:
+    image: valkey/valkey:9.0.1-alpine
+    hostname: valkey
+
   redis-drop:
     build:
       context: ./e2e/respdroprelay
@@ -71,6 +78,15 @@ services:
       UPSTREAM: dragonfly:6379
     depends_on:
       - dragonfly
+
+  valkey-drop:
+    build:
+      context: ./e2e/respdroprelay
+    hostname: valkey-drop
+    environment:
+      UPSTREAM: valkey:6379
+    depends_on:
+      - valkey
 
   whoami-redis:
     image: traefik/whoami
@@ -94,6 +110,17 @@ services:
       - "traefik.http.middlewares.simpleredis-dragonfly.plugin.simpleredisprobe.host=dragonfly:6379"
       - "traefik.http.middlewares.simpleredis-dragonfly.plugin.simpleredisprobe.dropHost=dragonfly-drop:6379"
 
+  whoami-valkey:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simpleredis-valkey.rule=PathPrefix(`/valkey`)"
+      - "traefik.http.routers.simpleredis-valkey.entrypoints=web"
+      - "traefik.http.routers.simpleredis-valkey.middlewares=simpleredis-valkey@docker"
+      - "traefik.http.services.simpleredis-valkey.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.simpleredis-valkey.plugin.simpleredisprobe.host=valkey:6379"
+      - "traefik.http.middlewares.simpleredis-valkey.plugin.simpleredisprobe.dropHost=valkey-drop:6379"
+
   redis-auth:
     image: redis:7-alpine
     hostname: redis-auth
@@ -105,6 +132,11 @@ services:
     command: ["--requirepass=secret"]
     ulimits:
       memlock: -1
+
+  valkey-auth:
+    image: valkey/valkey:9.0.1-alpine
+    hostname: valkey-auth
+    command: ["valkey-server", "--requirepass", "secret"]
 
   whoami-redis-wrong-password:
     image: traefik/whoami
@@ -128,6 +160,17 @@ services:
       - "traefik.http.middlewares.simpleredis-dragonfly-wrong-password.plugin.simpleredisprobe.host=dragonfly-auth:6379"
       - "traefik.http.middlewares.simpleredis-dragonfly-wrong-password.plugin.simpleredisprobe.password=wrong"
 
+  whoami-valkey-wrong-password:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simpleredis-valkey-wrong-password.rule=PathPrefix(`/valkey-wrong-password`)"
+      - "traefik.http.routers.simpleredis-valkey-wrong-password.entrypoints=web"
+      - "traefik.http.routers.simpleredis-valkey-wrong-password.middlewares=simpleredis-valkey-wrong-password@docker"
+      - "traefik.http.services.simpleredis-valkey-wrong-password.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.simpleredis-valkey-wrong-password.plugin.simpleredisprobe.host=valkey-auth:6379"
+      - "traefik.http.middlewares.simpleredis-valkey-wrong-password.plugin.simpleredisprobe.password=wrong"
+
   whoami-redis-database-99:
     image: traefik/whoami
     labels:
@@ -149,3 +192,146 @@ services:
       - "traefik.http.services.simpleredis-dragonfly-database-99.loadbalancer.server.port=80"
       - "traefik.http.middlewares.simpleredis-dragonfly-database-99.plugin.simpleredisprobe.host=dragonfly:6379"
       - "traefik.http.middlewares.simpleredis-dragonfly-database-99.plugin.simpleredisprobe.database=99"
+
+  whoami-valkey-database-99:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.simpleredis-valkey-database-99.rule=PathPrefix(`/valkey-database-99`)"
+      - "traefik.http.routers.simpleredis-valkey-database-99.entrypoints=web"
+      - "traefik.http.routers.simpleredis-valkey-database-99.middlewares=simpleredis-valkey-database-99@docker"
+      - "traefik.http.services.simpleredis-valkey-database-99.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.simpleredis-valkey-database-99.plugin.simpleredisprobe.host=valkey:6379"
+      - "traefik.http.middlewares.simpleredis-valkey-database-99.plugin.simpleredisprobe.database=99"
+
+  # /redis-tokenbucket/{a,b} and /redis-windowcounter/{a,b}: two ratelimitprobe instances per limiter on one key prefix, so a
+  # shared budget can only come from redis.
+  whoami-ratelimit-redis:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.ratelimit-redis.loadbalancer.server.port=80"
+      - "traefik.http.routers.ratelimit-redis-tokenbucket-a.rule=PathPrefix(`/redis-tokenbucket/a`)"
+      - "traefik.http.routers.ratelimit-redis-tokenbucket-a.entrypoints=web"
+      - "traefik.http.routers.ratelimit-redis-tokenbucket-a.service=ratelimit-redis"
+      - "traefik.http.routers.ratelimit-redis-tokenbucket-a.middlewares=ratelimit-redis-tokenbucket-a@docker"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-a.plugin.ratelimitprobe.host=redis:6379"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-a.plugin.ratelimitprobe.limiter=tokenbucket"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-a.plugin.ratelimitprobe.keyPrefix=tb"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-a.plugin.ratelimitprobe.rate=0.1"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-a.plugin.ratelimitprobe.burst=3"
+      - "traefik.http.routers.ratelimit-redis-tokenbucket-b.rule=PathPrefix(`/redis-tokenbucket/b`)"
+      - "traefik.http.routers.ratelimit-redis-tokenbucket-b.entrypoints=web"
+      - "traefik.http.routers.ratelimit-redis-tokenbucket-b.service=ratelimit-redis"
+      - "traefik.http.routers.ratelimit-redis-tokenbucket-b.middlewares=ratelimit-redis-tokenbucket-b@docker"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-b.plugin.ratelimitprobe.host=redis:6379"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-b.plugin.ratelimitprobe.limiter=tokenbucket"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-b.plugin.ratelimitprobe.keyPrefix=tb"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-b.plugin.ratelimitprobe.rate=0.1"
+      - "traefik.http.middlewares.ratelimit-redis-tokenbucket-b.plugin.ratelimitprobe.burst=3"
+      - "traefik.http.routers.ratelimit-redis-windowcounter-a.rule=PathPrefix(`/redis-windowcounter/a`)"
+      - "traefik.http.routers.ratelimit-redis-windowcounter-a.entrypoints=web"
+      - "traefik.http.routers.ratelimit-redis-windowcounter-a.service=ratelimit-redis"
+      - "traefik.http.routers.ratelimit-redis-windowcounter-a.middlewares=ratelimit-redis-windowcounter-a@docker"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-a.plugin.ratelimitprobe.host=redis:6379"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-a.plugin.ratelimitprobe.limiter=windowcounter"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-a.plugin.ratelimitprobe.keyPrefix=wc"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-a.plugin.ratelimitprobe.limit=3"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-a.plugin.ratelimitprobe.window=60s"
+      - "traefik.http.routers.ratelimit-redis-windowcounter-b.rule=PathPrefix(`/redis-windowcounter/b`)"
+      - "traefik.http.routers.ratelimit-redis-windowcounter-b.entrypoints=web"
+      - "traefik.http.routers.ratelimit-redis-windowcounter-b.service=ratelimit-redis"
+      - "traefik.http.routers.ratelimit-redis-windowcounter-b.middlewares=ratelimit-redis-windowcounter-b@docker"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-b.plugin.ratelimitprobe.host=redis:6379"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-b.plugin.ratelimitprobe.limiter=windowcounter"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-b.plugin.ratelimitprobe.keyPrefix=wc"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-b.plugin.ratelimitprobe.limit=3"
+      - "traefik.http.middlewares.ratelimit-redis-windowcounter-b.plugin.ratelimitprobe.window=60s"
+
+  # /dragonfly-tokenbucket/{a,b} and /dragonfly-windowcounter/{a,b}: two ratelimitprobe instances per limiter on one key prefix, so a
+  # shared budget can only come from dragonfly.
+  whoami-ratelimit-dragonfly:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.ratelimit-dragonfly.loadbalancer.server.port=80"
+      - "traefik.http.routers.ratelimit-dragonfly-tokenbucket-a.rule=PathPrefix(`/dragonfly-tokenbucket/a`)"
+      - "traefik.http.routers.ratelimit-dragonfly-tokenbucket-a.entrypoints=web"
+      - "traefik.http.routers.ratelimit-dragonfly-tokenbucket-a.service=ratelimit-dragonfly"
+      - "traefik.http.routers.ratelimit-dragonfly-tokenbucket-a.middlewares=ratelimit-dragonfly-tokenbucket-a@docker"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-a.plugin.ratelimitprobe.host=dragonfly:6379"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-a.plugin.ratelimitprobe.limiter=tokenbucket"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-a.plugin.ratelimitprobe.keyPrefix=tb"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-a.plugin.ratelimitprobe.rate=0.1"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-a.plugin.ratelimitprobe.burst=3"
+      - "traefik.http.routers.ratelimit-dragonfly-tokenbucket-b.rule=PathPrefix(`/dragonfly-tokenbucket/b`)"
+      - "traefik.http.routers.ratelimit-dragonfly-tokenbucket-b.entrypoints=web"
+      - "traefik.http.routers.ratelimit-dragonfly-tokenbucket-b.service=ratelimit-dragonfly"
+      - "traefik.http.routers.ratelimit-dragonfly-tokenbucket-b.middlewares=ratelimit-dragonfly-tokenbucket-b@docker"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-b.plugin.ratelimitprobe.host=dragonfly:6379"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-b.plugin.ratelimitprobe.limiter=tokenbucket"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-b.plugin.ratelimitprobe.keyPrefix=tb"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-b.plugin.ratelimitprobe.rate=0.1"
+      - "traefik.http.middlewares.ratelimit-dragonfly-tokenbucket-b.plugin.ratelimitprobe.burst=3"
+      - "traefik.http.routers.ratelimit-dragonfly-windowcounter-a.rule=PathPrefix(`/dragonfly-windowcounter/a`)"
+      - "traefik.http.routers.ratelimit-dragonfly-windowcounter-a.entrypoints=web"
+      - "traefik.http.routers.ratelimit-dragonfly-windowcounter-a.service=ratelimit-dragonfly"
+      - "traefik.http.routers.ratelimit-dragonfly-windowcounter-a.middlewares=ratelimit-dragonfly-windowcounter-a@docker"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-a.plugin.ratelimitprobe.host=dragonfly:6379"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-a.plugin.ratelimitprobe.limiter=windowcounter"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-a.plugin.ratelimitprobe.keyPrefix=wc"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-a.plugin.ratelimitprobe.limit=3"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-a.plugin.ratelimitprobe.window=60s"
+      - "traefik.http.routers.ratelimit-dragonfly-windowcounter-b.rule=PathPrefix(`/dragonfly-windowcounter/b`)"
+      - "traefik.http.routers.ratelimit-dragonfly-windowcounter-b.entrypoints=web"
+      - "traefik.http.routers.ratelimit-dragonfly-windowcounter-b.service=ratelimit-dragonfly"
+      - "traefik.http.routers.ratelimit-dragonfly-windowcounter-b.middlewares=ratelimit-dragonfly-windowcounter-b@docker"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-b.plugin.ratelimitprobe.host=dragonfly:6379"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-b.plugin.ratelimitprobe.limiter=windowcounter"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-b.plugin.ratelimitprobe.keyPrefix=wc"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-b.plugin.ratelimitprobe.limit=3"
+      - "traefik.http.middlewares.ratelimit-dragonfly-windowcounter-b.plugin.ratelimitprobe.window=60s"
+
+  # /valkey-tokenbucket/{a,b} and /valkey-windowcounter/{a,b}: two ratelimitprobe instances per limiter on one key prefix, so a
+  # shared budget can only come from valkey.
+  whoami-ratelimit-valkey:
+    image: traefik/whoami
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.ratelimit-valkey.loadbalancer.server.port=80"
+      - "traefik.http.routers.ratelimit-valkey-tokenbucket-a.rule=PathPrefix(`/valkey-tokenbucket/a`)"
+      - "traefik.http.routers.ratelimit-valkey-tokenbucket-a.entrypoints=web"
+      - "traefik.http.routers.ratelimit-valkey-tokenbucket-a.service=ratelimit-valkey"
+      - "traefik.http.routers.ratelimit-valkey-tokenbucket-a.middlewares=ratelimit-valkey-tokenbucket-a@docker"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-a.plugin.ratelimitprobe.host=valkey:6379"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-a.plugin.ratelimitprobe.limiter=tokenbucket"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-a.plugin.ratelimitprobe.keyPrefix=tb"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-a.plugin.ratelimitprobe.rate=0.1"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-a.plugin.ratelimitprobe.burst=3"
+      - "traefik.http.routers.ratelimit-valkey-tokenbucket-b.rule=PathPrefix(`/valkey-tokenbucket/b`)"
+      - "traefik.http.routers.ratelimit-valkey-tokenbucket-b.entrypoints=web"
+      - "traefik.http.routers.ratelimit-valkey-tokenbucket-b.service=ratelimit-valkey"
+      - "traefik.http.routers.ratelimit-valkey-tokenbucket-b.middlewares=ratelimit-valkey-tokenbucket-b@docker"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-b.plugin.ratelimitprobe.host=valkey:6379"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-b.plugin.ratelimitprobe.limiter=tokenbucket"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-b.plugin.ratelimitprobe.keyPrefix=tb"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-b.plugin.ratelimitprobe.rate=0.1"
+      - "traefik.http.middlewares.ratelimit-valkey-tokenbucket-b.plugin.ratelimitprobe.burst=3"
+      - "traefik.http.routers.ratelimit-valkey-windowcounter-a.rule=PathPrefix(`/valkey-windowcounter/a`)"
+      - "traefik.http.routers.ratelimit-valkey-windowcounter-a.entrypoints=web"
+      - "traefik.http.routers.ratelimit-valkey-windowcounter-a.service=ratelimit-valkey"
+      - "traefik.http.routers.ratelimit-valkey-windowcounter-a.middlewares=ratelimit-valkey-windowcounter-a@docker"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-a.plugin.ratelimitprobe.host=valkey:6379"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-a.plugin.ratelimitprobe.limiter=windowcounter"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-a.plugin.ratelimitprobe.keyPrefix=wc"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-a.plugin.ratelimitprobe.limit=3"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-a.plugin.ratelimitprobe.window=60s"
+      - "traefik.http.routers.ratelimit-valkey-windowcounter-b.rule=PathPrefix(`/valkey-windowcounter/b`)"
+      - "traefik.http.routers.ratelimit-valkey-windowcounter-b.entrypoints=web"
+      - "traefik.http.routers.ratelimit-valkey-windowcounter-b.service=ratelimit-valkey"
+      - "traefik.http.routers.ratelimit-valkey-windowcounter-b.middlewares=ratelimit-valkey-windowcounter-b@docker"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-b.plugin.ratelimitprobe.host=valkey:6379"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-b.plugin.ratelimitprobe.limiter=windowcounter"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-b.plugin.ratelimitprobe.keyPrefix=wc"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-b.plugin.ratelimitprobe.limit=3"
+      - "traefik.http.middlewares.ratelimit-valkey-windowcounter-b.plugin.ratelimitprobe.window=60s"

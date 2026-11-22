@@ -6,9 +6,9 @@ import (
 	"time"
 )
 
-// TestLive_Commands proves Get/Set/Del/MGet/Incr/Expire against live Redis and Dragonfly.
+// TestLive_Commands proves Get/Set/Del/MGet/Incr/Expire against live Redis, Dragonfly, and Valkey.
 func TestLive_Commands(t *testing.T) {
-	runForEachLiveEngine(t, "SIMPLEREDIS_LIVE_REDIS", "SIMPLEREDIS_LIVE_DRAGONFLY", runLiveCommandsBackend)
+	runForEachLiveEngine(t, "", runLiveCommandsBackend)
 }
 
 // runLiveCommandsBackend proves engine-success Get/Set/Del/MGet/Incr/Expire against one engine.
