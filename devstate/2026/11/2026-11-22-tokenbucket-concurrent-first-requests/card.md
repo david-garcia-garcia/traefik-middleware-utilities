@@ -32,7 +32,7 @@ El cliente vivo usa `waitLiveClient14328` local (`PoolSize` 16, `MaxIdleConns` 1
 In progress. 0 items remain.
 
 Priority: P3 — tests y spec cubren un hueco de prueba, sin daño actual a operadores ni usuarios
-Reviewed head: 0d19228f
+Reviewed head: a25e493c
 Owner decision: None.
 
 ## Review scores
@@ -55,8 +55,12 @@ Owner decision: None.
 
 ## Specs
 Worktree:
-- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-concurrent-first-requests/openspec/changes/tokenbucket-concurrent-first-requests/proposal.md) — modified
-- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-concurrent-first-requests/openspec/changes/tokenbucket-concurrent-first-requests/proposal.md) — modified
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-concurrent-first-requests/openspec/changes/archive/2026-11-22-tokenbucket-concurrent-first-requests/proposal.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-concurrent-first-requests/openspec/changes/archive/2026-11-22-tokenbucket-concurrent-first-requests/proposal.md) — modified
+
+Completed:
+- [std_go_tokenbucket_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-concurrent-first-requests/openspec/specs/std_go_tokenbucket_allow/spec.md) — modified
+- [std_go_tokenbucket_lua-eval](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-tokenbucket-concurrent-first-requests/openspec/specs/std_go_tokenbucket_lua-eval/spec.md) — modified
 
 
 ## Deviations from the ask
@@ -91,9 +95,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
+| Specs in this PR | 0 added / 4 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 0d19228fef2e9972f0093f2a863aafdcefc6f865 | Card must match the branch you measured |
+| Reviewed head | a25e493c1d29dd00115d7df7eb83e9776f6b9cbc | Card must match the branch you measured |
 
 ### Stored data model
 None.
