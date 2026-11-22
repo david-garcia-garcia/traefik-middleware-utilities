@@ -105,38 +105,38 @@ El hermano `std_go_tokenbucket_allow` deja «which live source is removed» sin 
 
 - Q: ¿Qué costura hace que admitir una clave nueva sea O(1) amortizado en compilado y Yaegi, con el mismo comportamiento observable de `std_go_backendbackoff_allow`?
   Rank: bounded asked — `loadEntry`/`dropExpired`/`dropOne` y `memEntry` viven solo en `backendbackoff` (1 def cada uno, 1 literal de producción, 0 constructores en tests; raíces `backendbackoff/*.go` y `**/*.go` del módulo); Desired nombra «O(1) amortized» y el mismo comportamiento del spec.
-  Decision: assumed — listed, not picked. Opciones 1–4 arriba; 1 tiene la evidencia del hermano #105; 3 no cumple el Desired; las vetadas no entran.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md (opción 1, lista de expiración con punteros concretos).
+  By: propose
 
 - Q: Si propose elige una lista ordenada por `expireAt`, ¿`Report` también reenlaza cuando refresca `expireAt`?
   Rank: bounded incidental — 1 cuerpo de producción (`allow.go` `Report`); 6 lecturas de `gate.keys` en `zzz_gate_test.go` (incluye `TestReport_AfterTTLStillRecords`); el spec nombra refresh en Allow, no en Report; raíces `backendbackoff/*.go`.
-  Decision: assumed — si hay lista, o Report reenlaza (conserva el TTL que el código escribe hoy) o Report deja de escribir `expireAt` (el spec dice que expirar es trabajo de Allow). Propose elige; no es preferir CLOSED.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Decision 2 (Report sigue escribiendo `expireAt` y reenlaza).
+  By: propose
 
 - Q: Tras una lista, ¿«one arbitrary slot» sigue sin especificar qué clave viva se quita (como `std_go_tokenbucket_allow`), aunque el código haga pop de la cabeza LRU?
   Rank: additive asked — el spec vivo ya dice slot arbitrario; Unknowns nombra este punto; no cambia callers de Allow/Report.
-  Decision: assumed — el contrato se queda en «arbitrary» salvo que propose lo apriete; LRU de cabeza es un mecanismo compatible, no una preferencia CLOSED.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md (la cabeza es un slot arbitrario válido; el spec no se aprieta).
+  By: propose
 
 - Q: ¿Este cambio cierra `knowledge/debt/2026-11-21-backendbackoff-gate-new-key-scan.md`?
   Rank: additive asked — Unknowns lo nombra; la nota es el mismo barrido.
-  Decision: assumed — sí, cuando el apply quite el walk en clave nueva; propose lo confirma al aterrizar la nota.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md y tasks.md 3.1 (borrar la nota al aterrizar el apply).
+  By: propose
 
 - Q: ¿Qué nombres de benchmark compilado y Yaegi muestran los números del Desired?
   Rank: additive asked — Desired «Benchmarks show compiled and Yaegi numbers»; Unknowns pide los nombres exactos.
-  Decision: assumed — espejo de `BenchmarkMemoryAllow/new-key-full-table` y `BenchmarkYaegiMemoryAllow/new-key-full-table` como sub-benches de `BenchmarkAllow` / `BenchmarkYaegiAllow` (nombres finales en propose). `BenchmarkAllowWarm` / `TestAllocAllowWarm` se quedan (clave caliente CLOSED). Prefijo `zzz_`, helpers con sufijo del slug del ticket, sin fichero compartido.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Decision 5 (`BenchmarkAllow/new-key-full-table` y `BenchmarkYaegiAllow/new-key-full-table`).
+  By: propose
 
 - Q: ¿Hace falta un test de tope/expulsión a 65536 (caducadas primero, `len` se queda en 65536) que hoy no existe en `backendbackoff/`?
   Rank: additive asked — Current «Cap/eviction unit test at 65536 … not found»; Desired mismo comportamiento observable.
-  Decision: assumed — sí, test autocontenido `zzz_` con helpers sufijados; patrón `tokenbucket/zzz_memory_test.go`. Prefill por `Allow` es O(n²) y no vale para CI: hace falta un store de test (como `storeMemEntryForTest`) si hay lista, u otro prefill O(n) que propose nombre.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Decision 5 (casos a–d, `storeEntryForTestExpiryList`).
+  By: propose
 
 - Q: Si la costura reenlaza en cada Allow de una clave ya guardada, ¿el techo de `TestAllocAllowWarm` (1 alloc / 64 B) sigue siendo el contrato del camino caliente?
   Rank: bounded incidental — 1 bench y 1 test de techo en `zzz_bench_test.go`; Desired pide O(1) en clave nueva, no un rewrite del camino caliente; raíces `backendbackoff/*.go`.
-  Decision: assumed — cualquier lista debe seguir pasando `TestAllocAllowWarm`; tokenbucket inlinó `moveToBackLocked` por el coste Yaegi del call. Propose mide los dos modos.
-  By: explore
+  Decision: resolved — by propose, pointing to design.md Goals (`TestAllocAllowWarm` se mantiene).
+  By: propose
 
 - Q: El paquete de uso `knowledge/devdocs/std_go_backendbackoff.md` no menciona el coste del barrido en clave nueva ni una lista de expiración. ¿Se documenta en este cambio?
   Rank: additive incidental — el paquete existe; el hueco es de uso, no de Language (Gate/Allow/Report/Credit ya están); esta fase no escribe usage (produce atendido espera al humano y el run para en explore).
