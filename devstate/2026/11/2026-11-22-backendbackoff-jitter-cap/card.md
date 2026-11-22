@@ -20,7 +20,7 @@ Priority: P1 — production replica probes lockstep at MaxCooldown today, a wron
 In progress. 0 items remain.
 
 Priority: P1 — production replica probes lockstep at MaxCooldown today, a wrong jitter contract
-Reviewed head: 1cbfd944
+Reviewed head: d19ca18a
 Owner decision: None.
 
 ## Review scores
@@ -79,7 +79,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 1cbfd9441bd6d39c6ca40471fed531e6c2c1735c | Card must match the branch you measured |
+| Reviewed head | d19ca18a6ad4752c1338a59b58a853284ec00a23 | Card must match the branch you measured |
 
 ### Stored data model
 None.
