@@ -163,15 +163,23 @@ func TestAllowDenyAndReportMoveToTailExpiryList(t *testing.T) {
 		t.Fatalf("after Allow deny list %s, want b,c,d,a", got)
 	}
 
-	p, _, err = gate.Allow("b")
-	if err != nil || !p.Allowed() {
-		t.Fatalf("admit b: allowed=%v err=%v", p.Allowed(), err)
+	pb, _, err := gate.Allow("b")
+	if err != nil || !pb.Allowed() {
+		t.Fatalf("admit b: allowed=%v err=%v", pb.Allowed(), err)
 	}
-	if err := gate.Report(p, true); err != nil {
+	// Admit c after b so b is no longer the tail; only b's Report can move it back.
+	pc, _, err := gate.Allow("c")
+	if err != nil || !pc.Allowed() {
+		t.Fatalf("admit c: allowed=%v err=%v", pc.Allowed(), err)
+	}
+	if got := strings.Join(expiryListKeysExpiryList(t, gate), ","); got != "d,a,b,c" {
+		t.Fatalf("after admits list %s, want d,a,b,c", got)
+	}
+	if err := gate.Report(pb, true); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(expiryListKeysExpiryList(t, gate), ","); got != "c,d,a,b" {
-		t.Fatalf("after Report list %s, want c,d,a,b", got)
+	if got := strings.Join(expiryListKeysExpiryList(t, gate), ","); got != "d,a,c,b" {
+		t.Fatalf("after Report list %s, want d,a,c,b", got)
 	}
 }
 
