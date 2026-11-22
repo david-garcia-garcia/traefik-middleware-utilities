@@ -17,8 +17,8 @@ Not yet.
 In progress. 0 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 2e301c76
-Owner decision: Required. See Explore Decisions.
+Reviewed head: f2df74be
+Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
@@ -32,14 +32,17 @@ Owner decision: Required. See Explore Decisions.
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Branch | 2026-11-22-backendbackoff-stale-probe-report pushed | `git` |
-| OpenSpec | none | `openspec/` |
+| OpenSpec | backendbackoff-probe-permit | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/121 | pr-host |
 | CI | not seen | caller omitted CI snapshot |
 | Local tests | none | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
-None.
+Worktree:
+- [std_go_backendbackoff_allow](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-stale-probe-report/openspec/changes/backendbackoff-probe-permit/proposal.md) — modified
+- [std_go_backendbackoff_cooldown](https://github.com/david-garcia-garcia/traefik-middleware-utilities/blob/2026-11-22-backendbackoff-stale-probe-report/openspec/changes/backendbackoff-probe-permit/proposal.md) — modified
+
 
 ## Deviations from the ask
 None.
@@ -51,10 +54,7 @@ None.
 Ticket 2026-11-22-backendbackoff-stale-probe-report on branch 2026-11-22-backendbackoff-stale-probe-report targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/121; CI not seen.
 
 ## Explore Decisions
-| Question | Rank | Decision | By |
-| --- | --- | --- | --- |
-| ¿Qué forma de identidad une Allow con Report (generación, token opaco, otro)? | bounded incidental — cambia el contrato Allow/Report que ya tiene 32 llamadas a Allow y 18 a Report (raíces: worktree `*.go` `gate.Allow(`/`gate.Report(`, identificador `backendbackoff`, `e2e/`); ningún criterio nombra generación vs token (Unknowns; Out of scope «Elegir el diseño») | assumed — deferred to propose | explore |
-
+None.
 
 ## Findings
 None.
@@ -67,9 +67,9 @@ None.
 ### Review metrics
 | Metric | Value | Why it matters |
 | --- | --- | --- |
-| Specs in this PR | none | Same list as ## Specs |
+| Specs in this PR | 0 added / 2 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 2e301c767486718754a09767662b43f7911b091d | Card must match the branch you measured |
+| Reviewed head | f2df74bea246bcc005b1feff16cb77b60b733007 | Card must match the branch you measured |
 
 ### Stored data model
 None.
