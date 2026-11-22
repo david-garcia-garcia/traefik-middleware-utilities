@@ -14,17 +14,17 @@ Not yet.
 **End users.** None.
 
 ## Merge readiness
-In progress. 1 items remain.
+Ready for review. 1 items remain.
 
 Priority: unknown — motivation not written
-Reviewed head: 9438ca8f
+Reviewed head: 054730cd
 Owner decision: None.
 
 ## Review scores
 | Measure | Result | What it means |
 | --- | --- | --- |
-| Overall readiness | 1/6 | Not ready |
-| CI proof | 1/6 | not seen |
+| Overall readiness | 6/6 | Ready |
+| CI proof | 6/6 | succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995093261 |
 | Local tests proof | N/A | remote PR — CI proof covers this |
 | Review resolution | 6/6 | no open PR comments |
 
@@ -34,8 +34,8 @@ Owner decision: None.
 | Branch | 2026-11-22-tokenbucket-hgetall-field-order pushed | `git` |
 | OpenSpec | tokenbucket-hmget-named-fields | `openspec/` |
 | Pull request | https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/107 | pr-host |
-| CI | not seen | caller omitted CI snapshot |
-| Local tests | none | handoff.yaml localTests |
+| CI | build 44995093261 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995093261 | https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995093261 |
+| Local tests | passed | handoff.yaml localTests |
 | PR comments | no comments | devstate/comments.md |
 
 ## Specs
@@ -51,7 +51,7 @@ None.
 
 
 ## How this fits together
-Ticket 2026-11-22-tokenbucket-hgetall-field-order on branch 2026-11-22-tokenbucket-hgetall-field-order targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/107; CI not seen.
+Ticket 2026-11-22-tokenbucket-hgetall-field-order on branch 2026-11-22-tokenbucket-hgetall-field-order targeting master; PR https://github.com/david-garcia-garcia/traefik-middleware-utilities/pull/107; CI build 44995093261 succeeded https://github.com/david-garcia-garcia/traefik-middleware-utilities/actions/runs/44995093261.
 
 ## Explore Decisions
 None.
@@ -69,7 +69,7 @@ None.
 | --- | --- | --- |
 | Specs in this PR | 0 added / 1 modified | Same list as ## Specs |
 | Open reviewer comments walked | 0 FIX / 0 ANSWER / 0 open | Unanswered review is merge risk |
-| Reviewed head | 9438ca8fa2e1ab228dbc6cdf498d5c5fb4da14e8 | Card must match the branch you measured |
+| Reviewed head | 054730cd4eee9a195a1c273f8b1da9da3060d7e2 | Card must match the branch you measured |
 
 ### Stored data model
 None.
