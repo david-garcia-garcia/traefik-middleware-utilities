@@ -19,3 +19,8 @@ head: 3bd8cd1793173474797eb73c8797e33ec78b9bff
 phase: implement
 verdict: ready for review
 head: 45a0cb7b831a38c9f1c3d12f630a0e497c145a3b
+
+## codereview (2026-11-22)
+phase: codereview
+verdict: ready for review
+head: 571cd5e1a0c08f644fdd43198f141eacf53b977e
