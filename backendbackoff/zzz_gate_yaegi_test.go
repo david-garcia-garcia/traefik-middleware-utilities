@@ -22,6 +22,17 @@ func TestYaegi_AllowThenReportTrips(t *testing.T) {
 	}
 }
 
+func TestYaegi_TrippedThenProbe(t *testing.T) {
+	goPath := t.TempDir()
+	writeGopathBackendbackoff(t, goPath)
+	writeGopathFile(t, goPath, "tripprobe", "roundtrip.go", tripprobeSrc)
+
+	got := evalTripprobe(t, goPath, `tripprobe.TrippedThenProbe()`)
+	if got != "ok" {
+		t.Fatalf("yaegi tripped then probe: %q, want ok", got)
+	}
+}
+
 // evalTripprobe evaluates expr in a GOPATH interp with stdlib only (no unsafe).
 func evalTripprobe(t *testing.T, goPath, expr string) string {
 	t.Helper()
@@ -136,6 +147,60 @@ func TripAfterFailures() string {
 	}
 	if p.Allowed() {
 		return "not-denied"
+	}
+	return "ok"
+}
+
+func TrippedThenProbe() string {
+	now := time.Unix(1700000000, 0)
+	gate, err := backendbackoff.New(backendbackoff.Config{
+		FailureRatio: 0.30,
+		TripFailures: 5,
+		BaseCooldown: time.Second,
+		MaxCooldown:  10 * time.Second,
+		Jitter:       0,
+		TTL:          time.Minute,
+	})
+	if err != nil {
+		return "new:" + err.Error()
+	}
+	gate.SetNowForTest(func() time.Time { return now })
+	for i := 0; i < 5; i++ {
+		p, _, allowErr := gate.Allow("k")
+		if allowErr != nil {
+			return "allow:" + allowErr.Error()
+		}
+		if p.Probe() {
+			return "closed-probe"
+		}
+		if _, reportErr := gate.Report(p, false); reportErr != nil {
+			return "report:" + reportErr.Error()
+		}
+	}
+	tripped, err := gate.Tripped("k")
+	if err != nil {
+		return "tripped:" + err.Error()
+	}
+	if !tripped {
+		return "not-tripped"
+	}
+	now = now.Add(time.Second)
+	p, _, err := gate.Allow("k")
+	if err != nil {
+		return "probe:" + err.Error()
+	}
+	if !p.Allowed() || !p.Probe() {
+		return "not-probe"
+	}
+	if _, err := gate.Report(p, true); err != nil {
+		return "close:" + err.Error()
+	}
+	tripped, err = gate.Tripped("k")
+	if err != nil {
+		return "tripped:" + err.Error()
+	}
+	if tripped {
+		return "still-tripped"
 	}
 	return "ok"
 }
