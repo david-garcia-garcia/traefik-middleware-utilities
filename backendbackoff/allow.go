@@ -28,7 +28,7 @@ func (g *Gate) Allow(key string) (Permit, time.Duration, error) {
 		entry.probeOutstanding = true
 		entry.probeUntil = now.Add(g.cfg.BaseCooldown)
 		g.bumpGen(entry)
-		return Permit{key: key, gen: entry.gen}, 0, nil
+		return Permit{key: key, gen: entry.gen, probe: true}, 0, nil
 	case stateHalfOpen:
 		if entry.probeOutstanding && now.Before(entry.probeUntil) {
 			return Permit{}, entry.probeUntil.Sub(now), nil
@@ -37,7 +37,7 @@ func (g *Gate) Allow(key string) (Permit, time.Duration, error) {
 		entry.probeOutstanding = true
 		entry.probeUntil = now.Add(g.cfg.BaseCooldown)
 		g.bumpGen(entry)
-		return Permit{key: key, gen: entry.gen}, 0, nil
+		return Permit{key: key, gen: entry.gen, probe: true}, 0, nil
 	default:
 		return Permit{}, 0, errUnknown
 	}
@@ -107,6 +107,23 @@ func (g *Gate) Report(permit Permit, success bool) (applied bool, err error) {
 	default:
 		return false, errUnknown
 	}
+}
+
+// Tripped reports whether key is OPEN or HALF-OPEN: it tripped and no probe has closed it since. A key that is not
+// stored, or whose idle TTL has elapsed, is not tripped, because the next Allow treats it as unseen. Tripped does not
+// create the key, change its state, or refresh its idle deadline. A closed gate returns false and errClosed.
+func (g *Gate) Tripped(key string) (bool, error) {
+	now := g.now()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.closed {
+		return false, errClosed
+	}
+	entry := g.keys[key]
+	if entry == nil || !now.Before(entry.expireAt) {
+		return false, nil
+	}
+	return entry.state != stateClosed, nil
 }
 
 // bumpGen assigns the next gate-wide generation so a stale permit cannot match.

@@ -14,6 +14,14 @@ _Avoid_: HTTP 503 inside the library; Reporting a denied Allow; passing `req.Con
 The identity of one admitted Allow: the key plus that key's generation at admit. `Allowed()` is false on the zero value.
 _Avoid_: reconstructing it from HTTP; pairing a generation with a different key
 
+**Probe**:
+`Permit.Probe()`: true when Allow admitted the attempt as the HALF-OPEN probe of a tripped key (after the OPEN cooldown, or taking over an expired probe lease). CLOSED admits, including the first one after an idle key was dropped, are not probes.
+_Avoid_: tracking "am I probing" in the caller from its own flags
+
+**Tripped**:
+`Tripped(key)`: whether the key is OPEN or HALF-OPEN. A missing key, or one idle for TTL, is not tripped. Read-only: it does not create the key, change state, or refresh the idle deadline.
+_Avoid_: copying `TTL` into the caller to guess when the gate dropped a key
+
 **Report**:
 The boolean outcome of a real backend attempt the gate admitted, identified by the `Permit` Allow returned. A report whose generation does not match the key's current generation is ignored (no credit, state, `n`, or TTL change). No context argument: a canceled request that already hit the backend still lands.
 _Avoid_: Reporting gate denies; classifying status codes inside the library
@@ -31,6 +39,7 @@ Import `github.com/david-garcia-garcia/traefik-middleware-utilities/backendbacko
 - `New(Config{})` once (zeros apply defaults) or pass knobs. `FailureRatio` is `p`; `TripFailures` is how many consecutive failures trip a dead backend.
 - Before each request, if `req.Context()` is already done, skip Allow and the backend call. Otherwise call `Allow(key)`. If `!p.Allowed()`, the caller may set `Retry-After` from the wait; the library does not.
 - On an admitted attempt, call the backend, then `Report(p, success)`. Never Report a deny. A report from another generation is ignored and `Report` returns `applied` false (use it, not your own flag, to log that a probe closed the gate).
+- A caller that logs transitions logs "started" on the first deny while it is not backing off, and "ended" when `Report` applies a successful `p.Probe()` permit. When an admit is not a probe, or `Tripped(key)` is false, while the caller still thinks it is backing off, the gate dropped the idle key: clear the flag without an "ended" line.
 - Prove with `go test -short ./backendbackoff/...`. No live Redis/Dragonfly (see `knowledge/devdocs/std_go_test-suites.md`).
 - Benchmark new-key admission with `go test -run '^$' -bench 'BenchmarkAllow/new-key-full-table' ./backendbackoff/` (compiled) and `-bench 'BenchmarkYaegiAllow/new-key-full-table'` (interpreted; writes a test-only `zz_bench_hooks.go` into the interpreter GOPATH copy). CI does not run benchmarks.
 
@@ -67,7 +76,7 @@ _, _ = gate.Report(p, ok)
 - Report only real attempts the gate admitted. Denied and zero permits are ignored.
 - Report of an admitted attempt still records after idle TTL has elapsed; expire is Allow's job.
 - After Close, Allow and Report return an error.
-- Idle longer than TTL drops the key; the next Allow treats the backend as healthy.
+- Idle longer than TTL drops the key; the next Allow treats the backend as healthy. `Tripped` turns false at that moment and the next admit is not a `Probe`.
 - HALF-OPEN admits one probe. Concurrent Allows during that probe are denied.
 - Two Gate instances do not share state. N Traefik replicas each burn `TripFailures` locally.
 - When `Jitter` is greater than 0, OPEN waits are uniform in `[wait*(1-Jitter), min(wait*(1+Jitter), MaxCooldown))`; they never pile on `MaxCooldown`. `Jitter` 0 returns `wait` exactly.

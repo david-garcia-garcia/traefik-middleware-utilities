@@ -223,6 +223,8 @@ ok := callBackend()
 _, _ = gate.Report(p, ok)
 ```
 
+`p.Probe()` is true when the permit is the HALF-OPEN probe of a tripped key. `Tripped(key)` reports whether the key is OPEN or HALF-OPEN, without touching it. A key idle for `TTL` (60s by default) is dropped: `Tripped` turns false and the next admit is not a probe. A caller that logs "backoff started" and "backoff ended" can use the two to tell a probe that closed the gate from a key the gate forgot.
+
 Prefix keys in the caller. Store the Gate in a reclaim table the caller owns so a Traefik reload keeps the map (`Close` as the reclaim hook; no Sleep/Wake). Two Gate instances do not share state. Do not import `tokenbucket`.
 
 ## CIDR lookup

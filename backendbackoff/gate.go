@@ -70,13 +70,21 @@ type Gate struct {
 
 // Permit identifies one admitted Allow. The zero value is a deny.
 type Permit struct {
-	key string
-	gen uint64
+	key   string
+	gen   uint64
+	probe bool
 }
 
 // Allowed reports whether Allow admitted a backend attempt.
 func (p Permit) Allowed() bool {
 	return p.gen != 0
+}
+
+// Probe reports whether Allow admitted this attempt as the HALF-OPEN probe of a tripped key. An attempt admitted
+// while the key is CLOSED, including the first one after an idle key was dropped, is not a probe. The zero Permit is
+// not a probe.
+func (p Permit) Probe() bool {
+	return p.probe
 }
 
 // memEntry is one key's credit, backoff exponent, idle expire time, and its place in Gate's expiry list.
